@@ -217,6 +217,7 @@ describe("applyUndoRecord", () => {
 			deductions: [],
 			intakeIds: ["new-intake"],
 			restoreIntakeId: "prior-intake",
+			operationId: "operation-1",
 		});
 
 		expect(buildCargoDeductionStatements).not.toHaveBeenCalled();

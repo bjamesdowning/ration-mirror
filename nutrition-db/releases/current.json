@@ -1,0 +1,27 @@
+{
+	"schemaVersion": 1,
+	"datasetSnapshotId": "dev-unpinned",
+	"status": "development",
+	"note": "Replace archiveSha256 with verified checksums before --apply-remote. seed-minimal.sql must never be promoted to production.",
+	"datasets": [
+		{
+			"dataType": "foundation_food",
+			"packageHint": "FoodData_Central_foundation_food_csv_2026-04-30",
+			"officialUrl": "https://fdc.nal.usda.gov/download-datasets",
+			"publicationDate": "2026-04-30",
+			"archiveSha256": null
+		},
+		{
+			"dataType": "sr_legacy_food",
+			"packageHint": "FoodData_Central_sr_legacy_food_csv_2018-04",
+			"officialUrl": "https://fdc.nal.usda.gov/download-datasets",
+			"publicationDate": "2018-04",
+			"archiveSha256": null
+		}
+	],
+	"matcherVersion": "1.1.0",
+	"portionMatcherVersion": "1.0.0",
+	"importedAt": null,
+	"rowCounts": null,
+	"snapshotHash": null
+}

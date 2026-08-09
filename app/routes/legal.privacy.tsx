@@ -36,7 +36,7 @@ export default function PrivacyPolicy() {
 		<>
 			<JsonLd data={schemas} />
 			<p className="text-sm text-muted mb-8 glass-panel rounded-lg p-4 not-prose">
-				Last Updated: July 15, 2026
+				Last Updated: August 9, 2026
 			</p>
 			<div className="prose-article max-w-none">
 				<LegalMarkdown content={privacyMd} />

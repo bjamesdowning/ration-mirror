@@ -94,7 +94,15 @@ describe("authenticateMcp", () => {
 			userId: "user-1",
 			keyName: "Test Key",
 			keyPrefix: "rtn_live_abcd1234",
-			scopes: ["mcp", "inventory"],
+			scopes: [
+				"inventory",
+				"mcp:read",
+				"mcp:inventory:write",
+				"mcp:galley:write",
+				"mcp:manifest:write",
+				"mcp:supply:write",
+				"mcp:preferences:write",
+			],
 			preClaim: false,
 		});
 		expect(verifyApiKey).toHaveBeenCalledWith(
@@ -126,7 +134,14 @@ describe("authenticateMcp", () => {
 		);
 		expect(result).toMatchObject({
 			organizationId: "org-x-api-key",
-			scopes: ["mcp"],
+			scopes: [
+				"mcp:read",
+				"mcp:inventory:write",
+				"mcp:galley:write",
+				"mcp:manifest:write",
+				"mcp:supply:write",
+				"mcp:preferences:write",
+			],
 		});
 		expect(verifyApiKey).toHaveBeenCalledWith(
 			expect.anything(),

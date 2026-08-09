@@ -58,8 +58,8 @@ enum SyncIndicatorPolicy {
 }
 
 extension SnapshotStore {
-    func syncState(domain: String, organizationId: String, online: Bool) -> DataSyncState {
-        guard let syncedAt = syncedAt(domain: domain, organizationId: organizationId) else {
+    func syncState(domain: String, scope: SnapshotScope, online: Bool) -> DataSyncState {
+        guard let syncedAt = syncedAt(domain: domain, scope: scope) else {
             return online ? .neverSynced : .offline(nil)
         }
         if !online {
@@ -69,6 +69,26 @@ extension SnapshotStore {
             return .stale(syncedAt)
         }
         return .fresh
+    }
+
+    func syncState(domain: String, organizationId: String, online: Bool) -> DataSyncState {
+        syncState(domain: domain, scope: .organization(organizationId), online: online)
+    }
+
+    func syncState(
+        domain: String,
+        organizationId: String,
+        userId: String?,
+        online: Bool
+    ) -> DataSyncState {
+        if let userId {
+            return syncState(
+                domain: domain,
+                scope: .userOrganization(userId: userId, organizationId: organizationId),
+                online: online
+            )
+        }
+        return syncState(domain: domain, organizationId: organizationId, online: online)
     }
 }
 
@@ -144,6 +164,7 @@ struct StaleDataBanner: View {
 struct DataSyncBannerModifier: ViewModifier {
     let domain: String
     let organizationId: String?
+    var syncUserId: String? = nil
     let isRefreshing: Bool
     let reservesOfflineBannerSpace: Bool
     @Environment(AppEnvironment.self) private var env
@@ -155,6 +176,7 @@ struct DataSyncBannerModifier: ViewModifier {
                     let state = env.snapshots.syncState(
                         domain: domain,
                         organizationId: organizationId,
+                        userId: syncUserId,
                         online: true
                     )
                     if case let .stale(date) = state,
@@ -180,12 +202,14 @@ extension View {
     func dataSyncBanner(
         domain: String,
         organizationId: String?,
+        syncUserId: String? = nil,
         isRefreshing: Bool = false,
         reservesOfflineBannerSpace: Bool = false
     ) -> some View {
         modifier(DataSyncBannerModifier(
             domain: domain,
             organizationId: organizationId,
+            syncUserId: syncUserId,
             isRefreshing: isRefreshing,
             reservesOfflineBannerSpace: reservesOfflineBannerSpace
         ))

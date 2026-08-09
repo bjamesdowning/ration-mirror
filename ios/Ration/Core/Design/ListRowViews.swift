@@ -324,6 +324,7 @@ struct ManifestEntryRow: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel(ManifestEntryActionPolicy.accessibilityLabel(for: action))
+            .accessibilityIdentifier("manifest.eat.\(entry.id)")
         case .editServing:
             Button(action: onEditServing) {
                 HStack(spacing: 4) {
@@ -339,6 +340,7 @@ struct ManifestEntryRow: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel(ManifestEntryActionPolicy.accessibilityLabel(for: action))
+            .accessibilityIdentifier("manifest.eat.\(entry.id)")
         case .none:
             Image(systemName: "checkmark.seal.fill")
                 .foregroundStyle(Theme.hyperGreen)

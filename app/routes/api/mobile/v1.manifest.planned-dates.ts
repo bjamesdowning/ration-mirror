@@ -1,13 +1,14 @@
 import { data } from "react-router";
 import { handleApiError } from "~/lib/error-handler";
-import { buildFlagContext } from "~/lib/feature-flags/context.server";
-import { isFeatureEnabled } from "~/lib/feature-flags/flags.server";
+import { buildMobileFlagContext } from "~/lib/feature-flags/context.server";
 import {
 	ensureMealPlan,
 	getConsumedIntakeDatesForRange,
 	getPlannedDatesForRange,
 } from "~/lib/manifest.server";
 import { requireMobileActiveGroup } from "~/lib/mobile/auth.server";
+import { serializePlannedDatesResponse } from "~/lib/nutrition/dto.server";
+import { resolveNutritionCapabilities } from "~/lib/nutrition/feature-policy.server";
 import { WeekQuerySchema } from "~/lib/schemas/manifest";
 import type { Route } from "./+types/v1.manifest.planned-dates";
 
@@ -62,17 +63,13 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		);
 
 		const env = context.cloudflare.env;
-		const flagContext = buildFlagContext(request, env, {
+		const flagContext = buildMobileFlagContext(request, env, {
 			user: { id: userId },
 		});
-		const nutritionManifest = await isFeatureEnabled(
-			env,
-			"nutrition-manifest",
-			flagContext,
-		);
+		const caps = await resolveNutritionCapabilities(env, flagContext);
 
-		if (!nutritionManifest) {
-			return { dates };
+		if (!caps.manifest) {
+			return serializePlannedDatesResponse({ from, to, dates });
 		}
 
 		const consumedDates = await getConsumedIntakeDatesForRange(
@@ -82,7 +79,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 			from,
 			to,
 		);
-		return { dates, consumedDates };
+		return serializePlannedDatesResponse({ from, to, dates, consumedDates });
 	} catch (e) {
 		return handleApiError(e);
 	}

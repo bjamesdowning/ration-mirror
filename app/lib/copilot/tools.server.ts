@@ -221,6 +221,19 @@ export function toAiSdkTools(
 								ok: false as const,
 								tool: envelope.tool,
 								error: envelope.error,
+								...(envelope.outcome ? { outcome: envelope.outcome } : {}),
+								...(envelope.requestId
+									? { requestId: envelope.requestId }
+									: {}),
+								...(envelope.operationId
+									? { operationId: envelope.operationId }
+									: {}),
+								...(envelope.retryable !== undefined
+									? { retryable: envelope.retryable }
+									: {}),
+								...(envelope.retryAfterMs !== undefined
+									? { retryAfterMs: envelope.retryAfterMs }
+									: {}),
 							};
 						}
 						return {
@@ -229,6 +242,11 @@ export function toAiSdkTools(
 							data: envelope.data,
 							...(envelope.warnings ? { warnings: envelope.warnings } : {}),
 							...(envelope.meta ? { meta: envelope.meta } : {}),
+							...(envelope.outcome ? { outcome: envelope.outcome } : {}),
+							...(envelope.requestId ? { requestId: envelope.requestId } : {}),
+							...(envelope.operationId
+								? { operationId: envelope.operationId }
+								: {}),
 						};
 					},
 				}),

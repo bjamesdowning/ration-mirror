@@ -1,12 +1,12 @@
 import { data } from "react-router";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { handleApiError } from "~/lib/error-handler";
-import { buildFlagContext } from "~/lib/feature-flags/context.server";
-import { getActiveNutritionConsent } from "~/lib/nutrition/consent.server";
+import { buildWebFlagContext } from "~/lib/feature-flags/context.server";
 import {
-	clearManifestPersonalIntake,
-	upsertManifestPersonalIntake,
-} from "~/lib/nutrition/intake-log.server";
+	clearManifestIntakes,
+	logManifestIntakes,
+	resolveHttpOperationKey,
+} from "~/lib/nutrition/service.server";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import { ManifestPersonalIntakeUpsertSchema } from "~/lib/schemas/manifest";
 import type { Route } from "./+types/meal-plans.$id.entries.$entryId.intake";
@@ -38,9 +38,17 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 		);
 	}
 
-	const flagContext = buildFlagContext(request, context.cloudflare.env, {
+	const flagContext = buildWebFlagContext(request, context.cloudflare.env, {
 		user,
 	});
+	const principal = {
+		userId: user.id,
+		organizationId: groupId,
+		surface: "web" as const,
+		authMethod: "session",
+		scopes: ["nutrition:read", "nutrition:write"],
+		requestId: request.headers.get("cf-ray") ?? crypto.randomUUID(),
+	};
 
 	try {
 		if (request.method === "POST") {
@@ -53,54 +61,85 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 				);
 			}
 
-			const result = await upsertManifestPersonalIntake(
+			const result = await logManifestIntakes(
 				context.cloudflare.env,
+				principal,
+				flagContext,
 				{
-					organizationId: groupId,
-					userId: user.id,
+					operationKey: resolveHttpOperationKey(
+						request.headers,
+						parsed.data.idempotencyKey,
+					),
 					planId,
-					entryId,
-					servings: parsed.data.servings,
-					idempotencyKey: parsed.data.idempotencyKey,
-					consent: parsed.data.consent,
-					consentSource: "web",
-					flagContext,
+					items: [
+						{
+							entryId,
+							servings: parsed.data.servings,
+							idempotencyKey: parsed.data.idempotencyKey,
+						},
+					],
 				},
 			);
-
-			const consent = await getActiveNutritionConsent(
-				context.cloudflare.env.DB,
-				user.id,
-				"intake",
-			);
+			const item = result.items[0];
+			if (!item) throw new Error("Nutrition operation returned no item");
+			const undoToken =
+				result.undoExpiresAt && Date.now() <= result.undoExpiresAt.getTime()
+					? result.operationId
+					: undefined;
 
 			return {
 				intake: {
-					id: result.intake.id,
-					servings: result.intake.servings,
-					energyKcal: result.intake.energyKcal,
-					proteinG: result.intake.proteinG,
-					carbsG: result.intake.carbsG,
-					fatG: result.intake.fatG,
-					occurredAt: result.intake.occurredAt.toISOString(),
+					id: item.intake.id,
+					servings: item.intake.servings,
+					energyKcal: item.intake.energyKcal,
+					proteinG: item.intake.proteinG,
+					carbsG: item.intake.carbsG,
+					fatG: item.intake.fatG,
+					occurredAt: item.intake.occurredAt.toISOString(),
 				},
-				idempotent: result.idempotent,
-				replaced: result.replaced,
-				intakeConsentGranted: consent != null,
+				idempotent: item.replayed,
+				replayed: result.replayed,
+				replaced: item.replacedIntakeId != null,
+				intakeConsentGranted: true,
+				operationId: result.operationId,
+				dayTotals: result.dayTotals,
+				summaryGeneratedAt: result.summaryGeneratedAt,
+				undoToken,
 			};
 		}
 
 		if (request.method === "DELETE") {
-			const result = await clearManifestPersonalIntake(context.cloudflare.env, {
-				organizationId: groupId,
-				userId: user.id,
-				planId,
-				entryId,
+			const url = new URL(request.url);
+			const operationKey = resolveHttpOperationKey(
+				request.headers,
+				url.searchParams.get("operationKey"),
+			);
+			const result = await clearManifestIntakes(
+				context.cloudflare.env,
+				principal,
 				flagContext,
-			});
+				{
+					operationKey,
+					planId,
+					entryIds: [entryId],
+				},
+			);
+			const item = result.items[0];
+			if (!item) throw new Error("Nutrition operation returned no item");
+			const undoToken =
+				item.voidedIntakeId &&
+				result.undoExpiresAt &&
+				Date.now() <= result.undoExpiresAt.getTime()
+					? result.operationId
+					: undefined;
 			return {
-				cleared: result.cleared,
-				voidedIntakeId: result.voidedIntakeId,
+				cleared: item.voidedIntakeId != null,
+				voidedIntakeId: item.voidedIntakeId,
+				replayed: result.replayed,
+				operationId: result.operationId,
+				dayTotals: result.dayTotals,
+				summaryGeneratedAt: result.summaryGeneratedAt,
+				undoToken,
 			};
 		}
 

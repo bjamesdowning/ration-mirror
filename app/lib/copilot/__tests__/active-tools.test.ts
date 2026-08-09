@@ -20,8 +20,13 @@ const ALL = [
 ];
 
 describe("resolveCopilotActiveTools", () => {
-	it("keeps full set for empty text", () => {
-		expect(resolveCopilotActiveTools(ALL, "")).toEqual(ALL);
+	it("keeps only core tools for empty text", () => {
+		const tools = resolveCopilotActiveTools(ALL, "");
+		expect(tools).toContain("get_context");
+		expect(tools).toContain("list_inventory");
+		expect(tools).toContain("create_meal");
+		expect(tools).not.toContain("add_cargo_item");
+		expect(tools).not.toContain("commit_manifest_plan");
 	});
 
 	it("always includes create_meal and propose_manifest_plan in core", () => {

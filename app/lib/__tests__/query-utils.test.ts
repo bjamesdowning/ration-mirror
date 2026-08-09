@@ -5,10 +5,12 @@ import {
 	chunkedQuery,
 	D1_MAX_BOUND_PARAMS,
 	D1_MAX_INGREDIENT_ROWS_PER_STATEMENT,
+	D1_MAX_NUTRITION_INTAKE_ROWS_PER_STATEMENT,
 	D1_MAX_SUPPLY_ROWS_PER_STATEMENT,
 	D1_MAX_TAG_INSERT_ROWS_PER_STATEMENT,
 	D1_MAX_TAG_ROWS_PER_STATEMENT,
 	D1_SAFE_BOUND_PARAMS,
+	NUTRITION_INTAKE_INSERT_COLUMNS,
 	packByBindBudget,
 	SUPPLY_ITEM_INSERT_COLUMNS,
 } from "~/lib/query-utils.server";
@@ -37,6 +39,11 @@ describe("constants", () => {
 	it("D1_MAX_SUPPLY_ROWS_PER_STATEMENT is floor(99/13) = 7", () => {
 		expect(SUPPLY_ITEM_INSERT_COLUMNS).toBe(13);
 		expect(D1_MAX_SUPPLY_ROWS_PER_STATEMENT).toBe(7);
+	});
+
+	it("caps full nutrition intake inserts at 3 rows", () => {
+		expect(NUTRITION_INTAKE_INSERT_COLUMNS).toBe(31);
+		expect(D1_MAX_NUTRITION_INTAKE_ROWS_PER_STATEMENT).toBe(3);
 	});
 });
 
@@ -260,5 +267,61 @@ describe("supply_item Drizzle insert bind counts", () => {
 		expect(D1_MAX_SUPPLY_ROWS_PER_STATEMENT).toBe(7);
 		expect(built.params.length).toBe(7 * SUPPLY_ITEM_INSERT_COLUMNS);
 		expect(built.params.length).toBeLessThanOrEqual(D1_SAFE_BOUND_PARAMS);
+	});
+});
+
+describe("nutrition_intake Drizzle insert bind counts", () => {
+	it("canonical 3-row insert stays within D1's 100-bind limit", async () => {
+		const { drizzle } = await import("drizzle-orm/d1");
+		const { nutritionIntake } = await import("~/db/schema");
+		const fakeDb = {
+			prepare() {
+				return { bind: () => ({}) };
+			},
+		};
+		const now = new Date("2026-08-09T12:00:00.000Z");
+		const rows = Array.from(
+			{ length: D1_MAX_NUTRITION_INTAKE_ROWS_PER_STATEMENT },
+			(_, index) => ({
+				id: `intake-${index}`,
+				organizationId: "org-1",
+				userId: "user-1",
+				planId: "plan-1",
+				entryId: `entry-${index}`,
+				mealId: "meal-1",
+				manifestDate: "2026-08-09",
+				slotType: "dinner",
+				servings: 1,
+				energyKcal: 500,
+				proteinG: 20,
+				carbsG: 60,
+				fatG: 15,
+				coverage: 1,
+				source: "meal",
+				confidence: 1,
+				verified: 1,
+				occurredAt: now,
+				kitchenEventId: null,
+				schemaVersion: 2,
+				nutrientsJson: { energyKcal: 500 },
+				coverageJson: { overall: 1 },
+				fiberG: 8,
+				consentId: "consent-1",
+				idempotencyKey: `key-${index}`,
+				operationId: "operation-1",
+				replacesIntakeId: null,
+				voidOperationId: null,
+				voidedAt: null,
+				voidedByUserId: null,
+				createdAt: now,
+			}),
+		);
+		const d1 = drizzle(fakeDb as unknown as D1Database);
+		const built = d1.insert(nutritionIntake).values(rows).toSQL();
+		expect(built.params.length).toBe(
+			D1_MAX_NUTRITION_INTAKE_ROWS_PER_STATEMENT *
+				NUTRITION_INTAKE_INSERT_COLUMNS,
+		);
+		expect(built.params.length).toBeLessThanOrEqual(D1_MAX_BOUND_PARAMS);
 	});
 });

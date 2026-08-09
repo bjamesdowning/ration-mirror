@@ -2,7 +2,7 @@ import { data } from "react-router";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { handleApiError } from "~/lib/error-handler";
 import { assertFeatureEnabled } from "~/lib/feature-flags/assert-enabled.server";
-import { buildFlagContext } from "~/lib/feature-flags/context.server";
+import { buildWebFlagContext } from "~/lib/feature-flags/context.server";
 import { cookManifestEntries } from "~/lib/manifest-cook.server";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import { CookEntriesRequestSchema } from "~/lib/schemas/manifest";
@@ -37,7 +37,7 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 	}
 
 	try {
-		const flagContext = buildFlagContext(request, context.cloudflare.env, {
+		const flagContext = buildWebFlagContext(request, context.cloudflare.env, {
 			user,
 		});
 		await assertFeatureEnabled(

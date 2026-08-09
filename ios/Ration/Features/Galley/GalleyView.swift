@@ -272,24 +272,28 @@ struct GalleyView: View {
             ManifestPlateUpSheet(
                 entry: entry,
                 hasIntakeConsent: intakeConsentGranted,
-                onSave: { servings, consent in
-                    await logServingFromGalley(entry: entry, servings: servings, consent: consent)
+                onSave: { servings in
+                    await logServingFromGalley(entry: entry, servings: servings)
                 }
             )
         }
     }
 
     @MainActor
-    private func logServingFromGalley(entry: ManifestEntry, servings: Double, consent: Bool) async -> String? {
+    private func logServingFromGalley(entry: ManifestEntry, servings: Double) async -> String? {
         do {
             let result = try await env.api.upsertManifestIntake(
                 entryId: entry.id,
                 servings: servings,
-                idempotencyKey: UUID().uuidString,
-                consent: consent ? true : nil
+                idempotencyKey: UUID().uuidString
             )
             if result.intakeConsentGranted == true {
                 intakeConsentGranted = true
+            }
+            if let dayTotals = result.dayTotals, !dayTotals.isEmpty {
+                env.configureNutritionScope()
+                let day = LocalDay.todayISO()
+                env.nutrition.applyDayTotals(dayTotals, forRange: day, to: day)
             }
             Haptics.success()
             cookSuccessMessage = "Serving logged"
@@ -297,6 +301,10 @@ struct GalleyView: View {
         } catch {
             if let apiError = error as? APIError, apiError.isNutritionConsentRequired {
                 return "Allow personal serving logs to continue."
+            }
+            if let apiError = error as? APIError, apiError.isNutritionUpdating {
+                return apiError.errorDescription
+                    ?? "Nutrition totals are still updating. Try again shortly."
             }
             return (error as? APIError)?.errorDescription ?? error.localizedDescription
         }

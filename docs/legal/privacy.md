@@ -43,9 +43,11 @@ We collect data regarding items in your digital Cargo ("Cargo Data") and images 
 
 ### Nutrition goals and intake
 
-When nutrition features are enabled for your account, you may optionally set **personal daily nutrition goals** (energy and macros) and log **intake** when you mark Manifest meals as eaten (plate-up). Goal storage requires your **explicit consent** at save time; you may clear goals at any time. Food composition lookups use a **self-hosted USDA-shaped reference database** operated by us (not a live third-party USDA API call for each lookup). Optional AI nutrient estimates on AI ingest paths are labelled as estimates and are not medical advice.
+When nutrition features are enabled for your account, you may optionally set **personal daily nutrition goals** (energy and macros) and log **private intake** when you choose to record a Manifest meal as eaten (plate-up). Ration records separate, versioned explicit consent for goals, intake, and connected-agent nutrition processing. The applicable full statement is shown before each consent is recorded; nutrition write requests cannot grant consent implicitly or provide their own consent timestamp.
 
-Intake history is retained for approximately **396 days (~13 months)** and then deleted automatically. Nutrition goals and intake records are erased when you purge your account (see Section 11).
+You may withdraw any nutrition consent in Nutrition privacy settings. Withdrawal blocks future processing for that purpose but does not by itself erase previously stored data; goals and intake can be erased separately. Goals remain until you clear or erase them or delete your account. Intake history is retained for approximately **396 days (~13 months)** and then deleted automatically unless you erase it sooner. Nutrition goals and intake records are also erased when you purge your account (see Section 11).
+
+Food composition lookups use a **self-hosted USDA-shaped reference database** operated by us (not a live third-party USDA API call for each lookup). Optional AI nutrient estimates on AI ingest paths are labelled as estimates and are not medical advice.
 
 ## 3. Cookies
 
@@ -85,7 +87,7 @@ Where the General Data Protection Regulation (GDPR) or UK GDPR applies, we rely 
 - **Legal obligation (Art. 6(1)(c)):** Payment records and transaction history retained to comply with applicable tax, VAT, and financial reporting laws, including obligations to Revenue in Ireland.
 - **Legitimate interests (Art. 6(1)(f)):** Security monitoring, fraud prevention, and service improvement — where our interests do not override your rights and freedoms.
 
-For allergen and dietary restriction data (special category data), we rely on your **explicit consent (GDPR Art. 9(2)(a))** as the legal basis. See Section 2 above. Personal nutrition goals, when you set them, are likewise stored only with your **explicit consent** at save time.
+For allergen and dietary restriction data (special category data), we rely on your **explicit consent (GDPR Art. 9(2)(a))** as the legal basis. See Section 2 above. Personal nutrition goals, private intake, and connected-agent processing of those nutrition datasets likewise require separate **explicit consent**.
 
 ## 7. Magic Link Authentication
 
@@ -113,7 +115,7 @@ We may employ third party companies and individuals to facilitate our Service ("
 
 ### 9.1 AI Agents and MCP Connections
 
-When you connect an MCP-compatible AI client (for example Claude, ChatGPT, or Cursor) via OAuth, you authorize that client to access your Ration kitchen data within the scopes you approve. The client vendor may process prompts and tool results on their systems; Ration does not control third-party retention. You can revoke access in Hub Settings → Connected Agents. OAuth grants are bound to a single household you select at authorization time.
+When you connect an MCP-compatible AI client (for example Claude, ChatGPT, or Cursor) via OAuth, you authorize that client to access your Ration kitchen data within the scopes you approve. Nutrition access additionally requires active consent for the underlying goals or intake purpose and separate connected-agent nutrition-processing consent. Consent does not connect an agent or grant OAuth permissions by itself. The client vendor may process prompts and tool results on their systems; Ration does not control third-party retention. You can withdraw nutrition-processing consent in Nutrition privacy settings and revoke the OAuth connection in Hub Settings → Connected Agents. OAuth grants are bound to a single household you select at authorization time.
 
 These third parties have access to your Personal Data only to perform these tasks on our behalf and are obligated not to disclose or use it for any other purpose.
 

@@ -19,11 +19,14 @@ export {
 	FOOD_NUTRIENT_COLUMNS,
 	NUTRIENT_KEYS,
 	NUTRITION_COVERAGE_THRESHOLD,
+	NUTRITION_DATASET_SNAPSHOT_ID,
 	NUTRITION_FDC_CACHE_TTL_SECONDS,
 	NUTRITION_FDC_KV_PREFIX,
 	NUTRITION_MATCHER_VERSION,
+	NUTRITION_PORTION_MATCHER_VERSION,
 	type NutrientKey,
 	nutritionMatchCacheKey,
+	nutritionPortionCacheKey,
 } from "./constants";
 export {
 	aggregateManifestDayNutrition,
@@ -46,6 +49,7 @@ export {
 	nutritionIntakeRetentionCutoff,
 	previousUtcCalendarDay,
 } from "./goal-effective";
+export { sha256Hex } from "./hash";
 export {
 	gramsFromMassResolution,
 	type ResolveIngredientMassOptions,
@@ -105,7 +109,10 @@ export type {
 	NutrientsPer100g,
 	NutrientsPerServing,
 	NutrientValues,
+	NutritionMassMeta,
+	NutritionMatchMeta,
 	NutritionMatchQuality,
+	NutritionProvenance,
 	NutritionSchemaVersion,
 	NutritionServingBasis,
 	NutritionSnapshot,

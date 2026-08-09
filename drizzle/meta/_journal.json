@@ -316,6 +316,48 @@
       "when": 1786284793569,
       "tag": "0044_kind_true_believers",
       "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "6",
+      "when": 1786306517378,
+      "tag": "0045_light_songbird",
+      "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "6",
+      "when": 1786306918099,
+      "tag": "0046_steady_pete_wisdom",
+      "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "6",
+      "when": 1786308106251,
+      "tag": "0047_bored_zzzax",
+      "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "6",
+      "when": 1786310215845,
+      "tag": "0048_fair_whiplash",
+      "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "6",
+      "when": 1786310892896,
+      "tag": "0049_nervous_warlock",
+      "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "6",
+      "when": 1786312418818,
+      "tag": "0050_dark_havok",
+      "breakpoints": true
     }
   ]
 }

@@ -98,7 +98,7 @@ export const FLAG_REGISTRY: Record<string, FlagRegistryEntry> = {
 	"nutrition-async-recompute": {
 		defaultEnabled: false,
 		description:
-			"Async queue-backed meal nutrition recompute (stub until queue wired)",
+			"Async queue-backed meal nutrition recompute (requires NUTRITION_RECOMPUTE_QUEUE)",
 	},
 };
 

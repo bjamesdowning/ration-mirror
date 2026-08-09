@@ -33,6 +33,8 @@ export interface UndoRecord {
 	 * For `manifest_intake` edit undo: un-void this prior active row.
 	 */
 	restoreIntakeId?: string | null;
+	/** Canonical nutrition operation that produced the intake mutation. */
+	operationId?: string;
 }
 
 function undoKey(token: string): string {
@@ -42,8 +44,8 @@ function undoKey(token: string): string {
 export async function storeUndoToken(
 	kv: KVNamespace,
 	record: UndoRecord,
+	token: string = crypto.randomUUID(),
 ): Promise<string> {
-	const token = crypto.randomUUID();
 	await kv.put(undoKey(token), JSON.stringify(record), {
 		expirationTtl: UNDO_TOKEN_TTL_SECONDS,
 	});
@@ -57,9 +59,10 @@ export async function storeUndoToken(
 export async function tryStoreUndoToken(
 	kv: KVNamespace,
 	record: UndoRecord,
+	token?: string,
 ): Promise<string | undefined> {
 	try {
-		return await storeUndoToken(kv, record);
+		return await storeUndoToken(kv, record, token);
 	} catch (kvErr) {
 		log.warn("undo token store failed", {
 			kind: record.kind,
@@ -71,8 +74,8 @@ export async function tryStoreUndoToken(
 	}
 }
 
-/** Loads and deletes a one-time undo token; returns null if missing, expired, or unauthorized. */
-export async function consumeUndoToken(
+/** Loads an undo token without consuming it, so a failed rollback remains retryable. */
+export async function loadUndoToken(
 	kv: KVNamespace,
 	token: string,
 	userId: string,
@@ -92,8 +95,14 @@ export async function consumeUndoToken(
 		return null;
 	}
 
-	await kv.delete(undoKey(token));
 	return record;
+}
+
+export async function deleteUndoToken(
+	kv: KVNamespace,
+	token: string,
+): Promise<void> {
+	await kv.delete(undoKey(token));
 }
 
 export function mergeDeductions(

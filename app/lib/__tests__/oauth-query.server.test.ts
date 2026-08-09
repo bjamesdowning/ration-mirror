@@ -91,18 +91,31 @@ describe("mergeSessionCookies", () => {
 });
 
 describe("buildConsentScopeForSubmit", () => {
-	it("preserves offline_access from the original request", () => {
+	it("requires an explicit offline_access selection", () => {
 		const oauthQuery =
 			"client_id=abc&scope=mcp%3Aread+offline_access&response_type=code";
 		expect(
 			buildConsentScopeForSubmit(["mcp:galley:write"], oauthQuery),
-		).toEqual("mcp:galley:write offline_access");
+		).toEqual("");
+		expect(
+			buildConsentScopeForSubmit(["mcp:read"], oauthQuery, {
+				offlineAccessSelected: true,
+			}),
+		).toEqual("mcp:read offline_access");
 	});
 
-	it("falls back to requested MCP scopes when none selected", () => {
+	it("keeps zero selected MCP scopes as zero authorization", () => {
 		const oauthQuery = "scope=mcp%3Aread+mcp%3Asupply%3Awrite+offline_access";
-		expect(buildConsentScopeForSubmit([], oauthQuery)).toEqual(
-			"mcp:read mcp:supply:write offline_access",
-		);
+		expect(buildConsentScopeForSubmit([], oauthQuery)).toEqual("");
+	});
+
+	it("rejects form-injected scopes absent from the signed request", () => {
+		const oauthQuery = "scope=mcp%3Aread";
+		expect(
+			buildConsentScopeForSubmit(
+				["mcp:read", "mcp:nutrition:read"],
+				oauthQuery,
+			),
+		).toEqual("mcp:read");
 	});
 });

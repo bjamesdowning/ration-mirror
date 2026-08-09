@@ -194,7 +194,7 @@ describe("consumeManifestEntries", () => {
 		expect(batch).toHaveBeenCalledTimes(1);
 	});
 
-	it("logs nutrition intake when nutrition-manifest is on and portions set", async () => {
+	it("never creates personal intake from legacy Consume, even with nutrition flags and portions", async () => {
 		isFeatureEnabled.mockResolvedValue(true);
 		getMealMissingIngredients.mockResolvedValue([]);
 		cookMeal.mockResolvedValue({
@@ -208,23 +208,8 @@ describe("consumeManifestEntries", () => {
 		});
 
 		expect(result.consumed).toBe(1);
-		expect(isFeatureEnabled).toHaveBeenCalledWith(
-			env,
-			"nutrition-manifest",
-			expect.anything(),
-		);
-		expect(insertValues).toHaveBeenCalledWith(
-			expect.objectContaining({
-				entryId,
-				servings: 1.5,
-				energyKcal: 750,
-				proteinG: 30,
-				carbsG: 90,
-				fatG: 15,
-				userId: "user-1",
-				manifestDate: "2026-07-30",
-			}),
-		);
+		expect(result.intakeIds).toEqual([]);
+		expect(insertValues).not.toHaveBeenCalled();
 	});
 
 	it("skips intake when logNutrition is false", async () => {
@@ -278,7 +263,7 @@ describe("consumeManifestEntries", () => {
 		expect(insertValues).not.toHaveBeenCalled();
 	});
 
-	it("skips intake for mcp/copilot unless logNutrition is explicitly true", async () => {
+	it("never logs intake for mcp/copilot through legacy Consume", async () => {
 		isFeatureEnabled.mockResolvedValue(true);
 		getMealMissingIngredients.mockResolvedValue([]);
 		cookMeal.mockResolvedValue({
@@ -327,10 +312,10 @@ describe("consumeManifestEntries", () => {
 			logNutrition: true,
 			portions: [{ entryId, servings: 1 }],
 		});
-		expect(insertValues).toHaveBeenCalled();
+		expect(insertValues).not.toHaveBeenCalled();
 	});
 
-	it("logs planned meal servings when portions omitted on web", async () => {
+	it("never invents planned meal intake on web", async () => {
 		isFeatureEnabled.mockResolvedValue(true);
 		getMealMissingIngredients.mockResolvedValue([]);
 		cookMeal.mockResolvedValue({
@@ -343,13 +328,6 @@ describe("consumeManifestEntries", () => {
 			source: "web",
 		});
 
-		// mealServings = 2 → 500 kcal × 2
-		expect(insertValues).toHaveBeenCalledWith(
-			expect.objectContaining({
-				servings: 2,
-				energyKcal: 1000,
-				userId: "user-1",
-			}),
-		);
+		expect(insertValues).not.toHaveBeenCalled();
 	});
 });

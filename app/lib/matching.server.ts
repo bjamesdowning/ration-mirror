@@ -536,6 +536,10 @@ export async function matchMeals(
 					cookTime: meal.cookTime,
 					customFields: meal.customFields,
 					nutrition: meal.nutrition,
+					nutritionRevision: meal.nutritionRevision,
+					nutritionComputedRevision: meal.nutritionComputedRevision,
+					nutritionStatus: meal.nutritionStatus,
+					nutritionUpdatedAt: meal.nutritionUpdatedAt,
 					createdAt: meal.createdAt,
 					updatedAt: meal.updatedAt,
 				})

@@ -167,7 +167,8 @@ Ration/
 │   ├── Filters/    # PageFilterState, FilterOptionsSheet, TagMultiSelectPicker, ActiveFilterChipRail, DismissibleFilterChip (Cargo/Galley/Supply)
 │   ├── Session/    # SessionStore — global org context + credits + AI consent
 │   ├── Consent/    # AIConsentCoordinator — shared "proceed" gate for all 4 AI entry points
-│   ├── Persistence/# SnapshotStore — org-scoped offline cache
+│   ├── Persistence/# SnapshotStore — org + private user+org offline cache
+│   ├── Nutrition/  # NutritionStore — private summaries, Eat day-total patches
 │   ├── Networking/ # APIClient (auto token refresh), RationAPI facade, config
 │   ├── Auth/       # AuthManager (token lifecycle), Keychain wrapper
 │   ├── Billing/    # RevenueCat SDK boundary
@@ -254,7 +255,7 @@ handler also opens the picker when access is lost remotely.
 | `/supply`, `/supply/items`, `/supply/sync`, `/supply/complete` | various | Supply list |
 | `/manifest`, `/manifest/consume` | GET/POST | Meal plan (legacy Eat/consume) |
 | `/manifest/cook` | POST | Shared Cook → Prepared (`nutrition-cook-log-split`) |
-| `/manifest/entries/:entryId/intake` | POST/DELETE | Private Eat log / clear (explicit first-use intake consent) |
+| `/manifest/entries/:entryId/intake` | POST/DELETE | Atomic private Eat log / clear (operation key; versioned privacy consent) |
 | `/nutrition/summary`, `/nutrition/goals` | GET/… | Nutrition summary + goals (flag-gated; goals GET accepts `asOf`) |
 | `/scan`, `/scan/:requestId` | POST/GET | Visual scan AI |
 | `/settings` | GET/PATCH | User preferences |
@@ -302,7 +303,8 @@ absolute macros only; fiber appears on the strip only when day totals include kn
 **Nutrition Cook/Eat split (iOS 1.3.25, flag-gated):** When `nutrition-cook-log-split` is on,
 Manifest **Cook** deducts Cargo and marks *Prepared* (no personal nutrition). **Log my serving**
 opens `ManifestPlateUpSheet` for private intake; first use requires an **explicit** intake-consent
-checkbox (`consent: true` on POST) — not implied by Cook or goals. Galley **Cook meal** bridges
+affirmation after displaying the versioned privacy statement, followed by a separate privacy-API
+grant — not an inline Eat field and not implied by Cook or goals. Galley **Cook meal** bridges
 onto today’s Manifest and may offer the same Eat sheet; **Add to Manifest** deep-links to
 Add-to-plan with meal + day prefilled (`ration://manifest/add?mealId=&date=`). Day view shows
 an Intake log derived from personal intake on entries. Settings → Nutrition goals remain a

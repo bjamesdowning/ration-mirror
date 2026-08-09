@@ -366,6 +366,20 @@ export const meal = sqliteTable(
 		nutrition: text("nutrition", {
 			mode: "json",
 		}).$type<MealNutritionSnapshot | null>(),
+		/** Monotonic source revision used to reject stale async recomputes. */
+		nutritionRevision: integer("nutrition_revision").notNull().default(0),
+		/** Latest source revision represented by the persisted nutrition snapshot. */
+		nutritionComputedRevision: integer("nutrition_computed_revision")
+			.notNull()
+			.default(0),
+		nutritionStatus: text("nutrition_status", {
+			enum: ["current", "pending", "failed"],
+		})
+			.notNull()
+			.default("current"),
+		nutritionUpdatedAt: integer("nutrition_updated_at", {
+			mode: "timestamp",
+		}),
 		createdAt: integer("created_at", { mode: "timestamp" })
 			.notNull()
 			.default(sql`(unixepoch())`),
@@ -466,6 +480,7 @@ export const mealIngredient = sqliteTable(
 	(table) => [
 		index("meal_ingredient_meal_idx").on(table.mealId),
 		index("meal_ingredient_name_idx").on(table.ingredientName),
+		index("meal_ingredient_cargo_meal_idx").on(table.cargoId, table.mealId),
 	],
 );
 
@@ -1012,6 +1027,18 @@ export const ingredientNutritionMatch = sqliteTable(
 		description: text("description"),
 		source: text("source").notNull(),
 		confidence: real("confidence").notNull(),
+		resolutionKind: text("resolution_kind"),
+		decisionSource: text("decision_source"),
+		matchQuality: text("match_quality"),
+		matchScore: real("match_score"),
+		scoreMargin: real("score_margin"),
+		matcherVersion: text("matcher_version"),
+		datasetSnapshotId: text("dataset_snapshot_id"),
+		expiresAt: integer("expires_at", { mode: "timestamp" }),
+		reviewedByUserId: text("reviewed_by_user_id").references(() => user.id, {
+			onDelete: "set null",
+		}),
+		reviewedAt: integer("reviewed_at", { mode: "timestamp" }),
 		createdAt: integer("created_at", { mode: "timestamp" })
 			.notNull()
 			.default(sql`(unixepoch())`),
@@ -1025,6 +1052,7 @@ export const ingredientNutritionMatch = sqliteTable(
 			table.normalizedName,
 		),
 		index("ingredient_nutrition_match_org_idx").on(table.organizationId),
+		index("ingredient_nutrition_match_expiry_idx").on(table.expiresAt),
 	],
 );
 
@@ -1061,11 +1089,24 @@ export const nutritionGoal = sqliteTable(
 		/** Inclusive end date YYYY-MM-DD; null = open-ended. */
 		effectiveTo: text("effective_to"),
 		consentAt: integer("consent_at", { mode: "timestamp" }).notNull(),
+		/** Nullable while legacy dogfood rows are classified. */
+		consentId: text("consent_id").references(() => nutritionConsent.id, {
+			onDelete: "restrict",
+		}),
 		createdAt: integer("created_at", { mode: "timestamp" })
 			.notNull()
 			.default(sql`(unixepoch())`),
 	},
-	(table) => [index("nutrition_goal_user_idx").on(table.userId)],
+	(table) => [
+		index("nutrition_goal_user_idx").on(table.userId),
+		index("nutrition_goal_user_effective_idx").on(
+			table.userId,
+			table.effectiveFrom,
+		),
+		uniqueIndex("nutrition_goal_user_open_uidx")
+			.on(table.userId)
+			.where(sql`${table.effectiveTo} IS NULL`),
+	],
 );
 
 export const nutritionGoalRelations = relations(nutritionGoal, ({ one }) => ({
@@ -1076,8 +1117,9 @@ export const nutritionGoalRelations = relations(nutritionGoal, ({ one }) => ({
 }));
 
 /**
- * Server-stamped nutrition consent (purpose-level). Clients send `consent: true`;
- * never trust client-authored grant timestamps.
+ * Server-stamped, versioned nutrition consent (purpose-level). Grants are
+ * recorded only through the dedicated privacy API; nutrition writes reference
+ * the resulting ledger row and never grant consent implicitly.
  */
 export const nutritionConsent = sqliteTable(
 	"nutrition_consent",
@@ -1088,11 +1130,22 @@ export const nutritionConsent = sqliteTable(
 		userId: text("user_id")
 			.notNull()
 			.references(() => user.id, { onDelete: "cascade" }),
-		/** goals | intake | healthkit (reserved) */
+		/** goals | intake | agent_processing */
 		purpose: text("purpose").notNull(),
 		policyVersion: text("policy_version").notNull(),
+		/** Nullable only for retained legacy evidence pending operator classification. */
+		statementVersion: text("statement_version"),
+		statementSha256: text("statement_sha256"),
+		privacyNoticeVersion: text("privacy_notice_version"),
 		/** web | mobile | mcp | copilot */
 		source: text("source").notNull(),
+		clientSurface: text("client_surface"),
+		clientVersion: text("client_version"),
+		locale: text("locale"),
+		/** Idempotency key for the consent operation; never client identity. */
+		requestId: text("request_id"),
+		/** Idempotency key for the later withdrawal operation, if any. */
+		withdrawRequestId: text("withdraw_request_id"),
 		grantedAt: integer("granted_at", { mode: "timestamp" }).notNull(),
 		withdrawnAt: integer("withdrawn_at", { mode: "timestamp" }),
 		createdAt: integer("created_at", { mode: "timestamp" })
@@ -1102,8 +1155,14 @@ export const nutritionConsent = sqliteTable(
 	(table) => [
 		index("nutrition_consent_user_purpose_idx").on(table.userId, table.purpose),
 		uniqueIndex("nutrition_consent_active_uidx")
-			.on(table.userId, table.purpose)
+			.on(table.userId, table.purpose, table.policyVersion)
 			.where(sql`${table.withdrawnAt} IS NULL`),
+		uniqueIndex("nutrition_consent_user_request_uidx")
+			.on(table.userId, table.requestId)
+			.where(sql`${table.requestId} IS NOT NULL`),
+		uniqueIndex("nutrition_consent_user_withdraw_request_uidx")
+			.on(table.userId, table.withdrawRequestId)
+			.where(sql`${table.withdrawRequestId} IS NOT NULL`),
 	],
 );
 
@@ -1165,9 +1224,16 @@ export const nutritionIntake = sqliteTable(
 		coverageJson: text("coverage_json", { mode: "json" }).$type<
 			Record<string, number>
 		>(),
+		/** Indexed nullable fiber scalar; null preserves unknown. */
+		fiberG: real("fiber_g"),
+		/** Nullable while legacy dogfood rows are classified. */
+		consentId: text("consent_id").references(() => nutritionConsent.id, {
+			onDelete: "restrict",
+		}),
 		idempotencyKey: text("idempotency_key"),
 		operationId: text("operation_id"),
 		replacesIntakeId: text("replaces_intake_id"),
+		voidOperationId: text("void_operation_id"),
 		voidedAt: integer("voided_at", { mode: "timestamp" }),
 		voidedByUserId: text("voided_by_user_id").references(() => user.id, {
 			onDelete: "set null",
@@ -1185,12 +1251,20 @@ export const nutritionIntake = sqliteTable(
 			table.organizationId,
 			table.manifestDate,
 		),
-		index("nutrition_intake_user_history_idx").on(
+		index("nutrition_intake_user_history_idx")
+			.on(
+				table.userId,
+				table.organizationId,
+				table.manifestDate,
+				table.occurredAt,
+				table.id,
+			)
+			.where(sql`${table.voidedAt} IS NULL`),
+		index("nutrition_intake_retention_idx").on(table.occurredAt),
+		index("nutrition_intake_operation_idx").on(
 			table.userId,
 			table.organizationId,
-			table.manifestDate,
-			table.occurredAt,
-			table.id,
+			table.operationId,
 		),
 		uniqueIndex("nutrition_intake_user_idempotency_uidx")
 			.on(table.userId, table.idempotencyKey)
@@ -1222,6 +1296,188 @@ export const nutritionIntakeRelations = relations(
 			references: [kitchenEvent.id],
 		}),
 	}),
+);
+
+/**
+ * Request-level idempotency record for all personal nutrition mutations.
+ * Results are reconstructed from immutable rows associated with operationId.
+ */
+export const nutritionOperation = sqliteTable(
+	"nutrition_operation",
+	{
+		id: text("id")
+			.primaryKey()
+			.$defaultFn(() => crypto.randomUUID()),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id, { onDelete: "cascade" }),
+		operationKey: text("operation_key").notNull(),
+		requestHash: text("request_hash").notNull(),
+		operationType: text("operation_type").notNull(),
+		status: text("status", {
+			enum: ["in_progress", "completed", "failed"],
+		})
+			.notNull()
+			.default("in_progress"),
+		itemCount: integer("item_count").notNull(),
+		/** Stable committed response metadata (never arguments or free-form PII). */
+		resultJson: text("result_json", { mode: "json" }).$type<{
+			summaryGeneratedAt?: string;
+			dayTotals?: Array<{
+				date: string;
+				energyKcal: number;
+				proteinG: number;
+				carbsG: number;
+				fatG: number;
+				fiberG?: number | null;
+				coverageAvg: number;
+				entryCount: number;
+			}>;
+		}>(),
+		createdAt: integer("created_at", { mode: "timestamp" })
+			.notNull()
+			.default(sql`(unixepoch())`),
+		completedAt: integer("completed_at", { mode: "timestamp" }),
+		/** Durable one-time undo consumption marker for intake operations. */
+		undoneAt: integer("undone_at", { mode: "timestamp" }),
+	},
+	(table) => [
+		// Operation keys are user-scoped so goal mutations (user-global) and org
+		// switches cannot commit the same key twice under different households.
+		unique("nutrition_operation_user_key_unique").on(
+			table.userId,
+			table.operationKey,
+		),
+		index("nutrition_operation_status_created_idx").on(
+			table.status,
+			table.createdAt,
+		),
+		index("nutrition_operation_user_org_idx").on(
+			table.userId,
+			table.organizationId,
+		),
+	],
+);
+
+/**
+ * Value-free durable audit trail for sensitive nutrition access and mutation.
+ * Nutrient values, food names, arguments, outputs, prompts, and free-form errors
+ * must never be stored here.
+ */
+export const nutritionAccessAudit = sqliteTable(
+	"nutrition_access_audit",
+	{
+		id: text("id")
+			.primaryKey()
+			.$defaultFn(() => crypto.randomUUID()),
+		eventVersion: integer("event_version").notNull().default(1),
+		userId: text("user_id").references(() => user.id, {
+			onDelete: "set null",
+		}),
+		organizationId: text("organization_id").references(() => organization.id, {
+			onDelete: "set null",
+		}),
+		surface: text("surface").notNull(),
+		authMethod: text("auth_method").notNull(),
+		credentialId: text("credential_id"),
+		clientId: text("client_id"),
+		eventType: text("event_type").notNull(),
+		requiredScope: text("required_scope"),
+		consentPurpose: text("consent_purpose"),
+		consentPolicyVersion: text("consent_policy_version"),
+		outcome: text("outcome").notNull(),
+		errorCode: text("error_code"),
+		replayed: integer("replayed", { mode: "boolean" }).notNull().default(false),
+		itemCountBucket: text("item_count_bucket"),
+		dateRangeBucket: text("date_range_bucket"),
+		requestId: text("request_id").notNull(),
+		operationId: text("operation_id"),
+		durationBucket: text("duration_bucket"),
+		occurredAt: integer("occurred_at", { mode: "timestamp" })
+			.notNull()
+			.default(sql`(unixepoch())`),
+	},
+	(table) => [
+		index("nutrition_access_audit_user_occurred_idx").on(
+			table.userId,
+			table.occurredAt,
+		),
+		index("nutrition_access_audit_org_occurred_idx").on(
+			table.organizationId,
+			table.occurredAt,
+		),
+		index("nutrition_access_audit_request_idx").on(table.requestId),
+	],
+);
+
+/**
+ * D1 source-of-truth outbox and lease record for queue-backed recomputation.
+ * Queue payloads contain only jobKey and wake-up metadata.
+ */
+export const nutritionRecomputeJob = sqliteTable(
+	"nutrition_recompute_job",
+	{
+		jobKey: text("job_key").primaryKey(),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id, { onDelete: "cascade" }),
+		subjectType: text("subject_type", {
+			enum: ["meal", "organization"],
+		}).notNull(),
+		subjectId: text("subject_id").notNull(),
+		trigger: text("trigger").notNull(),
+		requestedRevision: integer("requested_revision").notNull().default(1),
+		processingRevision: integer("processing_revision"),
+		completedRevision: integer("completed_revision").notNull().default(0),
+		status: text("status", {
+			enum: ["pending", "processing", "completed", "failed"],
+		})
+			.notNull()
+			.default("pending"),
+		attemptCount: integer("attempt_count").notNull().default(0),
+		dispatchAfter: integer("dispatch_after", { mode: "timestamp" }).notNull(),
+		lastDispatchedAt: integer("last_dispatched_at", { mode: "timestamp" }),
+		leaseToken: text("lease_token"),
+		leaseExpiresAt: integer("lease_expires_at", { mode: "timestamp" }),
+		lastErrorCode: text("last_error_code"),
+		sweepCursor: text("sweep_cursor"),
+		originatingSurface: text("originating_surface").notNull(),
+		originatingUserId: text("originating_user_id").references(() => user.id, {
+			onDelete: "set null",
+		}),
+		originatingClientVersion: text("originating_client_version"),
+		originatingCountry: text("originating_country"),
+		originatingEnvironment: text("originating_environment"),
+		originatingPlan: text("originating_plan"),
+		createdAt: integer("created_at", { mode: "timestamp" })
+			.notNull()
+			.default(sql`(unixepoch())`),
+		updatedAt: integer("updated_at", { mode: "timestamp" })
+			.notNull()
+			.default(sql`(unixepoch())`),
+		completedAt: integer("completed_at", { mode: "timestamp" }),
+		expiresAt: integer("expires_at", { mode: "timestamp" }),
+	},
+	(table) => [
+		index("nutrition_recompute_due_idx").on(
+			table.status,
+			table.dispatchAfter,
+			table.jobKey,
+		),
+		index("nutrition_recompute_lease_idx").on(
+			table.status,
+			table.leaseExpiresAt,
+		),
+		index("nutrition_recompute_expiry_idx").on(table.status, table.expiresAt),
+		index("nutrition_recompute_org_subject_idx").on(
+			table.organizationId,
+			table.subjectType,
+			table.subjectId,
+		),
+	],
 );
 
 export {

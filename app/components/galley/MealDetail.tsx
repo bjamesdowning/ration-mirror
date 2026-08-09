@@ -385,6 +385,16 @@ export function MealDetail({
 		});
 	}, [fetcher.state, fetcher.data, offerEatEnabled]);
 
+	useEffect(() => {
+		if (intakeFetcher.state !== "idle") return;
+		const data = intakeFetcher.data as
+			| { intakeConsentGranted?: boolean; error?: string }
+			| undefined;
+		if (data?.intakeConsentGranted === true && !data.error) {
+			setIntakeConsentGranted(true);
+		}
+	}, [intakeFetcher.state, intakeFetcher.data]);
+
 	const cookSuccessMessage = isCooked
 		? fetcher.data?.result?.partialCook
 			? galleyPartialCookDescription(fetcher.data?.result?.skippedIngredients)
@@ -419,13 +429,12 @@ export function MealDetail({
 		);
 	};
 
-	const handleEat = (entryId: string, servings: number, consent?: boolean) => {
+	const handleEat = (entryId: string, servings: number) => {
 		if (!eatEntry) return;
 		intakeFetcher.submit(
 			JSON.stringify({
 				servings,
 				idempotencyKey: crypto.randomUUID(),
-				...(consent ? { consent: true } : {}),
 			}),
 			{
 				method: "POST",
@@ -849,11 +858,10 @@ export function MealDetail({
 					mealName={eatEntry.mealName}
 					defaultServings={1}
 					intakeConsentGranted={intakeConsentGranted}
-					onConfirmEat={(servings, consent) => {
+					onConfirmEat={(servings) => {
 						const entryId = eatEntry.id;
-						if (consent) setIntakeConsentGranted(true);
 						setEatEntry(null);
-						handleEat(entryId, servings, consent);
+						handleEat(entryId, servings);
 					}}
 					onClose={() => setEatEntry(null)}
 				/>

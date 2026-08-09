@@ -6,6 +6,7 @@ import Observation
 final class NutritionGoalsViewModel {
     private(set) var goal: NutritionGoal?
     private(set) var summary: NutritionSummary?
+    private(set) var consentStatuses: [NutritionConsentStatus] = []
     private(set) var isLoading = false
     private(set) var isSaving = false
     var errorMessage: String?
@@ -19,6 +20,14 @@ final class NutritionGoalsViewModel {
 
     var hasAnyValue: Bool {
         [dailyEnergyKcal, proteinG, carbsG, fatG, fiberG].contains { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+    }
+
+    var goalsConsent: NutritionConsentStatus? {
+        consentStatuses.first { $0.purpose == .goals }
+    }
+
+    var hasActiveGoalsConsent: Bool {
+        goalsConsent?.state == .active
     }
 
     /// Sparse server days backfilled to a contiguous 7-day window for the chart.
@@ -38,6 +47,7 @@ final class NutritionGoalsViewModel {
         isUnavailable = false
         defer { isLoading = false }
         do {
+            consentStatuses = try await api.nutritionPrivacy().consents
             let response = try await api.nutritionGoal(asOf: ManifestDateHelpers.todayISO())
             applyGoal(response.goal)
         } catch let apiError as APIError where apiError.isFeatureDisabled {
@@ -78,7 +88,7 @@ final class NutritionGoalsViewModel {
         return Double(trimmed)
     }
 
-    func save(api: RationAPI) async -> Bool {
+    func save(api: RationAPI, affirmed: Bool) async -> Bool {
         guard hasAnyValue else {
             errorMessage = "Set at least one nutrient target."
             return false
@@ -87,15 +97,20 @@ final class NutritionGoalsViewModel {
         errorMessage = nil
         defer { isSaving = false }
         do {
+            if !hasActiveGoalsConsent {
+                guard affirmed, let goalsConsent else {
+                    errorMessage = "Review and accept the current nutrition goals consent statement."
+                    return false
+                }
+                consentStatuses = try await api.grantNutritionConsent(goalsConsent).consents
+            }
             let body = NutritionGoalUpsertRequest(
                 dailyEnergyKcal: Self.parseOptional(dailyEnergyKcal),
                 proteinG: Self.parseOptional(proteinG),
                 carbsG: Self.parseOptional(carbsG),
                 fatG: Self.parseOptional(fatG),
                 fiberG: Self.parseOptional(fiberG),
-                effectiveFrom: ManifestDateHelpers.todayISO(),
-                // Server records first-use goals consent; idempotent to re-send on every edit.
-                consent: true
+                effectiveFrom: ManifestDateHelpers.todayISO()
             )
             let response = try await MutationRetry.once {
                 try await api.upsertNutritionGoal(body)
@@ -129,7 +144,9 @@ final class NutritionGoalsViewModel {
 struct NutritionGoalsView: View {
     @Environment(AppEnvironment.self) private var env
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.openURL) private var openURL
     @State private var model = NutritionGoalsViewModel()
+    @State private var affirmedGoalsConsent = false
     @FocusState private var focusedField: Field?
 
     private enum Field: Hashable {
@@ -161,13 +178,18 @@ struct NutritionGoalsView: View {
                     Button("Save") {
                         Task {
                             focusedField = nil
-                            if await model.save(api: env.api) {
+                            if await model.save(api: env.api, affirmed: affirmedGoalsConsent) {
                                 Haptics.light()
                                 dismiss()
                             }
                         }
                     }
-                    .disabled(model.isSaving || !model.hasAnyValue || model.isUnavailable)
+                    .disabled(
+                        model.isSaving
+                            || !model.hasAnyValue
+                            || model.isUnavailable
+                            || (!model.hasActiveGoalsConsent && !affirmedGoalsConsent)
+                    )
                 }
             }
             .background(Theme.ceramic)
@@ -187,6 +209,26 @@ struct NutritionGoalsView: View {
                 Text("Daily targets")
             } footer: {
                 Text("Set at least one target. Leave a field blank to skip it. Saving stores these goals to power your daily and weekly progress views.")
+            }
+
+            if !model.hasActiveGoalsConsent, let consent = model.goalsConsent {
+                Section {
+                    Text(consent.statement.text)
+                        .font(Typography.caption())
+                    Toggle(
+                        "I have read this statement and explicitly consent",
+                        isOn: $affirmedGoalsConsent
+                    )
+                    .tint(Theme.hyperGreen)
+                    .accessibilityIdentifier("nutrition.goals.consent.toggle")
+                    Button("Privacy Policy") {
+                        openURL(AppConfig.privacyURL)
+                    }
+                } header: {
+                    Text("Explicit consent")
+                } footer: {
+                    Text("Statement \(consent.statement.statementVersion). Withdrawal and erasure are available in Privacy & AI settings.")
+                }
             }
 
             if let errorMessage = model.errorMessage {

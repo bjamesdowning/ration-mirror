@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
 	detectNutritionSchemaVersion,
+	fromCanonicalNutrientAmounts,
 	isNutritionSnapshotV2,
 	matchQualityFromLegacy,
 	normalizeNutritionSnapshot,
 	projectNutritionSnapshotToLegacy,
+	toCanonicalNutrientAmounts,
 	upgradeNutritionSnapshotToV2,
 } from "../adapters";
 import type { NutritionSnapshot } from "../types";
@@ -72,5 +74,41 @@ describe("adapters", () => {
 		expect(matchQualityFromLegacy("usda", 1, true)).toBe("verified");
 		expect(matchQualityFromLegacy("ai_estimate", 0.7, false)).toBe("medium");
 		expect(matchQualityFromLegacy("user_override", 0, false)).toBe("unknown");
+	});
+
+	it("maps carbG ↔ carbsG without coercing null to zero", () => {
+		const canonical = toCanonicalNutrientAmounts({
+			energyKcal: 10,
+			proteinG: null,
+			fatG: 1,
+			carbG: 2,
+			fiberG: null,
+			sugarG: null,
+			satFatG: null,
+			sodiumMg: null,
+			saltG: null,
+		});
+		expect(canonical).toEqual({
+			energyKcal: 10,
+			proteinG: null,
+			carbsG: 2,
+			fatG: 1,
+			fiberG: null,
+			sugarG: null,
+			satFatG: null,
+			sodiumMg: null,
+			saltG: null,
+		});
+		expect(fromCanonicalNutrientAmounts(canonical)).toEqual({
+			energyKcal: 10,
+			proteinG: null,
+			carbG: 2,
+			fatG: 1,
+			fiberG: null,
+			sugarG: null,
+			satFatG: null,
+			sodiumMg: null,
+			saltG: null,
+		});
 	});
 });

@@ -1,12 +1,65 @@
 import { describe, expect, it } from "vitest";
 import { APP_VERSION } from "../../version";
-import { buildAgentFlagContext, buildFlagContext } from "../context.server";
+import {
+	buildAgentFlagContext,
+	buildFlagContext,
+	buildMobileFlagContext,
+	buildSystemFlagContext,
+	buildWebFlagContext,
+	InvalidRationClientHeaderError,
+} from "../context.server";
 
 function requestWithCf(url: string, country: string): Request {
 	const request = new Request(url);
 	Object.defineProperty(request, "cf", { value: { country } });
 	return request;
 }
+
+describe("buildWebFlagContext", () => {
+	it("forces web + APP_VERSION even when header claims ios", () => {
+		const request = new Request("https://ration.mayutic.com/", {
+			headers: { "X-Ration-Client": "ios/1.3.17" },
+		});
+		const context = buildWebFlagContext(request, { RATION_ENV: "production" });
+		expect(context.clientPlatform).toBe("web");
+		expect(context.clientVersion).toBe(APP_VERSION);
+		expect(context.country).toBe("unknown");
+	});
+});
+
+describe("buildMobileFlagContext", () => {
+	it("forces ios and accepts reported marketing version", () => {
+		const request = new Request("https://ration.mayutic.com/", {
+			headers: { "X-Ration-Client": "ios/1.3.17" },
+		});
+		const context = buildMobileFlagContext(request, {
+			RATION_ENV: "production",
+		});
+		expect(context.clientPlatform).toBe("ios");
+		expect(context.clientVersion).toBe("1.3.17");
+	});
+
+	it("rejects mismatched header platforms", () => {
+		const request = new Request("https://ration.mayutic.com/", {
+			headers: { "X-Ration-Client": "web/1.8.3" },
+		});
+		expect(() => buildMobileFlagContext(request, {})).toThrow(
+			InvalidRationClientHeaderError,
+		);
+	});
+});
+
+describe("buildSystemFlagContext", () => {
+	it("defaults to system surface", () => {
+		const context = buildSystemFlagContext(
+			{ RATION_ENV: "production" },
+			"user-1",
+		);
+		expect(context.clientPlatform).toBe("system");
+		expect(context.userId).toBe("user-1");
+		expect(context.environment).toBe("production");
+	});
+});
 
 describe("buildFlagContext", () => {
 	it("includes country from request.cf", () => {

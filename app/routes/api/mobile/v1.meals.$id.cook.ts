@@ -1,7 +1,7 @@
 import { data } from "react-router";
 import { z } from "zod";
 import { handleApiError } from "~/lib/error-handler";
-import { buildFlagContext } from "~/lib/feature-flags/context.server";
+import { buildMobileFlagContext } from "~/lib/feature-flags/context.server";
 import { cookMealFromGalley } from "~/lib/galley-cook-manifest.server";
 import { requireMobileActiveGroup } from "~/lib/mobile/auth.server";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
@@ -63,9 +63,13 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 			}
 		}
 
-		const flagContext = buildFlagContext(request, context.cloudflare.env, {
-			user: { id: userId },
-		});
+		const flagContext = buildMobileFlagContext(
+			request,
+			context.cloudflare.env,
+			{
+				user: { id: userId },
+			},
+		);
 
 		const result = await cookMealFromGalley(
 			context.cloudflare.env,

@@ -1,7 +1,7 @@
 import { data } from "react-router";
 import { handleApiError } from "~/lib/error-handler";
 import { assertFeatureEnabled } from "~/lib/feature-flags/assert-enabled.server";
-import { buildFlagContext } from "~/lib/feature-flags/context.server";
+import { buildMobileFlagContext } from "~/lib/feature-flags/context.server";
 import { ensureMealPlan } from "~/lib/manifest.server";
 import { cookManifestEntries } from "~/lib/manifest-cook.server";
 import { requireMobileActiveGroup } from "~/lib/mobile/auth.server";
@@ -33,9 +33,13 @@ export async function action({ request, context }: Route.ActionArgs) {
 			);
 		}
 
-		const flagContext = buildFlagContext(request, context.cloudflare.env, {
-			user: { id: userId },
-		});
+		const flagContext = buildMobileFlagContext(
+			request,
+			context.cloudflare.env,
+			{
+				user: { id: userId },
+			},
+		);
 		await assertFeatureEnabled(
 			context.cloudflare.env,
 			"nutrition-cook-log-split",

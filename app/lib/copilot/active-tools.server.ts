@@ -86,7 +86,8 @@ function includesAny(text: string, needles: RegExp[]): boolean {
 
 /**
  * Filter available tool names for this turn based on the latest user text.
- * Unknown / empty text keeps the full available set (safe default).
+ * Empty text never expands capability — only core read/context tools.
+ * Intent detection may shrink the authorized set; it never grants new scopes.
  */
 export function resolveCopilotActiveTools(
 	availableToolNames: string[],
@@ -94,13 +95,13 @@ export function resolveCopilotActiveTools(
 ): string[] {
 	const available = new Set(availableToolNames);
 	const text = userText.trim().toLowerCase();
-	if (!text) {
-		return availableToolNames;
-	}
 
 	const selected = new Set<string>();
 	for (const name of CORE_TOOLS) {
 		if (available.has(name)) selected.add(name);
+	}
+	if (!text) {
+		return availableToolNames.filter((name) => selected.has(name));
 	}
 
 	const wantInventory = includesAny(text, [
@@ -215,6 +216,9 @@ export function resolveCopilotActiveTools(
 	// If the user asked something that needs writes but keywords missed, they can
 	// rephrase; broad "help with kitchen" still has summary/read tools.
 	const result = availableToolNames.filter((name) => selected.has(name));
-	// Safety: never return empty when tools exist.
-	return result.length > 0 ? result : availableToolNames;
+	// Safety: never return empty when tools exist — fall back to core reads only.
+	if (result.length > 0) return result;
+	return availableToolNames.filter((name) =>
+		(CORE_TOOLS as readonly string[]).includes(name),
+	);
 }

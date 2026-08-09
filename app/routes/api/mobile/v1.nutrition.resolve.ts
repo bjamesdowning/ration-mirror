@@ -1,12 +1,12 @@
 import { data } from "react-router";
 import { handleApiError } from "~/lib/error-handler";
 import { assertFeatureEnabled } from "~/lib/feature-flags/assert-enabled.server";
-import { buildFlagContext } from "~/lib/feature-flags/flags.server";
+import { buildMobileFlagContext } from "~/lib/feature-flags/flags.server";
 import { requireMobileActiveGroup } from "~/lib/mobile/auth.server";
 import { NUTRITION_RESOLVE_CONCURRENCY } from "~/lib/nutrition/constants";
+import { serializeNutritionSnapshot } from "~/lib/nutrition/dto.server";
 import { mapWithConcurrency } from "~/lib/nutrition/map-concurrency";
 import { maybeResolveCargoNutrition } from "~/lib/nutrition/persist.server";
-import type { NutritionSnapshot } from "~/lib/nutrition/types";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import { NutritionResolveRequestSchema } from "~/lib/schemas/nutrition";
 import type { Route } from "./+types/v1.nutrition.resolve";
@@ -26,7 +26,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 			request,
 		);
 		const env = context.cloudflare.env;
-		const flagContext = buildFlagContext(request, env, {
+		const flagContext = buildMobileFlagContext(request, env, {
 			user: { id: userId },
 		});
 
@@ -57,8 +57,12 @@ export async function action({ request, context }: Route.ActionArgs) {
 			...new Set(parsed.data.names.map((n) => n.trim())),
 		].filter(Boolean);
 
-		// Ignore client allowAiEstimate — only scan_review ingest path may AI-fill.
-		const allowAiEstimate = parsed.data.ingestSource === "scan_review";
+		// Body ingestSource/allowAiEstimate are accepted for compatibility but
+		// ignored as policy inputs. AI remains disabled until a server-verified
+		// scan/job binding exists (and nutrition-ai-estimate is on).
+		void parsed.data.ingestSource;
+		void parsed.data.allowAiEstimate;
+		const allowAiEstimate = false;
 
 		const entries = await mapWithConcurrency(
 			uniqueNames,
@@ -78,9 +82,12 @@ export async function action({ request, context }: Route.ActionArgs) {
 			},
 		);
 
-		const snapshots: Record<string, NutritionSnapshot | null> = {};
+		const snapshots: Record<
+			string,
+			ReturnType<typeof serializeNutritionSnapshot> | null
+		> = {};
 		for (const [name, snap] of entries) {
-			snapshots[name] = snap;
+			snapshots[name] = snap ? serializeNutritionSnapshot(snap) : null;
 		}
 
 		return { snapshots };

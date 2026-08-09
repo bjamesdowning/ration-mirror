@@ -16,8 +16,50 @@ extension RationAPI {
         try await client.post("nutrition/goals", body: body)
     }
 
-    func clearNutritionGoal() async throws -> NutritionGoalClearResponse {
-        try await client.delete("nutrition/goals")
+    func clearNutritionGoal(
+        operationKey: String = UUID().uuidString
+    ) async throws -> NutritionGoalClearResponse {
+        try await client.delete(
+            "nutrition/goals",
+            query: [URLQueryItem(name: "operationKey", value: operationKey)]
+        )
+    }
+
+    func nutritionPrivacy() async throws -> NutritionPrivacyResponse {
+        try await client.get("privacy/nutrition")
+    }
+
+    func grantNutritionConsent(_ status: NutritionConsentStatus) async throws -> NutritionPrivacyResponse {
+        try await client.post(
+            "privacy/nutrition",
+            body: NutritionConsentGrantRequest(
+                purpose: status.purpose,
+                policyVersion: status.statement.policyVersion,
+                statementVersion: status.statement.statementVersion,
+                statementSha256: status.statement.sha256,
+                requestId: UUID().uuidString
+            )
+        )
+    }
+
+    func withdrawNutritionConsent(_ purpose: NutritionConsentPurpose) async throws -> NutritionPrivacyResponse {
+        try await client.post(
+            "privacy/nutrition",
+            body: NutritionConsentWithdrawRequest(
+                purpose: purpose,
+                requestId: UUID().uuidString
+            )
+        )
+    }
+
+    func eraseNutritionData(_ dataset: String) async throws -> NutritionPrivacyResponse {
+        try await client.post(
+            "privacy/nutrition",
+            body: NutritionDataEraseRequest(
+                dataset: dataset,
+                requestId: UUID().uuidString
+            )
+        )
     }
 
     // Nutrition summary — gated by `nutrition-goals` OR `nutrition-manifest`.

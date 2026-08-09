@@ -1,10 +1,10 @@
 import { z } from "zod";
 
+/** Scopes accepted when creating new API keys (legacy blanket `mcp` is rejected). */
 export const VALID_API_SCOPES = [
 	"inventory",
 	"galley",
 	"supply",
-	"mcp",
 	"mcp:read",
 	"mcp:inventory:write",
 	"mcp:galley:write",

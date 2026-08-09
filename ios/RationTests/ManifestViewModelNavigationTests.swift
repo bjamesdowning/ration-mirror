@@ -16,14 +16,18 @@ final class ManifestViewModelNavigationTests: XCTestCase {
         }
         let api = RationAPI(client: APIClient(auth: AuthManager()))
         let snapshots = SnapshotStore()
+        let nutrition = NutritionStore(snapshots: snapshots)
         let organizationId = "org-add-date-\(UUID().uuidString)"
+        let userId = "user-add-date"
 
         await model.navigateWeek(
             to: weekStart,
             api: api,
             snapshots: snapshots,
             online: true,
-            organizationId: organizationId
+            organizationId: organizationId,
+            userId: userId,
+            nutrition: nutrition
         )
         model.selectedDay = midWeek
 
@@ -83,14 +87,18 @@ final class ManifestViewModelNavigationTests: XCTestCase {
 
         let api = RationAPI(client: APIClient(auth: AuthManager()))
         let snapshots = SnapshotStore()
+        let nutrition = NutritionStore(snapshots: snapshots)
         let organizationId = "org-nav-\(UUID().uuidString)"
+        let userId = "user-nav"
 
         model.requestNavigateWeek(
             to: weekPrev,
             api: api,
             snapshots: snapshots,
             online: true,
-            organizationId: organizationId
+            organizationId: organizationId,
+            userId: userId,
+            nutrition: nutrition
         )
 
         XCTAssertEqual(model.rangeStart, weekPrev)
@@ -131,14 +139,18 @@ final class ManifestViewModelNavigationTests: XCTestCase {
 
         let api = RationAPI(client: APIClient(auth: AuthManager()))
         let snapshots = SnapshotStore()
+        let nutrition = NutritionStore(snapshots: snapshots)
         let organizationId = "org-stale-\(UUID().uuidString)"
+        let userId = "user-stale"
 
         model.requestNavigateWeek(
             to: weekPrev,
             api: api,
             snapshots: snapshots,
             online: true,
-            organizationId: organizationId
+            organizationId: organizationId,
+            userId: userId,
+            nutrition: nutrition
         )
         XCTAssertEqual(model.rangeStart, weekPrev)
 
@@ -147,7 +159,9 @@ final class ManifestViewModelNavigationTests: XCTestCase {
             api: api,
             snapshots: snapshots,
             online: true,
-            organizationId: organizationId
+            organizationId: organizationId,
+            userId: userId,
+            nutrition: nutrition
         )
         XCTAssertEqual(model.rangeStart, weekNext)
 
@@ -165,7 +179,7 @@ final class ManifestViewModelNavigationTests: XCTestCase {
         let cached = await snapshots.load(
             ManifestResponse.self,
             domain: SnapshotDomain.manifest,
-            organizationId: organizationId
+            scope: .userOrganization(userId: userId, organizationId: organizationId)
         )
         XCTAssertEqual(cached?.payload.startDate, weekNext)
     }
@@ -182,11 +196,13 @@ final class ManifestViewModelNavigationTests: XCTestCase {
         )
 
         let organizationId = "org-offline-\(UUID().uuidString)"
+        let userId = "user-offline"
         let snapshots = SnapshotStore()
+        let nutrition = NutritionStore(snapshots: snapshots)
         await snapshots.save(
             Self.manifest(start: week0, end: ManifestDateHelpers.addDays(week0, days: 6)),
             domain: SnapshotDomain.manifest,
-            organizationId: organizationId
+            scope: .userOrganization(userId: userId, organizationId: organizationId)
         )
 
         let api = RationAPI(client: APIClient(auth: AuthManager()))
@@ -195,7 +211,9 @@ final class ManifestViewModelNavigationTests: XCTestCase {
             api: api,
             snapshots: snapshots,
             online: false,
-            organizationId: organizationId
+            organizationId: organizationId,
+            userId: userId,
+            nutrition: nutrition
         )
 
         XCTAssertEqual(model.rangeStart, weekPrev)

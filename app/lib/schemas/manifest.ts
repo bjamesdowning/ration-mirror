@@ -77,12 +77,12 @@ export const CookEntriesRequestSchema = z.object({
 });
 
 /** Private Eat upsert — path-scoped entry; no client user/org IDs. */
-export const ManifestPersonalIntakeUpsertSchema = z.object({
-	servings: z.coerce.number().min(0.5).max(100),
-	idempotencyKey: z.string().uuid(),
-	/** Explicit first-use intake consent; server stamps grant time. */
-	consent: z.literal(true).optional(),
-});
+export const ManifestPersonalIntakeUpsertSchema = z
+	.object({
+		servings: z.coerce.number().min(0.5).max(100),
+		idempotencyKey: z.string().uuid(),
+	})
+	.strict();
 
 /**
  * Used by the bulk-add endpoint for both the "Copy Entry / Day" features

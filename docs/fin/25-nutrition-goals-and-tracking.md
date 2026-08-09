@@ -28,7 +28,7 @@ Flags off: Manifest nutrition chrome is unchanged (no preference strip).
 
 - **Cook** — Shared household action: deducts Cargo once and marks the plan entry *Prepared*. Does **not** write personal nutrition.
 - **Log my serving** / **Edit serving** — Private to you. Opens plate-up for how many servings **you** ate; records intake from the meal’s nutrition snapshot scaled to portions.
-- **Explicit intake consent** — First personal log requires checking an intake-consent checkbox (or API `consent: true`). Consent is **not** implied by Cook, Prepared status, or saving goals.
+- **Explicit intake consent** — First personal log requires reviewing the full versioned statement and granting intake consent through Ration's privacy controls. Consent is **not** an inline Eat field and is not implied by Cook, Prepared status, or saving goals.
 - **Remove my log** — Clears your personal intake for that entry without undoing Cook/Prepared.
 
 You can Cook without ever logging a personal serving.
@@ -60,7 +60,7 @@ Ask Ration (Copilot) and MCP can read and act on nutrition when Flagship flags a
 
 - **Reads:** `get_nutrition_summary`, `list_nutrition_intakes`; `get_meal_plan` includes `cookedAt` and the caller’s `personalIntake` when nutrition flags allow.
 - **Cook (shared):** `cook_manifest_entries` or Galley `consume_meal` (Manifest bridge when **nutrition-cook-log-split** is on) — Cargo/Prepared only; never personal intake.
-- **Eat (private):** `log_manifest_intake` (portions + `consent:true` on first grant) / `clear_manifest_intake`.
+- **Eat (private):** `log_manifest_intake` / `clear_manifest_intake`, each with a request-level operation key; consent must already be active in Ration.
 - **Goals:** `set_nutrition_goal` / `clear_nutrition_goal`.
 
 When **nutrition-cook-log-split** is on, `consume_manifest_entries` is refused (`cook_eat_split_required`) — use Cook then Eat. Agent Flagship context uses `clientPlatform` `mcp`|`copilot` + web `APP_VERSION` (never a faked iOS version). See *MCP tools reference*.

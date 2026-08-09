@@ -1,0 +1,1 @@
+ALTER TABLE `nutrition_operation` ADD `undone_at` integer;

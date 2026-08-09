@@ -19,11 +19,6 @@ export const SCOPE_META: Record<
 		description: "Read & write shopping lists",
 		color: "bg-platinum text-carbon",
 	},
-	mcp: {
-		label: "MCP Legacy Full Access",
-		description: "Legacy broad scope that grants all MCP permissions",
-		color: "bg-hyper-green/20 text-hyper-green border border-hyper-green/30",
-	},
 	"mcp:read": {
 		label: "MCP Read (advanced)",
 		description: "Manual MCP auth: read-only access across MCP tools",
@@ -78,7 +73,6 @@ export const MCP_SCOPE_ORDER: ApiScope[] = [
 	"mcp:preferences:write",
 	"mcp:nutrition:read",
 	"mcp:nutrition:write",
-	"mcp",
 ];
 
 export type ScopePresetId =

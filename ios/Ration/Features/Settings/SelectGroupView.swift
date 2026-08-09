@@ -107,6 +107,8 @@ struct SelectGroupView: View {
                 api: env.api,
                 auth: env.auth,
                 snapshots: env.snapshots,
+                nutrition: env.nutrition,
+                nutritionConsent: env.nutritionConsent,
                 billing: env.billing
             )
             env.session.completeOrgSelection()
@@ -137,6 +139,8 @@ struct SelectGroupView: View {
                 api: env.api,
                 auth: env.auth,
                 snapshots: env.snapshots,
+                nutrition: env.nutrition,
+                nutritionConsent: env.nutritionConsent,
                 billing: env.billing
             )
             env.session.completeOrgSelection()

@@ -22,10 +22,19 @@ describe("MCP_SCOPES", () => {
 });
 
 describe("requireScope", () => {
-	it("allows legacy mcp scope for any narrow requirement", () => {
+	it("allows legacy mcp scope for pre-nutrition requirements", () => {
 		expect(() =>
 			requireScope(ctx(["mcp"]), ["mcp:galley:write"]),
 		).not.toThrow();
+	});
+
+	it("does not let legacy mcp grant personal nutrition access", () => {
+		expect(() => requireScope(ctx(["mcp"]), ["mcp:nutrition:read"])).toThrow(
+			McpScopeError,
+		);
+		expect(() => requireScope(ctx(["mcp"]), ["mcp:nutrition:write"])).toThrow(
+			McpScopeError,
+		);
 	});
 
 	it("throws McpScopeError when a required scope is missing", () => {
@@ -57,7 +66,12 @@ describe("requireScope", () => {
 });
 
 describe("hasScope", () => {
-	it("returns true for legacy mcp on any narrow scope check", () => {
+	it("returns true for legacy mcp on pre-nutrition scope checks", () => {
 		expect(hasScope(ctx(["mcp"]), "mcp:read")).toBe(true);
+	});
+
+	it("returns false for legacy mcp on nutrition scope checks", () => {
+		expect(hasScope(ctx(["mcp"]), "mcp:nutrition:read")).toBe(false);
+		expect(hasScope(ctx(["mcp"]), "mcp:nutrition:write")).toBe(false);
 	});
 });

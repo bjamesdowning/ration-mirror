@@ -1,40 +1,40 @@
--- Minimal USDA-shaped seed (~30 common foods, per-100g values + sample portions).
--- Values approximate SR Legacy / Foundation averages for resolver smoke tests — not a full FDC dump.
--- Apply after schema.sql.
+-- TEST-ONLY USDA-shaped smoke seed (~30 foods). Approximate values — NOT App Review data.
+-- NEVER promote this file (or a DB filled from it) to production / reviewer nutrition-engine.
+-- Apply after schema.sql. Prefer scripts/import-fdc-nutrition.ts for verified Foundation + SR Legacy.
 
 BEGIN TRANSACTION;
 
 INSERT OR REPLACE INTO food (fdc_id, description, data_type) VALUES
-	(1001, 'Chicken breast, raw', 'sr_legacy'),
-	(1002, 'Milk, whole, 3.25% milkfat', 'sr_legacy'),
-	(1003, 'Wheat flour, white, all-purpose', 'sr_legacy'),
-	(1004, 'Rice, white, long-grain, raw', 'sr_legacy'),
-	(1005, 'Onions, raw', 'sr_legacy'),
-	(1006, 'Oil, olive, salad or cooking', 'sr_legacy'),
-	(1007, 'Egg, whole, raw, fresh', 'sr_legacy'),
-	(1008, 'Butter, salted', 'sr_legacy'),
-	(1009, 'Sugars, granulated', 'sr_legacy'),
-	(1010, 'Salt, table', 'sr_legacy'),
-	(1011, 'Tomatoes, red, ripe, raw', 'sr_legacy'),
-	(1012, 'Potatoes, flesh and skin, raw', 'sr_legacy'),
-	(1013, 'Pasta, dry, enriched', 'sr_legacy'),
-	(1014, 'Cheese, cheddar', 'sr_legacy'),
-	(1015, 'Yogurt, plain, whole milk', 'sr_legacy'),
-	(1016, 'Oats, raw', 'sr_legacy'),
-	(1017, 'Bananas, raw', 'sr_legacy'),
-	(1018, 'Apples, raw, with skin', 'sr_legacy'),
-	(1019, 'Bread, white, commercially prepared', 'sr_legacy'),
-	(1020, 'Spinach, raw', 'sr_legacy'),
-	(1021, 'Garlic, raw', 'sr_legacy'),
-	(1022, 'Lemons, raw, without peel', 'sr_legacy'),
-	(1023, 'Beef, ground, 85% lean meat / 15% fat, raw', 'sr_legacy'),
-	(1024, 'Fish, salmon, Atlantic, farmed, raw', 'sr_legacy'),
-	(1025, 'Beans, black, mature seeds, raw', 'sr_legacy'),
-	(1026, 'Lentils, raw', 'sr_legacy'),
-	(1027, 'Carrots, raw', 'sr_legacy'),
-	(1028, 'Broccoli, raw', 'sr_legacy'),
-	(1029, 'Avocados, raw, all commercial varieties', 'sr_legacy'),
-	(1030, 'Peanut butter, smooth style', 'sr_legacy');
+	(1001, 'Chicken breast, raw', 'sr_legacy_food'),
+	(1002, 'Milk, whole, 3.25% milkfat', 'sr_legacy_food'),
+	(1003, 'Wheat flour, white, all-purpose', 'sr_legacy_food'),
+	(1004, 'Rice, white, long-grain, raw', 'sr_legacy_food'),
+	(1005, 'Onions, raw', 'sr_legacy_food'),
+	(1006, 'Oil, olive, salad or cooking', 'sr_legacy_food'),
+	(1007, 'Egg, whole, raw, fresh', 'sr_legacy_food'),
+	(1008, 'Butter, salted', 'sr_legacy_food'),
+	(1009, 'Sugars, granulated', 'sr_legacy_food'),
+	(1010, 'Salt, table', 'sr_legacy_food'),
+	(1011, 'Tomatoes, red, ripe, raw', 'sr_legacy_food'),
+	(1012, 'Potatoes, flesh and skin, raw', 'sr_legacy_food'),
+	(1013, 'Pasta, dry, enriched', 'sr_legacy_food'),
+	(1014, 'Cheese, cheddar', 'sr_legacy_food'),
+	(1015, 'Yogurt, plain, whole milk', 'sr_legacy_food'),
+	(1016, 'Oats, raw', 'sr_legacy_food'),
+	(1017, 'Bananas, raw', 'sr_legacy_food'),
+	(1018, 'Apples, raw, with skin', 'sr_legacy_food'),
+	(1019, 'Bread, white, commercially prepared', 'sr_legacy_food'),
+	(1020, 'Spinach, raw', 'sr_legacy_food'),
+	(1021, 'Garlic, raw', 'sr_legacy_food'),
+	(1022, 'Lemons, raw, without peel', 'sr_legacy_food'),
+	(1023, 'Beef, ground, 85% lean meat / 15% fat, raw', 'sr_legacy_food'),
+	(1024, 'Fish, salmon, Atlantic, farmed, raw', 'sr_legacy_food'),
+	(1025, 'Beans, black, mature seeds, raw', 'sr_legacy_food'),
+	(1026, 'Lentils, raw', 'sr_legacy_food'),
+	(1027, 'Carrots, raw', 'sr_legacy_food'),
+	(1028, 'Broccoli, raw', 'sr_legacy_food'),
+	(1029, 'Avocados, raw, all commercial varieties', 'sr_legacy_food'),
+	(1030, 'Peanut butter, smooth style', 'sr_legacy_food');
 
 -- energy_kcal, protein_g, fat_g, carb_g, fiber_g, sugar_g, sat_fat_g, sodium_mg, salt_g
 INSERT OR REPLACE INTO food_nutrient (

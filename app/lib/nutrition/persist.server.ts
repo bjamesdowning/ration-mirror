@@ -6,14 +6,16 @@ import {
 	gte,
 	inArray,
 	isNull,
-	lt,
 	lte,
 	or,
 	sql,
 } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import * as schema from "~/db/schema";
-import type { FlagshipEvaluationContext } from "~/lib/feature-flags/context.server";
+import {
+	buildSystemFlagContext,
+	type FlagshipEvaluationContext,
+} from "~/lib/feature-flags/context.server";
 import { isFeatureEnabled } from "~/lib/feature-flags/flags.server";
 import { normalizeForCargoDedup } from "~/lib/matching";
 import { chunkedQuery } from "~/lib/query-utils.server";
@@ -31,7 +33,6 @@ import {
 import {
 	isGoalEffectiveOnDate,
 	nutritionIntakeRetentionCutoff,
-	previousUtcCalendarDay,
 } from "./goal-effective";
 import { mapWithConcurrency } from "./map-concurrency";
 import {
@@ -40,6 +41,7 @@ import {
 	pickBestCargoOverrideForIngredient,
 } from "./override-scale";
 import { resolveFoodName } from "./resolve-food.server";
+import { projectNullableValuesToLegacy } from "./scale-nutrients";
 import type {
 	MealNutritionSnapshot,
 	NutritionSnapshot,
@@ -55,18 +57,12 @@ export {
 	previousUtcCalendarDay,
 } from "./goal-effective";
 
-/** Flag context when no Request is available (ingest, background, MCP). */
+/** @deprecated Use {@link buildSystemFlagContext}. */
 export function buildMinimalFlagContext(
 	env: { RATION_ENV?: string },
 	userId?: string | null,
 ): FlagshipEvaluationContext {
-	const context: FlagshipEvaluationContext = {
-		environment: env.RATION_ENV?.trim() || "unknown",
-	};
-	if (userId) {
-		context.userId = userId;
-	}
-	return context;
+	return buildSystemFlagContext(env, userId);
 }
 
 export type MaybeResolveCargoNutritionOptions = ResolveCargoNutritionOptions & {
@@ -205,12 +201,20 @@ async function loadOrgCargoOverrideCandidates(
  * Prefer cargo `user_override` snapshots over USDA when a cargo match exists.
  * No-op when nutrition-engine is off. Returns the stored snapshot or null.
  */
+export type RecomputeMealNutritionOptions = {
+	/** When set, commit only if meal.nutritionRevision still equals this value. */
+	expectedSourceRevision?: number;
+	leaseToken?: string;
+	jobKey?: string;
+};
+
 export async function recomputeAndStoreMealNutrition(
 	env: Env,
 	db: D1Database,
 	mealId: string,
 	organizationId: string,
 	flagContext: FlagshipEvaluationContext,
+	opts?: RecomputeMealNutritionOptions,
 ): Promise<MealNutritionSnapshot | null> {
 	const enabled = await isFeatureEnabled(env, "nutrition-engine", flagContext);
 	if (!enabled) return null;
@@ -220,6 +224,7 @@ export async function recomputeAndStoreMealNutrition(
 		.select({
 			id: schema.meal.id,
 			servings: schema.meal.servings,
+			nutritionRevision: schema.meal.nutritionRevision,
 		})
 		.from(schema.meal)
 		.where(
@@ -231,6 +236,13 @@ export async function recomputeAndStoreMealNutrition(
 		.limit(1);
 
 	if (!mealRow) return null;
+
+	if (
+		opts?.expectedSourceRevision != null &&
+		mealRow.nutritionRevision !== opts.expectedSourceRevision
+	) {
+		throw new Error("stale_revision");
+	}
 
 	const ingredients = await d1
 		.select({
@@ -284,12 +296,17 @@ export async function recomputeAndStoreMealNutrition(
 				}
 			}
 
-			const resolved = await resolveFoodName(env, ing.ingredientName);
+			const resolved = await resolveFoodName(env, ing.ingredientName, {
+				organizationId,
+			});
 			return {
 				name: ing.ingredientName,
 				quantity: ing.quantity,
 				unit: (unit ?? ing.unit) as SupportedUnit | null,
-				nutrientsPer100g: resolved?.nutrientsPer100g ?? null,
+				// Meal aggregate still uses legacy numeric macros; null cores → 0 at this boundary.
+				nutrientsPer100g: resolved
+					? projectNullableValuesToLegacy(resolved.nutrientsPer100g)
+					: null,
 				fdcId: resolved?.fdcId ?? null,
 				source: "usda" as NutritionSource,
 			};
@@ -304,18 +321,32 @@ export async function recomputeAndStoreMealNutrition(
 		computedAt: new Date().toISOString(),
 	};
 
-	await d1
+	const now = new Date();
+	const commitConditions = [
+		eq(schema.meal.id, mealId),
+		eq(schema.meal.organizationId, organizationId),
+	];
+	if (opts?.expectedSourceRevision != null) {
+		commitConditions.push(
+			eq(schema.meal.nutritionRevision, opts.expectedSourceRevision),
+		);
+	}
+
+	const committed = await d1
 		.update(schema.meal)
 		.set({
 			nutrition: snapshot,
-			updatedAt: new Date(),
+			nutritionComputedRevision: mealRow.nutritionRevision,
+			nutritionStatus: "current",
+			nutritionUpdatedAt: now,
+			// Do not bump meal.updatedAt for derived nutrition-only writes.
 		})
-		.where(
-			and(
-				eq(schema.meal.id, mealId),
-				eq(schema.meal.organizationId, organizationId),
-			),
-		);
+		.where(and(...commitConditions))
+		.returning({ id: schema.meal.id });
+
+	if (committed.length === 0) {
+		throw new Error("stale_revision");
+	}
 
 	return snapshot;
 }
@@ -395,19 +426,46 @@ export async function recomputeMealsAffectedByCargoNutrition(
 		]),
 	].slice(0, MAX_MEALS_RECOMPUTE_ON_CARGO_NUTRITION);
 
-	const snaps = await mapWithConcurrency(
+	const { scheduleMealNutritionRecompute } = await import(
+		"./recompute-outbox.server"
+	);
+	const results = await mapWithConcurrency(
 		mealIds,
 		NUTRITION_MEAL_RECOMPUTE_CONCURRENCY,
 		(mealId) =>
-			recomputeAndStoreMealNutrition(
+			scheduleMealNutritionRecompute(
 				env,
 				db,
 				mealId,
 				organizationId,
 				flagContext,
+				{
+					trigger: "cargo_override",
+					origin: {
+						surface: String(flagContext.clientPlatform ?? "system"),
+						userId:
+							typeof flagContext.userId === "string"
+								? flagContext.userId
+								: null,
+						clientVersion:
+							typeof flagContext.clientVersion === "string"
+								? flagContext.clientVersion
+								: null,
+						country:
+							typeof flagContext.country === "string"
+								? flagContext.country
+								: null,
+						environment:
+							typeof flagContext.environment === "string"
+								? flagContext.environment
+								: null,
+						plan:
+							typeof flagContext.plan === "string" ? flagContext.plan : null,
+					},
+				},
 			),
 	);
-	return snaps.filter(Boolean).length;
+	return results.filter((r) => r.mode !== "skipped").length;
 }
 
 export async function getActiveNutritionGoal(
@@ -436,191 +494,6 @@ export async function getActiveNutritionGoal(
 	);
 }
 
-export type UpsertNutritionGoalInput = {
-	userId: string;
-	dailyEnergyKcal: number | null;
-	proteinG: number | null;
-	carbsG: number | null;
-	fatG: number | null;
-	fiberG?: number | null;
-	effectiveFrom: string;
-	consentAt: Date;
-};
-
-/**
- * Insert a new goal version; close any open-ended prior goal ending the day
- * before `effectiveFrom`.
- */
-export async function upsertNutritionGoal(
-	db: D1Database,
-	input: UpsertNutritionGoalInput,
-) {
-	const d1 = drizzle(db);
-	const now = new Date();
-
-	const openGoals = await d1
-		.select()
-		.from(schema.nutritionGoal)
-		.where(
-			and(
-				eq(schema.nutritionGoal.userId, input.userId),
-				isNull(schema.nutritionGoal.effectiveTo),
-			),
-		);
-
-	// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
-	const stmts: any[] = [];
-
-	// Always close open priors ending the day before the new goal so two goals
-	// never share an effective calendar day (including same-day replace).
-	const closeTo =
-		previousUtcCalendarDay(input.effectiveFrom) ?? input.effectiveFrom;
-	for (const prior of openGoals) {
-		stmts.push(
-			d1
-				.update(schema.nutritionGoal)
-				.set({ effectiveTo: closeTo })
-				.where(eq(schema.nutritionGoal.id, prior.id)),
-		);
-	}
-
-	const id = crypto.randomUUID();
-	stmts.push(
-		d1.insert(schema.nutritionGoal).values({
-			id,
-			userId: input.userId,
-			dailyEnergyKcal: input.dailyEnergyKcal,
-			proteinG: input.proteinG,
-			carbsG: input.carbsG,
-			fatG: input.fatG,
-			fiberG: input.fiberG ?? null,
-			effectiveFrom: input.effectiveFrom,
-			effectiveTo: null,
-			consentAt: input.consentAt,
-			createdAt: now,
-		}),
-	);
-
-	// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
-	await d1.batch(stmts as [any, ...any[]]);
-
-	const [created] = await d1
-		.select()
-		.from(schema.nutritionGoal)
-		.where(eq(schema.nutritionGoal.id, id))
-		.limit(1);
-
-	return created ?? null;
-}
-
-/**
- * Close all open-ended goals for the user so none remain effective on `asOfDate`.
- */
-export async function clearNutritionGoal(
-	db: D1Database,
-	userId: string,
-	asOfDate: string,
-): Promise<number> {
-	const d1 = drizzle(db);
-	const openGoals = await d1
-		.select()
-		.from(schema.nutritionGoal)
-		.where(
-			and(
-				eq(schema.nutritionGoal.userId, userId),
-				isNull(schema.nutritionGoal.effectiveTo),
-			),
-		);
-
-	if (openGoals.length === 0) return 0;
-
-	// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
-	const stmts: any[] = [];
-	for (const prior of openGoals) {
-		const closeTo =
-			prior.effectiveFrom < asOfDate
-				? (previousUtcCalendarDay(asOfDate) ?? asOfDate)
-				: asOfDate;
-		stmts.push(
-			d1
-				.update(schema.nutritionGoal)
-				.set({ effectiveTo: closeTo })
-				.where(eq(schema.nutritionGoal.id, prior.id)),
-		);
-	}
-
-	// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
-	await d1.batch(stmts as [any, ...any[]]);
-	return openGoals.length;
-}
-
-export type InsertNutritionIntakeInput = {
-	organizationId: string;
-	userId: string;
-	planId?: string | null;
-	entryId?: string | null;
-	mealId?: string | null;
-	manifestDate: string;
-	slotType?: string | null;
-	servings: number;
-	energyKcal: number;
-	proteinG: number;
-	carbsG: number;
-	fatG: number;
-	coverage: number;
-	source: string;
-	confidence: number;
-	verified: 0 | 1;
-	occurredAt: Date;
-	kitchenEventId?: string | null;
-	schemaVersion?: number;
-	nutrientsJson?: Record<string, number | null> | null;
-	coverageJson?: Record<string, number> | null;
-	idempotencyKey?: string | null;
-	operationId?: string | null;
-	replacesIntakeId?: string | null;
-};
-
-export async function insertNutritionIntake(
-	db: D1Database,
-	input: InsertNutritionIntakeInput,
-) {
-	const d1 = drizzle(db);
-	const id = crypto.randomUUID();
-	const [row] = await d1
-		.insert(schema.nutritionIntake)
-		.values({
-			id,
-			organizationId: input.organizationId,
-			userId: input.userId,
-			planId: input.planId ?? null,
-			entryId: input.entryId ?? null,
-			mealId: input.mealId ?? null,
-			manifestDate: input.manifestDate,
-			slotType: input.slotType ?? null,
-			servings: input.servings,
-			energyKcal: input.energyKcal,
-			proteinG: input.proteinG,
-			carbsG: input.carbsG,
-			fatG: input.fatG,
-			coverage: input.coverage,
-			source: input.source,
-			confidence: input.confidence,
-			verified: input.verified,
-			occurredAt: input.occurredAt,
-			kitchenEventId: input.kitchenEventId ?? null,
-			schemaVersion: input.schemaVersion ?? 1,
-			nutrientsJson: input.nutrientsJson ?? null,
-			coverageJson: input.coverageJson ?? null,
-			idempotencyKey: input.idempotencyKey ?? null,
-			operationId: input.operationId ?? null,
-			replacesIntakeId: input.replacesIntakeId ?? null,
-		})
-		.returning();
-
-	return row ?? null;
-}
-
 export type PersonalIntakeSummary = {
 	id: string;
 	entryId: string;
@@ -633,31 +506,6 @@ export type PersonalIntakeSummary = {
 	idempotencyKey: string | null;
 	replacesIntakeId: string | null;
 };
-
-/**
- * Active (non-voided) personal intake for one Manifest entry.
- */
-export async function getActivePersonalIntakeForEntry(
-	db: D1Database,
-	userId: string,
-	organizationId: string,
-	entryId: string,
-): Promise<typeof schema.nutritionIntake.$inferSelect | null> {
-	const d1 = drizzle(db, { schema });
-	const [row] = await d1
-		.select()
-		.from(schema.nutritionIntake)
-		.where(
-			and(
-				eq(schema.nutritionIntake.userId, userId),
-				eq(schema.nutritionIntake.organizationId, organizationId),
-				eq(schema.nutritionIntake.entryId, entryId),
-				isNull(schema.nutritionIntake.voidedAt),
-			),
-		)
-		.limit(1);
-	return row ?? null;
-}
 
 /**
  * Active personal intakes for many entries (caller-scoped only).
@@ -716,125 +564,6 @@ export async function getActivePersonalIntakesForEntries(
 		});
 	}
 	return result;
-}
-
-/**
- * Soft-void the caller's active intake for an entry. Returns the voided row.
- */
-export async function voidActivePersonalIntake(
-	db: D1Database,
-	input: {
-		userId: string;
-		organizationId: string;
-		entryId: string;
-		now?: Date;
-	},
-): Promise<typeof schema.nutritionIntake.$inferSelect | null> {
-	const existing = await getActivePersonalIntakeForEntry(
-		db,
-		input.userId,
-		input.organizationId,
-		input.entryId,
-	);
-	if (!existing) return null;
-
-	const d1 = drizzle(db, { schema });
-	const now = input.now ?? new Date();
-	await d1
-		.update(schema.nutritionIntake)
-		.set({ voidedAt: now, voidedByUserId: input.userId })
-		.where(
-			and(
-				eq(schema.nutritionIntake.id, existing.id),
-				eq(schema.nutritionIntake.userId, input.userId),
-				isNull(schema.nutritionIntake.voidedAt),
-			),
-		);
-	return { ...existing, voidedAt: now, voidedByUserId: input.userId };
-}
-
-/**
- * Atomically void prior active row (if any) and insert a replacement.
- * Returns the new row and prior id (for undo restore).
- */
-export async function replaceActivePersonalIntake(
-	db: D1Database,
-	input: InsertNutritionIntakeInput & {
-		entryId: string;
-		idempotencyKey: string;
-	},
-): Promise<{
-	row: typeof schema.nutritionIntake.$inferSelect;
-	replacedId: string | null;
-}> {
-	const prior = await getActivePersonalIntakeForEntry(
-		db,
-		input.userId,
-		input.organizationId,
-		input.entryId,
-	);
-
-	const d1 = drizzle(db, { schema });
-	const now = input.occurredAt;
-	const id = crypto.randomUUID();
-	const replacedId = prior?.id ?? null;
-
-	// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
-	const stmts: any[] = [];
-	if (prior) {
-		stmts.push(
-			d1
-				.update(schema.nutritionIntake)
-				.set({ voidedAt: now, voidedByUserId: input.userId })
-				.where(
-					and(
-						eq(schema.nutritionIntake.id, prior.id),
-						isNull(schema.nutritionIntake.voidedAt),
-					),
-				),
-		);
-	}
-
-	stmts.push(
-		d1.insert(schema.nutritionIntake).values({
-			id,
-			organizationId: input.organizationId,
-			userId: input.userId,
-			planId: input.planId ?? null,
-			entryId: input.entryId,
-			mealId: input.mealId ?? null,
-			manifestDate: input.manifestDate,
-			slotType: input.slotType ?? null,
-			servings: input.servings,
-			energyKcal: input.energyKcal,
-			proteinG: input.proteinG,
-			carbsG: input.carbsG,
-			fatG: input.fatG,
-			coverage: input.coverage,
-			source: input.source,
-			confidence: input.confidence,
-			verified: input.verified,
-			occurredAt: now,
-			kitchenEventId: input.kitchenEventId ?? null,
-			schemaVersion: input.schemaVersion ?? 2,
-			nutrientsJson: input.nutrientsJson ?? null,
-			coverageJson: input.coverageJson ?? null,
-			idempotencyKey: input.idempotencyKey,
-			operationId: input.operationId ?? null,
-			replacesIntakeId: replacedId,
-		}),
-	);
-
-	// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
-	await d1.batch(stmts as [any, ...any[]]);
-
-	const [row] = await d1
-		.select()
-		.from(schema.nutritionIntake)
-		.where(eq(schema.nutritionIntake.id, id))
-		.limit(1);
-	if (!row) throw new Error("Failed to insert nutrition intake");
-	return { row, replacedId };
 }
 
 export type NutritionSummaryResult = {
@@ -1016,6 +745,15 @@ export async function listNutritionIntakesForRange(
 	return { items, nextCursor };
 }
 
+/** Known fiber: scalar column, else JSON (legacy). Null stays unknown. */
+const knownFiberSql = sql`coalesce(
+	${schema.nutritionIntake.fiberG},
+	case
+		when json_type(${schema.nutritionIntake.nutrientsJson}, '$.fiberG') in ('integer', 'real')
+		then cast(json_extract(${schema.nutritionIntake.nutrientsJson}, '$.fiberG') as real)
+	end
+)`;
+
 export async function getNutritionSummary(
 	db: D1Database,
 	userId: string,
@@ -1032,16 +770,7 @@ export async function getNutritionSummary(
 		isNull(schema.nutritionIntake.voidedAt),
 	);
 
-	const [totalRow] = await d1
-		.select({
-			energyKcal: sql<number>`coalesce(sum(${schema.nutritionIntake.energyKcal}), 0)`,
-			proteinG: sql<number>`coalesce(sum(${schema.nutritionIntake.proteinG}), 0)`,
-			carbsG: sql<number>`coalesce(sum(${schema.nutritionIntake.carbsG}), 0)`,
-			fatG: sql<number>`coalesce(sum(${schema.nutritionIntake.fatG}), 0)`,
-		})
-		.from(schema.nutritionIntake)
-		.where(whereClause);
-
+	// One indexed grouped read — ≤93 day rows. Range totals fold from days (no JSON loop).
 	const dayRows = await d1
 		.select({
 			date: schema.nutritionIntake.manifestDate,
@@ -1049,6 +778,10 @@ export async function getNutritionSummary(
 			proteinG: sql<number>`coalesce(sum(${schema.nutritionIntake.proteinG}), 0)`,
 			carbsG: sql<number>`coalesce(sum(${schema.nutritionIntake.carbsG}), 0)`,
 			fatG: sql<number>`coalesce(sum(${schema.nutritionIntake.fatG}), 0)`,
+			fiberG: sql<number | null>`case
+				when count(${knownFiberSql}) > 0 then sum(${knownFiberSql})
+				else null
+			end`,
 			coverageAvg: sql<number>`coalesce(avg(${schema.nutritionIntake.coverage}), 0)`,
 			entryCount: sql<number>`count(*)`,
 		})
@@ -1057,46 +790,31 @@ export async function getNutritionSummary(
 		.groupBy(schema.nutritionIntake.manifestDate)
 		.orderBy(schema.nutritionIntake.manifestDate);
 
-	const totals = {
-		energyKcal: totalRow?.energyKcal ?? 0,
-		proteinG: totalRow?.proteinG ?? 0,
-		carbsG: totalRow?.carbsG ?? 0,
-		fatG: totalRow?.fatG ?? 0,
-	};
+	const days = dayRows.map((row) => ({
+		date: row.date,
+		energyKcal: row.energyKcal,
+		proteinG: row.proteinG,
+		carbsG: row.carbsG,
+		fatG: row.fatG,
+		...(row.fiberG != null ? { fiberG: row.fiberG } : {}),
+		coverageAvg: row.coverageAvg,
+		entryCount: row.entryCount,
+	}));
 
-	// Fiber lives in nutrientsJson (no fiber_g scalar). Roll up only known values;
-	// omit fiberG from days/totals when no intake contributed a finite number.
-	const jsonRows = await d1
-		.select({
-			date: schema.nutritionIntake.manifestDate,
-			nutrientsJson: schema.nutritionIntake.nutrientsJson,
-		})
-		.from(schema.nutritionIntake)
-		.where(whereClause);
-
-	const fiberByDate = new Map<string, number>();
+	let energyKcal = 0;
+	let proteinG = 0;
+	let carbsG = 0;
+	let fatG = 0;
 	let fiberTotal: number | undefined;
-	for (const row of jsonRows) {
-		const raw = row.nutrientsJson as Record<string, unknown> | null;
-		const fiber = raw?.fiberG;
-		if (typeof fiber !== "number" || !Number.isFinite(fiber)) continue;
-		fiberByDate.set(row.date, (fiberByDate.get(row.date) ?? 0) + fiber);
-		fiberTotal = (fiberTotal ?? 0) + fiber;
+	for (const day of days) {
+		energyKcal += day.energyKcal;
+		proteinG += day.proteinG;
+		carbsG += day.carbsG;
+		fatG += day.fatG;
+		if (day.fiberG != null) {
+			fiberTotal = (fiberTotal ?? 0) + day.fiberG;
+		}
 	}
-
-	const days = dayRows.map((row) => {
-		const fiberG = fiberByDate.get(row.date);
-		return {
-			date: row.date,
-			energyKcal: row.energyKcal,
-			proteinG: row.proteinG,
-			carbsG: row.carbsG,
-			fatG: row.fatG,
-			...(fiberG != null ? { fiberG } : {}),
-			coverageAvg: row.coverageAvg,
-			entryCount: row.entryCount,
-		};
-	});
 
 	const goalRow = await getActiveNutritionGoal(db, userId, to);
 	const goal = goalRow
@@ -1115,7 +833,10 @@ export async function getNutritionSummary(
 		from,
 		to,
 		totals: {
-			...totals,
+			energyKcal,
+			proteinG,
+			carbsG,
+			fatG,
 			...(fiberTotal != null ? { fiberG: fiberTotal } : {}),
 		},
 		days,
@@ -1123,19 +844,66 @@ export async function getNutritionSummary(
 	};
 }
 
+export const NUTRITION_INTAKE_PURGE_BATCH = 250;
+export const NUTRITION_RECOMPUTE_COMPLETED_RETENTION_DAYS = 15;
+export const NUTRITION_RECOMPUTE_FAILED_RETENTION_DAYS = 30;
+export const NUTRITION_RECOMPUTE_JOB_PURGE_BATCH = 500;
+
 /**
- * Delete intake rows older than retention window (default 396 days ≈ 13 months).
- * Returns number of deleted rows (best-effort from D1 meta).
+ * Delete intake rows older than retention (default 396 days) in bounded ID batches.
  */
 export async function purgeExpiredNutritionIntake(
 	db: D1Database,
 	now: Date,
 	retentionDays = 396,
+	limit = NUTRITION_INTAKE_PURGE_BATCH,
 ): Promise<number> {
-	const d1 = drizzle(db);
 	const cutoff = nutritionIntakeRetentionCutoff(now, retentionDays);
-	const result = await d1
-		.delete(schema.nutritionIntake)
-		.where(lt(schema.nutritionIntake.occurredAt, cutoff));
+	const cutoffUnix = Math.floor(cutoff.getTime() / 1000);
+	const result = await db
+		.prepare(
+			`DELETE FROM nutrition_intake
+       WHERE id IN (
+         SELECT id FROM nutrition_intake
+         WHERE occurred_at < ?1
+         ORDER BY occurred_at ASC
+         LIMIT ?2
+       )`,
+		)
+		.bind(cutoffUnix, limit)
+		.run();
+	return result.meta?.changes ?? 0;
+}
+
+/** Purge completed (15d) / failed (30d) recompute jobs; never age-purge pending. */
+export async function purgeExpiredNutritionRecomputeJobs(
+	db: D1Database,
+	now: Date,
+	limit = NUTRITION_RECOMPUTE_JOB_PURGE_BATCH,
+): Promise<number> {
+	const completedCutoff = Math.floor(
+		(now.getTime() -
+			NUTRITION_RECOMPUTE_COMPLETED_RETENTION_DAYS * 86_400_000) /
+			1000,
+	);
+	const failedCutoff = Math.floor(
+		(now.getTime() - NUTRITION_RECOMPUTE_FAILED_RETENTION_DAYS * 86_400_000) /
+			1000,
+	);
+	const result = await db
+		.prepare(
+			`DELETE FROM nutrition_recompute_job
+       WHERE job_key IN (
+         SELECT job_key FROM nutrition_recompute_job
+         WHERE (
+           (status = 'completed' AND coalesce(completed_at, updated_at) < ?1)
+           OR (status = 'failed' AND updated_at < ?2)
+         )
+         ORDER BY updated_at ASC
+         LIMIT ?3
+       )`,
+		)
+		.bind(completedCutoff, failedCutoff, limit)
+		.run();
 	return result.meta?.changes ?? 0;
 }

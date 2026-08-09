@@ -6,12 +6,15 @@ struct ManifestPlateUpSheet: View {
     let entry: ManifestEntry
     var hasIntakeConsent: Bool
     /// Returns an error message on failure, or `nil` on success.
-    let onSave: (_ servings: Double, _ consent: Bool) async -> String?
+    let onSave: (_ servings: Double) async -> String?
     var onRemove: (() async -> Void)?
 
+    @Environment(AppEnvironment.self) private var env
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.openURL) private var openURL
     @State private var servings: Double
     @State private var hasConsent: Bool
+    @State private var consentStatus: NutritionConsentStatus?
     @State private var isSaving = false
     @State private var isRemoving = false
     @State private var errorMessage: String?
@@ -19,7 +22,7 @@ struct ManifestPlateUpSheet: View {
     init(
         entry: ManifestEntry,
         hasIntakeConsent: Bool,
-        onSave: @escaping (_ servings: Double, _ consent: Bool) async -> String?,
+        onSave: @escaping (_ servings: Double) async -> String?,
         onRemove: (() async -> Void)? = nil
     ) {
         self.entry = entry
@@ -64,7 +67,9 @@ struct ManifestPlateUpSheet: View {
     }
 
     private var canSave: Bool {
-        !isSaving && !isRemoving && (hasIntakeConsent || hasConsent)
+        !isSaving
+            && !isRemoving
+            && (hasIntakeConsent || consentStatus?.state == .active || hasConsent)
     }
 
     var body: some View {
@@ -126,10 +131,24 @@ struct ManifestPlateUpSheet: View {
 
                 if !hasIntakeConsent {
                     Section {
-                        Toggle("Allow personal serving logs", isOn: $hasConsent)
-                            .tint(Theme.hyperGreen)
+                        if let consentStatus {
+                            Text(consentStatus.statement.text)
+                                .font(Typography.caption())
+                            if consentStatus.state != .active {
+                                Toggle(
+                                    "I have read this statement and explicitly consent",
+                                    isOn: $hasConsent
+                                )
+                                .tint(Theme.hyperGreen)
+                            }
+                            Button("Privacy Policy") {
+                                openURL(AppConfig.privacyURL)
+                            }
+                        } else {
+                            ProgressView("Loading privacy statement…")
+                        }
                     } footer: {
-                        Text("Your logged servings are private — they're never shared with other household members.")
+                        Text("Your logged servings are private. Withdrawal and erasure are available in Privacy & AI settings.")
                     }
                 }
 
@@ -157,7 +176,18 @@ struct ManifestPlateUpSheet: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") { Task { await save() } }
                         .disabled(!canSave)
+                        .accessibilityIdentifier("manifest.eat.save")
                 }
+            }
+        }
+        .task {
+            guard !hasIntakeConsent else { return }
+            do {
+                consentStatus = try await env.api.nutritionPrivacy().consents.first {
+                    $0.purpose == .intake
+                }
+            } catch {
+                errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
             }
         }
     }
@@ -174,11 +204,28 @@ struct ManifestPlateUpSheet: View {
         isSaving = true
         errorMessage = nil
         defer { isSaving = false }
-        if let failure = await onSave(servings, hasConsent) {
-            errorMessage = failure
-        } else {
-            Haptics.success()
-            dismiss()
+        do {
+            if !hasIntakeConsent && consentStatus?.state != .active {
+                guard hasConsent, let consentStatus else {
+                    errorMessage = "Review and accept the current intake consent statement."
+                    return
+                }
+                let response = try await env.api.grantNutritionConsent(consentStatus)
+                guard response.consents.contains(where: {
+                    $0.purpose == .intake && $0.state == .active
+                }) else {
+                    errorMessage = "Consent could not be recorded. Try again."
+                    return
+                }
+            }
+            if let failure = await onSave(servings) {
+                errorMessage = failure
+            } else {
+                Haptics.success()
+                dismiss()
+            }
+        } catch {
+            errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
         }
     }
 

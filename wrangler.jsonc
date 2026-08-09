@@ -163,6 +163,10 @@
 			{
 				"queue": "ration-import-url",
 				"binding": "IMPORT_URL_QUEUE"
+			},
+			{
+				"queue": "ration-nutrition-recompute",
+				"binding": "NUTRITION_RECOMPUTE_QUEUE"
 			}
 		],
 		"consumers": [
@@ -189,6 +193,15 @@
 				"max_batch_size": 3,
 				"max_batch_timeout": 10,
 				"max_retries": 3
+			},
+			{
+				"queue": "ration-nutrition-recompute",
+				"max_batch_size": 5,
+				"max_batch_timeout": 2,
+				"max_retries": 5,
+				"max_concurrency": 4,
+				"dead_letter_queue": "ration-nutrition-recompute-dlq",
+				"retry_delay": 15
 			}
 		]
 	},
@@ -199,9 +212,10 @@
 	 * session-purge: runs daily at 03:00 UTC to delete expired sessions and
 	 * prevent the session table from growing unbounded at scale.
 	 * Also runs Flight Recorder expiry detection + kitchen_event retention purge.
+	 * Minute cron: nutrition recompute outbox repair / expired lease recovery.
 	 */
 	"triggers": {
-		"crons": ["0 3 * * *"]
+		"crons": ["0 3 * * *", "* * * * *"]
 	},
 	/**
 	 * Dev Environment — isolated Cloudflare resources for remote dev testing.

@@ -23,16 +23,22 @@ struct NutritionGoal: Codable, Sendable, Identifiable, Equatable {
 
 struct NutritionGoalResponse: Codable, Sendable {
     let goal: NutritionGoal?
+    let operationId: String?
+    let replayed: Bool?
 }
 
 struct NutritionGoalClearResponse: Codable, Sendable {
     /// Server returns boolean; tolerate legacy numeric counts from older deploys.
     let cleared: Bool
     let goal: NutritionGoal?
+    let operationId: String?
+    let replayed: Bool?
 
-    init(cleared: Bool, goal: NutritionGoal?) {
+    init(cleared: Bool, goal: NutritionGoal?, operationId: String? = nil, replayed: Bool? = nil) {
         self.cleared = cleared
         self.goal = goal
+        self.operationId = operationId
+        self.replayed = replayed
     }
 
     init(from decoder: Decoder) throws {
@@ -46,14 +52,15 @@ struct NutritionGoalClearResponse: Codable, Sendable {
             cleared = false
         }
         goal = try c.decodeIfPresent(NutritionGoal.self, forKey: .goal)
+        operationId = try c.decodeIfPresent(String.self, forKey: .operationId)
+        replayed = try c.decodeIfPresent(Bool.self, forKey: .replayed)
     }
 
     private enum CodingKeys: String, CodingKey {
-        case cleared, goal
+        case cleared, goal, operationId, replayed
     }
 }
 
-/// POST/PATCH body — server stamps `consentAt` when `consent == true` on first save.
 struct NutritionGoalUpsertRequest: Encodable, Sendable {
     var dailyEnergyKcal: Double?
     var proteinG: Double?
@@ -61,7 +68,66 @@ struct NutritionGoalUpsertRequest: Encodable, Sendable {
     var fatG: Double?
     var fiberG: Double?
     let effectiveFrom: String
-    var consent: Bool?
+    let operationKey: String = UUID().uuidString
+}
+
+enum NutritionConsentPurpose: String, Codable, CaseIterable, Sendable {
+    case goals
+    case intake
+    case agentProcessing = "agent_processing"
+}
+
+enum NutritionConsentState: String, Codable, Sendable {
+    case active
+    case notGranted = "not_granted"
+    case withdrawn
+    case reconsentRequired = "reconsent_required"
+}
+
+struct NutritionConsentStatement: Codable, Sendable, Equatable {
+    let purpose: NutritionConsentPurpose
+    let policyVersion: String
+    let statementVersion: String
+    let text: String
+    let sha256: String
+    let privacyNoticeVersion: String
+}
+
+struct NutritionConsentStatus: Codable, Sendable, Identifiable, Equatable {
+    var id: NutritionConsentPurpose { purpose }
+    let purpose: NutritionConsentPurpose
+    let state: NutritionConsentState
+    let consentId: String?
+    let grantedAt: Date?
+    let withdrawnAt: Date?
+    let statement: NutritionConsentStatement
+}
+
+struct NutritionPrivacyResponse: Codable, Sendable {
+    let ok: Bool?
+    let consents: [NutritionConsentStatus]
+}
+
+struct NutritionConsentGrantRequest: Encodable, Sendable {
+    let action = "grant"
+    let purpose: NutritionConsentPurpose
+    let policyVersion: String
+    let statementVersion: String
+    let statementSha256: String
+    let affirmed = true
+    let requestId: String
+}
+
+struct NutritionConsentWithdrawRequest: Encodable, Sendable {
+    let action = "withdraw"
+    let purpose: NutritionConsentPurpose
+    let requestId: String
+}
+
+struct NutritionDataEraseRequest: Encodable, Sendable {
+    let action = "erase"
+    let dataset: String
+    let requestId: String
 }
 
 // MARK: - Nutrition Summary

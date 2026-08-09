@@ -71,17 +71,27 @@ export async function loader({
 			(OAUTH_MCP_SCOPES as readonly string[]).includes(s),
 		);
 
+	const signedParams = new URLSearchParams(signed);
 	const clientId =
 		url.searchParams.get("client_id") ??
-		new URLSearchParams(signed).get("client_id") ??
+		signedParams.get("client_id") ??
 		"Unknown client";
+	const redirectUri = signedParams.get("redirect_uri");
+	const requestsOfflineAccess =
+		parseScopesFromSignedQuery(signed).includes("offline_access");
+	const requestsNutrition = requestedScopes.some((scope) =>
+		scope.startsWith("mcp:nutrition:"),
+	);
 
 	return {
 		clientId,
+		redirectUri,
 		oauthQueryB64: encodeOAuthQueryForForm(signed),
 		selectOrgHref: buildOAuthPageUrl("/oauth/select-org", signed),
 		requestedScopes,
 		hasRequestedScopes: requestedScopes.length > 0,
+		requestsOfflineAccess,
+		requestsNutrition,
 		correlationId: getOAuthCorrelationId(request),
 	};
 }
@@ -117,6 +127,7 @@ export async function action({
 		.filter((s): s is OAuthMcpScope =>
 			(OAUTH_MCP_SCOPES as readonly string[]).includes(s),
 		);
+	const offlineAccessSelected = form.get("offline_access") === "true";
 
 	if (!oauthQuery) {
 		return oauthErrorResponse("missing_oauth_query", {
@@ -141,7 +152,11 @@ export async function action({
 			accept,
 			oauth_query: oauthQuery,
 			...(accept
-				? { scope: buildConsentScopeForSubmit(selectedScopes, oauthQuery) }
+				? {
+						scope: buildConsentScopeForSubmit(selectedScopes, oauthQuery, {
+							offlineAccessSelected,
+						}),
+					}
 				: {}),
 		});
 
@@ -222,8 +237,17 @@ export default function OAuthConsentPage({
 			description={
 				<>
 					<strong>{loaderData.clientId}</strong> is requesting access to your
-					Ration kitchen. Read access is enabled by default; you may add write
-					permissions below.
+					Ration kitchen
+					{loaderData.redirectUri ? (
+						<>
+							{" "}
+							and will return to{" "}
+							<code className="text-xs break-all">
+								{loaderData.redirectUri}
+							</code>
+						</>
+					) : null}
+					. Only the permissions you select below are granted.
 				</>
 			}
 			error={actionData?.error}
@@ -274,7 +298,29 @@ export default function OAuthConsentPage({
 								</span>
 							</label>
 						))}
+						{loaderData.requestsOfflineAccess ? (
+							<label className="flex items-start gap-3 rounded-lg border border-platinum/50 p-3">
+								<input
+									type="checkbox"
+									name="offline_access"
+									value="true"
+									className="mt-1 accent-hyper-green"
+								/>
+								<span className="text-sm text-carbon">
+									Stay signed in (refresh tokens). Leave unchecked for
+									one-session access only.
+								</span>
+							</label>
+						) : null}
 					</fieldset>
+
+					{loaderData.requestsNutrition ? (
+						<p className="rounded-lg border border-amber-200/80 bg-amber-50/80 p-3 text-xs text-carbon">
+							Personal nutrition scopes can expose sensitive health-related
+							goals and intake. Agents still need first-party consent in Ration
+							Privacy settings before reading or writing that data.
+						</p>
+					) : null}
 
 					<p className="text-xs text-muted">
 						By authorizing, you allow this agent to act on your behalf within

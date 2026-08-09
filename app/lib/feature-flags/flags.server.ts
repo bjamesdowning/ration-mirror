@@ -95,6 +95,15 @@ export async function getClientSafeFlags(
 	return result;
 }
 
-export { buildFlagContext } from "./context.server";
-export type { FlagshipEvaluationContext };
+export type {
+	ClientSurface,
+	FlagshipEvaluationContext,
+} from "./context.server";
+export {
+	buildAgentFlagContext,
+	buildFlagContext,
+	buildMobileFlagContext,
+	buildSystemFlagContext,
+	buildWebFlagContext,
+} from "./context.server";
 export { FLAG_REGISTRY, type FlagKey };

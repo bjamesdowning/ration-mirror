@@ -1,6 +1,4 @@
 #!/usr/bin/env bun
-import { mkdir, readdir, writeFile } from "node:fs/promises";
-import path from "node:path";
 /**
  * Convert USDA FoodData Central CSV exports into ration-nutrition D1 SQL.
  *
@@ -8,51 +6,38 @@ import path from "node:path";
  *   FoodData_Central_sr_legacy_food_csv_*
  *   FoodData_Central_foundation_food_csv_*
  *
- * Usage:
- *   bun scripts/import-fdc-nutrition.ts              # generate SQL chunks
- *   bun scripts/import-fdc-nutrition.ts --apply-local
- *   bun scripts/import-fdc-nutrition.ts --apply-remote
- *   bun scripts/import-fdc-nutrition.ts --apply-remote --db=ration-nutrition-dev
+ * Release metadata: nutrition-db/releases/current.json
+ * Never promote nutrition-db/seed-minimal.sql to production.
  *
- * Nutrient mapping (FDC nutrient_id → our wide columns):
- *   1008/2047/2048 → energy_kcal, 1003 protein, 1004 fat, 1005 carb,
- *   1079 fiber, 2000/1063 sugar, 1258 sat fat, 1093 sodium (salt = Na*2.5/1000)
+ * Usage:
+ *   bun scripts/import-fdc-nutrition.ts
+ *   bun scripts/import-fdc-nutrition.ts --apply-local
+ *   bun scripts/import-fdc-nutrition.ts --apply-remote --db=ration-nutrition-dev
  */
+import { createHash } from "node:crypto";
+import { createReadStream } from "node:fs";
+import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import path from "node:path";
 import { $ } from "bun";
+import {
+	applyImportNutrient,
+	emptyImportNutrients,
+	finalizeImportSalt,
+	type ImportWideNutrients,
+} from "../app/lib/nutrition/fdc-import-rules";
 
 const ROOT = path.join(import.meta.dir, "..");
 const RAW_DIR = path.join(ROOT, "nutrition-db", "raw");
 const OUT_DIR = path.join(ROOT, "nutrition-db", "generated");
 const SCHEMA = path.join(ROOT, "nutrition-db", "schema.sql");
+const RELEASE_MANIFEST = path.join(
+	ROOT,
+	"nutrition-db",
+	"releases",
+	"current.json",
+);
 
 const ALLOWED_DATA_TYPES = new Set(["sr_legacy_food", "foundation_food"]);
-
-/** Prefer earlier ids when filling the same column. */
-const NUTRIENT_COLUMNS: Record<number, keyof WideNutrients> = {
-	1008: "energy_kcal",
-	2047: "energy_kcal",
-	2048: "energy_kcal",
-	1003: "protein_g",
-	1004: "fat_g",
-	1005: "carb_g",
-	1079: "fiber_g",
-	2000: "sugar_g",
-	1063: "sugar_g",
-	1258: "sat_fat_g",
-	1093: "sodium_mg",
-};
-
-type WideNutrients = {
-	energy_kcal: number | null;
-	protein_g: number | null;
-	fat_g: number | null;
-	carb_g: number | null;
-	fiber_g: number | null;
-	sugar_g: number | null;
-	sat_fat_g: number | null;
-	sodium_mg: number | null;
-	salt_g: number | null;
-};
 
 type FoodRow = {
 	fdcId: number;
@@ -61,11 +46,35 @@ type FoodRow = {
 };
 
 type PortionRow = {
+	id: number | null;
 	fdcId: number;
 	modifier: string | null;
 	gramWeight: number;
 	amount: number | null;
 	measureUnit: string | null;
+};
+
+type ReleaseManifest = {
+	schemaVersion: number;
+	datasetSnapshotId: string;
+	status: string;
+	note?: string;
+	datasets: Array<{
+		dataType: string;
+		packageHint?: string;
+		officialUrl: string | null;
+		publicationDate: string | null;
+		archiveSha256: string | null;
+	}>;
+	matcherVersion: string;
+	portionMatcherVersion: string;
+	importedAt: string | null;
+	rowCounts: {
+		food: number;
+		nutrient: number;
+		portion: number;
+	} | null;
+	snapshotHash: string | null;
 };
 
 function sqlString(value: string): string {
@@ -77,59 +86,61 @@ function sqlNum(value: number | null | undefined): string {
 	return String(value);
 }
 
-/** Minimal RFC4180 CSV parser (handles quotes / commas / newlines in fields). */
-function parseCsv(text: string): string[][] {
-	const rows: string[][] = [];
+/** Streaming RFC4180 CSV row iterator (does not load the whole file into RAM). */
+async function* iterateCsvRows(filePath: string): AsyncGenerator<string[]> {
+	const stream = createReadStream(filePath, { encoding: "utf8" });
 	let row: string[] = [];
 	let field = "";
-	let i = 0;
 	let inQuotes = false;
 
-	while (i < text.length) {
-		const c = text[i];
-		if (inQuotes) {
-			if (c === '"') {
-				if (text[i + 1] === '"') {
-					field += '"';
-					i += 2;
+	for await (const chunk of stream) {
+		const text = typeof chunk === "string" ? chunk : String(chunk);
+		let i = 0;
+		while (i < text.length) {
+			const c = text[i];
+			if (inQuotes) {
+				if (c === '"') {
+					if (text[i + 1] === '"') {
+						field += '"';
+						i += 2;
+						continue;
+					}
+					inQuotes = false;
+					i += 1;
 					continue;
 				}
-				inQuotes = false;
+				field += c;
+				i += 1;
+				continue;
+			}
+			if (c === '"') {
+				inQuotes = true;
+				i += 1;
+				continue;
+			}
+			if (c === ",") {
+				row.push(field);
+				field = "";
+				i += 1;
+				continue;
+			}
+			if (c === "\n" || c === "\r") {
+				if (c === "\r" && text[i + 1] === "\n") i += 1;
+				row.push(field);
+				field = "";
+				if (row.length > 1 || row[0] !== "") yield row;
+				row = [];
 				i += 1;
 				continue;
 			}
 			field += c;
 			i += 1;
-			continue;
 		}
-		if (c === '"') {
-			inQuotes = true;
-			i += 1;
-			continue;
-		}
-		if (c === ",") {
-			row.push(field);
-			field = "";
-			i += 1;
-			continue;
-		}
-		if (c === "\n" || c === "\r") {
-			if (c === "\r" && text[i + 1] === "\n") i += 1;
-			row.push(field);
-			field = "";
-			if (row.length > 1 || row[0] !== "") rows.push(row);
-			row = [];
-			i += 1;
-			continue;
-		}
-		field += c;
-		i += 1;
 	}
 	if (field.length > 0 || row.length > 0) {
 		row.push(field);
-		rows.push(row);
+		if (row.length > 1 || row[0] !== "") yield row;
 	}
-	return rows;
 }
 
 function headerIndex(header: string[], name: string): number {
@@ -152,75 +163,35 @@ async function findDatasetDirs(): Promise<{
 	};
 }
 
-function emptyNutrients(): WideNutrients {
-	return {
-		energy_kcal: null,
-		protein_g: null,
-		fat_g: null,
-		carb_g: null,
-		fiber_g: null,
-		sugar_g: null,
-		sat_fat_g: null,
-		sodium_mg: null,
-		salt_g: null,
-	};
-}
-
-function applyNutrient(
-	target: WideNutrients,
-	nutrientId: number,
-	amount: number,
-): void {
-	if (!Number.isFinite(amount)) return;
-
-	// Energy: prefer 1008, then Atwater fallbacks only if empty.
-	if (nutrientId === 1008) {
-		target.energy_kcal = amount;
-		return;
-	}
-	if (nutrientId === 2047 || nutrientId === 2048) {
-		if (target.energy_kcal == null) target.energy_kcal = amount;
-		return;
-	}
-	// Sugar: prefer 2000 over 1063.
-	if (nutrientId === 2000) {
-		target.sugar_g = amount;
-		return;
-	}
-	if (nutrientId === 1063) {
-		if (target.sugar_g == null) target.sugar_g = amount;
-		return;
-	}
-
-	const col = NUTRIENT_COLUMNS[nutrientId];
-	if (!col) return;
-	if (target[col] == null) {
-		target[col] = amount;
-	}
+async function loadReleaseManifest(): Promise<ReleaseManifest> {
+	const raw = await readFile(RELEASE_MANIFEST, "utf8");
+	return JSON.parse(raw) as ReleaseManifest;
 }
 
 async function loadFoods(
 	dir: string,
 	foods: Map<number, FoodRow>,
 ): Promise<number> {
-	const text = await Bun.file(path.join(dir, "food.csv")).text();
-	const rows = parseCsv(text);
-	const header = rows[0];
-	if (!header) return 0;
-	const iFdc = headerIndex(header, "fdc_id");
-	const iType = headerIndex(header, "data_type");
-	const iDesc = headerIndex(header, "description");
+	const filePath = path.join(dir, "food.csv");
+	let header: string[] | null = null;
+	let iFdc = -1;
+	let iType = -1;
+	let iDesc = -1;
 	let added = 0;
-	for (let r = 1; r < rows.length; r++) {
-		const row = rows[r];
-		if (!row) continue;
+	for await (const row of iterateCsvRows(filePath)) {
+		if (!header) {
+			header = row;
+			iFdc = headerIndex(header, "fdc_id");
+			iType = headerIndex(header, "data_type");
+			iDesc = headerIndex(header, "description");
+			continue;
+		}
 		const dataType = row[iType]?.trim() ?? "";
 		if (!ALLOWED_DATA_TYPES.has(dataType)) continue;
 		const fdcId = Number(row[iFdc]);
 		const description = (row[iDesc] ?? "").trim();
 		if (!Number.isFinite(fdcId) || !description) continue;
 		const existing = foods.get(fdcId);
-		// Foundation wins over SR Legacy on id collision (rare).
 		if (existing && existing.dataType === "foundation_food") continue;
 		if (existing && dataType === "sr_legacy_food") continue;
 		foods.set(fdcId, { fdcId, description, dataType });
@@ -231,48 +202,56 @@ async function loadFoods(
 
 async function loadNutrients(
 	dir: string,
-	foodIds: Set<number>,
-	nutrients: Map<number, WideNutrients>,
+	foods: Map<number, FoodRow>,
+	nutrients: Map<number, ImportWideNutrients>,
 ): Promise<void> {
-	const text = await Bun.file(path.join(dir, "food_nutrient.csv")).text();
-	const rows = parseCsv(text);
-	const header = rows[0];
-	if (!header) return;
-	const iFdc = headerIndex(header, "fdc_id");
-	const iNut = headerIndex(header, "nutrient_id");
-	const iAmt = headerIndex(header, "amount");
-
-	for (let r = 1; r < rows.length; r++) {
-		const row = rows[r];
-		if (!row) continue;
+	const filePath = path.join(dir, "food_nutrient.csv");
+	let header: string[] | null = null;
+	let iFdc = -1;
+	let iNut = -1;
+	let iAmt = -1;
+	for await (const row of iterateCsvRows(filePath)) {
+		if (!header) {
+			header = row;
+			iFdc = headerIndex(header, "fdc_id");
+			iNut = headerIndex(header, "nutrient_id");
+			iAmt = headerIndex(header, "amount");
+			continue;
+		}
 		const fdcId = Number(row[iFdc]);
-		if (!foodIds.has(fdcId)) continue;
+		const food = foods.get(fdcId);
+		if (!food) continue;
 		const nutrientId = Number(row[iNut]);
-		if (!(nutrientId in NUTRIENT_COLUMNS)) continue;
 		const amount = Number(row[iAmt]);
-		if (!Number.isFinite(amount)) continue;
+		if (!Number.isFinite(nutrientId) || !Number.isFinite(amount)) continue;
 
 		let wide = nutrients.get(fdcId);
 		if (!wide) {
-			wide = emptyNutrients();
+			wide = emptyImportNutrients();
 			nutrients.set(fdcId, wide);
 		}
-		applyNutrient(wide, nutrientId, amount);
+		applyImportNutrient(wide, nutrientId, amount, food.dataType);
 	}
 }
 
 async function loadMeasureUnits(dir: string): Promise<Map<number, string>> {
 	const map = new Map<number, string>();
-	const file = Bun.file(path.join(dir, "measure_unit.csv"));
-	if (!(await file.exists())) return map;
-	const rows = parseCsv(await file.text());
-	const header = rows[0];
-	if (!header) return map;
-	const iId = headerIndex(header, "id");
-	const iName = headerIndex(header, "name");
-	for (let r = 1; r < rows.length; r++) {
-		const row = rows[r];
-		if (!row) continue;
+	const filePath = path.join(dir, "measure_unit.csv");
+	try {
+		await readFile(filePath);
+	} catch {
+		return map;
+	}
+	let header: string[] | null = null;
+	let iId = -1;
+	let iName = -1;
+	for await (const row of iterateCsvRows(filePath)) {
+		if (!header) {
+			header = row;
+			iId = headerIndex(header, "id");
+			iName = headerIndex(header, "name");
+			continue;
+		}
 		const id = Number(row[iId]);
 		const name = (row[iName] ?? "").trim();
 		if (Number.isFinite(id) && name) map.set(id, name);
@@ -286,23 +265,34 @@ async function loadPortions(
 	units: Map<number, string>,
 	portions: PortionRow[],
 ): Promise<void> {
-	const file = Bun.file(path.join(dir, "food_portion.csv"));
-	if (!(await file.exists())) return;
-	const rows = parseCsv(await file.text());
-	const header = rows[0];
-	if (!header) return;
-	const iFdc = headerIndex(header, "fdc_id");
-	const iAmount = headerIndex(header, "amount");
-	const iUnit = headerIndex(header, "measure_unit_id");
-	const iMod = headerIndex(header, "modifier");
-	const iGram = headerIndex(header, "gram_weight");
-	const iDesc = header.includes("portion_description")
-		? headerIndex(header, "portion_description")
-		: -1;
-
-	for (let r = 1; r < rows.length; r++) {
-		const row = rows[r];
-		if (!row) continue;
+	const filePath = path.join(dir, "food_portion.csv");
+	try {
+		await readFile(filePath);
+	} catch {
+		return;
+	}
+	let header: string[] | null = null;
+	let iId = -1;
+	let iFdc = -1;
+	let iAmount = -1;
+	let iUnit = -1;
+	let iMod = -1;
+	let iGram = -1;
+	let iDesc = -1;
+	for await (const row of iterateCsvRows(filePath)) {
+		if (!header) {
+			header = row;
+			iId = header.includes("id") ? headerIndex(header, "id") : -1;
+			iFdc = headerIndex(header, "fdc_id");
+			iAmount = headerIndex(header, "amount");
+			iUnit = headerIndex(header, "measure_unit_id");
+			iMod = headerIndex(header, "modifier");
+			iGram = headerIndex(header, "gram_weight");
+			iDesc = header.includes("portion_description")
+				? headerIndex(header, "portion_description")
+				: -1;
+			continue;
+		}
 		const fdcId = Number(row[iFdc]);
 		if (!foodIds.has(fdcId)) continue;
 		const gramWeight = Number(row[iGram]);
@@ -314,25 +304,16 @@ async function loadPortions(
 			? (units.get(unitId) ?? null)
 			: null;
 		const modifier =
-			row[iMod]?.trim() ||
-			(iDesc >= 0 ? row[iDesc]?.trim() : "") ||
-			null ||
-			null;
+			row[iMod]?.trim() || (iDesc >= 0 ? row[iDesc]?.trim() : "") || null;
+		const idRaw = iId >= 0 ? Number(row[iId]) : Number.NaN;
 		portions.push({
+			id: Number.isFinite(idRaw) ? idRaw : null,
 			fdcId,
 			modifier: modifier || null,
 			gramWeight,
 			amount: amount != null && Number.isFinite(amount) ? amount : null,
 			measureUnit: unitName,
 		});
-	}
-}
-
-function finalizeSalt(nutrients: Map<number, WideNutrients>): void {
-	for (const wide of nutrients.values()) {
-		if (wide.sodium_mg != null && Number.isFinite(wide.sodium_mg)) {
-			wide.salt_g = (wide.sodium_mg * 2.5) / 1000;
-		}
 	}
 }
 
@@ -344,7 +325,14 @@ function chunkArray<T>(items: T[], size: number): T[][] {
 	return out;
 }
 
+function computeSnapshotHash(parts: string[]): string {
+	const hash = createHash("sha256");
+	for (const p of parts) hash.update(p);
+	return hash.digest("hex");
+}
+
 async function generate(): Promise<string[]> {
+	const manifest = await loadReleaseManifest();
 	const datasets = await findDatasetDirs();
 	if (!datasets.srLegacy && !datasets.foundation) {
 		throw new Error(
@@ -363,17 +351,19 @@ async function generate(): Promise<string[]> {
 	}
 
 	const foodIds = new Set(foods.keys());
-	const nutrients = new Map<number, WideNutrients>();
+	const nutrients = new Map<number, ImportWideNutrients>();
 
 	if (datasets.srLegacy) {
-		console.log("Pivoting SR Legacy nutrients…");
-		await loadNutrients(datasets.srLegacy, foodIds, nutrients);
+		console.log("Pivoting SR Legacy nutrients (stream)…");
+		await loadNutrients(datasets.srLegacy, foods, nutrients);
 	}
 	if (datasets.foundation) {
-		console.log("Pivoting Foundation nutrients…");
-		await loadNutrients(datasets.foundation, foodIds, nutrients);
+		console.log("Pivoting Foundation nutrients (stream)…");
+		await loadNutrients(datasets.foundation, foods, nutrients);
 	}
-	finalizeSalt(nutrients);
+	for (const wide of nutrients.values()) {
+		finalizeImportSalt(wide);
+	}
 
 	const portions: PortionRow[] = [];
 	if (datasets.srLegacy) {
@@ -399,11 +389,14 @@ async function generate(): Promise<string[]> {
 	await writeFile(
 		clearPath,
 		`-- Clear existing nutrition reference data (keep schema)
+-- WARNING: Never run against the active production binding. Promote via new D1 + binding change.
 PRAGMA foreign_keys = OFF;
 DELETE FROM food_portion;
 DELETE FROM food_nutrient;
 DELETE FROM food;
 DELETE FROM food_fts;
+DELETE FROM dataset_release;
+DELETE FROM database_snapshot;
 PRAGMA foreign_keys = ON;
 `,
 	);
@@ -411,6 +404,7 @@ PRAGMA foreign_keys = ON;
 
 	const FOOD_CHUNK = 200;
 	const foodChunks = chunkArray(withMacros, FOOD_CHUNK);
+	const hashParts: string[] = [];
 	for (let i = 0; i < foodChunks.length; i++) {
 		const chunk = foodChunks[i] ?? [];
 		const lines: string[] = [
@@ -420,21 +414,22 @@ PRAGMA foreign_keys = ON;
 			chunk
 				.map(
 					(f) =>
-						`(${f.fdcId}, ${sqlString(f.description)}, ${sqlString(
-							f.dataType === "foundation_food" ? "foundation" : "sr_legacy",
-						)})`,
+						`(${f.fdcId}, ${sqlString(f.description)}, ${sqlString(f.dataType)})`,
 				)
 				.join(",\n") + ";",
 		);
 
 		lines.push(
-			`INSERT OR REPLACE INTO food_nutrient (fdc_id, energy_kcal, protein_g, fat_g, carb_g, fiber_g, sugar_g, sat_fat_g, sodium_mg, salt_g) VALUES`,
+			`INSERT OR REPLACE INTO food_nutrient (fdc_id, energy_kcal, protein_g, fat_g, carb_g, fiber_g, sugar_g, sat_fat_g, sodium_mg, salt_g, energy_nutrient_id, salt_derivation) VALUES`,
 		);
 		lines.push(
 			chunk
 				.map((f) => {
-					const n = nutrients.get(f.fdcId) ?? emptyNutrients();
-					return `(${f.fdcId}, ${sqlNum(n.energy_kcal)}, ${sqlNum(n.protein_g)}, ${sqlNum(n.fat_g)}, ${sqlNum(n.carb_g)}, ${sqlNum(n.fiber_g)}, ${sqlNum(n.sugar_g)}, ${sqlNum(n.sat_fat_g)}, ${sqlNum(n.sodium_mg)}, ${sqlNum(n.salt_g)})`;
+					const n = nutrients.get(f.fdcId) ?? emptyImportNutrients();
+					hashParts.push(
+						`${f.fdcId}|${n.energy_kcal}|${n.protein_g}|${n.fat_g}|${n.carb_g}|${n.energy_nutrient_id}`,
+					);
+					return `(${f.fdcId}, ${sqlNum(n.energy_kcal)}, ${sqlNum(n.protein_g)}, ${sqlNum(n.fat_g)}, ${sqlNum(n.carb_g)}, ${sqlNum(n.fiber_g)}, ${sqlNum(n.sugar_g)}, ${sqlNum(n.sat_fat_g)}, ${sqlNum(n.sodium_mg)}, ${sqlNum(n.salt_g)}, ${sqlNum(n.energy_nutrient_id)}, ${n.salt_derivation ? sqlString(n.salt_derivation) : "NULL"})`;
 				})
 				.join(",\n") + ";",
 		);
@@ -453,22 +448,66 @@ PRAGMA foreign_keys = ON;
 		if (chunk.length === 0) continue;
 		const known = chunk.filter((p) => nutrients.has(p.fdcId));
 		if (known.length === 0) continue;
-		const sql = [
-			`INSERT INTO food_portion (fdc_id, modifier, gram_weight, amount, measure_unit) VALUES`,
-			known
-				.map(
-					(p) =>
-						`(${p.fdcId}, ${p.modifier ? sqlString(p.modifier) : "NULL"}, ${p.gramWeight}, ${sqlNum(p.amount)}, ${p.measureUnit ? sqlString(p.measureUnit) : "NULL"})`,
-				)
-				.join(",\n") + ";",
-		].join("\n");
+		const withIds = known.filter((p) => p.id != null);
+		const withoutIds = known.filter((p) => p.id == null);
+		const parts: string[] = [];
+		if (withIds.length > 0) {
+			parts.push(
+				`INSERT OR REPLACE INTO food_portion (id, fdc_id, modifier, gram_weight, amount, measure_unit) VALUES`,
+				withIds
+					.map(
+						(p) =>
+							`(${p.id}, ${p.fdcId}, ${p.modifier ? sqlString(p.modifier) : "NULL"}, ${p.gramWeight}, ${sqlNum(p.amount)}, ${p.measureUnit ? sqlString(p.measureUnit) : "NULL"})`,
+					)
+					.join(",\n") + ";",
+			);
+		}
+		if (withoutIds.length > 0) {
+			parts.push(
+				`INSERT INTO food_portion (fdc_id, modifier, gram_weight, amount, measure_unit) VALUES`,
+				withoutIds
+					.map(
+						(p) =>
+							`(${p.fdcId}, ${p.modifier ? sqlString(p.modifier) : "NULL"}, ${p.gramWeight}, ${sqlNum(p.amount)}, ${p.measureUnit ? sqlString(p.measureUnit) : "NULL"})`,
+					)
+					.join(",\n") + ";",
+			);
+		}
 		const out = path.join(
 			OUT_DIR,
 			`02-portions-${String(i + 1).padStart(3, "0")}.sql`,
 		);
-		await writeFile(out, `${sql}\n`);
+		await writeFile(out, `${parts.join("\n")}\n`);
 		written.push(out);
 	}
+
+	const snapshotHash = computeSnapshotHash(hashParts);
+	const importedAt = Math.floor(Date.now() / 1000);
+	const snapshotId =
+		manifest.datasetSnapshotId === "dev-unpinned"
+			? `fdc-${new Date().toISOString().slice(0, 10)}-${snapshotHash.slice(0, 12)}`
+			: manifest.datasetSnapshotId;
+
+	const releaseSql: string[] = [];
+	for (const ds of manifest.datasets) {
+		const releaseId = `${ds.dataType}:${ds.publicationDate ?? "unknown"}`;
+		const countFood = withMacros.filter(
+			(f) => f.dataType === ds.dataType,
+		).length;
+		releaseSql.push(
+			`INSERT OR REPLACE INTO dataset_release (id, data_type, official_url, publication_date, archive_sha256, imported_at, row_count_food, row_count_nutrient, row_count_portion) VALUES (${sqlString(releaseId)}, ${sqlString(ds.dataType)}, ${ds.officialUrl ? sqlString(ds.officialUrl) : "NULL"}, ${ds.publicationDate ? sqlString(ds.publicationDate) : "NULL"}, ${ds.archiveSha256 ? sqlString(ds.archiveSha256) : "NULL"}, ${importedAt}, ${countFood}, ${countFood}, ${portions.filter((p) => foods.get(p.fdcId)?.dataType === ds.dataType).length});`,
+		);
+	}
+	const releaseIds = manifest.datasets.map(
+		(ds) => `${ds.dataType}:${ds.publicationDate ?? "unknown"}`,
+	);
+	releaseSql.push(
+		`INSERT OR REPLACE INTO database_snapshot (id, created_at, snapshot_hash, matcher_floor, release_ids_json, notes) VALUES (${sqlString(snapshotId)}, ${importedAt}, ${sqlString(snapshotHash)}, ${sqlString(manifest.matcherVersion)}, ${sqlString(JSON.stringify(releaseIds))}, ${sqlString("Generated by import-fdc-nutrition.ts")});`,
+	);
+
+	const metaPath = path.join(OUT_DIR, "03-release-metadata.sql");
+	await writeFile(metaPath, `${releaseSql.join("\n")}\n`);
+	written.push(metaPath);
 
 	const ftsPath = path.join(OUT_DIR, "99-fts-rebuild.sql");
 	await writeFile(
@@ -479,11 +518,31 @@ INSERT INTO food_fts(food_fts) VALUES('rebuild');
 	);
 	written.push(ftsPath);
 
-	const manifest = path.join(OUT_DIR, "MANIFEST.txt");
+	const updatedManifest: ReleaseManifest = {
+		...manifest,
+		datasetSnapshotId: snapshotId,
+		status: "generated",
+		importedAt: new Date(importedAt * 1000).toISOString(),
+		rowCounts: {
+			food: withMacros.length,
+			nutrient: withMacros.length,
+			portion: portions.length,
+		},
+		snapshotHash,
+		note: "Generated locally — verify checksums and golden accuracy before enabling nutrition-engine for App Review. seed-minimal.sql must never be promoted.",
+	};
 	await writeFile(
-		manifest,
+		path.join(OUT_DIR, "release-manifest.json"),
+		`${JSON.stringify(updatedManifest, null, "\t")}\n`,
+	);
+
+	const manifestTxt = path.join(OUT_DIR, "MANIFEST.txt");
+	await writeFile(
+		manifestTxt,
 		[
 			`generatedAt=${new Date().toISOString()}`,
+			`snapshotId=${snapshotId}`,
+			`snapshotHash=${snapshotHash}`,
 			`foods=${withMacros.length}`,
 			`portions=${portions.length}`,
 			`files=${written.length}`,
@@ -493,7 +552,7 @@ INSERT INTO food_fts(food_fts) VALUES('rebuild');
 	);
 
 	console.log(
-		`Wrote ${written.length} SQL files to ${path.relative(ROOT, OUT_DIR)}`,
+		`Wrote ${written.length} SQL files to ${path.relative(ROOT, OUT_DIR)} (snapshot ${snapshotId})`,
 	);
 	return written;
 }
@@ -502,6 +561,16 @@ async function applyFiles(
 	files: string[],
 	opts: { remote: boolean; db: string },
 ): Promise<void> {
+	if (opts.remote) {
+		const manifest = await loadReleaseManifest();
+		const missingSha = manifest.datasets.some((d) => !d.archiveSha256);
+		if (missingSha) {
+			throw new Error(
+				"Refusing --apply-remote: nutrition-db/releases/current.json is missing archiveSha256 for one or more datasets. Pin verified archives before remote apply.",
+			);
+		}
+	}
+
 	console.log(
 		`Applying schema to ${opts.db} (${opts.remote ? "remote" : "local"})…`,
 	);
@@ -533,7 +602,11 @@ Usage:
   bun scripts/import-fdc-nutrition.ts --apply-remote --db=ration-nutrition-dev
 
 Inputs:  nutrition-db/raw/FoodData_Central_*_csv_*/
+         nutrition-db/releases/current.json
 Outputs: nutrition-db/generated/*.sql  (gitignored)
+
+Remote apply requires archiveSha256 pins in the release manifest.
+Never promote seed-minimal.sql to production reviewers.
 `);
 }
 
@@ -554,13 +627,8 @@ if (applyRemote || applyLocal) {
 } else {
 	console.log(`
 Next:
-  # Production
-  bun scripts/import-fdc-nutrition.ts --apply-remote
-
-  # Or step-by-step:
-  bunx wrangler d1 execute ration-nutrition --remote --file=nutrition-db/schema.sql
-  for f in nutrition-db/generated/*.sql; do
-    bunx wrangler d1 execute ration-nutrition --remote --file="$f"
-  done
+  bun scripts/import-fdc-nutrition.ts --apply-local
+  # Remote only after archive SHA pins + staging verification:
+  bun scripts/import-fdc-nutrition.ts --apply-remote --db=ration-nutrition-dev
 `);
 }

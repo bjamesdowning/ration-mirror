@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { CalendarDateSchema } from "./nutrition-contract";
 
 export const NutritionSourceSchema = z.enum([
 	"usda",
@@ -104,15 +105,11 @@ export const ConsumePortionsSchema = z.object({
 	mealId: z.string().min(1).optional(),
 	entryId: z.string().min(1).optional(),
 	planId: z.string().min(1).optional(),
-	manifestDate: z
-		.string()
-		.regex(/^\d{4}-\d{2}-\d{2}$/, "manifestDate must be YYYY-MM-DD"),
+	manifestDate: CalendarDateSchema,
 	slotType: z.enum(["breakfast", "lunch", "dinner", "snack"]).optional(),
 });
 
 export type ConsumePortionsInput = z.infer<typeof ConsumePortionsSchema>;
-
-const ISO_DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 
 /** Empty / omitted → undefined; keep 0 as an explicit target; null stays null. */
 function nullableNutrient(
@@ -154,29 +151,30 @@ function countSetGoalNutrients(data: {
 	].filter((v) => v != null && Number.isFinite(v)).length;
 }
 
-const NutritionGoalFieldsSchema = z
-	.object({
-		dailyEnergyKcal: goalEnergyField,
-		proteinG: goalMacroField,
-		carbsG: goalMacroField,
-		fatG: goalMacroField,
-		fiberG: goalFiberField,
-		effectiveFrom: z
-			.string()
-			.regex(ISO_DATE_REGEX, "effectiveFrom must be YYYY-MM-DD"),
-		consentAt: z.coerce.date().optional(),
-		/** Preferred consent signal — server stamps grant time. */
-		consent: z.boolean().optional(),
-	})
-	.superRefine((data, ctx) => {
-		if (countSetGoalNutrients(data) < 1) {
-			ctx.addIssue({
-				code: z.ZodIssueCode.custom,
-				message: "Set at least one nutrient target",
-				path: ["dailyEnergyKcal"],
-			});
-		}
-	});
+const NutritionGoalFieldsObject = z.object({
+	dailyEnergyKcal: goalEnergyField,
+	proteinG: goalMacroField,
+	carbsG: goalMacroField,
+	fatG: goalMacroField,
+	fiberG: goalFiberField,
+	effectiveFrom: CalendarDateSchema,
+});
+
+function requireGoalTarget(
+	data: z.infer<typeof NutritionGoalFieldsObject>,
+	ctx: z.RefinementCtx,
+) {
+	if (countSetGoalNutrients(data) < 1) {
+		ctx.addIssue({
+			code: z.ZodIssueCode.custom,
+			message: "Set at least one nutrient target",
+			path: ["dailyEnergyKcal"],
+		});
+	}
+}
+
+const NutritionGoalFieldsSchema =
+	NutritionGoalFieldsObject.strict().superRefine(requireGoalTarget);
 
 function normalizeGoalFields(data: z.infer<typeof NutritionGoalFieldsSchema>) {
 	return {
@@ -186,8 +184,6 @@ function normalizeGoalFields(data: z.infer<typeof NutritionGoalFieldsSchema>) {
 		fatG: data.fatG ?? null,
 		fiberG: data.fiberG ?? null,
 		effectiveFrom: data.effectiveFrom,
-		consentAt: data.consentAt,
-		consent: data.consent,
 	};
 }
 
@@ -196,21 +192,16 @@ export const NutritionGoalSchema =
 
 export type NutritionGoalInput = z.infer<typeof NutritionGoalSchema>;
 
-/**
- * POST/PATCH body — accept legacy `consentAt` or boolean `consent: true`
- * (server stamps via nutrition_consent).
- */
-export const NutritionGoalUpsertSchema = NutritionGoalFieldsSchema.superRefine(
-	(data, ctx) => {
-		if (data.consent !== true && data.consentAt == null) {
-			ctx.addIssue({
-				code: z.ZodIssueCode.custom,
-				message: "consent or consentAt is required",
-				path: ["consent"],
-			});
-		}
-	},
-).transform(normalizeGoalFields);
+/** POST/PATCH body. Consent is established only through the privacy route. */
+export const NutritionGoalUpsertSchema = NutritionGoalFieldsObject.extend({
+	operationKey: z.string().uuid(),
+})
+	.strict()
+	.superRefine(requireGoalTarget)
+	.transform((data) => ({
+		...normalizeGoalFields(data),
+		operationKey: data.operationKey,
+	}));
 
 export type NutritionGoalUpsertInput = z.infer<
 	typeof NutritionGoalUpsertSchema
@@ -218,7 +209,7 @@ export type NutritionGoalUpsertInput = z.infer<
 
 /** Optional client calendar day for “active goal as of” (YYYY-MM-DD). */
 export const NutritionGoalAsOfQuerySchema = z.object({
-	asOf: z.string().regex(ISO_DATE_REGEX, "asOf must be YYYY-MM-DD").optional(),
+	asOf: CalendarDateSchema.optional(),
 });
 
 export type NutritionGoalAsOfQuery = z.infer<
@@ -237,8 +228,8 @@ function utcCalendarDayDiffInclusive(from: string, to: string): number {
 
 export const NutritionSummaryQuerySchema = z
 	.object({
-		from: z.string().regex(ISO_DATE_REGEX, "from must be YYYY-MM-DD"),
-		to: z.string().regex(ISO_DATE_REGEX, "to must be YYYY-MM-DD"),
+		from: CalendarDateSchema,
+		to: CalendarDateSchema,
 	})
 	.refine((v) => v.from <= v.to, {
 		message: "from must be on or before to",
@@ -312,7 +303,27 @@ export type NutritionResolveRequest = z.infer<
 	typeof NutritionResolveRequestSchema
 >;
 
-/** Async nutrition recompute queue message (Slice 8 stub). */
+/**
+ * Queue wake payload — no user/org IDs, names, or nutrient values.
+ * D1 `nutrition_recompute_job` is the source of truth.
+ */
+export const NutritionRecomputeWakeSchema = z
+	.object({
+		schemaVersion: z.literal(1),
+		type: z.literal("nutrition.recompute.wake"),
+		jobKey: z.string().min(1).max(200),
+		sentAt: z.string().datetime(),
+	})
+	.strict();
+
+export type NutritionRecomputeWakeMessage = z.infer<
+	typeof NutritionRecomputeWakeSchema
+>;
+
+/**
+ * @deprecated Legacy stub shape — prefer {@link NutritionRecomputeWakeSchema}.
+ * Kept so old in-flight test fixtures still parse during rollout.
+ */
 export const NutritionRecomputeJobSchema = z.object({
 	jobId: z.string().uuid(),
 	organizationId: z.string().min(1),

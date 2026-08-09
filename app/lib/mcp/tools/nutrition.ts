@@ -3,17 +3,16 @@ import { z } from "zod";
 import { getUtcTodayISO } from "../../cargo-utils";
 import { isFeatureEnabled } from "../../feature-flags/flags.server";
 import { ensureMealPlan } from "../../manifest.server";
+import { serializeNutritionGoal } from "../../nutrition/dto.server";
 import {
-	clearManifestPersonalIntake,
-	upsertManifestPersonalIntake,
-} from "../../nutrition/intake-log.server";
-import {
-	clearNutritionGoal,
-	getNutritionSummary,
-	listNutritionIntakesForRange,
-	upsertNutritionGoal,
-} from "../../nutrition/persist.server";
-import { resolveNutritionGoalConsentAt } from "../../nutrition/resolve-goal-consent.server";
+	clearGoal,
+	clearManifestIntakes,
+	deriveNutritionOperationKey,
+	getHistory,
+	getSummary,
+	logManifestIntakes,
+	setGoal,
+} from "../../nutrition/service.server";
 import {
 	NutritionGoalUpsertSchema,
 	NutritionSummaryQuerySchema,
@@ -22,6 +21,7 @@ import {
 	resolveAgentFlagContext,
 	resolveAgentSurface,
 } from "../agent-flag-context";
+import type { McpToolContext } from "../auth";
 import { err, featureDisabled, ok } from "../envelope";
 import {
 	defineSharedTool,
@@ -29,20 +29,22 @@ import {
 	registerSharedMcpTool,
 } from "../tool-runtime";
 
-function serializeGoal(
-	row: NonNullable<Awaited<ReturnType<typeof upsertNutritionGoal>>>,
-) {
+function nutritionPrincipal(ctx: McpToolContext) {
+	const surface = resolveAgentSurface(ctx);
 	return {
-		id: row.id,
-		dailyEnergyKcal: row.dailyEnergyKcal,
-		proteinG: row.proteinG,
-		carbsG: row.carbsG,
-		fatG: row.fatG,
-		fiberG: row.fiberG,
-		effectiveFrom: row.effectiveFrom,
-		effectiveTo: row.effectiveTo,
-		consentAt: row.consentAt,
-		createdAt: row.createdAt,
+		userId: ctx.userId,
+		organizationId: ctx.organizationId,
+		surface,
+		authMethod: ctx.authMethod,
+		credentialId: ctx.apiKeyId || null,
+		clientId: ctx.oauthClientId ?? null,
+		scopes: [
+			...(ctx.scopes.includes("mcp:nutrition:read") ? ["nutrition:read"] : []),
+			...(ctx.scopes.includes("mcp:nutrition:write")
+				? ["nutrition:write"]
+				: []),
+		],
+		requestId: crypto.randomUUID(),
 	};
 }
 
@@ -71,6 +73,7 @@ export function createNutritionToolDefs(env: McpToolsEnv) {
 			scopes: ["mcp:nutrition:read"],
 			rateLimitCategory: "mcp_list",
 			audit: false,
+			readOnlyHint: true,
 			handler: async (ctx, a) => {
 				const flagContext = resolveAgentFlagContext(env, ctx);
 				const [goalsOn, manifestOn] = await Promise.all([
@@ -96,14 +99,18 @@ export function createNutritionToolDefs(env: McpToolsEnv) {
 						{ details: parsed.error.flatten() },
 					);
 				}
-				const summary = await getNutritionSummary(
-					env.DB,
-					ctx.userId,
-					ctx.organizationId,
+				const principal = nutritionPrincipal(ctx);
+				const summary = await getSummary(
+					env,
+					principal,
+					flagContext,
 					parsed.data.from,
 					parsed.data.to,
 				);
-				return ok("get_nutrition_summary", summary);
+				return ok("get_nutrition_summary", summary, {
+					outcome: "no_effect",
+					requestId: principal.requestId,
+				});
 			},
 		}),
 		defineSharedTool({
@@ -125,6 +132,7 @@ export function createNutritionToolDefs(env: McpToolsEnv) {
 			scopes: ["mcp:nutrition:read"],
 			rateLimitCategory: "mcp_list",
 			audit: false,
+			readOnlyHint: true,
 			handler: async (ctx, a) => {
 				const flagContext = resolveAgentFlagContext(env, ctx);
 				const [goalsOn, manifestOn] = await Promise.all([
@@ -150,10 +158,11 @@ export function createNutritionToolDefs(env: McpToolsEnv) {
 						{ details: parsed.error.flatten() },
 					);
 				}
-				const result = await listNutritionIntakesForRange(
-					env.DB,
-					ctx.userId,
-					ctx.organizationId,
+				const principal = nutritionPrincipal(ctx);
+				const result = await getHistory(
+					env,
+					principal,
+					flagContext,
 					parsed.data.from,
 					parsed.data.to,
 					{ limit: a.limit ?? 100, cursor: a.cursor },
@@ -161,14 +170,18 @@ export function createNutritionToolDefs(env: McpToolsEnv) {
 				return ok(
 					"list_nutrition_intakes",
 					{ items: result.items },
-					{ meta: { nextCursor: result.nextCursor } },
+					{
+						meta: { nextCursor: result.nextCursor },
+						outcome: "no_effect",
+						requestId: principal.requestId,
+					},
 				);
 			},
 		}),
 		defineSharedTool({
 			name: "set_nutrition_goal",
 			description:
-				"Upsert the caller's personal daily nutrition goal (any subset of energy/macros/fiber; at least one required). Requires nutrition-goals and consent:true or legacy consentAt (Art. 9). Not medical advice — do not prescribe diets.",
+				"Idempotently upsert the caller's personal daily nutrition goal (any subset of energy/macros/fiber; at least one required) using operationKey. Requires active goals and agent-processing consent established in Ration. Not medical advice — do not prescribe diets.",
 			inputSchema: z.object({
 				dailyEnergyKcal: z
 					.number()
@@ -183,12 +196,12 @@ export function createNutritionToolDefs(env: McpToolsEnv) {
 				effectiveFrom: z
 					.string()
 					.regex(/^\d{4}-\d{2}-\d{2}$/, "Must be YYYY-MM-DD"),
-				consentAt: z.coerce.date().optional(),
-				consent: z.boolean().optional(),
+				operationKey: z.string().uuid(),
 			}),
 			scopes: ["mcp:nutrition:write"],
 			rateLimitCategory: "mcp_write",
 			audit: true,
+			idempotentHint: true,
 			handler: async (ctx, a) => {
 				const flagContext = resolveAgentFlagContext(env, ctx);
 				const enabled = await isFeatureEnabled(
@@ -208,36 +221,39 @@ export function createNutritionToolDefs(env: McpToolsEnv) {
 					return err(
 						"set_nutrition_goal",
 						"invalid_input",
-						"Set at least one nutrient target and provide consent:true or consentAt.",
+						"Set at least one nutrient target.",
 						{ details: parsed.error.flatten() },
 					);
 				}
-				const surface = resolveAgentSurface(ctx);
-				const consentAt = await resolveNutritionGoalConsentAt(
-					env.DB,
-					ctx.userId,
-					surface,
-					parsed.data,
-				);
-				const created = await upsertNutritionGoal(env.DB, {
-					userId: ctx.userId,
+				const principal = nutritionPrincipal(ctx);
+				const result = await setGoal(env, principal, flagContext, {
+					operationKey: parsed.data.operationKey,
 					dailyEnergyKcal: parsed.data.dailyEnergyKcal,
 					proteinG: parsed.data.proteinG,
 					carbsG: parsed.data.carbsG,
 					fatG: parsed.data.fatG,
 					fiberG: parsed.data.fiberG ?? null,
 					effectiveFrom: parsed.data.effectiveFrom,
-					consentAt,
 				});
-				return ok("set_nutrition_goal", {
-					goal: created ? serializeGoal(created) : null,
-				});
+				return ok(
+					"set_nutrition_goal",
+					{
+						goal: serializeNutritionGoal(result.goal),
+						operationId: result.operationId,
+						replayed: result.replayed,
+					},
+					{
+						outcome: result.replayed ? "replayed" : "committed",
+						requestId: principal.requestId,
+						operationId: result.operationId,
+					},
+				);
 			},
 		}),
 		defineSharedTool({
 			name: "clear_nutrition_goal",
 			description:
-				"Close open-ended nutrition goals so none remain effective on asOfDate (defaults to today UTC). Requires nutrition-goals. Destructive — pass confirm:true.",
+				"Idempotently close open-ended nutrition goals using operationKey so none remain effective on asOfDate (defaults to today UTC). Requires nutrition-goals. Destructive — pass confirm:true.",
 			inputSchema: z.object({
 				confirm: z.boolean(),
 				asOfDate: z
@@ -245,11 +261,14 @@ export function createNutritionToolDefs(env: McpToolsEnv) {
 					.regex(/^\d{4}-\d{2}-\d{2}$/, "Must be YYYY-MM-DD")
 					.optional()
 					.describe("UTC date to close goals as of (default: today)"),
+				operationKey: z.string().uuid(),
 			}),
 			scopes: ["mcp:nutrition:write"],
 			rateLimitCategory: "mcp_write",
 			audit: true,
 			needsApproval: true,
+			destructiveHint: true,
+			idempotentHint: true,
 			handler: async (ctx, a) => {
 				if (!a.confirm) {
 					return err(
@@ -272,75 +291,82 @@ export function createNutritionToolDefs(env: McpToolsEnv) {
 					);
 				}
 				const asOfDate = a.asOfDate ?? getUtcTodayISO();
-				const cleared = await clearNutritionGoal(env.DB, ctx.userId, asOfDate);
-				return ok("clear_nutrition_goal", { cleared, asOfDate, goal: null });
+				const principal = nutritionPrincipal(ctx);
+				const result = await clearGoal(env, principal, flagContext, {
+					operationKey: a.operationKey,
+					asOfDate,
+				});
+				return ok(
+					"clear_nutrition_goal",
+					{ ...result, asOfDate },
+					{
+						outcome: result.replayed
+							? "replayed"
+							: result.cleared
+								? "committed"
+								: "no_effect",
+						requestId: principal.requestId,
+						operationId: result.operationId,
+					},
+				);
 			},
 		}),
 		defineSharedTool({
 			name: "log_manifest_intake",
 			description:
-				"Log or update personal plate-up (Eat) for prepared Manifest entries. Never deducts Cargo. Requires nutrition-cook-log-split + nutrition-manifest and intake consent (pass consent:true on first grant). Pass portions[{entryId, servings, idempotencyKey}] (1–50). Not medical advice.",
+				"Atomically log or update personal plate-up (Eat) for prepared Manifest entries. Never deducts Cargo. Requires active intake and agent-processing consent established in Ration. Pass operationKey plus portions[{entryId, servings, idempotencyKey}] (1–50); during the compatibility window, omission derives a stable operation key from the ordered item keys. Returns stable replay semantics and authoritative day totals. Not medical advice.",
 			inputSchema: z.object({
 				portions: z.array(intakePortionSchema).min(1).max(50),
-				consent: z
-					.literal(true)
-					.optional()
-					.describe(
-						"Set true to grant purpose:intake consent on first log when none is active.",
-					),
+				operationKey: z.string().uuid().optional(),
 			}),
 			scopes: ["mcp:nutrition:write"],
 			rateLimitCategory: "mcp_write",
 			audit: true,
+			idempotentHint: true,
+			needsApproval: (args) =>
+				Array.isArray(args.portions) && args.portions.length > 1,
 			handler: async (ctx, a) => {
 				const flagContext = resolveAgentFlagContext(env, ctx);
-				const surface = resolveAgentSurface(ctx);
 				const plan = await ensureMealPlan(env.DB, ctx.organizationId);
-				const results: Array<{
-					entryId: string;
-					intake: Awaited<
-						ReturnType<typeof upsertManifestPersonalIntake>
-					>["intake"];
-					idempotent: boolean;
-					replaced: boolean;
-				}> = [];
-				for (const portion of a.portions) {
-					const result = await upsertManifestPersonalIntake(env, {
-						organizationId: ctx.organizationId,
-						userId: ctx.userId,
-						planId: plan.id,
-						entryId: portion.entryId,
-						servings: portion.servings,
-						idempotencyKey: portion.idempotencyKey,
-						consent: a.consent,
-						consentSource: surface,
-						flagContext,
-					});
-					results.push({
-						entryId: portion.entryId,
-						intake: result.intake,
-						idempotent: result.idempotent,
-						replaced: result.replaced,
-					});
-				}
-				return ok("log_manifest_intake", {
-					logged: results.length,
-					results,
+				const principal = nutritionPrincipal(ctx);
+				const result = await logManifestIntakes(env, principal, flagContext, {
+					operationKey:
+						a.operationKey ??
+						(await deriveNutritionOperationKey(
+							a.portions.map((portion) => portion.idempotencyKey),
+						)),
+					planId: plan.id,
+					items: a.portions,
 				});
+				return ok(
+					"log_manifest_intake",
+					{
+						logged: result.items.length,
+						...result,
+					},
+					{
+						outcome: result.replayed ? "replayed" : "committed",
+						requestId: principal.requestId,
+						operationId: result.operationId,
+					},
+				);
 			},
 		}),
 		defineSharedTool({
 			name: "clear_manifest_intake",
 			description:
-				"Void the caller's active personal intake for prepared Manifest entries (soft-clear). Does not uncook or restore Cargo. Requires nutrition-cook-log-split + nutrition-manifest. Destructive — pass confirm:true.",
+				"Atomically void the caller's active personal intake for prepared Manifest entries (soft-clear) using operationKey. Does not uncook or restore Cargo. Requires nutrition-cook-log-split + nutrition-manifest. Destructive — pass confirm:true.",
 			inputSchema: z.object({
 				entryIds: z.array(z.string().uuid()).min(1).max(50),
 				confirm: z.boolean(),
+				operationKey: z.string().uuid(),
 			}),
 			scopes: ["mcp:nutrition:write"],
 			rateLimitCategory: "mcp_write",
 			audit: true,
 			needsApproval: true,
+			destructiveHint: true,
+			idempotentHint: true,
 			handler: async (ctx, a) => {
 				if (!a.confirm) {
 					return err(
@@ -351,29 +377,25 @@ export function createNutritionToolDefs(env: McpToolsEnv) {
 				}
 				const flagContext = resolveAgentFlagContext(env, ctx);
 				const plan = await ensureMealPlan(env.DB, ctx.organizationId);
-				const results: Array<{
-					entryId: string;
-					cleared: boolean;
-					voidedIntakeId: string | null;
-				}> = [];
-				for (const entryId of a.entryIds) {
-					const result = await clearManifestPersonalIntake(env, {
-						organizationId: ctx.organizationId,
-						userId: ctx.userId,
-						planId: plan.id,
-						entryId,
-						flagContext,
-					});
-					results.push({
-						entryId,
-						cleared: result.cleared,
-						voidedIntakeId: result.voidedIntakeId,
-					});
-				}
-				return ok("clear_manifest_intake", {
-					clearedCount: results.filter((r) => r.cleared).length,
-					results,
+				const principal = nutritionPrincipal(ctx);
+				const result = await clearManifestIntakes(env, principal, flagContext, {
+					operationKey: a.operationKey,
+					planId: plan.id,
+					entryIds: a.entryIds,
 				});
+				return ok(
+					"clear_manifest_intake",
+					{
+						clearedCount: result.items.filter((item) => item.voidedIntakeId)
+							.length,
+						...result,
+					},
+					{
+						outcome: result.replayed ? "replayed" : "committed",
+						requestId: principal.requestId,
+						operationId: result.operationId,
+					},
+				);
 			},
 		}),
 	];

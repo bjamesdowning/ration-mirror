@@ -43,17 +43,14 @@ import {
 	writeUserSettings,
 } from "~/lib/auth.server";
 import { useConfirm } from "~/lib/confirm-context";
-import {
-	buildFlagContext,
-	isFeatureEnabled,
-} from "~/lib/feature-flags/flags.server";
+import { buildWebFlagContext } from "~/lib/feature-flags/context.server";
+import { isFeatureEnabled } from "~/lib/feature-flags/flags.server";
 import { AI_COSTS, checkBalance } from "~/lib/ledger.server";
 import type {
 	MealForPicker,
 	MealPlanEntryWithMeal,
 } from "~/lib/manifest.server";
 import {
-	attachPersonalIntakeToEntries,
 	ensureMealPlan,
 	getTodayISO,
 	getTriggeredAllergens,
@@ -63,14 +60,15 @@ import {
 import { addDays, getCalendarDates } from "~/lib/manifest-dates";
 import { getExcludedManifestDates } from "~/lib/manifest-supply.server";
 import { checkMealReadiness } from "~/lib/matching.server";
-import { getActiveNutritionConsent } from "~/lib/nutrition/consent.server";
+import { getNutritionConsentStatus } from "~/lib/nutrition/consent.server";
 import { aggregateManifestDayNutrition } from "~/lib/nutrition/day-totals";
 import { goalTargetsFromRow } from "~/lib/nutrition/goal-progress";
+import { getActiveNutritionGoal } from "~/lib/nutrition/persist.server";
 import {
-	getActiveNutritionGoal,
-	getNutritionSummary,
-	listNutritionIntakesForRange,
-} from "~/lib/nutrition/persist.server";
+	attachPersonalIntakeToEntries,
+	getHistory,
+	getSummary,
+} from "~/lib/nutrition/service.server";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import { getManifestReadyCacheVersion } from "~/lib/readiness-cache.server";
 import type { SlotType } from "~/lib/schemas/manifest";
@@ -182,7 +180,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		]);
 
 	const env = context.cloudflare.env;
-	const flagContext = buildFlagContext(request, env, { user });
+	const flagContext = buildWebFlagContext(request, env, { user });
 	const [nutritionManifest, nutritionGoals, nutritionCookLogSplit] =
 		await Promise.all([
 			isFeatureEnabled(env, "nutrition-manifest", flagContext),
@@ -192,12 +190,27 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 
 	let intakeConsentGranted = false;
 	if (nutritionCookLogSplit && nutritionManifest) {
-		const [attachedEntries, consentRow] = await Promise.all([
-			attachPersonalIntakeToEntries(db, user.id, groupId, entries),
-			getActiveNutritionConsent(db, user.id, "intake"),
-		]);
-		entries = attachedEntries;
-		intakeConsentGranted = consentRow != null;
+		const consentStatus = await getNutritionConsentStatus(
+			db,
+			user.id,
+			"intake",
+		);
+		intakeConsentGranted = consentStatus.state === "active";
+		if (intakeConsentGranted) {
+			entries = await attachPersonalIntakeToEntries(
+				env,
+				{
+					userId: user.id,
+					organizationId: groupId,
+					surface: "web",
+					authMethod: "session",
+					scopes: ["nutrition:read"],
+					requestId: request.headers.get("cf-ray") ?? crypto.randomUUID(),
+				},
+				flagContext,
+				entries,
+			);
+		}
 	}
 
 	const dayConsumedNutrients: Record<
@@ -226,19 +239,27 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		mealName: string | null;
 	}> = [];
 
-	if (nutritionManifest) {
+	if (nutritionManifest && intakeConsentGranted) {
+		const principal = {
+			userId: user.id,
+			organizationId: groupId,
+			surface: "web" as const,
+			authMethod: "session",
+			scopes: ["nutrition:read"],
+			requestId: request.headers.get("cf-ray") ?? crypto.randomUUID(),
+		};
 		const [summary, intakePage] = await Promise.all([
-			getNutritionSummary(
-				db,
-				user.id,
-				groupId,
+			getSummary(
+				env,
+				principal,
+				flagContext,
 				currentRangeStart,
 				currentRangeEnd,
 			),
-			listNutritionIntakesForRange(
-				db,
-				user.id,
-				groupId,
+			getHistory(
+				env,
+				principal,
+				flagContext,
 				currentRangeStart,
 				currentRangeEnd,
 			),
@@ -270,10 +291,15 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		for (const [date, totals] of Object.entries(aggregated)) {
 			dayConsumedNutrients[date] = totals.consumed;
 		}
-		if (nutritionGoals) {
-			const goal =
-				summary.goal ?? (await getActiveNutritionGoal(db, user.id, today));
-			goalTargets = goalTargetsFromRow(goal);
+		if (nutritionGoals && summary.goal) {
+			goalTargets = goalTargetsFromRow(summary.goal);
+		}
+	} else if (nutritionGoals) {
+		const goalsConsent = await getNutritionConsentStatus(db, user.id, "goals");
+		if (goalsConsent.state === "active") {
+			goalTargets = goalTargetsFromRow(
+				await getActiveNutritionGoal(db, user.id, today),
+			);
 		}
 	}
 
@@ -800,12 +826,11 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 		if (entry) setEatEntry(entry);
 	};
 
-	const handleEat = (entryId: string, servings: number, consent?: boolean) => {
+	const handleEat = (entryId: string, servings: number) => {
 		intakeFetcher.submit(
 			JSON.stringify({
 				servings,
 				idempotencyKey: crypto.randomUUID(),
-				...(consent ? { consent: true } : {}),
 			}),
 			{
 				method: "POST",
@@ -818,7 +843,7 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 	const handleRemoveServing = (entryId: string) => {
 		intakeFetcher.submit(null, {
 			method: "DELETE",
-			action: `/api/meal-plans/${plan.id}/entries/${entryId}/intake`,
+			action: `/api/meal-plans/${plan.id}/entries/${entryId}/intake?operationKey=${crypto.randomUUID()}`,
 		});
 	};
 
@@ -1454,10 +1479,10 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 					defaultServings={eatEntry.personalIntake?.servings ?? 1}
 					intakeConsentGranted={intakeConsentGranted}
 					hasExistingIntake={!!eatEntry.personalIntake}
-					onConfirmEat={(servings, consent) => {
+					onConfirmEat={(servings) => {
 						const entryId = eatEntry.id;
 						setEatEntry(null);
-						handleEat(entryId, servings, consent);
+						handleEat(entryId, servings);
 					}}
 					onRemoveLog={() => {
 						const entryId = eatEntry.id;

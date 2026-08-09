@@ -1,4 +1,4 @@
-import { OAUTH_MCP_SCOPES, type OAuthMcpScope } from "./oauth.constants";
+import type { OAuthMcpScope } from "./oauth.constants";
 
 export type OAuthPagePath =
 	| "/oauth/sign-in"
@@ -39,21 +39,25 @@ export function parseScopesFromSignedQuery(signedQuery: string): string[] {
 }
 
 /**
- * Scopes to send to `oauth2Consent`: selected MCP scopes plus non-MCP scopes from
- * the original request (e.g. `offline_access`) that are not shown as checkboxes.
+ * Scopes to send to `oauth2Consent`.
+ *
+ * - Selected MCP scopes are intersected with the signed request (no injection).
+ * - Zero selected MCP scopes means zero MCP authorization (no fallback).
+ * - `offline_access` is included only when the consent form opts in and it was
+ *   originally requested; it is never preserved invisibly.
  */
 export function buildConsentScopeForSubmit(
 	selectedMcpScopes: OAuthMcpScope[],
 	signedQuery: string,
+	options?: { offlineAccessSelected?: boolean },
 ): string {
-	const requested = parseScopesFromSignedQuery(signedQuery);
-	const nonMcp = requested.filter((s) => !s.startsWith("mcp:") && s !== "mcp");
-	const mcpFromForm = selectedMcpScopes;
-	const mcpFallback = requested.filter((s): s is OAuthMcpScope =>
-		(OAUTH_MCP_SCOPES as readonly string[]).includes(s),
-	);
-	const mcp = mcpFromForm.length > 0 ? mcpFromForm : mcpFallback;
-	return [...new Set([...mcp, ...nonMcp])].join(" ");
+	const requested = new Set(parseScopesFromSignedQuery(signedQuery));
+	const mcp = selectedMcpScopes.filter((scope) => requested.has(scope));
+	const scopes = new Set<string>(mcp);
+	if (options?.offlineAccessSelected && requested.has("offline_access")) {
+		scopes.add("offline_access");
+	}
+	return [...scopes].join(" ");
 }
 
 /**

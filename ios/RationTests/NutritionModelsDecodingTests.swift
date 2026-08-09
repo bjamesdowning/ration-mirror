@@ -69,14 +69,42 @@ final class NutritionModelsDecodingTests: XCTestCase {
             carbsG: nil,
             fatG: nil,
             fiberG: nil,
-            effectiveFrom: "2026-01-01",
-            consent: true
+            effectiveFrom: "2026-01-01"
         )
         let data = try JSONEncoder().encode(request)
         let json = try XCTUnwrap(String(data: data, encoding: .utf8))
         XCTAssertTrue(json.contains("\"dailyEnergyKcal\":2000"))
-        XCTAssertTrue(json.contains("\"consent\":true"))
+        XCTAssertFalse(json.contains("consent"))
         XCTAssertFalse(json.contains("proteinG"))
+    }
+
+    func testDecodesVersionedNutritionConsentStatus() throws {
+        let json = Data(
+            """
+            {
+              "ok": true,
+              "consents": [{
+                "purpose": "intake",
+                "state": "active",
+                "consentId": "consent-1",
+                "grantedAt": "2026-08-09T12:00:00Z",
+                "withdrawnAt": null,
+                "statement": {
+                  "purpose": "intake",
+                  "policyVersion": "2026-08-09",
+                  "statementVersion": "intake-2026-08-09.1",
+                  "text": "Full statement",
+                  "sha256": "\(String(repeating: "a", count: 64))",
+                  "privacyNoticeVersion": "2026-08-09"
+                }
+              }]
+            }
+            """.utf8
+        )
+        let response = try decoder.decode(NutritionPrivacyResponse.self, from: json)
+        XCTAssertEqual(response.consents.first?.purpose, .intake)
+        XCTAssertEqual(response.consents.first?.state, .active)
+        XCTAssertEqual(response.consents.first?.statement.statementVersion, "intake-2026-08-09.1")
     }
 
     func testDecodesNutritionGoalClearResponseWithBoolCleared() throws {
@@ -247,11 +275,12 @@ final class NutritionModelsDecodingTests: XCTestCase {
     }
 
     func testEncodesManifestIntakeUpsertRequest() throws {
-        let request = ManifestIntakeUpsertRequest(servings: 2.0, idempotencyKey: "key-1", consent: nil)
+        let request = ManifestIntakeUpsertRequest(servings: 2.0, idempotencyKey: "key-1")
         let data = try JSONEncoder().encode(request)
         let json = try XCTUnwrap(String(data: data, encoding: .utf8))
         XCTAssertTrue(json.contains("\"servings\":2"))
         XCTAssertTrue(json.contains("\"idempotencyKey\":\"key-1\""))
+        XCTAssertFalse(json.contains("consent"))
         XCTAssertFalse(json.contains("consent"))
     }
 

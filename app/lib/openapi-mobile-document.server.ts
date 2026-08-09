@@ -502,7 +502,7 @@ export function buildMobileOpenApiDocument(baseUrl: string) {
 				post: {
 					summary: "Log or edit personal serving (Eat)",
 					description:
-						"Requires nutrition-cook-log-split and nutrition-manifest. Entry must be prepared. Body: servings (0.5–100), idempotencyKey (uuid), optional consent:true for first-use intake consent. Never mutates Cargo.",
+						"Requires nutrition-cook-log-split, nutrition-manifest, and active intake consent granted through /privacy/nutrition. Entry must be prepared. Body: servings (0.5–100), idempotencyKey (UUID; also the single-item operation key). Returns stable operationId/replayed semantics and authoritative dayTotals. Never mutates Cargo.",
 					security: [{ bearerAuth: [] }],
 					parameters: [
 						{
@@ -513,18 +513,25 @@ export function buildMobileOpenApiDocument(baseUrl: string) {
 						},
 					],
 					responses: {
-						"200": { description: "Personal intake summary + undoToken" },
+						"200": {
+							description:
+								"Personal intake, stable operationId/replayed, authoritative dayTotals, summaryGeneratedAt, and D1-backed undoToken (operationId within 5s)",
+						},
 						"403": {
 							description: "FEATURE_DISABLED or nutrition_consent_required",
 						},
-						"409": { description: "entry_not_prepared" },
+						"404": { description: "not_found" },
+						"409": {
+							description:
+								"entry_not_prepared, idempotency_conflict, operation_in_progress, or nutrition_write_conflict",
+						},
 						"422": { description: "nutrition_unavailable" },
 					},
 				},
 				delete: {
 					summary: "Remove my personal serving log",
 					description:
-						"Soft-voids the caller's active intake for the entry. Does not clear Prepared or restore Cargo.",
+						"Soft-voids the caller's active intake for the entry. Requires a UUID operationKey query parameter (or Idempotency-Key header) for idempotency. Does not clear Prepared or restore Cargo.",
 					security: [{ bearerAuth: [] }],
 					parameters: [
 						{
@@ -533,10 +540,24 @@ export function buildMobileOpenApiDocument(baseUrl: string) {
 							required: true,
 							schema: { type: "string", format: "uuid" },
 						},
+						{
+							name: "operationKey",
+							in: "query",
+							required: true,
+							schema: { type: "string", format: "uuid" },
+						},
 					],
 					responses: {
-						"200": { description: "cleared + optional undoToken" },
+						"200": {
+							description:
+								"Stable clear result, operationId/replayed, dayTotals, summaryGeneratedAt, and D1-backed undoToken",
+						},
 						"403": { description: "FEATURE_DISABLED" },
+						"404": { description: "not_found" },
+						"409": {
+							description:
+								"idempotency_conflict, operation_in_progress, or nutrition_write_conflict",
+						},
 					},
 				},
 			},
@@ -544,7 +565,7 @@ export function buildMobileOpenApiDocument(baseUrl: string) {
 				get: {
 					summary: "Nutrition day totals and active goal",
 					description:
-						"Requires nutrition-goals or nutrition-manifest. Query: from, to (YYYY-MM-DD).",
+						"Requires nutrition-goals or nutrition-manifest plus active intake consent. Query: from, to (strict Gregorian YYYY-MM-DD, inclusive). Response includes goalAsOf (= to) and additive nutritionV2.",
 					security: [{ bearerAuth: [] }],
 					parameters: [
 						{
@@ -561,8 +582,40 @@ export function buildMobileOpenApiDocument(baseUrl: string) {
 						},
 					],
 					responses: {
-						"200": { description: "Summary with days[] and optional goal" },
+						"200": {
+							description:
+								"Summary with days[], optional goal, goalAsOf, and nutritionV2",
+						},
 						"403": { description: "Feature disabled" },
+					},
+				},
+			},
+			"/api/mobile/v1/manifest/planned-dates": {
+				get: {
+					summary: "Manifest planned (and intake) calendar dates",
+					description:
+						"Month-scoped planned meal dates for the active kitchen. When nutrition-manifest (and engine) are effectively on, also returns consumedDates for personal intake markers. Query: from, to (YYYY-MM-DD, max 40 days). Response includes schemaVersion 2.",
+					security: [{ bearerAuth: [] }],
+					parameters: [
+						{
+							name: "from",
+							in: "query",
+							required: true,
+							schema: { type: "string", format: "date" },
+						},
+						{
+							name: "to",
+							in: "query",
+							required: true,
+							schema: { type: "string", format: "date" },
+						},
+					],
+					responses: {
+						"200": {
+							description:
+								"{ schemaVersion, from, to, dates[], consumedDates? }",
+						},
+						"400": { description: "Invalid or oversized date range" },
 					},
 				},
 			},
@@ -588,7 +641,7 @@ export function buildMobileOpenApiDocument(baseUrl: string) {
 				post: {
 					summary: "Upsert versioned nutrition goal",
 					description:
-						"Requires nutrition-goals and consent:true (or legacy consentAt). GDPR Art. 9.",
+						"Requires nutrition-goals and active goals consent granted through /privacy/nutrition. Body includes operationKey (UUID) for stable idempotent replay. GDPR Art. 9.",
 					security: [{ bearerAuth: [] }],
 					responses: {
 						"200": { description: "Created/updated goal version" },
@@ -597,7 +650,17 @@ export function buildMobileOpenApiDocument(baseUrl: string) {
 				},
 				delete: {
 					summary: "Clear open-ended nutrition goals",
+					description:
+						"Requires operationKey (UUID) as a query parameter for stable idempotent replay.",
 					security: [{ bearerAuth: [] }],
+					parameters: [
+						{
+							name: "operationKey",
+							in: "query",
+							required: true,
+							schema: { type: "string", format: "uuid" },
+						},
+					],
 					responses: {
 						"200": { description: "Cleared" },
 						"403": { description: "Feature disabled" },

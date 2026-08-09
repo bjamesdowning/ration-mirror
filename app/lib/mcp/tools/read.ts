@@ -14,13 +14,10 @@ import {
 	getExpiringCargo,
 } from "../../cargo.server";
 import { addUtcDays, getUtcTodayISO } from "../../cargo-utils";
-import {
-	attachPersonalIntakeToEntries,
-	getMealPlan,
-	getWeekEntries,
-} from "../../manifest.server";
+import { getMealPlan, getWeekEntries } from "../../manifest.server";
 import { MEAL_MATCH_CANDIDATE_CAP, matchMeals } from "../../matching.server";
 import { getMealsPage } from "../../meals.server";
+import { attachPersonalIntakeToEntries } from "../../nutrition/service.server";
 import { parseDirections } from "../../schemas/directions";
 import { getSupplyList, getSupplyListById } from "../../supply.server";
 import { getTagsForCargoIds, tagsToSlugs } from "../../tags.server";
@@ -85,9 +82,6 @@ export function createReadToolDefs(env: McpToolsEnv) {
 				const { resolveAgentFlagContext } = await import(
 					"../agent-flag-context"
 				);
-				const { isFeatureEnabled } = await import(
-					"../../feature-flags/flags.server"
-				);
 				const onboarding = await getAgentOnboardingState(
 					env,
 					ctx.organizationId,
@@ -107,22 +101,19 @@ export function createReadToolDefs(env: McpToolsEnv) {
 					},
 				};
 				const flagContext = resolveAgentFlagContext(env, ctx);
-				const [
-					nutritionEngine,
-					nutritionManifest,
-					nutritionGoals,
-					nutritionCookLogSplit,
-				] = await Promise.all([
-					isFeatureEnabled(env, "nutrition-engine", flagContext),
-					isFeatureEnabled(env, "nutrition-manifest", flagContext),
-					isFeatureEnabled(env, "nutrition-goals", flagContext),
-					isFeatureEnabled(env, "nutrition-cook-log-split", flagContext),
-				]);
+				const caps = await (
+					await import("../../nutrition/feature-policy.server")
+				).resolveNutritionCapabilities(env, flagContext, {
+					queueConfigured: Boolean(
+						(env as { NUTRITION_RECOMPUTE_QUEUE?: unknown })
+							.NUTRITION_RECOMPUTE_QUEUE,
+					),
+				});
 				const nutritionFlags = {
-					engine: nutritionEngine,
-					manifest: nutritionManifest,
-					goals: nutritionGoals,
-					cookLogSplit: nutritionCookLogSplit,
+					engine: caps.engine,
+					manifest: caps.manifest,
+					goals: caps.goals,
+					cookLogSplit: caps.cookLogSplit,
 				};
 				const capabilities = buildGetContextCapabilities(
 					ctx.scopes,
@@ -419,12 +410,33 @@ export function createReadToolDefs(env: McpToolsEnv) {
 				);
 				// Personal intake is mcp:nutrition:read — never leak under mcp:read alone.
 				if (manifestOn && hasScope(ctx, "mcp:nutrition:read")) {
-					entries = await attachPersonalIntakeToEntries(
-						env.DB,
-						ctx.userId,
-						ctx.organizationId,
-						entries,
-					);
+					try {
+						entries = await attachPersonalIntakeToEntries(
+							env,
+							{
+								userId: ctx.userId,
+								organizationId: ctx.organizationId,
+								surface: ctx.agentSurface === "copilot" ? "copilot" : "mcp",
+								authMethod: ctx.authMethod,
+								credentialId: ctx.apiKeyId,
+								clientId: ctx.oauthClientId ?? null,
+								scopes: ["nutrition:read"],
+								requestId: crypto.randomUUID(),
+							},
+							flagContext,
+							entries,
+						);
+					} catch (error) {
+						if (
+							!(
+								error instanceof Error &&
+								"code" in error &&
+								String(error.code).startsWith("nutrition_consent_")
+							)
+						) {
+							throw error;
+						}
+					}
 				}
 				return ok("get_meal_plan", {
 					planId: plan.id,

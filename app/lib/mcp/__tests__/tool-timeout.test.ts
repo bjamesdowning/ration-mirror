@@ -56,6 +56,54 @@ describe("runTool timeout", () => {
 		}
 	});
 
+	it("returns timeout_ambiguous for mutation timeouts", async () => {
+		const env = {
+			__mcp: {
+				organizationId: "org-1",
+				userId: "user-1",
+				scopes: ["mcp:nutrition:write"],
+				authMethod: "api_key",
+				apiKeyId: "key-1",
+				keyName: "test",
+				keyPrefix: "rk_",
+				preClaim: false,
+			},
+			RATION_KV: {
+				get: vi.fn().mockResolvedValue(null),
+				put: vi.fn(),
+			},
+		} as unknown as McpToolsEnv;
+		const operationKey = "11111111-1111-4111-8111-111111111111";
+
+		const pending = runTool(
+			env,
+			{
+				name: "log_manifest_intake",
+				scopes: ["mcp:nutrition:write"],
+				rateLimitCategory: "mcp_write",
+				audit: false,
+				handler: async () => {
+					await new Promise((resolve) =>
+						setTimeout(resolve, MCP_TOOL_TIMEOUT_MS + 5_000),
+					);
+					return ok("log_manifest_intake", { done: true });
+				},
+			},
+			{ operationKey },
+		);
+
+		await vi.advanceTimersByTimeAsync(MCP_TOOL_TIMEOUT_MS + 1);
+		const envelope = await pending;
+		expect(envelope.ok).toBe(false);
+		if (!envelope.ok) {
+			expect(envelope.error.code).toBe("timeout_ambiguous");
+			expect(envelope.outcome).toBe("unknown");
+			expect(envelope.retryable).toBe(true);
+			expect(envelope.operationId).toBe(operationKey);
+			expect(envelope.error.recoveryHint).toMatch(/same operationKey/i);
+		}
+	});
+
 	it("returns handler result when it finishes before timeout", async () => {
 		const env = {
 			__mcp: {

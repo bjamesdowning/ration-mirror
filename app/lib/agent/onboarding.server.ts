@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import * as schema from "../../db/schema";
-import type { McpScope } from "../mcp/scopes";
+import { hasScope, type McpScope } from "../mcp/scopes";
 import { buildClaimRecoveryPaths } from "./claim.constants";
 
 import type { AgentKitchenSnapshot } from "./kitchen-snapshot.server";
@@ -156,7 +156,7 @@ export function buildGetContextCapabilities(
 ) {
 	const normalizedScopes = scopes as McpScope[];
 	const has = (needed: McpScope) =>
-		normalizedScopes.includes("mcp") || normalizedScopes.includes(needed);
+		hasScope({ scopes: normalizedScopes } as never, needed);
 	const canRead = has("mcp:read");
 	const canWritePreferences = has("mcp:preferences:write");
 	const canNutritionRead = has("mcp:nutrition:read");

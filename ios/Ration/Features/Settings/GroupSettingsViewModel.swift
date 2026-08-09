@@ -93,6 +93,8 @@ final class GroupSettingsViewModel {
                     api: api,
                     auth: env.auth,
                     snapshots: env.snapshots,
+                    nutrition: env.nutrition,
+                    nutritionConsent: env.nutritionConsent,
                     billing: env.billing
                 )
             }
@@ -212,6 +214,8 @@ final class GroupSettingsViewModel {
         errorMessage = nil
         do {
             let response = try await api.deleteGroup(organizationId: orgId)
+            env.nutrition.invalidate()
+            env.nutritionConsent.invalidate()
             await env.snapshots.clearAll()
             env.refreshOutcomes.clearAll()
             env.session.beginOrgSelection(organizations: response.organizations)
@@ -246,6 +250,8 @@ final class GroupSettingsViewModel {
         defer { isLeavingGroup = false }
         do {
             let response = try await api.leaveGroup()
+            env.nutrition.invalidate()
+            env.nutritionConsent.invalidate()
             await env.snapshots.clearAll()
             env.refreshOutcomes.clearAll()
             env.session.beginOrgSelection(organizations: response.organizations)
@@ -297,6 +303,8 @@ final class GroupSettingsViewModel {
                 api: env.api,
                 auth: env.auth,
                 snapshots: env.snapshots,
+                nutrition: env.nutrition,
+                nutritionConsent: env.nutritionConsent,
                 billing: env.billing
             )
             session = env.session.session

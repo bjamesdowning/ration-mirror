@@ -75,7 +75,11 @@
 			{ "queue": "ration-scan", "binding": "SCAN_QUEUE" },
 			{ "queue": "ration-meal-generate", "binding": "MEAL_GENERATE_QUEUE" },
 			{ "queue": "ration-plan-week", "binding": "PLAN_WEEK_QUEUE" },
-			{ "queue": "ration-import-url", "binding": "IMPORT_URL_QUEUE" }
+			{ "queue": "ration-import-url", "binding": "IMPORT_URL_QUEUE" },
+			{
+				"queue": "ration-nutrition-recompute-local",
+				"binding": "NUTRITION_RECOMPUTE_QUEUE"
+			}
 		],
 		"consumers": [
 			{
@@ -101,6 +105,15 @@
 				"max_batch_size": 3,
 				"max_batch_timeout": 10,
 				"max_retries": 3
+			},
+			{
+				"queue": "ration-nutrition-recompute-local",
+				"max_batch_size": 5,
+				"max_batch_timeout": 2,
+				"max_retries": 5,
+				"max_concurrency": 4,
+				"dead_letter_queue": "ration-nutrition-recompute-dlq-local",
+				"retry_delay": 15
 			}
 		]
 	},

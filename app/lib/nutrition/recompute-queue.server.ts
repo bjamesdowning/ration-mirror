@@ -1,14 +1,26 @@
+/**
+ * Compatibility shim — prefer scheduleMealNutritionRecompute / wake schema.
+ */
 import type { FlagshipEvaluationContext } from "~/lib/feature-flags/context.server";
-import { isFeatureEnabled } from "~/lib/feature-flags/flags.server";
 import {
 	type NutritionRecomputeJobMessage,
 	NutritionRecomputeJobSchema,
+	type NutritionRecomputeWakeMessage,
 } from "~/lib/schemas/nutrition";
-import { emitNutritionRecomputeEnqueued } from "~/lib/telemetry.server";
+import { scheduleMealNutritionRecompute } from "./recompute-outbox.server";
+
+export {
+	buildNutritionRecomputeWake,
+	mealNutritionJobKey,
+	orgNutritionJobKey,
+	scheduleMealNutritionRecompute,
+	sendNutritionRecomputeWake,
+} from "./recompute-outbox.server";
+
+export type { NutritionRecomputeWakeMessage };
 
 /**
- * Submit async nutrition recompute job (Slice 8 stub).
- * No-op unless `nutrition-async-recompute` is enabled — no queue table yet.
+ * @deprecated Legacy stub enqueue — maps mealId jobs onto the outbox/wake path.
  */
 export async function submitNutritionRecomputeJob(
 	env: Env,
@@ -16,20 +28,27 @@ export async function submitNutritionRecomputeJob(
 	flagContext: FlagshipEvaluationContext,
 ): Promise<{ enqueued: boolean; jobId: string }> {
 	const parsed = NutritionRecomputeJobSchema.parse(message);
-	const enabled = await isFeatureEnabled(
-		env,
-		"nutrition-async-recompute",
-		flagContext,
-	);
-	if (!enabled) {
+	if (!parsed.mealId) {
 		return { enqueued: false, jobId: parsed.jobId };
 	}
-
-	// Queue producer stub — wire to Cloudflare Queue when Slice 3 lands.
-	emitNutritionRecomputeEnqueued(parsed.trigger);
-	return { enqueued: true, jobId: parsed.jobId };
+	const result = await scheduleMealNutritionRecompute(
+		env,
+		env.DB,
+		parsed.mealId,
+		parsed.organizationId,
+		flagContext,
+		{
+			trigger: parsed.trigger === "cargo" ? "cargo_override" : "meal_write",
+			origin: { surface: "system" },
+		},
+	);
+	return {
+		enqueued: result.mode === "async" || result.mode === "sync",
+		jobId: parsed.jobId,
+	};
 }
 
+/** @deprecated */
 export function buildNutritionRecomputeMessage(input: {
 	organizationId: string;
 	trigger: NutritionRecomputeJobMessage["trigger"];

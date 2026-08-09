@@ -31,14 +31,32 @@ describe("resolveIngredientMass", () => {
 		expect(result.estimated).toBe(true);
 	});
 
-	it("falls back to assumed_1g_ml for unknown volume names", () => {
+	it("falls back to assumed_1g_ml for unknown volume names (non-nutrition)", () => {
 		const result = resolveIngredientMass(1, "l", "exotic nebula tonic");
 		expect(result.method).toBe("assumed_1g_ml");
 		expect(result.grams).toBe(1000);
 		expect(result.confidence).toBeLessThan(0.5);
 	});
 
-	it("returns unknown for count units", () => {
+	it("does not use assumed_1g_ml when forNutrition is set", () => {
+		const result = resolveIngredientMass(1, "l", "exotic nebula tonic", {
+			forNutrition: true,
+		});
+		expect(result.method).toBe("unknown");
+		expect(result.grams).toBeNull();
+	});
+
+	it("uses FDC portion grams for count units", () => {
+		const result = resolveIngredientMass(2, "unit", "egg", {
+			forNutrition: true,
+			fdcPortionGrams: 100,
+			fdcPortionConfidence: 0.9,
+		});
+		expect(result.method).toBe("fdc_portion");
+		expect(result.grams).toBe(100);
+	});
+
+	it("returns unknown for count units without portion", () => {
 		const result = resolveIngredientMass(1, "unit", "milk");
 		expect(result.method).toBe("unknown");
 		expect(result.grams).toBeNull();

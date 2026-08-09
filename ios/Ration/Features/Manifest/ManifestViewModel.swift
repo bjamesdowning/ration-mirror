@@ -45,15 +45,23 @@ final class ManifestViewModel {
 
     enum IntakeOutcome: Sendable {
         case success(intake: ManifestPersonalIntake, undoToken: String?)
-        /// First-use intake consent has not been granted — caller should show the
-        /// consent gate and retry with `consent: true`.
+        /// Intake consent is missing or stale — caller should show the current
+        /// privacy statement, grant through the privacy endpoint, and retry.
         case consentRequired
         case nutritionUnavailable
+        /// Meal nutrition recompute still pending (`nutrition_updating`).
+        case nutritionUpdating
         case failed
     }
 
     /// Day-keyed nutrient totals for the visible range (nutrition-goals / nutrition-manifest).
     private(set) var nutritionSummary: NutritionSummary?
+    /// True when `nutritionSummary` is shown from offline/private cache.
+    private(set) var nutritionSummaryOffline = false
+
+    private func privateSnapshotScope(userId: String, organizationId: String) -> SnapshotScope {
+        .userOrganization(userId: userId, organizationId: organizationId)
+    }
 
     func applyInitialAnchorIfNeeded() {
         guard !hasInitializedAnchor else { return }
@@ -106,15 +114,23 @@ final class ManifestViewModel {
         isNavigatingWeek = false
     }
 
-    func load(api: RationAPI, snapshots: SnapshotStore, online: Bool, organizationId: String) async {
+    func load(
+        api: RationAPI,
+        snapshots: SnapshotStore,
+        online: Bool,
+        organizationId: String,
+        userId: String,
+        nutrition: NutritionStore
+    ) async {
         errorMessage = nil
         offlineBannerMessage = nil
+        let scope = privateSnapshotScope(userId: userId, organizationId: organizationId)
 
         let requestedStart = rangeStart
         let endDate = ManifestDateHelpers.addDays(requestedStart, days: max(calendarSpan - 1, 0))
         let hadCache = await restoreSnapshot(
             snapshots,
-            organizationId: organizationId,
+            scope: scope,
             requestedStart: requestedStart,
             preserveRangeStart: online
         )
@@ -127,6 +143,13 @@ final class ManifestViewModel {
             if !hadCache {
                 errorMessage = "You're offline and no cached manifest is available."
             }
+            await loadNutritionSummary(
+                api: api,
+                online: online,
+                nutrition: nutrition,
+                userId: userId,
+                organizationId: organizationId
+            )
             return
         }
 
@@ -139,7 +162,7 @@ final class ManifestViewModel {
             manifest = data
             applySupplyDayInclusion(from: data)
             offlineBannerMessage = nil
-            await snapshots.save(data, domain: SnapshotDomain.manifest, organizationId: organizationId)
+            await snapshots.save(data, domain: SnapshotDomain.manifest, scope: scope)
             if let refreshOutcomes {
                 SnapshotRefreshPolicy.recordRefreshSuccess(
                     outcomes: refreshOutcomes,
@@ -147,7 +170,13 @@ final class ManifestViewModel {
                     domain: SnapshotDomain.manifest
                 )
             }
-            await loadNutritionSummary(api: api, online: online)
+            await loadNutritionSummary(
+                api: api,
+                online: online,
+                nutrition: nutrition,
+                userId: userId,
+                organizationId: organizationId
+            )
         } catch {
             guard rangeStart == requestedStart else { return }
             if SnapshotRefreshPolicy.isIgnorableRefreshError(error) { return }
@@ -172,7 +201,9 @@ final class ManifestViewModel {
         api: RationAPI,
         snapshots: SnapshotStore,
         online: Bool,
-        organizationId: String
+        organizationId: String,
+        userId: String,
+        nutrition: NutritionStore
     ) {
         let nav = beginWeekNavigation(to: start)
         navigationTask = Task {
@@ -182,7 +213,9 @@ final class ManifestViewModel {
                 api: api,
                 snapshots: snapshots,
                 online: online,
-                organizationId: organizationId
+                organizationId: organizationId,
+                userId: userId,
+                nutrition: nutrition
             )
         }
     }
@@ -193,7 +226,9 @@ final class ManifestViewModel {
         api: RationAPI,
         snapshots: SnapshotStore,
         online: Bool,
-        organizationId: String
+        organizationId: String,
+        userId: String,
+        nutrition: NutritionStore
     ) async {
         let nav = beginWeekNavigation(to: start)
         await performNavigateWeek(
@@ -202,7 +237,9 @@ final class ManifestViewModel {
             api: api,
             snapshots: snapshots,
             online: online,
-            organizationId: organizationId
+            organizationId: organizationId,
+            userId: userId,
+            nutrition: nutrition
         )
     }
 
@@ -243,9 +280,12 @@ final class ManifestViewModel {
         api: RationAPI,
         snapshots: SnapshotStore,
         online: Bool,
-        organizationId: String
+        organizationId: String,
+        userId: String,
+        nutrition: NutritionStore
     ) async {
         let endDate = ManifestDateHelpers.addDays(normalizedStart, days: max(calendarSpan - 1, 0))
+        let scope = privateSnapshotScope(userId: userId, organizationId: organizationId)
 
         defer {
             if isCurrentNavigation(generation) {
@@ -267,9 +307,15 @@ final class ManifestViewModel {
                 applySupplyDayInclusion(from: data)
                 // Re-check before disk write: another navigation may have won mid-await.
                 guard isCurrentNavigation(generation) else { return }
-                await snapshots.save(data, domain: SnapshotDomain.manifest, organizationId: organizationId)
+                await snapshots.save(data, domain: SnapshotDomain.manifest, scope: scope)
                 if isCurrentNavigation(generation) {
-                    await loadNutritionSummary(api: api, online: online)
+                    await loadNutritionSummary(
+                        api: api,
+                        online: online,
+                        nutrition: nutrition,
+                        userId: userId,
+                        organizationId: organizationId
+                    )
                 }
                 // A superseded in-flight save can finish after a newer week was cached —
                 // rewrite the live week so offline restore cannot land on the stale one.
@@ -277,7 +323,7 @@ final class ManifestViewModel {
                    let live = manifest,
                    live.startDate == rangeStart
                 {
-                    await snapshots.save(live, domain: SnapshotDomain.manifest, organizationId: organizationId)
+                    await snapshots.save(live, domain: SnapshotDomain.manifest, scope: scope)
                 }
             } catch is CancellationError {
                 return
@@ -288,12 +334,19 @@ final class ManifestViewModel {
         } else if let cached = await snapshots.load(
             ManifestResponse.self,
             domain: SnapshotDomain.manifest,
-            organizationId: organizationId
+            scope: scope
         ) {
             guard isCurrentNavigation(generation) else { return }
             if cached.payload.startDate == normalizedStart {
                 manifest = cached.payload
                 applySupplyDayInclusion(from: cached.payload)
+                await loadNutritionSummary(
+                    api: api,
+                    online: online,
+                    nutrition: nutrition,
+                    userId: userId,
+                    organizationId: organizationId
+                )
             } else {
                 offlineBannerMessage = "Offline — no cached manifest data for this week"
             }
@@ -344,7 +397,8 @@ final class ManifestViewModel {
         api: RationAPI,
         snapshots: SnapshotStore,
         online: Bool,
-        organizationId: String
+        organizationId: String,
+        userId: String
     ) async -> ConsumeOutcome {
         do {
             let result = try await api.consumeManifestEntries(
@@ -365,7 +419,8 @@ final class ManifestViewModel {
                 api: api,
                 snapshots: snapshots,
                 online: online,
-                organizationId: organizationId
+                organizationId: organizationId,
+                userId: userId
             )
             return .success(undoToken: undoToken)
         } catch {
@@ -381,7 +436,8 @@ final class ManifestViewModel {
         api: RationAPI,
         snapshots: SnapshotStore,
         online: Bool,
-        organizationId: String
+        organizationId: String,
+        userId: String
     ) async -> CookOutcome {
         do {
             let result = try await api.cookManifestEntries(
@@ -402,7 +458,8 @@ final class ManifestViewModel {
                 api: api,
                 snapshots: snapshots,
                 online: online,
-                organizationId: organizationId
+                organizationId: organizationId,
+                userId: userId
             )
             return .success(undoToken: undoToken)
         } catch {
@@ -416,18 +473,18 @@ final class ManifestViewModel {
         _ entry: ManifestEntry,
         servings: Double,
         idempotencyKey: String,
-        consent: Bool = false,
-        api: RationAPI
+        api: RationAPI,
+        nutrition: NutritionStore
     ) async -> IntakeOutcome {
         do {
             let result = try await api.upsertManifestIntake(
                 entryId: entry.id,
                 servings: servings,
-                idempotencyKey: idempotencyKey,
-                consent: consent ? true : nil
+                idempotencyKey: idempotencyKey
             )
             Haptics.success()
             setPersonalIntakeLocally(entryId: entry.id, intake: result.intake)
+            applyAuthoritativeDayTotals(result.dayTotals, nutrition: nutrition)
             return .success(intake: result.intake, undoToken: result.undoToken)
         } catch {
             if let apiError = error as? APIError, apiError.isNutritionConsentRequired {
@@ -437,36 +494,58 @@ final class ManifestViewModel {
                 errorMessage = apiError.errorDescription
                 return .nutritionUnavailable
             }
+            if let apiError = error as? APIError, apiError.isNutritionUpdating {
+                errorMessage = apiError.errorDescription
+                    ?? "Nutrition totals are still updating. Try again shortly."
+                return .nutritionUpdating
+            }
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
             return .failed
         }
     }
 
     /// Remove my logged serving ("Remove my log") — does not affect Cargo or Cook state.
-    func clearServing(_ entry: ManifestEntry, api: RationAPI) async -> String? {
+    func clearServing(
+        _ entry: ManifestEntry,
+        api: RationAPI,
+        nutrition: NutritionStore
+    ) async -> String? {
         do {
             let result = try await api.clearManifestIntake(entryId: entry.id)
             Haptics.light()
             setPersonalIntakeLocally(entryId: entry.id, intake: nil)
+            applyAuthoritativeDayTotals(result.dayTotals, nutrition: nutrition)
             return result.undoToken
         } catch {
-            errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+            if let apiError = error as? APIError, apiError.isNutritionUpdating {
+                errorMessage = apiError.errorDescription
+                    ?? "Nutrition totals are still updating. Try again shortly."
+            } else {
+                errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+            }
             return nil
         }
     }
 
-    /// Loads day-keyed nutrient totals for the currently visible range. Fails closed and
-    /// silently when nutrition goals/manifest flags are off — no banner, no retry noise.
-    func loadNutritionSummary(api: RationAPI, online: Bool) async {
-        guard online else { return }
+    /// Loads day-keyed nutrient totals for the currently visible range via `NutritionStore`.
+    /// Offline shows private cached summary when available (never a legacy org-only cache).
+    func loadNutritionSummary(
+        api: RationAPI,
+        online: Bool,
+        nutrition: NutritionStore,
+        userId: String,
+        organizationId: String
+    ) async {
+        nutrition.configure(userId: userId, organizationId: organizationId)
         let endDate = ManifestDateHelpers.addDays(rangeStart, days: max(calendarSpan - 1, 0))
-        do {
-            nutritionSummary = try await api.nutritionSummary(from: rangeStart, to: endDate)
-        } catch let apiError as APIError where apiError.isFeatureDisabled {
-            nutritionSummary = nil
-        } catch {
-            // Nutrient line is a supplementary affordance — never surface as a blocking error.
-        }
+        let summary = await nutrition.loadSummary(
+            from: rangeStart,
+            to: endDate,
+            api: api,
+            online: online
+        )
+        nutritionSummary = summary
+        nutritionSummaryOffline = nutrition.loadState.isOfflineCached
     }
 
     func deleteEntry(
@@ -474,7 +553,8 @@ final class ManifestViewModel {
         api: RationAPI,
         snapshots: SnapshotStore,
         online: Bool,
-        organizationId: String
+        organizationId: String,
+        userId: String
     ) async {
         guard online else {
             errorMessage = "Deleting entries requires a network connection."
@@ -488,7 +568,8 @@ final class ManifestViewModel {
                 api: api,
                 snapshots: snapshots,
                 online: online,
-                organizationId: organizationId
+                organizationId: organizationId,
+                userId: userId
             )
         } catch {
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
@@ -550,15 +631,17 @@ final class ManifestViewModel {
         api: RationAPI,
         snapshots: SnapshotStore,
         online: Bool,
-        organizationId: String
+        organizationId: String,
+        userId: String
     ) async {
         let endDate = ManifestDateHelpers.addDays(rangeStart, days: max(calendarSpan - 1, 0))
         guard online else { return }
+        let scope = privateSnapshotScope(userId: userId, organizationId: organizationId)
         do {
             let data = try await api.manifest(startDate: rangeStart, endDate: endDate)
             manifest = data
             applySupplyDayInclusion(from: data)
-            await snapshots.save(data, domain: SnapshotDomain.manifest, organizationId: organizationId)
+            await snapshots.save(data, domain: SnapshotDomain.manifest, scope: scope)
         } catch {
             // Consume succeeded — do not surface reload failures as errors.
         }
@@ -571,7 +654,9 @@ final class ManifestViewModel {
         api: RationAPI,
         snapshots: SnapshotStore,
         online: Bool,
-        organizationId: String
+        organizationId: String,
+        userId: String,
+        nutrition: NutritionStore
     ) async -> Bool {
         guard online else {
             errorMessage = "Planning meals requires a network connection."
@@ -585,11 +670,40 @@ final class ManifestViewModel {
                 ManifestEntryCreate(mealId: mealId, date: date, slotType: slotType)
             )
             Haptics.success()
-            await load(api: api, snapshots: snapshots, online: online, organizationId: organizationId)
+            await load(
+                api: api,
+                snapshots: snapshots,
+                online: online,
+                organizationId: organizationId,
+                userId: userId,
+                nutrition: nutrition
+            )
             return true
         } catch {
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
             return false
+        }
+    }
+
+    private func applyAuthoritativeDayTotals(
+        _ dayTotals: [NutritionDayTotals]?,
+        nutrition: NutritionStore
+    ) {
+        guard let dayTotals, !dayTotals.isEmpty else { return }
+        let endDate = ManifestDateHelpers.addDays(rangeStart, days: max(calendarSpan - 1, 0))
+        nutrition.applyDayTotals(dayTotals, forRange: rangeStart, to: endDate)
+        if let summary = nutrition.summary {
+            nutritionSummary = summary
+            nutritionSummaryOffline = false
+        } else if var current = nutritionSummary {
+            current = NutritionSummaryReducer.applyingDayTotals(
+                current,
+                dayTotals: dayTotals,
+                from: rangeStart,
+                to: endDate
+            )
+            nutritionSummary = current
+            nutritionSummaryOffline = false
         }
     }
 
@@ -602,11 +716,16 @@ final class ManifestViewModel {
     @discardableResult
     private func restoreSnapshot(
         _ snapshots: SnapshotStore,
-        organizationId: String,
+        scope: SnapshotScope,
         requestedStart: String,
         preserveRangeStart: Bool = false
     ) async -> Bool {
-        guard let cached = await snapshots.load(ManifestResponse.self, domain: SnapshotDomain.manifest, organizationId: organizationId) else {
+        // Private load only — never fall back to legacy org-only Manifest cache.
+        guard let cached = await snapshots.load(
+            ManifestResponse.self,
+            domain: SnapshotDomain.manifest,
+            scope: scope
+        ) else {
             return false
         }
         manifest = cached.payload

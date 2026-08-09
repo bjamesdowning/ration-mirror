@@ -103,6 +103,8 @@ final class SessionStore {
         api: RationAPI,
         auth: AuthManager,
         snapshots: SnapshotStore,
+        nutrition: NutritionStore? = nil,
+        nutritionConsent: NutritionConsentStore? = nil,
         billing: BillingManager? = nil
     ) async throws {
         guard !org.isActive else { return }
@@ -113,10 +115,16 @@ final class SessionStore {
         if let oldLogo = activeOrg?.logo, let url = AvatarURLResolver.resolve(oldLogo) {
             AuthImageLoader.shared.invalidate(url: url)
         }
+        nutrition?.invalidate()
+        nutritionConsent?.invalidate()
         await snapshots.clearAll()
         session = try await api.session()
         if let organizationId = activeOrganizationId {
             billing?.setBillingOrganizationId(organizationId)
+        }
+        if let userId = session?.user.id, let organizationId = activeOrganizationId {
+            nutrition?.configure(userId: userId, organizationId: organizationId)
+            nutritionConsent?.configure(userId: userId, organizationId: organizationId)
         }
         orgGeneration += 1
     }

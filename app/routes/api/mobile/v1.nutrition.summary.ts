@@ -1,12 +1,11 @@
 import { data } from "react-router";
 import { handleApiError } from "~/lib/error-handler";
 import { FEATURE_DISABLED_CODE } from "~/lib/feature-flags/assert-enabled.server";
-import {
-	buildFlagContext,
-	isFeatureEnabled,
-} from "~/lib/feature-flags/flags.server";
+import { buildMobileFlagContext } from "~/lib/feature-flags/flags.server";
 import { requireMobileActiveGroup } from "~/lib/mobile/auth.server";
-import { getNutritionSummary } from "~/lib/nutrition/persist.server";
+import { serializeNutritionSummary } from "~/lib/nutrition/dto.server";
+import { resolveNutritionCapabilities } from "~/lib/nutrition/feature-policy.server";
+import { getSummary } from "~/lib/nutrition/service.server";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import { NutritionSummaryQuerySchema } from "~/lib/schemas/nutrition";
 import type { Route } from "./+types/v1.nutrition.summary";
@@ -21,7 +20,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 			request,
 		);
 		const env = context.cloudflare.env;
-		const flagContext = buildFlagContext(request, env, {
+		const flagContext = buildMobileFlagContext(request, env, {
 			user: { id: userId },
 		});
 
@@ -37,11 +36,8 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 			);
 		}
 
-		const [goalsOn, manifestOn] = await Promise.all([
-			isFeatureEnabled(env, "nutrition-goals", flagContext),
-			isFeatureEnabled(env, "nutrition-manifest", flagContext),
-		]);
-		if (!goalsOn && !manifestOn) {
+		const caps = await resolveNutritionCapabilities(env, flagContext);
+		if (!caps.goals && !caps.manifest) {
 			throw data(
 				{
 					error: "This feature is temporarily unavailable.",
@@ -63,13 +59,21 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 			);
 		}
 
-		return getNutritionSummary(
-			env.DB,
-			userId,
-			organizationId,
+		const summary = await getSummary(
+			env,
+			{
+				userId,
+				organizationId,
+				surface: "mobile",
+				authMethod: "mobile_bearer",
+				scopes: ["nutrition:read"],
+				requestId: request.headers.get("cf-ray") ?? crypto.randomUUID(),
+			},
+			flagContext,
 			parsed.data.from,
 			parsed.data.to,
 		);
+		return serializeNutritionSummary(summary);
 	} catch (e) {
 		return handleApiError(e);
 	}

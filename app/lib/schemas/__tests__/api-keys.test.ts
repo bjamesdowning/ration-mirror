@@ -11,13 +11,13 @@ describe("CreateApiKeySchema", () => {
 		expect(parsed.scopes).toEqual(["mcp:read", "mcp:inventory:write"]);
 	});
 
-	it("accepts legacy mcp scope for backward compatibility", () => {
-		const parsed = CreateApiKeySchema.parse({
+	it("rejects new keys with legacy blanket mcp scope", () => {
+		const result = CreateApiKeySchema.safeParse({
 			name: "Legacy MCP",
 			scopes: ["mcp"],
 		});
 
-		expect(parsed.scopes).toEqual(["mcp"]);
+		expect(result.success).toBe(false);
 	});
 
 	it("rejects unknown MCP scope names", () => {

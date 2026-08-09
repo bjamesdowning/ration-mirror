@@ -97,8 +97,37 @@ describe("NutritionSnapshotV2Schema", () => {
 	});
 });
 
+describe("NutritionRecomputeWakeSchema", () => {
+	it("accepts PII-free wake payload", async () => {
+		const { NutritionRecomputeWakeSchema } = await import(
+			"~/lib/schemas/nutrition"
+		);
+		const parsed = NutritionRecomputeWakeSchema.parse({
+			schemaVersion: 1,
+			type: "nutrition.recompute.wake",
+			jobKey: "meal:abc",
+			sentAt: "2026-08-09T12:00:00.000Z",
+		});
+		expect(parsed.jobKey).toBe("meal:abc");
+	});
+
+	it("rejects payloads with organizationId", async () => {
+		const { NutritionRecomputeWakeSchema } = await import(
+			"~/lib/schemas/nutrition"
+		);
+		const parsed = NutritionRecomputeWakeSchema.safeParse({
+			schemaVersion: 1,
+			type: "nutrition.recompute.wake",
+			jobKey: "meal:abc",
+			sentAt: "2026-08-09T12:00:00.000Z",
+			organizationId: "org-1",
+		});
+		expect(parsed.success).toBe(false);
+	});
+});
+
 describe("NutritionRecomputeJobSchema", () => {
-	it("accepts async recompute queue message", () => {
+	it("accepts legacy async recompute queue message", () => {
 		const parsed = NutritionRecomputeJobSchema.parse({
 			jobId: "11111111-1111-4111-8111-111111111111",
 			organizationId: "org-1",
@@ -235,46 +264,49 @@ describe("NutritionGoalAsOfQuerySchema", () => {
 		expect(() =>
 			NutritionGoalAsOfQuerySchema.parse({ asOf: "08/09/2026" }),
 		).toThrow();
+		expect(() =>
+			NutritionGoalAsOfQuerySchema.parse({ asOf: "2026-02-31" }),
+		).toThrow();
 	});
 });
 
 describe("NutritionGoalUpsertSchema", () => {
-	it("requires consent or consentAt", () => {
-		expect(() =>
-			NutritionGoalUpsertSchema.parse({
-				dailyEnergyKcal: 2000,
-				proteinG: 100,
-				carbsG: 200,
-				fatG: 70,
-				effectiveFrom: "2026-08-09",
-			}),
-		).toThrow();
-
-		const legacy = NutritionGoalUpsertSchema.parse({
+	it("accepts nutrient fields without a client consent signal", () => {
+		const parsed = NutritionGoalUpsertSchema.parse({
 			dailyEnergyKcal: 2000,
 			proteinG: 100,
 			carbsG: 200,
 			fatG: 70,
 			effectiveFrom: "2026-08-09",
-			consentAt: "2026-08-09T12:00:00.000Z",
+			operationKey: "11111111-1111-4111-8111-111111111111",
 		});
-		expect(legacy.consentAt).toBeInstanceOf(Date);
+		expect(parsed.dailyEnergyKcal).toBe(2000);
+	});
 
-		const modern = NutritionGoalUpsertSchema.parse({
-			dailyEnergyKcal: 2000,
-			proteinG: 200,
-			effectiveFrom: "2026-08-09",
-			consent: true,
-		});
-		expect(modern.consent).toBe(true);
-		expect(modern.carbsG).toBeNull();
+	it("rejects legacy consent fields at the nutrition write boundary", () => {
+		expect(() =>
+			NutritionGoalUpsertSchema.parse({
+				dailyEnergyKcal: 2000,
+				effectiveFrom: "2026-08-09",
+				operationKey: "11111111-1111-4111-8111-111111111111",
+				consentAt: "2026-08-09T12:00:00.000Z",
+			}),
+		).toThrow();
+		expect(() =>
+			NutritionGoalUpsertSchema.parse({
+				dailyEnergyKcal: 2000,
+				effectiveFrom: "2026-08-09",
+				operationKey: "11111111-1111-4111-8111-111111111111",
+				consent: true,
+			}),
+		).toThrow();
 	});
 
 	it("accepts zero kcal as an explicit energy target", () => {
 		const parsed = NutritionGoalUpsertSchema.parse({
 			dailyEnergyKcal: 0,
 			effectiveFrom: "2026-08-09",
-			consent: true,
+			operationKey: "11111111-1111-4111-8111-111111111111",
 		});
 		expect(parsed.dailyEnergyKcal).toBe(0);
 	});
@@ -284,7 +316,7 @@ describe("NutritionGoalUpsertSchema", () => {
 			dailyEnergyKcal: "",
 			proteinG: 100,
 			effectiveFrom: "2026-08-09",
-			consent: true,
+			operationKey: "11111111-1111-4111-8111-111111111111",
 		});
 		expect(parsed.dailyEnergyKcal).toBeNull();
 		expect(parsed.proteinG).toBe(100);
@@ -299,7 +331,7 @@ describe("NutritionGoalUpsertSchema", () => {
 				fatG: null,
 				fiberG: null,
 				effectiveFrom: "2026-08-09",
-				consent: true,
+				operationKey: "11111111-1111-4111-8111-111111111111",
 			}),
 		).toThrow();
 	});
@@ -321,10 +353,19 @@ describe("Cook and Eat request schemas", () => {
 		const parsed = ManifestPersonalIntakeUpsertSchema.parse({
 			servings: 0.5,
 			idempotencyKey: "22222222-2222-4222-8222-222222222222",
-			consent: true,
 		});
 		expect(parsed.servings).toBe(0.5);
-		expect(parsed.consent).toBe(true);
+	});
+
+	it("rejects client-provided consent on the Eat write", async () => {
+		const { ManifestPersonalIntakeUpsertSchema } = await import("../manifest");
+		expect(() =>
+			ManifestPersonalIntakeUpsertSchema.parse({
+				servings: 1,
+				idempotencyKey: "22222222-2222-4222-8222-222222222222",
+				consent: true,
+			}),
+		).toThrow();
 	});
 
 	it("rejects servings below 0.5", async () => {

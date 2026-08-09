@@ -1,16 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createNutritionToolDefs } from "../tools/nutrition";
 
-vi.mock("~/lib/nutrition/persist.server", () => ({
-	getNutritionSummary: vi.fn(),
-	listNutritionIntakesForRange: vi.fn(),
-	upsertNutritionGoal: vi.fn(),
-	clearNutritionGoal: vi.fn(),
+vi.mock("~/lib/nutrition/service.server", () => ({
+	getSummary: vi.fn(),
+	getHistory: vi.fn(),
+	setGoal: vi.fn(),
+	clearGoal: vi.fn(),
+	logManifestIntakes: vi.fn(),
+	clearManifestIntakes: vi.fn(),
 }));
 
-vi.mock("~/lib/nutrition/intake-log.server", () => ({
-	upsertManifestPersonalIntake: vi.fn(),
-	clearManifestPersonalIntake: vi.fn(),
+vi.mock("~/lib/nutrition/consent.server", () => ({
+	assertActiveNutritionConsent: vi.fn().mockResolvedValue({
+		id: "consent-1",
+		grantedAt: new Date("2026-08-01T00:00:00Z"),
+	}),
 }));
 
 vi.mock("~/lib/manifest.server", () => ({
@@ -94,15 +98,13 @@ describe("createNutritionToolDefs", () => {
 			"~/lib/feature-flags/flags.server"
 		);
 		vi.mocked(isFeatureEnabled).mockResolvedValue(true);
-		const { upsertManifestPersonalIntake } = await import(
-			"~/lib/nutrition/intake-log.server"
+		const { logManifestIntakes } = await import(
+			"~/lib/nutrition/service.server"
 		);
-		const { NutritionConsentRequiredError } = await import(
-			"~/lib/nutrition/consent.server"
-		);
-		vi.mocked(upsertManifestPersonalIntake).mockRejectedValue(
-			new NutritionConsentRequiredError("intake"),
-		);
+		const consentError = Object.assign(new Error("Consent required"), {
+			code: "nutrition_consent_required",
+		});
+		vi.mocked(logManifestIntakes).mockRejectedValue(consentError);
 
 		const defs = createNutritionToolDefs({} as never);
 		const log = defs.find((d) => d.name === "log_manifest_intake");
@@ -113,6 +115,7 @@ describe("createNutritionToolDefs", () => {
 		// assert handler throws consent error for runtime mapping.
 		await expect(
 			log.handler(baseCtx, {
+				operationKey: "33333333-3333-4333-8333-333333333333",
 				portions: [
 					{
 						entryId: "11111111-1111-4111-8111-111111111111",
@@ -121,7 +124,7 @@ describe("createNutritionToolDefs", () => {
 					},
 				],
 			}),
-		).rejects.toBeInstanceOf(NutritionConsentRequiredError);
+		).rejects.toBe(consentError);
 	});
 
 	it("logs intake portions when consent path succeeds", async () => {
@@ -129,29 +132,32 @@ describe("createNutritionToolDefs", () => {
 			"~/lib/feature-flags/flags.server"
 		);
 		vi.mocked(isFeatureEnabled).mockResolvedValue(true);
-		const { upsertManifestPersonalIntake } = await import(
-			"~/lib/nutrition/intake-log.server"
+		const { logManifestIntakes } = await import(
+			"~/lib/nutrition/service.server"
 		);
-		vi.mocked(upsertManifestPersonalIntake).mockResolvedValue({
-			intake: {
-				id: "intake-1",
-				entryId: "11111111-1111-4111-8111-111111111111",
-				servings: 1,
-				energyKcal: 400,
-				proteinG: 20,
-				carbsG: 40,
-				fatG: 10,
-				occurredAt: new Date("2026-08-01T12:00:00Z"),
-			},
-			idempotent: false,
-			replaced: false,
-			replacedIntakeId: null,
+		vi.mocked(logManifestIntakes).mockResolvedValue({
+			operationId: "33333333-3333-4333-8333-333333333333",
+			replayed: false,
+			undoExpiresAt: null,
+			summaryGeneratedAt: "2026-08-09T12:00:00.000Z",
+			items: [
+				{
+					intake: {
+						id: "intake-1",
+						entryId: "11111111-1111-4111-8111-111111111111",
+					} as never,
+					replayed: false,
+					replacedIntakeId: null,
+				},
+			],
+			dayTotals: [],
 		});
 
 		const defs = createNutritionToolDefs({} as never);
 		const log = defs.find((d) => d.name === "log_manifest_intake");
 		if (!log) throw new Error("expected log_manifest_intake");
 		const envelope = await log.handler(baseCtx, {
+			operationKey: "33333333-3333-4333-8333-333333333333",
 			portions: [
 				{
 					entryId: "11111111-1111-4111-8111-111111111111",
@@ -159,17 +165,18 @@ describe("createNutritionToolDefs", () => {
 					idempotencyKey: "22222222-2222-4222-8222-222222222222",
 				},
 			],
-			consent: true,
 		});
 		expect(envelope.ok).toBe(true);
 		if (!envelope.ok) return;
 		expect(envelope.data).toMatchObject({ logged: 1 });
-		expect(upsertManifestPersonalIntake).toHaveBeenCalledWith(
+		expect(logManifestIntakes).toHaveBeenCalledWith(
 			expect.anything(),
 			expect.objectContaining({
-				consent: true,
-				consentSource: "mcp",
-				flagContext: expect.objectContaining({ clientPlatform: "mcp" }),
+				surface: "mcp",
+			}),
+			expect.objectContaining({ clientPlatform: "mcp" }),
+			expect.objectContaining({
+				operationKey: "33333333-3333-4333-8333-333333333333",
 			}),
 		);
 	});
@@ -179,10 +186,8 @@ describe("createNutritionToolDefs", () => {
 			"~/lib/feature-flags/flags.server"
 		);
 		vi.mocked(isFeatureEnabled).mockResolvedValue(true);
-		const { listNutritionIntakesForRange } = await import(
-			"~/lib/nutrition/persist.server"
-		);
-		vi.mocked(listNutritionIntakesForRange).mockResolvedValue({
+		const { getHistory } = await import("~/lib/nutrition/service.server");
+		vi.mocked(getHistory).mockResolvedValue({
 			items: [
 				{
 					id: "intake-1",
@@ -224,6 +229,7 @@ describe("createNutritionToolDefs", () => {
 		const denied = await clear.handler(baseCtx, {
 			entryIds: ["11111111-1111-4111-8111-111111111111"],
 			confirm: false,
+			operationKey: "33333333-3333-4333-8333-333333333333",
 		});
 		expect(denied.ok).toBe(false);
 		if (denied.ok) return;
@@ -231,12 +237,22 @@ describe("createNutritionToolDefs", () => {
 	});
 
 	it("clears intake when confirm is true", async () => {
-		const { clearManifestPersonalIntake } = await import(
-			"~/lib/nutrition/intake-log.server"
+		const { clearManifestIntakes } = await import(
+			"~/lib/nutrition/service.server"
 		);
-		vi.mocked(clearManifestPersonalIntake).mockResolvedValue({
-			cleared: true,
-			voidedIntakeId: "intake-1",
+		vi.mocked(clearManifestIntakes).mockResolvedValue({
+			operationId: "33333333-3333-4333-8333-333333333333",
+			replayed: false,
+			undoExpiresAt: null,
+			summaryGeneratedAt: "2026-08-09T12:00:00.000Z",
+			items: [
+				{
+					entryId: "11111111-1111-4111-8111-111111111111",
+					replayed: false,
+					voidedIntakeId: "intake-1",
+				},
+			],
+			dayTotals: [],
 		});
 
 		const defs = createNutritionToolDefs({} as never);
@@ -245,15 +261,19 @@ describe("createNutritionToolDefs", () => {
 		const envelope = await clear.handler(baseCtx, {
 			entryIds: ["11111111-1111-4111-8111-111111111111"],
 			confirm: true,
+			operationKey: "33333333-3333-4333-8333-333333333333",
 		});
 		expect(envelope.ok).toBe(true);
 		if (!envelope.ok) return;
 		expect(envelope.data).toMatchObject({ clearedCount: 1 });
-		expect(clearManifestPersonalIntake).toHaveBeenCalledWith(
+		expect(clearManifestIntakes).toHaveBeenCalledWith(
 			expect.anything(),
 			expect.objectContaining({
-				entryId: "11111111-1111-4111-8111-111111111111",
-				flagContext: expect.objectContaining({ clientPlatform: "mcp" }),
+				surface: "mcp",
+			}),
+			expect.objectContaining({ clientPlatform: "mcp" }),
+			expect.objectContaining({
+				entryIds: ["11111111-1111-4111-8111-111111111111"],
 			}),
 		);
 	});

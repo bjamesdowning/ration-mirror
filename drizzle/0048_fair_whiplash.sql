@@ -1,0 +1,1 @@
+ALTER TABLE `nutrition_operation` ADD `result_json` text;

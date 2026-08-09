@@ -28,8 +28,12 @@ struct ManifestView: View {
         env.session.activeOrganizationId
     }
 
+    private var userId: String? {
+        env.session.session?.user.id
+    }
+
     private var loadTaskKey: String {
-        "\(organizationId ?? "nil")-\(isTabActive)-\(env.lifecycle.refreshToken(forTab: .manifest))"
+        "\(userId ?? "nil")-\(organizationId ?? "nil")-\(isTabActive)-\(env.lifecycle.refreshToken(forTab: .manifest))"
     }
 
     private var manifestEntryCount: Int {
@@ -50,13 +54,15 @@ struct ManifestView: View {
     }
 
     private func jumpToToday() {
-        guard let organizationId else { return }
+        guard let organizationId, let userId else { return }
         model.requestNavigateWeek(
             to: todayNavigationAnchor,
             api: env.api,
             snapshots: env.snapshots,
             online: env.network.isOnline,
-            organizationId: organizationId
+            organizationId: organizationId,
+            userId: userId,
+            nutrition: env.nutrition
         )
     }
 
@@ -142,8 +148,8 @@ struct ManifestView: View {
                 ManifestPlateUpSheet(
                     entry: entry,
                     hasIntakeConsent: model.manifest?.intakeConsentGranted ?? false,
-                    onSave: { servings, consent in
-                        await handleLogServing(entry, servings: servings, consent: consent)
+                    onSave: { servings in
+                        await handleLogServing(entry, servings: servings)
                     },
                     onRemove: entry.personalIntake != nil
                         ? { await handleClearServing(entry) }
@@ -177,6 +183,7 @@ struct ManifestView: View {
                 GlobalPageToolbar(
                     syncDomain: SnapshotDomain.manifest,
                     organizationId: organizationId,
+                    syncUserId: userId,
                     isRefreshing: model.isRefreshing,
                     onOptions: { showingOptions = true },
                     onOpenGroupSettings: onOpenGroupSettings,
@@ -186,6 +193,7 @@ struct ManifestView: View {
             .dataSyncBanner(
                 domain: SnapshotDomain.manifest,
                 organizationId: organizationId,
+                syncUserId: userId,
                 isRefreshing: model.isRefreshing
             )
             .sheet(isPresented: $showingOptions) {
@@ -231,6 +239,9 @@ struct ManifestView: View {
                     guard let organizationId = env.session.activeOrganizationId else {
                         return "Organization not ready."
                     }
+                    guard let userId = env.session.session?.user.id else {
+                        return "Session not ready."
+                    }
                     let ok = await model.addEntry(
                         mealId: mealId,
                         date: date,
@@ -238,7 +249,9 @@ struct ManifestView: View {
                         api: env.api,
                         snapshots: env.snapshots,
                         online: env.network.isOnline,
-                        organizationId: organizationId
+                        organizationId: organizationId,
+                        userId: userId,
+                        nutrition: env.nutrition
                     )
                     return ok ? nil : model.errorMessage
                 }
@@ -268,7 +281,7 @@ struct ManifestView: View {
     }
 
     private func jumpToCalendarDay(_ isoDay: String) {
-        guard let organizationId else { return }
+        guard let organizationId, let userId else { return }
         let start = ManifestDateHelpers.normalizedNavigationStart(
             isoDay,
             calendarSpan: model.calendarSpan,
@@ -280,19 +293,26 @@ struct ManifestView: View {
             api: env.api,
             snapshots: env.snapshots,
             online: env.network.isOnline,
-            organizationId: organizationId
+            organizationId: organizationId,
+            userId: userId,
+            nutrition: env.nutrition
         )
     }
 
     private func reload(organizationId: String? = nil) async {
-        guard let organizationId = organizationId ?? self.organizationId else { return }
+        guard let organizationId = organizationId ?? self.organizationId,
+              let userId
+        else { return }
+        env.configureNutritionScope()
         model.refreshOutcomes = env.refreshOutcomes
         await env.loadSnapshot(organizationId: organizationId, domain: SnapshotDomain.manifest) {
             await model.load(
                 api: env.api,
                 snapshots: env.snapshots,
                 online: env.network.isOnline,
-                organizationId: organizationId
+                organizationId: organizationId,
+                userId: userId,
+                nutrition: env.nutrition
             )
         }
     }
@@ -349,12 +369,15 @@ struct ManifestView: View {
                     ? { showingJumpCalendar = true }
                     : nil
             ) { start in
+                guard let userId else { return }
                 model.requestNavigateWeek(
                     to: start,
                     api: env.api,
                     snapshots: env.snapshots,
                     online: env.network.isOnline,
-                    organizationId: organizationId
+                    organizationId: organizationId,
+                    userId: userId,
+                    nutrition: env.nutrition
                 )
             }
             .listRowBackground(Color.clear)
@@ -422,12 +445,14 @@ struct ManifestView: View {
                         .listRowBackground(Theme.surface)
                         .destructiveTrailingSwipe {
                             Task {
+                                guard let userId else { return }
                                 await model.deleteEntry(
                                     entry,
                                     api: env.api,
                                     snapshots: env.snapshots,
                                     online: env.network.isOnline,
-                                    organizationId: organizationId
+                                    organizationId: organizationId,
+                                    userId: userId
                                 )
                             }
                         }
@@ -483,14 +508,15 @@ struct ManifestView: View {
 
     /// Deducts Cargo — routes to split Cook or legacy Consume based on `nutrition-cook-log-split`.
     private func handlePrepare(_ entry: ManifestEntry) async {
-        guard let organizationId else { return }
+        guard let organizationId, let userId else { return }
         if entryActionFlags.isCookLogSplitEnabled {
             switch await model.cook(
                 entry,
                 api: env.api,
                 snapshots: env.snapshots,
                 online: env.network.isOnline,
-                organizationId: organizationId
+                organizationId: organizationId,
+                userId: userId
             ) {
             case .success(let token):
                 setUndo(token: token, message: "Meal cooked")
@@ -508,7 +534,8 @@ struct ManifestView: View {
                 api: env.api,
                 snapshots: env.snapshots,
                 online: env.network.isOnline,
-                organizationId: organizationId
+                organizationId: organizationId,
+                userId: userId
             ) {
             case .success(let token):
                 setUndo(token: token, message: "Meal consumed")
@@ -523,7 +550,7 @@ struct ManifestView: View {
     }
 
     private func confirmPrepareDespiteShortfall() async {
-        guard let entry = pendingPrepareEntry, let organizationId else { return }
+        guard let entry = pendingPrepareEntry, let organizationId, let userId else { return }
         pendingPrepareEntry = nil
         prepareConfirmationMessage = nil
         showPrepareConfirmation = false
@@ -534,7 +561,8 @@ struct ManifestView: View {
                 api: env.api,
                 snapshots: env.snapshots,
                 online: env.network.isOnline,
-                organizationId: organizationId
+                organizationId: organizationId,
+                userId: userId
             ) {
                 setUndo(token: token, message: "Meal cooked")
                 offerEatAfterCook(entry)
@@ -545,7 +573,8 @@ struct ManifestView: View {
             api: env.api,
             snapshots: env.snapshots,
             online: env.network.isOnline,
-            organizationId: organizationId
+            organizationId: organizationId,
+            userId: userId
         ) {
             setUndo(token: token, message: "Meal consumed")
         }
@@ -562,13 +591,13 @@ struct ManifestView: View {
     }
 
     /// Eat — private serving log. Returns an error message on failure for the sheet to display.
-    private func handleLogServing(_ entry: ManifestEntry, servings: Double, consent: Bool) async -> String? {
+    private func handleLogServing(_ entry: ManifestEntry, servings: Double) async -> String? {
         switch await model.logServing(
             entry,
             servings: servings,
             idempotencyKey: UUID().uuidString,
-            consent: consent,
-            api: env.api
+            api: env.api,
+            nutrition: env.nutrition
         ) {
         case .success(_, let token):
             setUndo(token: token, message: "Serving logged")
@@ -577,13 +606,15 @@ struct ManifestView: View {
             return "Allow personal serving logs to continue."
         case .nutritionUnavailable:
             return model.errorMessage ?? "Nutrition unavailable for this meal."
+        case .nutritionUpdating:
+            return model.errorMessage ?? "Nutrition totals are still updating. Try again shortly."
         case .failed:
             return model.errorMessage ?? "Couldn't log this serving."
         }
     }
 
     private func handleClearServing(_ entry: ManifestEntry) async {
-        if let token = await model.clearServing(entry, api: env.api) {
+        if let token = await model.clearServing(entry, api: env.api, nutrition: env.nutrition) {
             setUndo(token: token, message: "Serving removed")
         }
     }
@@ -626,7 +657,7 @@ struct ManifestView: View {
     }
 
     private func performUndo(_ token: String) async {
-        guard env.network.isOnline, let organizationId else {
+        guard env.network.isOnline, let organizationId, let userId else {
             pendingUndo = nil
             return
         }
@@ -640,7 +671,9 @@ struct ManifestView: View {
                     api: env.api,
                     snapshots: env.snapshots,
                     online: env.network.isOnline,
-                    organizationId: organizationId
+                    organizationId: organizationId,
+                    userId: userId,
+                    nutrition: env.nutrition
                 )
             }
         } catch {

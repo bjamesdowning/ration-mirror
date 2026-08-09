@@ -2,7 +2,7 @@ import { data } from "react-router";
 import { z } from "zod";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { handleApiError } from "~/lib/error-handler";
-import { buildFlagContext } from "~/lib/feature-flags/context.server";
+import { buildWebFlagContext } from "~/lib/feature-flags/context.server";
 import { cookMealFromGalley } from "~/lib/galley-cook-manifest.server";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import { SLOT_TYPES } from "~/lib/schemas/manifest";
@@ -85,7 +85,7 @@ export async function action({ request, params, context }: Route.ActionArgs) {
 	}
 
 	try {
-		const flagContext = buildFlagContext(request, context.cloudflare.env, {
+		const flagContext = buildWebFlagContext(request, context.cloudflare.env, {
 			user,
 		});
 		const result = await cookMealFromGalley(

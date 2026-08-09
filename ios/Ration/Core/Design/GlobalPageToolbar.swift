@@ -5,6 +5,8 @@ struct GlobalPageToolbar: ToolbarContent {
     var hasActiveFilters: Bool = false
     var syncDomain: String?
     var organizationId: String?
+    /// When set, sync metadata is read from the private user+org snapshot scope.
+    var syncUserId: String? = nil
     var isRefreshing: Bool = false
     var onOptions: (() -> Void)?
     var onOpenGroupSettings: () -> Void
@@ -26,6 +28,7 @@ struct GlobalPageToolbar: ToolbarContent {
                     let state = env.snapshots.syncState(
                         domain: syncDomain,
                         organizationId: organizationId,
+                        userId: syncUserId,
                         online: env.network.isOnline
                     )
                     let showStale = SyncIndicatorPolicy.shouldShowStaleDisclosure(

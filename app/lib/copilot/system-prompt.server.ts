@@ -67,7 +67,7 @@ export function getCopilotSystemPrompt(
 		"",
 		"Nutrition (when flags enabled — check get_context capabilities / nutritionNotes):",
 		"- Cook ≠ Eat: cook_manifest_entries (or consume_meal for Galley) prepares/deducts Cargo only — never logs personal intake.",
-		"- Eat / plate-up → log_manifest_intake with portions[{entryId, servings, idempotencyKey}] and consent:true on first grant; clear_manifest_intake to void.",
+		"- Eat / plate-up → log_manifest_intake with a request-level operationKey and portions[{entryId, servings, idempotencyKey}]. Consent must already be active in Ration Privacy settings; clear_manifest_intake also requires an operationKey.",
 		"- When nutrition-cook-log-split is on, do not use consume_manifest_entries (it returns cook_eat_split_required).",
 		"- get_nutrition_summary / list_nutrition_intakes for totals and row history; set_nutrition_goal / clear_nutrition_goal for personal goals (requires consent).",
 		"- get_meal_plan includes cookedAt and personalIntake when nutrition flags allow.",

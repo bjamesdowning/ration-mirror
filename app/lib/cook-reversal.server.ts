@@ -31,6 +31,7 @@ export async function applyUndoRecord(
 		| "userId"
 		| "intakeIds"
 		| "restoreIntakeId"
+		| "operationId"
 	>,
 	options?: { kv?: KVNamespace },
 ): Promise<void> {
@@ -166,6 +167,9 @@ export async function applyUndoRecord(
 	}
 
 	if (record.kind === "manifest_intake") {
+		if (!record.operationId) {
+			throw new Error("Invalid nutrition undo record");
+		}
 		const now = new Date();
 		if (record.intakeIds?.length) {
 			stmts.push(
@@ -176,6 +180,7 @@ export async function applyUndoRecord(
 						and(
 							eq(schema.nutritionIntake.userId, record.userId),
 							eq(schema.nutritionIntake.organizationId, organizationId),
+							eq(schema.nutritionIntake.operationId, record.operationId),
 							inArray(schema.nutritionIntake.id, record.intakeIds),
 							isNull(schema.nutritionIntake.voidedAt),
 						),
@@ -186,12 +191,17 @@ export async function applyUndoRecord(
 			stmts.push(
 				d1
 					.update(schema.nutritionIntake)
-					.set({ voidedAt: null, voidedByUserId: null })
+					.set({
+						voidedAt: null,
+						voidedByUserId: null,
+						voidOperationId: null,
+					})
 					.where(
 						and(
 							eq(schema.nutritionIntake.id, record.restoreIntakeId),
 							eq(schema.nutritionIntake.userId, record.userId),
 							eq(schema.nutritionIntake.organizationId, organizationId),
+							eq(schema.nutritionIntake.voidOperationId, record.operationId),
 						),
 					),
 			);

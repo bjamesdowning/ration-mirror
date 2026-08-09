@@ -8,7 +8,11 @@ import {
 	purgeExpiredKitchenEvents,
 } from "../app/lib/kitchen-events.server";
 import { log } from "../app/lib/logging.server";
-import { purgeExpiredNutritionIntake } from "../app/lib/nutrition/persist.server";
+import {
+	purgeExpiredNutritionIntake,
+	purgeExpiredNutritionRecomputeJobs,
+} from "../app/lib/nutrition/persist.server";
+import { repairDueNutritionRecomputeJobs } from "../app/lib/nutrition/recompute-consumer.server";
 import { runWithOpsEnv } from "../app/lib/ops-context.server";
 import { retryFailedPurgeJobs } from "../app/lib/purge-retry-cron.server";
 import { sendReengagementEmails } from "../app/lib/reengagement-cron.server";
@@ -128,11 +132,21 @@ export default {
 	 *
 	 * Cron: "0 3 * * *" (03:00 UTC daily — low-traffic window)
 	 */
-	async scheduled(
-		_event: ScheduledController,
-		env: Env,
-		ctx: ExecutionContext,
-	) {
+	async scheduled(event: ScheduledController, env: Env, ctx: ExecutionContext) {
+		if (event.cron === "* * * * *") {
+			ctx.waitUntil(repairDueNutritionRecomputeJobs(env));
+			ctx.waitUntil(
+				purgeExpiredNutritionIntake(env.DB, new Date()).catch((err) => {
+					log.error("[CRON] Nutrition intake purge failed", err);
+				}),
+			);
+			ctx.waitUntil(
+				purgeExpiredNutritionRecomputeJobs(env.DB, new Date()).catch((err) => {
+					log.error("[CRON] Nutrition recompute job purge failed", err);
+				}),
+			);
+			return;
+		}
 		ctx.waitUntil(purgeExpiredSessions(env));
 		ctx.waitUntil(purgeExpiredQueueJobs(env));
 		ctx.waitUntil(purgeOrphanAgentKitchens(env));
@@ -198,17 +212,7 @@ async function runKitchenEventRetentionPurge(env: Env): Promise<void> {
 	} catch (err) {
 		log.error("[CRON] Kitchen event retention purge failed", err);
 	}
-
-	try {
-		const deletedIntake = await purgeExpiredNutritionIntake(env.DB, new Date());
-		if (deletedIntake > 0) {
-			log.info("[CRON] Purged expired nutrition intake", {
-				deleted: deletedIntake,
-			});
-		}
-	} catch (err) {
-		log.error("[CRON] Nutrition intake retention purge failed", err);
-	}
+	// Nutrition intake + recompute-job retention run on the minute cron (bounded batches).
 }
 
 async function runCargoStatusRefresh(env: Env): Promise<void> {

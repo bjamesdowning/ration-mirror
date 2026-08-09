@@ -1,44 +1,21 @@
 import { data } from "react-router";
 import { handleApiError } from "~/lib/error-handler";
-import { assertFeatureEnabled } from "~/lib/feature-flags/assert-enabled.server";
-import { buildFlagContext } from "~/lib/feature-flags/flags.server";
+import { buildMobileFlagContext } from "~/lib/feature-flags/flags.server";
 import { getTodayISO } from "~/lib/manifest-dates";
 import { requireMobileActiveGroup } from "~/lib/mobile/auth.server";
+import { serializeNutritionGoal } from "~/lib/nutrition/dto.server";
 import {
-	clearNutritionGoal,
-	getActiveNutritionGoal,
-	upsertNutritionGoal,
-} from "~/lib/nutrition/persist.server";
-import { resolveNutritionGoalConsentAt } from "~/lib/nutrition/resolve-goal-consent.server";
+	clearGoal,
+	getGoal,
+	resolveHttpOperationKey,
+	setGoal,
+} from "~/lib/nutrition/service.server";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import {
 	NutritionGoalAsOfQuerySchema,
 	NutritionGoalUpsertSchema,
 } from "~/lib/schemas/nutrition";
 import type { Route } from "./+types/v1.nutrition.goals";
-
-function serializeGoal(
-	row: NonNullable<Awaited<ReturnType<typeof getActiveNutritionGoal>>>,
-) {
-	return {
-		id: row.id,
-		dailyEnergyKcal: row.dailyEnergyKcal,
-		proteinG: row.proteinG,
-		carbsG: row.carbsG,
-		fatG: row.fatG,
-		fiberG: row.fiberG,
-		effectiveFrom: row.effectiveFrom,
-		effectiveTo: row.effectiveTo,
-		consentAt:
-			row.consentAt instanceof Date
-				? row.consentAt.toISOString()
-				: row.consentAt,
-		createdAt:
-			row.createdAt instanceof Date
-				? row.createdAt.toISOString()
-				: row.createdAt,
-	};
-}
 
 /**
  * GET /api/mobile/v1/nutrition/goals?asOf=YYYY-MM-DD
@@ -47,13 +24,22 @@ function serializeGoal(
  */
 export async function loader({ request, context }: Route.LoaderArgs) {
 	try {
-		const { userId } = await requireMobileActiveGroup(context, request);
-		const env = context.cloudflare.env;
-		await assertFeatureEnabled(
-			env,
-			"nutrition-goals",
-			buildFlagContext(request, env, { user: { id: userId } }),
+		const { userId, organizationId } = await requireMobileActiveGroup(
+			context,
+			request,
 		);
+		const env = context.cloudflare.env;
+		const flagContext = buildMobileFlagContext(request, env, {
+			user: { id: userId },
+		});
+		const principal = {
+			userId,
+			organizationId,
+			surface: "mobile" as const,
+			authMethod: "mobile_bearer",
+			scopes: ["nutrition:read"],
+			requestId: request.headers.get("cf-ray") ?? crypto.randomUUID(),
+		};
 
 		const url = new URL(request.url);
 		const asOfParsed = NutritionGoalAsOfQuerySchema.safeParse({
@@ -66,9 +52,8 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 			);
 		}
 		const asOf = asOfParsed.data.asOf ?? getTodayISO();
-
-		const goal = await getActiveNutritionGoal(env.DB, userId, asOf);
-		return { goal: goal ? serializeGoal(goal) : null };
+		const goal = await getGoal(env, principal, flagContext, asOf);
+		return { goal: goal ? serializeNutritionGoal(goal) : null };
 	} catch (e) {
 		return handleApiError(e);
 	}
@@ -80,13 +65,22 @@ export async function loader({ request, context }: Route.LoaderArgs) {
  */
 export async function action({ request, context }: Route.ActionArgs) {
 	try {
-		const { userId } = await requireMobileActiveGroup(context, request);
-		const env = context.cloudflare.env;
-		await assertFeatureEnabled(
-			env,
-			"nutrition-goals",
-			buildFlagContext(request, env, { user: { id: userId } }),
+		const { userId, organizationId } = await requireMobileActiveGroup(
+			context,
+			request,
 		);
+		const env = context.cloudflare.env;
+		const flagContext = buildMobileFlagContext(request, env, {
+			user: { id: userId },
+		});
+		const principal = {
+			userId,
+			organizationId,
+			surface: "mobile" as const,
+			authMethod: "mobile_bearer",
+			scopes: ["nutrition:read", "nutrition:write"],
+			requestId: request.headers.get("cf-ray") ?? crypto.randomUUID(),
+		};
 
 		const rateLimitResult = await checkRateLimit(
 			env.RATION_KV,
@@ -101,12 +95,24 @@ export async function action({ request, context }: Route.ActionArgs) {
 		}
 
 		if (request.method === "DELETE") {
-			const clearedCount = await clearNutritionGoal(
-				env.DB,
-				userId,
-				getTodayISO(),
+			const url = new URL(request.url);
+			const operationKey = resolveHttpOperationKey(
+				request.headers,
+				url.searchParams.get("operationKey"),
 			);
-			return { cleared: clearedCount > 0, goal: null };
+			const asOfParsed = NutritionGoalAsOfQuerySchema.safeParse({
+				asOf: url.searchParams.get("asOf") ?? undefined,
+			});
+			if (!asOfParsed.success) {
+				throw data(
+					{ error: "Invalid request", details: asOfParsed.error.flatten() },
+					{ status: 400 },
+				);
+			}
+			return clearGoal(env, principal, flagContext, {
+				operationKey,
+				asOfDate: asOfParsed.data.asOf ?? getTodayISO(),
+			});
 		}
 
 		if (request.method !== "POST" && request.method !== "PATCH") {
@@ -122,24 +128,24 @@ export async function action({ request, context }: Route.ActionArgs) {
 			);
 		}
 
-		const consentAt = await resolveNutritionGoalConsentAt(
-			env.DB,
-			userId,
-			"mobile",
-			parsed.data,
-		);
-		const created = await upsertNutritionGoal(env.DB, {
-			userId,
+		const result = await setGoal(env, principal, flagContext, {
+			operationKey: resolveHttpOperationKey(
+				request.headers,
+				parsed.data.operationKey,
+			),
 			dailyEnergyKcal: parsed.data.dailyEnergyKcal,
 			proteinG: parsed.data.proteinG,
 			carbsG: parsed.data.carbsG,
 			fatG: parsed.data.fatG,
 			fiberG: parsed.data.fiberG ?? null,
 			effectiveFrom: parsed.data.effectiveFrom,
-			consentAt,
 		});
 
-		return { goal: created ? serializeGoal(created) : null };
+		return {
+			goal: serializeNutritionGoal(result.goal),
+			operationId: result.operationId,
+			replayed: result.replayed,
+		};
 	} catch (e) {
 		return handleApiError(e);
 	}

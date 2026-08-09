@@ -22,7 +22,6 @@ import {
 } from "../db/schema";
 import { type AllergenSlug, detectAllergens } from "./allergens";
 import { buildCargoDeductionStatements } from "./cargo-deduction.server";
-import { isFeatureEnabled } from "./feature-flags/flags.server";
 import {
 	buildKitchenEventInserts,
 	buildManifestConsumedEvent,
@@ -31,9 +30,6 @@ import { log } from "./logging.server";
 import { getExcludedManifestDates } from "./manifest-supply.server";
 import { getMealMissingIngredients } from "./matching.server";
 import { type CargoDeduction, cookMeal } from "./meals.server";
-import { NUTRITION_COVERAGE_THRESHOLD } from "./nutrition/constants";
-import { buildMinimalFlagContext } from "./nutrition/persist.server";
-import { scaleNutrientValues } from "./nutrition/scale-nutrients";
 import type { MealNutritionSnapshot } from "./nutrition/types";
 import { chunkedQuery } from "./query-utils.server";
 import { bumpReadinessCacheVersions } from "./readiness-cache.server";
@@ -283,44 +279,6 @@ export async function getWeekEntries(
 	}) as MealPlanEntryWithMeal[];
 }
 
-/**
- * Attach the caller's active personal intake to week entries (privacy-safe).
- */
-export async function attachPersonalIntakeToEntries(
-	db: D1Database,
-	userId: string,
-	organizationId: string,
-	entries: MealPlanEntryWithMeal[],
-): Promise<MealPlanEntryWithMeal[]> {
-	if (entries.length === 0) return entries;
-	const { getActivePersonalIntakesForEntries } = await import(
-		"./nutrition/persist.server"
-	);
-	const map = await getActivePersonalIntakesForEntries(
-		db,
-		userId,
-		organizationId,
-		entries.map((e) => e.id),
-	);
-	return entries.map((entry) => {
-		const intake = map.get(entry.id);
-		return {
-			...entry,
-			personalIntake: intake
-				? {
-						id: intake.id,
-						servings: intake.servings,
-						energyKcal: intake.energyKcal,
-						proteinG: intake.proteinG,
-						carbsG: intake.carbsG,
-						fatG: intake.fatG,
-						occurredAt: intake.occurredAt,
-					}
-				: null,
-		};
-	});
-}
-
 async function attachMealTagsToEntries(
 	db: D1Database,
 	entries: MealPlanEntryWithMeal[],
@@ -411,13 +369,11 @@ export async function consumeManifestEntries(
 		confirmInsufficient?: boolean;
 		userId?: string | null;
 		source?: KitchenEventSource;
-		/**
-		 * Defaults to true when nutrition-manifest is enabled, except mobile
-		 * without portions (legacy clients) and mcp/copilot (opt-in only).
-		 */
+		/** @deprecated Ignored. Legacy Consume never writes personal intake. */
 		logNutrition?: boolean;
+		/** @deprecated Ignored. Use the dedicated private Eat endpoint. */
 		portions?: Array<{ entryId: string; servings: number }>;
-		/** Prefer agent/route Flagship context when available. */
+		/** @deprecated Ignored by legacy Consume. */
 		flagContext?: import("~/lib/feature-flags/context.server").FlagshipEvaluationContext;
 	},
 ): Promise<ConsumeManifestEntriesResult> {
@@ -476,34 +432,6 @@ export async function consumeManifestEntries(
 		};
 	}
 
-	const portionByEntry = new Map<string, number>();
-	for (const p of options?.portions ?? []) {
-		portionByEntry.set(p.entryId, p.servings);
-	}
-
-	// Mobile clients without plate-up (e.g. iOS 1.3.17) omit portions — do not
-	// invent intake unless they explicitly opt in via logNutrition or portions.
-	// MCP/Copilot always opt in via logNutrition:true (no silent personal intake).
-	const hasPortions = (options?.portions?.length ?? 0) > 0;
-	const isAgentSource =
-		options?.source === "mcp" || options?.source === "copilot";
-	const defaultLogNutrition = isAgentSource
-		? options?.logNutrition === true
-		: options?.source === "mobile" &&
-				options?.logNutrition === undefined &&
-				!hasPortions
-			? false
-			: options?.logNutrition !== false;
-
-	const shouldLogNutrition =
-		defaultLogNutrition &&
-		!!options?.userId &&
-		(await isFeatureEnabled(
-			env,
-			"nutrition-manifest",
-			options.flagContext ?? buildMinimalFlagContext(env, options.userId),
-		));
-
 	// 3. Cook each unique meal once with aggregated servings. Entries for the
 	//    same mealId are combined so we call cookMeal M times (unique meals)
 	//    instead of N times (entries). The deduction is linear in servings so
@@ -558,7 +486,6 @@ export async function consumeManifestEntries(
 	const now = new Date();
 	const consumedEntryIds: string[] = [];
 	const allEventIds: string[] = [];
-	const allIntakeIds: string[] = [];
 
 	// Per unique meal: plan deductions without writing, then atomically apply
 	// cargo updates + consumedAt marks in one D1 batch. If a later meal fails,
@@ -599,66 +526,7 @@ export async function consumeManifestEntries(
 			}
 		}
 
-		const intakeRows: Array<{
-			id: string;
-			organizationId: string;
-			userId: string;
-			planId: string;
-			entryId: string;
-			mealId: string;
-			manifestDate: string;
-			slotType: string | null;
-			servings: number;
-			energyKcal: number;
-			proteinG: number;
-			carbsG: number;
-			fatG: number;
-			coverage: number;
-			source: string;
-			confidence: number;
-			verified: 0 | 1;
-			occurredAt: Date;
-			kitchenEventId: string;
-		}> = [];
-
 		const eventId = crypto.randomUUID();
-
-		if (shouldLogNutrition && options?.userId) {
-			for (const entry of mealEntries) {
-				const portion = portionByEntry.has(entry.id)
-					? (portionByEntry.get(entry.id) ?? 0)
-					: (entry.servingsOverride ?? entry.mealServings ?? 1);
-				if (!Number.isFinite(portion) || portion <= 0) continue;
-				const snap = entry.mealNutrition as MealNutritionSnapshot | null;
-				const perServing = snap?.perServing;
-				if (!perServing) continue;
-				const scaled = scaleNutrientValues(perServing, portion);
-				const coverage = snap?.coverage ?? 0;
-				const verified: 0 | 1 =
-					coverage >= NUTRITION_COVERAGE_THRESHOLD ? 1 : 0;
-				intakeRows.push({
-					id: crypto.randomUUID(),
-					organizationId,
-					userId: options.userId,
-					planId,
-					entryId: entry.id,
-					mealId,
-					manifestDate: entry.date,
-					slotType: entry.slotType ?? null,
-					servings: portion,
-					energyKcal: scaled.energyKcal,
-					proteinG: scaled.proteinG,
-					carbsG: scaled.carbG,
-					fatG: scaled.fatG,
-					coverage,
-					source: "meal",
-					confidence: coverage,
-					verified,
-					occurredAt: now,
-					kitchenEventId: eventId,
-				});
-			}
-		}
 
 		// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
 		const stmts: any[] = await buildCargoDeductionStatements(
@@ -699,33 +567,6 @@ export async function consumeManifestEntries(
 		]);
 		stmts.push(...eventStmts);
 		allEventIds.push(...eventIds);
-		allIntakeIds.push(...intakeRows.map((row) => row.id));
-
-		for (const row of intakeRows) {
-			stmts.push(
-				d1.insert(nutritionIntake).values({
-					id: row.id,
-					organizationId: row.organizationId,
-					userId: row.userId,
-					planId: row.planId,
-					entryId: row.entryId,
-					mealId: row.mealId,
-					manifestDate: row.manifestDate,
-					slotType: row.slotType,
-					servings: row.servings,
-					energyKcal: row.energyKcal,
-					proteinG: row.proteinG,
-					carbsG: row.carbsG,
-					fatG: row.fatG,
-					coverage: row.coverage,
-					source: row.source,
-					confidence: row.confidence,
-					verified: row.verified,
-					occurredAt: row.occurredAt,
-					kitchenEventId: row.kitchenEventId,
-				}),
-			);
-		}
 
 		trackD1BatchSize("consumeManifestEntries", stmts.length, {
 			organizationRef: organizationId,
@@ -752,7 +593,7 @@ export async function consumeManifestEntries(
 		skippedIngredients:
 			skippedIngredients.length > 0 ? skippedIngredients : undefined,
 		eventIds: allEventIds,
-		intakeIds: allIntakeIds,
+		intakeIds: [],
 	};
 }
 

@@ -9,6 +9,14 @@ import type { MassResolutionResult } from "./types";
 export type ResolveIngredientMassOptions = {
 	/** Caller-supplied grams (e.g. meal ingredient precomputed mass). */
 	explicitGrams?: number | null;
+	/**
+	 * Food-nutrition path: never use assumed 1 g/ml; count units need FDC portion.
+	 * Package-scale / cargo quantity edits may leave this false.
+	 */
+	forNutrition?: boolean;
+	/** Grams from a matched FDC portion (`gramWeight / amount * quantity`). */
+	fdcPortionGrams?: number | null;
+	fdcPortionConfidence?: number;
 };
 
 /**
@@ -64,6 +72,10 @@ export function resolveIngredientMass(
 			};
 		}
 
+		if (opts?.forNutrition) {
+			return unknownMass();
+		}
+
 		const ml = convertQuantity(quantity, unit, "ml");
 		if (ml != null && Number.isFinite(ml) && ml > 0) {
 			return {
@@ -74,6 +86,20 @@ export function resolveIngredientMass(
 			};
 		}
 		return unknownMass();
+	}
+
+	const portionGrams = opts?.fdcPortionGrams;
+	if (
+		portionGrams != null &&
+		Number.isFinite(portionGrams) &&
+		portionGrams > 0
+	) {
+		return {
+			grams: portionGrams,
+			method: "fdc_portion",
+			confidence: opts?.fdcPortionConfidence ?? 0.9,
+			estimated: false,
+		};
 	}
 
 	return unknownMass();
@@ -98,15 +124,34 @@ function unknownMass(): MassResolutionResult {
 	};
 }
 
-/** Stub hook for FDC portion-based mass (Slice 5 — wired when portion DB lands). */
+/**
+ * Apply FDC portion grams when present (pure helper for async portion lookup).
+ * @deprecated Prefer {@link resolveIngredientMass} with `fdcPortionGrams`.
+ */
 export function resolveMassFromFdcPortion(
 	_fdcId: number,
 	_portionDescription?: string | null,
+	gramsPerUnit?: number | null,
+	quantity = 1,
 ): MassResolutionResult {
+	if (
+		gramsPerUnit == null ||
+		!Number.isFinite(gramsPerUnit) ||
+		gramsPerUnit <= 0 ||
+		!Number.isFinite(quantity) ||
+		quantity <= 0
+	) {
+		return {
+			grams: null,
+			method: "fdc_portion",
+			confidence: 0,
+			estimated: true,
+		};
+	}
 	return {
-		grams: null,
+		grams: gramsPerUnit * quantity,
 		method: "fdc_portion",
-		confidence: 0,
-		estimated: true,
+		confidence: 0.9,
+		estimated: false,
 	};
 }

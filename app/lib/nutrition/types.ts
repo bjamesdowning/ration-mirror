@@ -1,3 +1,5 @@
+import type { NutrientKey } from "./constants";
+
 /** Provenance of a nutrition snapshot. */
 export type NutritionSource = "usda" | "ai_estimate" | "user_override";
 
@@ -48,6 +50,45 @@ export type NutrientsPerServing = NutrientValues;
  * Attached nutrition for a cargo item or ingredient match.
  * `verified` is true only for USDA (and future user-confirmed overrides).
  */
+/** Dataset / nutrient provenance for v2 snapshots (immutable historical fact). */
+export type NutritionProvenance = {
+	provider: "usda_fdc" | "ai" | "user" | "unknown";
+	dataType: string | null;
+	datasetRelease: string | null;
+	datasetSnapshotId: string | null;
+	importedAt: string | null;
+	nutrientIds: Partial<Record<NutrientKey, number | null>> | null;
+	derivations: Partial<Record<NutrientKey, string>> | null;
+	model: string | null;
+	promptVersion: string | null;
+	generatedAt: string | null;
+};
+
+/** Mass resolution method for ingredient / package scaling. */
+export type MassResolutionMethod =
+	| "direct_mass"
+	| "fdc_portion"
+	| "density"
+	| "assumed_1g_ml"
+	| "explicit"
+	| "unknown";
+
+export type NutritionMatchMeta = {
+	matcherVersion: string;
+	quality: NutritionMatchQuality;
+	score: number | null;
+	margin: number | null;
+	method: "exact" | "fts_rank" | "org_ledger" | "user" | "barcode" | "unknown";
+};
+
+export type NutritionMassMeta = {
+	grams: number | null;
+	method: MassResolutionMethod;
+	confidence: number;
+	portionId: number | null;
+	portionDescription: string | null;
+};
+
 /** Legacy v1 nutrition snapshot (implicit schemaVersion 1). */
 export type NutritionSnapshot = {
 	source: NutritionSource;
@@ -69,6 +110,9 @@ export type NutritionSnapshotV2Meta = {
 	servingBasis: NutritionServingBasis | null;
 	/** Fraction of nutrient fields with known (non-null) values (0–1). */
 	nutrientCoverage: number;
+	provenance?: NutritionProvenance | null;
+	match?: NutritionMatchMeta | null;
+	mass?: NutritionMassMeta | null;
 };
 
 /** v2 contract — nullable nutrient math with additive metadata. */
@@ -120,15 +164,6 @@ export type MealNutritionSnapshot = {
 	computedAt: string;
 };
 
-/** Mass resolution method for ingredient / package scaling. */
-export type MassResolutionMethod =
-	| "direct_mass"
-	| "fdc_portion"
-	| "density"
-	| "assumed_1g_ml"
-	| "explicit"
-	| "unknown";
-
 export type MassResolutionResult = {
 	grams: number | null;
 	method: MassResolutionMethod;
@@ -142,9 +177,22 @@ export type MassResolutionResult = {
 export type ResolvedFood = {
 	fdcId: number;
 	description: string;
-	nutrientsPer100g: NutrientsPer100g;
-	/** Ranker score when resolved via FTS/LIKE re-rank. */
+	/** Per-100g nutrients — core macros stay null when unknown (never coerced to 0). */
+	nutrientsPer100g: NullableNutrientValues;
+	dataType?: string | null;
+	/** Ranker raw score when resolved via FTS re-rank. */
 	matchScore?: number;
-	/** True when primary-label / high-tier match (safe to mark verified). */
+	normalizedScore?: number;
+	scoreMargin?: number;
+	matchQuality?: NutritionMatchQuality;
+	/** True only when auto-attach gates pass (score + margin). */
+	autoAccept?: boolean;
+	/**
+	 * @deprecated Prefer `autoAccept` / `matchQuality`. Never implies `verified`.
+	 */
 	highConfidence?: boolean;
+	energyNutrientId?: number | null;
+	saltDerivation?: string | null;
+	provenance?: NutritionProvenance | null;
+	match?: NutritionMatchMeta | null;
 };

@@ -1,15 +1,14 @@
 /**
  * Fine-grained MCP scope vocabulary.
  *
- * Existing keys with the broad `mcp` scope continue to work as before — `mcp`
- * implies all `mcp:*` scopes. New keys can be created with narrow scopes for
- * least-privilege access.
+ * Legacy blanket `mcp` expands only to the pre-nutrition kitchen scope set. It
+ * never satisfies personal nutrition scopes; those require explicit grant.
  */
 
 import type { McpToolContext } from "./auth";
 
 export const MCP_SCOPES = [
-	"mcp", // legacy: full access
+	"mcp", // legacy: pre-nutrition kitchen access only
 	"mcp:read",
 	"mcp:inventory:write",
 	"mcp:galley:write",
@@ -22,6 +21,21 @@ export const MCP_SCOPES = [
 
 export type McpScope = (typeof MCP_SCOPES)[number];
 
+/** Scopes implied by legacy blanket `mcp` (never includes nutrition). */
+export const LEGACY_MCP_EXPANDED_SCOPES = [
+	"mcp:read",
+	"mcp:inventory:write",
+	"mcp:galley:write",
+	"mcp:manifest:write",
+	"mcp:supply:write",
+	"mcp:preferences:write",
+] as const satisfies readonly McpScope[];
+
+const NUTRITION_SCOPES = new Set<McpScope>([
+	"mcp:nutrition:read",
+	"mcp:nutrition:write",
+]);
+
 /** Error thrown when a tool requires a scope the caller does not have. */
 export class McpScopeError extends Error {
 	override name = "McpScopeError" as const;
@@ -32,22 +46,33 @@ export class McpScopeError extends Error {
 	}
 }
 
+export function expandLegacyMcpScopes(
+	scopes: readonly string[],
+): readonly string[] {
+	if (!scopes.includes("mcp")) return scopes;
+	const next = new Set(scopes);
+	next.delete("mcp");
+	for (const scope of LEGACY_MCP_EXPANDED_SCOPES) {
+		next.add(scope);
+	}
+	return [...next];
+}
+
 /**
  * Throws `McpScopeError` unless the context satisfies ALL of the listed scopes
- * (AND semantics). Legacy `mcp` scope satisfies any narrow scope.
+ * (AND semantics). Legacy `mcp` satisfies pre-nutrition scopes only.
  */
 export function requireScope(ctx: McpToolContext, needed: McpScope[]): void {
-	const hasLegacy = ctx.scopes.includes("mcp");
-	if (hasLegacy) return;
-	for (const s of needed) {
-		if (!ctx.scopes.includes(s)) {
-			throw new McpScopeError(s);
+	for (const scope of needed) {
+		if (!hasScope(ctx, scope)) {
+			throw new McpScopeError(scope);
 		}
 	}
 }
 
 /** Check (without throwing) whether the context satisfies the required scope. */
 export function hasScope(ctx: McpToolContext, needed: McpScope): boolean {
-	if (ctx.scopes.includes("mcp")) return true;
-	return ctx.scopes.includes(needed);
+	if (ctx.scopes.includes(needed)) return true;
+	if (NUTRITION_SCOPES.has(needed)) return false;
+	return ctx.scopes.includes("mcp");
 }

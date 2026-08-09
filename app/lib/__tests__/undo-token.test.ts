@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
-	consumeUndoToken,
+	deleteUndoToken,
+	loadUndoToken,
 	storeUndoToken,
 	tryStoreUndoToken,
 	type UndoRecord,
@@ -28,8 +29,9 @@ const sampleRecord: UndoRecord = {
 describe("tryStoreUndoToken", () => {
 	it("returns token on success", async () => {
 		const kv = mockKv();
-		const token = await tryStoreUndoToken(kv, sampleRecord);
-		expect(token).toEqual(expect.any(String));
+		const stableToken = crypto.randomUUID();
+		const token = await tryStoreUndoToken(kv, sampleRecord, stableToken);
+		expect(token).toBe(stableToken);
 		expect(kv.put).toHaveBeenCalledTimes(1);
 	});
 
@@ -41,10 +43,10 @@ describe("tryStoreUndoToken", () => {
 	});
 });
 
-describe("consumeUndoToken", () => {
+describe("rollback-safe undo tokens", () => {
 	it("returns null when token is missing", async () => {
 		const kv = mockKv();
-		const result = await consumeUndoToken(
+		const result = await loadUndoToken(
 			kv,
 			crypto.randomUUID(),
 			"user-1",
@@ -57,21 +59,24 @@ describe("consumeUndoToken", () => {
 	it("does not delete token when user/org mismatch", async () => {
 		const kv = mockKv();
 		const token = await storeUndoToken(kv, sampleRecord);
-		const result = await consumeUndoToken(kv, token, "other-user", "org-1");
+		const result = await loadUndoToken(kv, token, "other-user", "org-1");
 		expect(result).toBeNull();
 		expect(kv.delete).not.toHaveBeenCalled();
-		const retry = await consumeUndoToken(kv, token, "user-1", "org-1");
+		const retry = await loadUndoToken(kv, token, "user-1", "org-1");
 		expect(retry?.kind).toBe("cook");
-		expect(kv.delete).toHaveBeenCalledTimes(1);
+		expect(kv.delete).not.toHaveBeenCalled();
 	});
 
-	it("deletes token only after successful auth match", async () => {
+	it("keeps the token retryable until rollback succeeds", async () => {
 		const kv = mockKv();
 		const token = await storeUndoToken(kv, sampleRecord);
-		const result = await consumeUndoToken(kv, token, "user-1", "org-1");
+		const result = await loadUndoToken(kv, token, "user-1", "org-1");
 		expect(result?.deductions).toEqual(sampleRecord.deductions);
+		expect(kv.delete).not.toHaveBeenCalled();
+
+		await deleteUndoToken(kv, token);
 		expect(kv.delete).toHaveBeenCalledWith(`undo:${token}`);
-		const second = await consumeUndoToken(kv, token, "user-1", "org-1");
+		const second = await loadUndoToken(kv, token, "user-1", "org-1");
 		expect(second).toBeNull();
 	});
 });

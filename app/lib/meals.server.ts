@@ -43,10 +43,8 @@ import {
 } from "./matching.server";
 import { NUTRITION_MEAL_RECOMPUTE_CONCURRENCY } from "./nutrition/constants";
 import { mapWithConcurrency } from "./nutrition/map-concurrency";
-import {
-	buildMinimalFlagContext,
-	recomputeAndStoreMealNutrition,
-} from "./nutrition/persist.server";
+import { buildMinimalFlagContext } from "./nutrition/persist.server";
+import { scheduleMealNutritionRecompute } from "./nutrition/recompute-outbox.server";
 import {
 	chunkArray,
 	chunkedQuery,
@@ -252,6 +250,10 @@ export async function getMeals(
 					cookTime: meal.cookTime,
 					customFields: meal.customFields,
 					nutrition: meal.nutrition,
+					nutritionRevision: meal.nutritionRevision,
+					nutritionComputedRevision: meal.nutritionComputedRevision,
+					nutritionStatus: meal.nutritionStatus,
+					nutritionUpdatedAt: meal.nutritionUpdatedAt,
 					createdAt: meal.createdAt,
 					updatedAt: meal.updatedAt,
 				})
@@ -278,6 +280,10 @@ export async function getMeals(
 					cookTime: meal.cookTime,
 					customFields: meal.customFields,
 					nutrition: meal.nutrition,
+					nutritionRevision: meal.nutritionRevision,
+					nutritionComputedRevision: meal.nutritionComputedRevision,
+					nutritionStatus: meal.nutritionStatus,
+					nutritionUpdatedAt: meal.nutritionUpdatedAt,
 					createdAt: meal.createdAt,
 					updatedAt: meal.updatedAt,
 				})
@@ -376,6 +382,10 @@ export async function getMealsPage(
 		cookTime: meal.cookTime,
 		customFields: meal.customFields,
 		nutrition: meal.nutrition,
+		nutritionRevision: meal.nutritionRevision,
+		nutritionComputedRevision: meal.nutritionComputedRevision,
+		nutritionStatus: meal.nutritionStatus,
+		nutritionUpdatedAt: meal.nutritionUpdatedAt,
 		createdAt: meal.createdAt,
 		updatedAt: meal.updatedAt,
 	} as const;
@@ -771,12 +781,16 @@ export async function createMeal(
 	);
 
 	if (env) {
-		await recomputeAndStoreMealNutrition(
+		await scheduleMealNutritionRecompute(
 			env,
 			db,
 			mealId,
 			organizationId,
 			buildMinimalFlagContext(env, options?.userId),
+			{
+				trigger: "meal_write",
+				origin: { surface: "system", userId: options?.userId },
+			},
 		);
 	}
 
@@ -888,12 +902,16 @@ export async function createMeals(
 			mealIds,
 			NUTRITION_MEAL_RECOMPUTE_CONCURRENCY,
 			(id) =>
-				recomputeAndStoreMealNutrition(
+				scheduleMealNutritionRecompute(
 					env,
 					db,
 					id,
 					organizationId,
 					buildMinimalFlagContext(env, options?.userId),
+					{
+						trigger: "meal_write",
+						origin: { surface: "system", userId: options?.userId },
+					},
 				),
 		);
 	} else {
@@ -992,12 +1010,16 @@ export async function updateMeal(
 
 	const nutritionEnv = options?.env;
 	if (nutritionEnv) {
-		await recomputeAndStoreMealNutrition(
+		await scheduleMealNutritionRecompute(
 			nutritionEnv,
 			db,
 			mealId,
 			organizationId,
 			buildMinimalFlagContext(nutritionEnv, options?.userId),
+			{
+				trigger: "meal_write",
+				origin: { surface: "system", userId: options?.userId },
+			},
 		);
 	}
 

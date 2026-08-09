@@ -1,0 +1,2 @@
+ALTER TABLE `nutrition_consent` ADD `withdraw_request_id` text;--> statement-breakpoint
+CREATE UNIQUE INDEX `nutrition_consent_user_withdraw_request_uidx` ON `nutrition_consent` (`user_id`,`withdraw_request_id`) WHERE "nutrition_consent"."withdraw_request_id" IS NOT NULL;

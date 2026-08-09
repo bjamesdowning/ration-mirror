@@ -38,8 +38,8 @@ final class APIClient {
     }
 
     @discardableResult
-    func delete<T: Decodable>(_ path: String) async throws -> T {
-        try await send(path: path, method: "DELETE", query: [], body: nil)
+    func delete<T: Decodable>(_ path: String, query: [URLQueryItem] = []) async throws -> T {
+        try await send(path: path, method: "DELETE", query: query, body: nil)
     }
 
     /// Multipart image upload for the scan endpoint.

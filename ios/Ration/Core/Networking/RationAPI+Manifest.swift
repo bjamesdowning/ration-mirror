@@ -73,16 +73,21 @@ extension RationAPI {
     func upsertManifestIntake(
         entryId: String,
         servings: Double,
-        idempotencyKey: String,
-        consent: Bool? = nil
+        idempotencyKey: String
     ) async throws -> ManifestIntakeUpsertResponse {
         try await client.post(
             "manifest/entries/\(entryId)/intake",
-            body: ManifestIntakeUpsertRequest(servings: servings, idempotencyKey: idempotencyKey, consent: consent)
+            body: ManifestIntakeUpsertRequest(servings: servings, idempotencyKey: idempotencyKey)
         )
     }
 
-    func clearManifestIntake(entryId: String) async throws -> ManifestIntakeClearResponse {
-        try await client.delete("manifest/entries/\(entryId)/intake")
+    func clearManifestIntake(
+        entryId: String,
+        operationKey: String = UUID().uuidString
+    ) async throws -> ManifestIntakeClearResponse {
+        try await client.delete(
+            "manifest/entries/\(entryId)/intake",
+            query: [URLQueryItem(name: "operationKey", value: operationKey)]
+        )
     }
 }

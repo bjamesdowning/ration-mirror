@@ -201,23 +201,29 @@ struct ManifestPersonalIntake: Codable, Sendable, Equatable {
     let occurredAt: Date
 }
 
-/// POST body — server stamps first-use intake consent when `consent == true`.
 struct ManifestIntakeUpsertRequest: Encodable, Sendable {
     let servings: Double
     let idempotencyKey: String
-    var consent: Bool?
 }
 
 struct ManifestIntakeUpsertResponse: Codable, Sendable {
     let intake: ManifestPersonalIntake
     let idempotent: Bool
+    let replayed: Bool?
     let replaced: Bool
     let intakeConsentGranted: Bool?
+    let operationId: String?
+    let dayTotals: [NutritionDayTotals]?
+    let summaryGeneratedAt: String?
     let undoToken: String?
 }
 
 struct ManifestIntakeClearResponse: Codable, Sendable {
     let cleared: Bool
     let voidedIntakeId: String?
+    let replayed: Bool?
+    let operationId: String?
+    let dayTotals: [NutritionDayTotals]?
+    let summaryGeneratedAt: String?
     let undoToken: String?
 }

@@ -1,11 +1,10 @@
 import { data } from "react-router";
 import { getUserSettings } from "~/lib/auth.server";
 import { handleApiError } from "~/lib/error-handler";
-import { buildFlagContext } from "~/lib/feature-flags/context.server";
+import { buildMobileFlagContext } from "~/lib/feature-flags/context.server";
 import { isFeatureEnabled } from "~/lib/feature-flags/flags.server";
 import {
 	addEntry,
-	attachPersonalIntakeToEntries,
 	ensureMealPlan,
 	getTodayISO,
 	getWeekEntries,
@@ -14,7 +13,8 @@ import {
 import { getCalendarDates } from "~/lib/manifest-dates";
 import { getExcludedManifestDates } from "~/lib/manifest-supply.server";
 import { requireMobileActiveGroup } from "~/lib/mobile/auth.server";
-import { getActiveNutritionConsent } from "~/lib/nutrition/consent.server";
+import { getNutritionConsentStatus } from "~/lib/nutrition/consent.server";
+import { attachPersonalIntakeToEntries } from "~/lib/nutrition/service.server";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import {
 	MealPlanEntryCreateSchema,
@@ -67,9 +67,13 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 			parsed.data.endDate,
 		);
 
-		const flagContext = buildFlagContext(request, context.cloudflare.env, {
-			user: { id: userId },
-		});
+		const flagContext = buildMobileFlagContext(
+			request,
+			context.cloudflare.env,
+			{
+				user: { id: userId },
+			},
+		);
 		const [cookLogSplit, nutritionManifest] = await Promise.all([
 			isFeatureEnabled(
 				context.cloudflare.env,
@@ -85,18 +89,27 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 
 		let intakeConsentGranted: boolean | undefined;
 		if (cookLogSplit && nutritionManifest) {
-			entries = await attachPersonalIntakeToEntries(
-				context.cloudflare.env.DB,
-				userId,
-				organizationId,
-				entries,
-			);
-			const consent = await getActiveNutritionConsent(
+			const consent = await getNutritionConsentStatus(
 				context.cloudflare.env.DB,
 				userId,
 				"intake",
 			);
-			intakeConsentGranted = consent != null;
+			intakeConsentGranted = consent.state === "active";
+			if (intakeConsentGranted) {
+				entries = await attachPersonalIntakeToEntries(
+					context.cloudflare.env,
+					{
+						userId,
+						organizationId,
+						surface: "mobile",
+						authMethod: "mobile_bearer",
+						scopes: ["nutrition:read"],
+						requestId: request.headers.get("cf-ray") ?? crypto.randomUUID(),
+					},
+					flagContext,
+					entries,
+				);
+			}
 		}
 
 		const excludedDates = await getExcludedManifestDates(

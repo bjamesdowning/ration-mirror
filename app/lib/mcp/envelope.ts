@@ -42,19 +42,29 @@ export type ToolErrorBody = {
 	recoveryHint?: string;
 };
 
+export type ToolOutcome = "no_effect" | "committed" | "replayed" | "unknown";
+
+export type ToolResultMeta = {
+	outcome?: ToolOutcome;
+	requestId?: string;
+	operationId?: string;
+	retryable?: boolean;
+	retryAfterMs?: number;
+};
+
 export type ToolEnvelope<T = unknown> =
-	| {
+	| ({
 			ok: true;
 			tool: string;
 			data: T;
 			warnings?: string[];
 			meta?: ToolMeta;
-	  }
-	| {
+	  } & ToolResultMeta)
+	| ({
 			ok: false;
 			tool: string;
 			error: ToolErrorBody;
-	  };
+	  } & ToolResultMeta);
 
 export type ToolErrorCode =
 	| "rate_limited"
@@ -68,17 +78,47 @@ export type ToolErrorCode =
 	| "internal_error"
 	| "insufficient_cargo"
 	| "timeout"
+	| "timeout_ambiguous"
 	| "feature_disabled"
 	| "cook_eat_split_required"
 	| "consent_required";
 
-/** Wraps an envelope into the MCP `content` array shape that `server.tool` returns. */
+export const ToolEnvelopeSchema = z.object({
+	ok: z.boolean(),
+	tool: z.string(),
+	data: z.unknown().optional(),
+	warnings: z.array(z.string()).optional(),
+	meta: z.record(z.string(), z.unknown()).optional(),
+	error: z
+		.object({
+			code: z.string(),
+			message: z.string(),
+			details: z.unknown().optional(),
+			retryAfter: z.number().optional(),
+			recoveryHint: z.string().optional(),
+		})
+		.optional(),
+	outcome: z.enum(["no_effect", "committed", "replayed", "unknown"]).optional(),
+	requestId: z.string().optional(),
+	operationId: z.string().optional(),
+	retryable: z.boolean().optional(),
+	retryAfterMs: z.number().optional(),
+});
+
+/** Wraps an envelope into MCP content + structuredContent for modern clients. */
 export function toolReply<T>(
 	_toolName: string,
 	body: ToolEnvelope<T>,
-): { content: Array<{ type: "text"; text: string }> } {
+): {
+	content: Array<{ type: "text"; text: string }>;
+	structuredContent: Record<string, unknown>;
+	isError: boolean;
+} {
+	const structured = body as unknown as Record<string, unknown>;
 	return {
 		content: [{ type: "text", text: JSON.stringify(body, null, 2) }],
+		structuredContent: structured,
+		isError: !body.ok,
 	};
 }
 
@@ -86,18 +126,20 @@ export function toolReply<T>(
 export function ok<T>(
 	tool: string,
 	data: T,
-	extra?: { warnings?: string[]; meta?: ToolMeta },
-): ToolEnvelope<T> {
-	const out: {
-		ok: true;
-		tool: string;
-		data: T;
+	extra?: {
 		warnings?: string[];
 		meta?: ToolMeta;
-	} = { ok: true, tool, data };
+	} & ToolResultMeta,
+): ToolEnvelope<T> {
+	const out: Extract<ToolEnvelope<T>, { ok: true }> = { ok: true, tool, data };
 	if (extra?.warnings && extra.warnings.length > 0)
 		out.warnings = extra.warnings;
 	if (extra?.meta) out.meta = extra.meta;
+	if (extra?.outcome !== undefined) out.outcome = extra.outcome;
+	if (extra?.requestId !== undefined) out.requestId = extra.requestId;
+	if (extra?.operationId !== undefined) out.operationId = extra.operationId;
+	if (extra?.retryable !== undefined) out.retryable = extra.retryable;
+	if (extra?.retryAfterMs !== undefined) out.retryAfterMs = extra.retryAfterMs;
 	return out;
 }
 
@@ -106,7 +148,11 @@ export function err(
 	tool: string,
 	code: ToolErrorCode,
 	message: string,
-	extra?: { details?: unknown; retryAfter?: number; recoveryHint?: string },
+	extra?: {
+		details?: unknown;
+		retryAfter?: number;
+		recoveryHint?: string;
+	} & ToolResultMeta,
 ): ToolEnvelope<never> {
 	const error: ToolErrorBody = {
 		code,
@@ -116,7 +162,17 @@ export function err(
 	if (extra?.retryAfter !== undefined) error.retryAfter = extra.retryAfter;
 	if (extra?.recoveryHint !== undefined)
 		error.recoveryHint = extra.recoveryHint;
-	return { ok: false, tool, error };
+	const out: Extract<ToolEnvelope<never>, { ok: false }> = {
+		ok: false,
+		tool,
+		error,
+	};
+	if (extra?.outcome !== undefined) out.outcome = extra.outcome;
+	if (extra?.requestId !== undefined) out.requestId = extra.requestId;
+	if (extra?.operationId !== undefined) out.operationId = extra.operationId;
+	if (extra?.retryable !== undefined) out.retryable = extra.retryable;
+	if (extra?.retryAfterMs !== undefined) out.retryAfterMs = extra.retryAfterMs;
+	return out;
 }
 
 /** Convenience for validation / bad-arg failures with an optional recovery hint. */
@@ -244,7 +300,7 @@ export function mapErrorToEnvelope(
 		) {
 			return err(tool, "consent_required", error.message, {
 				recoveryHint:
-					"Ask the user to consent to personal intake logging, then retry with consent:true.",
+					"Ask the user to review and grant the required nutrition consent in Ration Privacy settings, then retry the same operation key.",
 			});
 		}
 		if (
@@ -258,11 +314,32 @@ export function mapErrorToEnvelope(
 		}
 		if (
 			code === "nutrition_unavailable" ||
-			error.name === "NutritionUnavailableError"
+			error.name === "NutritionUnavailableError" ||
+			code === "nutrition_updating" ||
+			error.name === "NutritionUpdatingError"
 		) {
 			return err(tool, "conflict", error.message, {
 				recoveryHint:
 					"Meal nutrition snapshot is missing — update the meal or skip intake for this entry.",
+			});
+		}
+		if (
+			code === "idempotency_conflict" ||
+			code === "operation_in_progress" ||
+			code === "nutrition_write_conflict" ||
+			code === "undo_conflict"
+		) {
+			const retryable =
+				code === "operation_in_progress" ||
+				code === "nutrition_write_conflict" ||
+				("retryable" in error &&
+					(error as { retryable?: boolean }).retryable === true);
+			return err(tool, "conflict", error.message, {
+				details: { code, retryable },
+				retryAfter: retryable ? 1 : undefined,
+				recoveryHint: retryable
+					? "Retry the same operationKey after a short delay. Never mint a new key for this request."
+					: "Do not retry with a new key. Inspect the conflict code and reconcile client state.",
 			});
 		}
 		if (error.message.startsWith("Insufficient Cargo for:")) {

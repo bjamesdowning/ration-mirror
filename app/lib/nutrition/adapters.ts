@@ -138,3 +138,59 @@ export function nutrientFieldCoverage(
 ): number {
 	return nutrientCoverageRatio(values);
 }
+
+/** Persistence/legacy `carbG` → API-canonical `carbsG` (null-preserving). */
+export function toCanonicalNutrientAmounts(
+	values: NullableNutrientValues | NutrientValues | null | undefined,
+): {
+	energyKcal: number | null;
+	proteinG: number | null;
+	carbsG: number | null;
+	fatG: number | null;
+	fiberG: number | null;
+	sugarG: number | null;
+	satFatG: number | null;
+	sodiumMg: number | null;
+	saltG: number | null;
+} | null {
+	if (!values) return null;
+	return {
+		energyKcal: values.energyKcal ?? null,
+		proteinG: values.proteinG ?? null,
+		carbsG: values.carbG ?? null,
+		fatG: values.fatG ?? null,
+		fiberG: values.fiberG ?? null,
+		sugarG: values.sugarG ?? null,
+		satFatG: values.satFatG ?? null,
+		sodiumMg: values.sodiumMg ?? null,
+		saltG: values.saltG ?? null,
+	};
+}
+
+/** API-canonical `carbsG` → persistence/legacy `carbG` (null-preserving). */
+export function fromCanonicalNutrientAmounts(
+	values: {
+		energyKcal: number | null;
+		proteinG: number | null;
+		carbsG: number | null;
+		fatG: number | null;
+		fiberG: number | null;
+		sugarG: number | null;
+		satFatG: number | null;
+		sodiumMg: number | null;
+		saltG: number | null;
+	} | null,
+): NullableNutrientValues | null {
+	if (!values) return null;
+	return {
+		energyKcal: values.energyKcal,
+		proteinG: values.proteinG,
+		carbG: values.carbsG,
+		fatG: values.fatG,
+		fiberG: values.fiberG,
+		sugarG: values.sugarG,
+		satFatG: values.satFatG,
+		sodiumMg: values.sodiumMg,
+		saltG: values.saltG,
+	};
+}

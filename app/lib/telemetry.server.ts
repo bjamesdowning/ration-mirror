@@ -296,9 +296,38 @@ export async function trackWriteOperation<T>(
 // Nutrition ops counters (low-cardinality — no PII)
 // ---------------------------------------------------------------------------
 
-export type NutritionResolveOutcome = "hit" | "miss" | "ai";
-export type NutritionRecomputeTrigger = "cargo" | "meal" | "batch";
+export type NutritionResolveOutcome =
+	| "hit"
+	| "miss"
+	| "abstain"
+	| "unavailable"
+	| "ai";
+export type NutritionConsentOutcome = "grant" | "withdraw" | "denied" | "erase";
+export type NutritionIntakeOutcome =
+	| "committed"
+	| "replayed"
+	| "conflict"
+	| "failed";
+export type NutritionRecomputeTrigger =
+	| "cargo"
+	| "meal"
+	| "batch"
+	| "meal_write"
+	| "cargo_override"
+	| "org_sweep"
+	| "repair"
+	| "wake";
 export type NutritionIntakeSource = "manifest" | "cook";
+export type NutritionRecomputeOutcome =
+	| "ok"
+	| "skipped"
+	| "failed"
+	| "invalid_message"
+	| "missing_job"
+	| "duplicate"
+	| "flag_off"
+	| "claim_miss"
+	| "stale";
 
 export function emitNutritionResolve(outcome: NutritionResolveOutcome): void {
 	emitOpsMetric({
@@ -317,8 +346,8 @@ export function emitNutritionRecomputeEnqueued(
 }
 
 export function emitNutritionRecomputeProcessed(
-	trigger: NutritionRecomputeTrigger,
-	outcome: "ok" | "skipped" | "failed",
+	trigger: NutritionRecomputeTrigger | string,
+	outcome: NutritionRecomputeOutcome,
 ): void {
 	emitOpsMetric({
 		route: "queue_consumer",
@@ -326,9 +355,36 @@ export function emitNutritionRecomputeProcessed(
 	});
 }
 
-export function emitNutritionIntakeLogged(source: NutritionIntakeSource): void {
+export function emitNutritionIntakeLogged(
+	source: NutritionIntakeSource,
+	outcome: NutritionIntakeOutcome = "committed",
+): void {
 	emitOpsMetric({
 		route: "api",
-		blobs: ["nutrition_intake_logged", source],
+		blobs: ["nutrition_intake_logged", source, outcome],
+	});
+}
+
+export function emitNutritionConsent(
+	outcome: NutritionConsentOutcome,
+	purposeBucket: "goals" | "intake" | "agent" | "other" = "other",
+): void {
+	emitOpsMetric({
+		route: "api",
+		blobs: ["nutrition_consent", outcome, purposeBucket],
+	});
+}
+
+export function emitNutritionSummaryDuration(bucketMs: string): void {
+	emitOpsMetric({
+		route: "api",
+		blobs: ["nutrition_summary_duration", bucketMs],
+	});
+}
+
+export function emitNutritionQueueSendFailure(): void {
+	emitOpsMetric({
+		route: "queue_consumer",
+		blobs: ["nutrition_recompute_queue_send_failed"],
 	});
 }

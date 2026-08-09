@@ -3,6 +3,7 @@ import { z } from "zod";
 import { CapacityExceededError } from "./capacity.server";
 import { GroupMembershipError } from "./group-membership.server";
 import { log } from "./logging.server";
+import { NutritionConsentError } from "./nutrition/consent.server";
 import { SupplySyncBusyError } from "./supply-sync-lock.server";
 import { emitApiOutcome } from "./telemetry.server";
 
@@ -250,6 +251,17 @@ export function handleApiError(error: unknown) {
 		);
 	}
 
+	if (error instanceof NutritionConsentError) {
+		return data(
+			{
+				error: error.message,
+				code: error.code,
+				statement: error.statement,
+			},
+			{ status: error.status },
+		);
+	}
+
 	if (
 		error instanceof Error &&
 		"code" in error &&
@@ -261,6 +273,20 @@ export function handleApiError(error: unknown) {
 				code: "nutrition_consent_required" as const,
 			},
 			{ status: 403 },
+		);
+	}
+
+	if (
+		error instanceof Error &&
+		"code" in error &&
+		(error as { code?: string }).code === "nutrition_updating"
+	) {
+		return data(
+			{
+				error: error.message,
+				code: "nutrition_updating" as const,
+			},
+			{ status: 409 },
 		);
 	}
 
@@ -289,6 +315,38 @@ export function handleApiError(error: unknown) {
 				code: "entry_not_prepared" as const,
 			},
 			{ status: 409 },
+		);
+	}
+
+	if (
+		error instanceof Error &&
+		"code" in error &&
+		"status" in error &&
+		[
+			"idempotency_conflict",
+			"operation_in_progress",
+			"nutrition_write_conflict",
+			"nutrition_operation_invalid",
+			"nutrition_persistence_invariant",
+			"undo_conflict",
+			"not_found",
+			"insufficient_scope",
+		].includes((error as { code?: string }).code ?? "")
+	) {
+		const typed = error as Error & {
+			code: string;
+			status: number;
+			requiredScope?: string;
+			retryable?: boolean;
+		};
+		return data(
+			{
+				error: typed.message,
+				code: typed.code,
+				...(typed.retryable != null ? { retryable: typed.retryable } : {}),
+				...(typed.requiredScope ? { requiredScope: typed.requiredScope } : {}),
+			},
+			{ status: typed.status },
 		);
 	}
 

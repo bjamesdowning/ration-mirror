@@ -32,11 +32,12 @@ describe("oauth.constants scope policy", () => {
 		}
 	});
 
-	it("defaults DCR clients to all granular MCP scopes", () => {
-		for (const scope of OAUTH_DCR_MCP_SCOPES) {
-			expect(OAUTH_REGISTRATION_DEFAULT_SCOPES).toContain(scope);
-		}
-		expect(OAUTH_REGISTRATION_DEFAULT_SCOPES).toContain("offline_access");
+	it("defaults DCR clients to mcp:read only", () => {
+		expect(OAUTH_REGISTRATION_DEFAULT_SCOPES).toEqual(["mcp:read"]);
+		expect(OAUTH_REGISTRATION_DEFAULT_SCOPES).not.toContain("offline_access");
+		expect(OAUTH_REGISTRATION_DEFAULT_SCOPES).not.toContain(
+			"mcp:nutrition:read",
+		);
 	});
 
 	it("pre-checks only read on consent", () => {

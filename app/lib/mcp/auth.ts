@@ -1,9 +1,13 @@
 import { waitUntil } from "cloudflare:workers";
+import { eq } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/d1";
+import * as schema from "~/db/schema";
 import { resolvePreClaimForOrg } from "../agent/onboarding.server";
 import { verifyApiKey } from "../api-key.server";
 import { isApiKeyCredential } from "../oauth.constants";
 import { touchUserLastActive } from "../user-activity.server";
 import { verifyMcpOAuthToken } from "./oauth-token.server";
+import { expandLegacyMcpScopes } from "./scopes";
 
 /**
  * Exhaustive set of all error messages thrown by authenticateMcp.
@@ -88,13 +92,27 @@ async function authenticateApiKey(
 		);
 	}
 
+	const expandedScopes = [...expandLegacyMcpScopes(scopes)];
+	if (scopes.includes("mcp")) {
+		// Persist the non-nutrition expansion so credentials do not regain
+		// nutrition access if runtime recognition of legacy `mcp` is removed.
+		waitUntil(
+			drizzle(env.DB)
+				.update(schema.apiKey)
+				.set({ scopes: JSON.stringify(expandedScopes) })
+				.where(eq(schema.apiKey.id, record.id))
+				.then(() => undefined)
+				.catch(() => undefined),
+		);
+	}
+
 	return {
 		organizationId: record.organizationId,
 		apiKeyId: record.id,
 		userId: record.userId,
 		keyName: record.name,
 		keyPrefix: record.keyPrefix,
-		scopes,
+		scopes: expandedScopes,
 		authMethod: "api_key",
 		agentSurface: "mcp",
 		preClaim: await resolvePreClaimForOrg(env, record.organizationId),

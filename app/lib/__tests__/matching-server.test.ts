@@ -146,6 +146,10 @@ describe("strictMatch", () => {
 		cookTime: 20,
 		customFields: null,
 		nutrition: null,
+		nutritionRevision: 0,
+		nutritionComputedRevision: 0,
+		nutritionStatus: "current" as const,
+		nutritionUpdatedAt: null,
 		createdAt: new Date(),
 		updatedAt: new Date(),
 	});

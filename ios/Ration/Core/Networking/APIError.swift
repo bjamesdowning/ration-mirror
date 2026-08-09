@@ -121,8 +121,8 @@ enum APIError: Error, LocalizedError, Sendable {
         return code == "FEATURE_DISABLED"
     }
 
-    /// 403 first-use intake consent gate (`NutritionConsentRequiredError`) — show the
-    /// consent prompt and retry with `consent: true` rather than a generic error.
+    /// 403 nutrition consent gate — show the versioned privacy statement,
+    /// record consent through `/privacy/nutrition`, then retry the write.
     var isNutritionConsentRequired: Bool {
         guard statusCode == 403 else { return false }
         return code == "nutrition_consent_required"
@@ -132,5 +132,11 @@ enum APIError: Error, LocalizedError, Sendable {
     var isNutritionUnavailable: Bool {
         guard statusCode == 422 else { return false }
         return code == "nutrition_unavailable"
+    }
+
+    /// 409 — meal nutrition recompute still pending; retry shortly.
+    var isNutritionUpdating: Bool {
+        guard statusCode == 409 else { return false }
+        return code == "nutrition_updating"
     }
 }

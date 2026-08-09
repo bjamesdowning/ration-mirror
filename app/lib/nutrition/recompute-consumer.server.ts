@@ -1,51 +1,462 @@
-import type { FlagshipEvaluationContext } from "~/lib/feature-flags/context.server";
-import { isFeatureEnabled } from "~/lib/feature-flags/flags.server";
+/**
+ * Async nutrition recompute consumer — lease + revision-safe commit.
+ */
+import { and, eq, gt, isNull, lt, lte, or, sql } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/d1";
+import * as schema from "~/db/schema";
 import {
-	type NutritionRecomputeJobMessage,
-	NutritionRecomputeJobSchema,
-} from "~/lib/schemas/nutrition";
+	buildSystemFlagContext,
+	type FlagshipEvaluationContext,
+} from "~/lib/feature-flags/context.server";
+import { isFeatureEnabled } from "~/lib/feature-flags/flags.server";
+import { NutritionRecomputeWakeSchema } from "~/lib/schemas/nutrition";
 import { emitNutritionRecomputeProcessed } from "~/lib/telemetry.server";
 import { recomputeAndStoreMealNutrition } from "./persist.server";
+import {
+	NUTRITION_RECOMPUTE_LEASE_MS,
+	sendNutritionRecomputeWake,
+} from "./recompute-outbox.server";
+
+const REPAIR_BATCH_LIMIT = 25;
 
 /**
- * Consumer stub for async nutrition recompute jobs (Slice 8).
- * Processes a single meal recompute when flag is on; batch/cargo paths are no-ops.
+ * Process a wake message body from NUTRITION_RECOMPUTE_QUEUE.
  */
+export async function runNutritionRecomputeConsumerJob(
+	env: Env,
+	body: unknown,
+): Promise<void> {
+	const result = await consumeNutritionRecomputeWake(env, env.DB, body);
+	if (result.retryable) {
+		throw new Error(result.reason ?? "nutrition_recompute_retry");
+	}
+}
+
+export async function consumeNutritionRecomputeWake(
+	env: Env,
+	db: D1Database,
+	rawMessage: unknown,
+): Promise<{
+	processed: boolean;
+	reason?: string;
+	retryable?: boolean;
+}> {
+	const parsed = NutritionRecomputeWakeSchema.safeParse(rawMessage);
+	if (!parsed.success) {
+		emitNutritionRecomputeProcessed("wake", "invalid_message");
+		return { processed: false, reason: "invalid_message", retryable: false };
+	}
+
+	const { jobKey } = parsed.data;
+	const d1 = drizzle(db, { schema });
+	const [job] = await d1
+		.select()
+		.from(schema.nutritionRecomputeJob)
+		.where(eq(schema.nutritionRecomputeJob.jobKey, jobKey))
+		.limit(1);
+
+	if (!job) {
+		emitNutritionRecomputeProcessed("wake", "missing_job");
+		return { processed: false, reason: "missing_job", retryable: false };
+	}
+
+	if (
+		job.status === "completed" &&
+		(job.completedRevision ?? 0) >= job.requestedRevision
+	) {
+		emitNutritionRecomputeProcessed(job.trigger, "duplicate");
+		return { processed: false, reason: "already_completed", retryable: false };
+	}
+
+	const flagContext = rebuildFlagContextFromJob(env, job);
+	const enabled = await isFeatureEnabled(
+		env,
+		"nutrition-async-recompute",
+		flagContext,
+	);
+	const engineOn = await isFeatureEnabled(env, "nutrition-engine", flagContext);
+	if (!enabled || !engineOn) {
+		// Never leave meals stuck in `pending` when the queue path is disabled.
+		if (job.subjectType === "meal" && engineOn) {
+			try {
+				await recomputeAndStoreMealNutrition(
+					env,
+					db,
+					job.subjectId,
+					job.organizationId,
+					flagContext,
+					{ expectedSourceRevision: job.requestedRevision },
+				);
+			} catch {
+				// Stale revision or transient — still complete the job below so Eat
+				// is not blocked forever; a later write will re-schedule.
+			}
+		} else if (job.subjectType === "meal") {
+			await clearMealNutritionPending(
+				env,
+				job.subjectId,
+				job.organizationId,
+				job.requestedRevision,
+			);
+		}
+		await forceCompleteJob(env, jobKey, job.requestedRevision);
+		emitNutritionRecomputeProcessed(job.trigger, "flag_off");
+		return { processed: false, reason: "flag_off", retryable: false };
+	}
+
+	const claim = await claimNutritionRecomputeJob(
+		env,
+		jobKey,
+		job.requestedRevision,
+	);
+	if (!claim.claimed) {
+		emitNutritionRecomputeProcessed(job.trigger, "claim_miss");
+		return { processed: false, reason: claim.reason, retryable: false };
+	}
+
+	if (job.subjectType !== "meal") {
+		await markJobFailed(env, jobKey, claim.leaseToken, "unsupported_subject");
+		emitNutritionRecomputeProcessed(job.trigger, "skipped");
+		return {
+			processed: false,
+			reason: "unsupported_subject",
+			retryable: false,
+		};
+	}
+
+	try {
+		const snapshot = await recomputeAndStoreMealNutrition(
+			env,
+			db,
+			job.subjectId,
+			job.organizationId,
+			flagContext,
+			{
+				expectedSourceRevision: claim.processingRevision,
+				leaseToken: claim.leaseToken,
+				jobKey,
+			},
+		);
+
+		if (!snapshot) {
+			const d1 = drizzle(db, { schema });
+			const [mealStillThere] = await d1
+				.select({ id: schema.meal.id })
+				.from(schema.meal)
+				.where(
+					and(
+						eq(schema.meal.id, job.subjectId),
+						eq(schema.meal.organizationId, job.organizationId),
+					),
+				)
+				.limit(1);
+			if (!mealStillThere) {
+				// Subject deleted — safe to ack.
+				await markJobCompleted(
+					env,
+					jobKey,
+					claim.leaseToken,
+					claim.processingRevision,
+				);
+				emitNutritionRecomputeProcessed(job.trigger, "skipped");
+				return { processed: false, reason: "subject_gone", retryable: false };
+			}
+			// Engine off or unresolved — leave pending for repair, do not fake-complete.
+			await releaseJobToPending(env, jobKey, claim.leaseToken);
+			emitNutritionRecomputeProcessed(job.trigger, "skipped");
+			return { processed: false, reason: "no_snapshot", retryable: false };
+		}
+
+		await markJobCompleted(
+			env,
+			jobKey,
+			claim.leaseToken,
+			claim.processingRevision,
+		);
+		emitNutritionRecomputeProcessed(job.trigger, "ok");
+		return { processed: true };
+	} catch (err) {
+		const code =
+			err instanceof Error && err.message === "stale_revision"
+				? "stale_revision"
+				: "transient_error";
+		if (code === "stale_revision") {
+			await releaseJobToPending(env, jobKey, claim.leaseToken);
+			await sendNutritionRecomputeWake(env, jobKey);
+			emitNutritionRecomputeProcessed(job.trigger, "stale");
+			return { processed: false, reason: code, retryable: false };
+		}
+		await markJobFailed(env, jobKey, claim.leaseToken, code);
+		emitNutritionRecomputeProcessed(job.trigger, "failed");
+		return { processed: false, reason: code, retryable: true };
+	}
+}
+
+export async function claimNutritionRecomputeJob(
+	env: Env,
+	jobKey: string,
+	requestedRevision: number,
+	now = new Date(),
+): Promise<
+	| {
+			claimed: true;
+			leaseToken: string;
+			processingRevision: number;
+	  }
+	| { claimed: false; reason: string }
+> {
+	const leaseToken = crypto.randomUUID();
+	const leaseExpiresAt = new Date(now.getTime() + NUTRITION_RECOMPUTE_LEASE_MS);
+	const d1 = drizzle(env.DB, { schema });
+
+	const updated = await d1
+		.update(schema.nutritionRecomputeJob)
+		.set({
+			status: "processing",
+			processingRevision: requestedRevision,
+			leaseToken,
+			leaseExpiresAt,
+			attemptCount: sql`${schema.nutritionRecomputeJob.attemptCount} + 1`,
+			lastDispatchedAt: now,
+			updatedAt: now,
+		})
+		.where(
+			and(
+				eq(schema.nutritionRecomputeJob.jobKey, jobKey),
+				eq(schema.nutritionRecomputeJob.requestedRevision, requestedRevision),
+				or(
+					eq(schema.nutritionRecomputeJob.status, "pending"),
+					and(
+						eq(schema.nutritionRecomputeJob.status, "processing"),
+						or(
+							isNull(schema.nutritionRecomputeJob.leaseExpiresAt),
+							lte(schema.nutritionRecomputeJob.leaseExpiresAt, now),
+						),
+					),
+					eq(schema.nutritionRecomputeJob.status, "failed"),
+				),
+			),
+		)
+		.returning({ jobKey: schema.nutritionRecomputeJob.jobKey });
+
+	if (updated.length === 0) {
+		return { claimed: false, reason: "claim_conflict" };
+	}
+	return { claimed: true, leaseToken, processingRevision: requestedRevision };
+}
+
+/** Complete a job without a lease (flag-off / kill-switch path). */
+async function forceCompleteJob(
+	env: Env,
+	jobKey: string,
+	completedRevision: number,
+	now = new Date(),
+): Promise<void> {
+	const d1 = drizzle(env.DB, { schema });
+	await d1
+		.update(schema.nutritionRecomputeJob)
+		.set({
+			status: "completed",
+			completedRevision,
+			leaseToken: null,
+			leaseExpiresAt: null,
+			completedAt: now,
+			updatedAt: now,
+			lastErrorCode: "flag_off",
+		})
+		.where(eq(schema.nutritionRecomputeJob.jobKey, jobKey));
+}
+
+/**
+ * When nutrition-engine is off, clear `pending` so private Eat is not blocked
+ * indefinitely. Prefer keeping an existing snapshot as `current`.
+ */
+async function clearMealNutritionPending(
+	env: Env,
+	mealId: string,
+	organizationId: string,
+	expectedRevision: number,
+	now = new Date(),
+): Promise<void> {
+	const d1 = drizzle(env.DB, { schema });
+	await d1
+		.update(schema.meal)
+		.set({
+			nutritionStatus: "current",
+			nutritionUpdatedAt: now,
+		})
+		.where(
+			and(
+				eq(schema.meal.id, mealId),
+				eq(schema.meal.organizationId, organizationId),
+				eq(schema.meal.nutritionRevision, expectedRevision),
+				eq(schema.meal.nutritionStatus, "pending"),
+			),
+		);
+}
+
+async function markJobCompleted(
+	env: Env,
+	jobKey: string,
+	leaseToken: string,
+	completedRevision: number,
+	now = new Date(),
+): Promise<void> {
+	const d1 = drizzle(env.DB, { schema });
+	await d1
+		.update(schema.nutritionRecomputeJob)
+		.set({
+			status: "completed",
+			completedRevision,
+			leaseToken: null,
+			leaseExpiresAt: null,
+			completedAt: now,
+			updatedAt: now,
+			lastErrorCode: null,
+		})
+		.where(
+			and(
+				eq(schema.nutritionRecomputeJob.jobKey, jobKey),
+				eq(schema.nutritionRecomputeJob.leaseToken, leaseToken),
+			),
+		);
+}
+
+async function markJobFailed(
+	env: Env,
+	jobKey: string,
+	leaseToken: string,
+	errorCode: string,
+	now = new Date(),
+): Promise<void> {
+	const d1 = drizzle(env.DB, { schema });
+	await d1
+		.update(schema.nutritionRecomputeJob)
+		.set({
+			status: "failed",
+			lastErrorCode: errorCode,
+			leaseToken: null,
+			leaseExpiresAt: null,
+			updatedAt: now,
+		})
+		.where(
+			and(
+				eq(schema.nutritionRecomputeJob.jobKey, jobKey),
+				eq(schema.nutritionRecomputeJob.leaseToken, leaseToken),
+			),
+		);
+}
+
+async function releaseJobToPending(
+	env: Env,
+	jobKey: string,
+	leaseToken: string,
+	now = new Date(),
+): Promise<void> {
+	const d1 = drizzle(env.DB, { schema });
+	await d1
+		.update(schema.nutritionRecomputeJob)
+		.set({
+			status: "pending",
+			leaseToken: null,
+			leaseExpiresAt: null,
+			dispatchAfter: now,
+			updatedAt: now,
+		})
+		.where(
+			and(
+				eq(schema.nutritionRecomputeJob.jobKey, jobKey),
+				eq(schema.nutritionRecomputeJob.leaseToken, leaseToken),
+			),
+		);
+}
+
+function rebuildFlagContextFromJob(
+	env: Env,
+	job: typeof schema.nutritionRecomputeJob.$inferSelect,
+): FlagshipEvaluationContext {
+	const surface = (job.originatingSurface || "system") as
+		| "web"
+		| "ios"
+		| "mcp"
+		| "copilot"
+		| "system";
+	const base = buildSystemFlagContext(env, job.originatingUserId, {
+		originatingSurface: surface,
+		originatingClientVersion: job.originatingClientVersion,
+	});
+	return {
+		...base,
+		country: job.originatingCountry ?? base.country,
+		plan: job.originatingPlan ?? base.plan,
+	};
+}
+
+/**
+ * Redispatch due pending jobs and recover expired leases (bounded).
+ * Safe to call from cron; does not fail user mutations.
+ */
+export async function repairDueNutritionRecomputeJobs(
+	env: Env,
+	now = new Date(),
+): Promise<number> {
+	const d1 = drizzle(env.DB, { schema });
+	const due = await d1
+		.select({
+			jobKey: schema.nutritionRecomputeJob.jobKey,
+		})
+		.from(schema.nutritionRecomputeJob)
+		.where(
+			or(
+				and(
+					eq(schema.nutritionRecomputeJob.status, "pending"),
+					lte(schema.nutritionRecomputeJob.dispatchAfter, now),
+				),
+				and(
+					eq(schema.nutritionRecomputeJob.status, "processing"),
+					or(
+						isNull(schema.nutritionRecomputeJob.leaseExpiresAt),
+						lt(schema.nutritionRecomputeJob.leaseExpiresAt, now),
+					),
+				),
+				and(
+					eq(schema.nutritionRecomputeJob.status, "failed"),
+					or(
+						isNull(schema.nutritionRecomputeJob.expiresAt),
+						gt(schema.nutritionRecomputeJob.expiresAt, now),
+					),
+				),
+			),
+		)
+		.limit(REPAIR_BATCH_LIMIT);
+
+	let sent = 0;
+	for (const row of due) {
+		await d1
+			.update(schema.nutritionRecomputeJob)
+			.set({
+				status: "pending",
+				leaseToken: null,
+				leaseExpiresAt: null,
+				dispatchAfter: now,
+				updatedAt: now,
+			})
+			.where(eq(schema.nutritionRecomputeJob.jobKey, row.jobKey));
+		if (await sendNutritionRecomputeWake(env, row.jobKey, now)) {
+			sent += 1;
+		}
+	}
+	return sent;
+}
+
+/** @deprecated Prefer {@link consumeNutritionRecomputeWake}. */
 export async function consumeNutritionRecomputeJob(
 	env: Env,
 	db: D1Database,
 	rawMessage: unknown,
 	flagContext: FlagshipEvaluationContext,
 ): Promise<{ processed: boolean; reason?: string }> {
-	const enabled = await isFeatureEnabled(
-		env,
-		"nutrition-async-recompute",
-		flagContext,
-	);
-	if (!enabled) {
-		return { processed: false, reason: "flag_off" };
-	}
-
-	const message = NutritionRecomputeJobSchema.safeParse(rawMessage);
-	if (!message.success) {
-		return { processed: false, reason: "invalid_message" };
-	}
-
-	const job = message.data;
-	if (job.mealId) {
-		await recomputeAndStoreMealNutrition(
-			env,
-			db,
-			job.mealId,
-			job.organizationId,
-			flagContext,
-		);
-		emitNutritionRecomputeProcessed(job.trigger, "ok");
-		return { processed: true };
-	}
-
-	emitNutritionRecomputeProcessed(job.trigger, "skipped");
-	return { processed: false, reason: "no_meal_id" };
+	void flagContext;
+	const result = await consumeNutritionRecomputeWake(env, db, rawMessage);
+	return { processed: result.processed, reason: result.reason };
 }
-
-export type { NutritionRecomputeJobMessage };

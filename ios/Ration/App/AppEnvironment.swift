@@ -21,6 +21,8 @@ final class AppEnvironment {
     let api: RationAPI
     let billing: BillingManager
     let snapshots: SnapshotStore
+    let nutrition: NutritionStore
+    let nutritionConsent: NutritionConsentStore
     let network: NetworkMonitor
     let session: SessionStore
     let nextActionDismiss: NextActionDismissStore
@@ -47,6 +49,10 @@ final class AppEnvironment {
         self.billing = billing
         let snapshots = SnapshotStore()
         self.snapshots = snapshots
+        let nutrition = NutritionStore(snapshots: snapshots)
+        self.nutrition = nutrition
+        let nutritionConsent = NutritionConsentStore()
+        self.nutritionConsent = nutritionConsent
         self.network = NetworkMonitor()
         let session = SessionStore()
         self.session = session
@@ -69,8 +75,10 @@ final class AppEnvironment {
         let refreshOutcomes = SnapshotRefreshOutcomeStore()
         self.refreshOutcomes = refreshOutcomes
 
-        client.orgAccessLostHandler = { [snapshots, refreshOutcomes, session] in
+        client.orgAccessLostHandler = { [snapshots, nutrition, nutritionConsent, refreshOutcomes, session] in
             guard !session.needsOrgSelection else { return }
+            nutrition.invalidate()
+            nutritionConsent.invalidate()
             await snapshots.clearAll()
             refreshOutcomes.clearAll()
             session.beginOrgSelection(organizations: [])
@@ -83,7 +91,9 @@ final class AppEnvironment {
         }
 
         // H-2: a forced 401 logout must match explicit sign-out's full wipe
-        auth.onSignedOut = { [snapshots, billing, session, theme, unitDisplayMode, launch, onboarding, deepLinkRouter, refreshOutcomes, nextActionDismiss] in
+        auth.onSignedOut = { [snapshots, nutrition, nutritionConsent, billing, session, theme, unitDisplayMode, launch, onboarding, deepLinkRouter, refreshOutcomes, nextActionDismiss] in
+            nutrition.invalidate()
+            nutritionConsent.invalidate()
             await snapshots.clearAll()
             refreshOutcomes.clearAll()
             await billing.logOut()
@@ -96,6 +106,15 @@ final class AppEnvironment {
             nextActionDismiss.clearAll()
             AuthImageLoader.shared.clearAll()
         }
+    }
+
+    /// Configures private nutrition caches for the signed-in user + active org.
+    func configureNutritionScope() {
+        guard let userId = session.session?.user.id,
+              let organizationId = session.activeOrganizationId
+        else { return }
+        nutrition.configure(userId: userId, organizationId: organizationId)
+        nutritionConsent.configure(userId: userId, organizationId: organizationId)
     }
 
     func notifyCargoDataChanged() {
@@ -116,14 +135,26 @@ final class AppEnvironment {
     }
 
     func warmSnapshotMetadata(organizationId: String) async {
+        configureNutritionScope()
         for domain in [
             SnapshotDomain.hub,
             SnapshotDomain.cargo,
             SnapshotDomain.galley,
-            SnapshotDomain.manifest,
             SnapshotDomain.supply,
         ] {
             await snapshots.warmSyncMetadata(domain: domain, organizationId: organizationId)
+        }
+        if let userId = session.session?.user.id {
+            let privateScope = SnapshotScope.userOrganization(
+                userId: userId,
+                organizationId: organizationId
+            )
+            await snapshots.warmSyncMetadata(domain: SnapshotDomain.manifest, scope: privateScope)
+            await snapshots.warmSyncMetadata(
+                domain: SnapshotDomain.nutritionSummary,
+                scope: privateScope
+            )
+            await nutritionConsent.restoreCache(snapshots: snapshots)
         }
     }
 }

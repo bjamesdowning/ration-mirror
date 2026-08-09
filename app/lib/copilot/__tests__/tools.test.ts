@@ -159,6 +159,40 @@ describe("createCopilotToolDefs", () => {
 				}),
 			).toBe(true);
 		}
+		const logIntakeApproval = definitions.get(
+			"log_manifest_intake",
+		)?.needsApproval;
+		expect(typeof logIntakeApproval).toBe("function");
+		if (typeof logIntakeApproval === "function") {
+			const entryId = crypto.randomUUID();
+			expect(
+				await logIntakeApproval({
+					portions: [
+						{
+							entryId,
+							servings: 1,
+							idempotencyKey: crypto.randomUUID(),
+						},
+					],
+				}),
+			).toBe(false);
+			expect(
+				await logIntakeApproval({
+					portions: [
+						{
+							entryId,
+							servings: 1,
+							idempotencyKey: crypto.randomUUID(),
+						},
+						{
+							entryId: crypto.randomUUID(),
+							servings: 1,
+							idempotencyKey: crypto.randomUUID(),
+						},
+					],
+				}),
+			).toBe(true);
+		}
 	});
 
 	it("passes approval policy into the AI SDK adapter", () => {

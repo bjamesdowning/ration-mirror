@@ -10,6 +10,7 @@ import {
 	mapErrorToEnvelope,
 	rateLimited,
 	type ToolEnvelope,
+	ToolEnvelopeSchema,
 	toolReply,
 } from "./envelope";
 import { recordMcpToolMetric } from "./metrics";
@@ -79,6 +80,9 @@ export type SharedToolDefinition = {
 	needsApproval?: SharedToolApproval<Record<string, unknown>>;
 	/** Override default tool timeout; `null` disables (credit/queue jobs). */
 	timeoutMs?: number | null;
+	readOnlyHint?: boolean;
+	destructiveHint?: boolean;
+	idempotentHint?: boolean;
 	handler: (
 		ctx: McpToolContext,
 		args: Record<string, unknown>,
@@ -204,17 +208,47 @@ export async function runTool<TArgs extends Record<string, unknown>, TData>(
 		} else {
 			let timeoutId: ReturnType<typeof setTimeout> | undefined;
 			let timedOut = false;
+			const isMutation =
+				opts.rateLimitCategory != null &&
+				MCP_MUTATION_RATE_LIMIT_CATEGORIES.has(opts.rateLimitCategory);
+			const operationKeyValue = (args as Record<string, unknown>).operationKey;
+			const operationKey =
+				typeof operationKeyValue === "string" ? operationKeyValue : undefined;
 			envelope = await Promise.race([
 				handlerPromise,
 				new Promise<ToolEnvelope<TData>>((resolve) => {
 					timeoutId = setTimeout(() => {
 						timedOut = true;
+						if (isMutation) {
+							resolve(
+								err(
+									opts.name,
+									"timeout_ambiguous",
+									`Tool ${opts.name} exceeded ${timeoutMs}ms; the write may still complete.`,
+									{
+										outcome: "unknown",
+										retryable: true,
+										retryAfterMs: 1000,
+										operationId: operationKey,
+										details: {
+											code: "timeout_ambiguous",
+											operationKey: operationKey ?? null,
+										},
+										recoveryHint:
+											"Retry or query status with the same operationKey. Never mint a new key for this request.",
+									},
+								) as ToolEnvelope<TData>,
+							);
+							return;
+						}
 						resolve(
 							err(
 								opts.name,
 								"timeout",
 								`Tool ${opts.name} exceeded ${timeoutMs}ms and was aborted.`,
 								{
+									outcome: "unknown",
+									retryable: true,
 									recoveryHint:
 										"Retry with a smaller payload, or try again shortly. If this persists, use the native Ration screen for this action.",
 								},
@@ -255,7 +289,11 @@ export async function runTool<TArgs extends Record<string, unknown>, TData>(
 			});
 		}
 		const durationMs = Date.now() - startedAt;
-		if (!envelope.ok && envelope.error.code === "timeout") {
+		if (
+			!envelope.ok &&
+			(envelope.error.code === "timeout" ||
+				envelope.error.code === "timeout_ambiguous")
+		) {
 			recordMcpToolMetric({
 				type: "tool_timeout",
 				tool: opts.name,
@@ -302,10 +340,7 @@ export async function runTool<TArgs extends Record<string, unknown>, TData>(
  */
 export function makeTool<TArgs extends Record<string, unknown>, TData>(
 	opts: MakeToolOptions<TArgs, TData>,
-): (
-	env: McpToolsEnv,
-	args: TArgs,
-) => Promise<{ content: Array<{ type: "text"; text: string }> }> {
+): (env: McpToolsEnv, args: TArgs) => Promise<ReturnType<typeof toolReply>> {
 	return async (env, args) => {
 		const envelope = await runTool(env, opts, args);
 		return toolReply(opts.name, envelope);
@@ -326,10 +361,26 @@ export function registerSharedMcpTool(
 		timeoutMs: definition.timeoutMs,
 		handler: definition.handler,
 	});
-	server.tool(
+	const isRead =
+		definition.readOnlyHint ??
+		(definition.rateLimitCategory === "mcp_list" ||
+			definition.rateLimitCategory === "mcp_search" ||
+			definition.rateLimitCategory === "mcp_delegated_read");
+	server.registerTool(
 		definition.name,
-		definition.description,
-		definition.inputSchema.shape,
+		{
+			description: definition.description,
+			inputSchema: definition.inputSchema.shape,
+			outputSchema: ToolEnvelopeSchema,
+			annotations: {
+				readOnlyHint: isRead,
+				destructiveHint: definition.destructiveHint ?? false,
+				idempotentHint:
+					definition.idempotentHint ??
+					(definition.audit && !(definition.destructiveHint ?? false)),
+				openWorldHint: false,
+			},
+		},
 		async (args) => handler(env, args),
 	);
 }

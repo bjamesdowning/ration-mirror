@@ -14,6 +14,8 @@ On **Cargo → item detail → Edit**, the nutrition panel lets you set or clear
 
 When package mass is known, Ration also stores a derived **per 100 g** density so meal scaling stays stable if you later change the cargo quantity.
 
+Changing **quantity or unit** on Cargo (or in scan review) rescales package totals from that density — e.g. fixing `1 unit` → `1 L` of milk updates calories to the liter package. Manual overrides keep your package totals when correcting a unit without a prior mass, then re-derive density for the new size.
+
 ## Galley meals
 
 Meal detail and edit show recipe-level nutrition when the engine is on (computed from ingredients or stored snapshots). Adjust before cooking or planning if the panel looks wrong; overrides follow the same verified-override pattern.

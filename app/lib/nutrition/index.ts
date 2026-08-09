@@ -35,6 +35,11 @@ export {
 	withDerivedPer100g,
 } from "./override-scale";
 export {
+	cargoPackageSizeChanged,
+	type ScaleCargoNutritionOptions,
+	scaleCargoNutritionToPackage,
+} from "./package-scale";
+export {
 	applyUserOverrideToSnapshot,
 	blankCargoNutritionSnapshot,
 	formatCoveragePercent,

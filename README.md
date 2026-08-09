@@ -810,7 +810,7 @@ Avatars are served via `GET /api/user/avatar/:userId` and updated via `POST /api
 Nutrition is behind Flagship flags (registry default **off**): `nutrition-engine`, `nutrition-ai-estimate`, `nutrition-manifest`, `nutrition-goals`. See [Feature flags](docs/dev/feature-flags.md), [DPIA/consent notes](docs/dev/nutrition-dpia-notes.md), and help articles [`24`](docs/fin/24-nutrition-overview.md)–[`26`](docs/fin/26-editing-nutrition.md).
 
 - **Resolve** — USDA-shaped self-hosted `NUTRITION_DB` with FTS top-N + JS re-rank (KV `nutrition:fdc:v2:`); blank on miss for manual/CSV; labelled AI estimate only when request `ingestSource` is `scan_review` and `nutrition-ai-estimate` is on (client `allowAiEstimate` booleans are ignored).
-- **Cargo overrides → meals** — Meal recompute prefers org cargo `user_override` snapshots (linked `cargoId` or exact normalized name) over USDA; saving a Cargo override refreshes affected meals (bounded).
+- **Cargo overrides → meals** — Meal recompute prefers org cargo `user_override` snapshots (linked `cargoId` or exact normalized name) over USDA; saving a Cargo override refreshes affected meals (bounded). Package qty/unit edits rescale cargo `perServing` from `per100g` (or override totals) so calories stay aligned.
 - **UI** — Cargo/Galley panels, scan review (`POST /api/nutrition/resolve`), Manifest Eat plate-up + day totals + ~13-month calendar, Settings goals (consent), Flight Recorder kcal on logged events.
 - **APIs / MCP** — Summary and goals routes; tools `get_nutrition_summary`, `set_nutrition_goal`, `clear_nutrition_goal`. Intake retention ~396 days; erased on account purge.
 - **Dogfood** — Production enablement via Flagship `userId` allowlist only — never `FEATURE_FLAG_OVERRIDES` to turn nutrition **on**.

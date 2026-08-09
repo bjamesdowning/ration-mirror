@@ -86,7 +86,10 @@ import {
 	NUTRITION_RESOLVE_CONCURRENCY,
 } from "./nutrition/constants";
 import { mapWithConcurrency } from "./nutrition/map-concurrency";
-import { withDerivedPer100g } from "./nutrition/override-scale";
+import {
+	cargoPackageSizeChanged,
+	scaleCargoNutritionToPackage,
+} from "./nutrition/package-scale";
 import {
 	buildMinimalFlagContext,
 	maybeResolveCargoNutrition,
@@ -831,9 +834,7 @@ export async function ingestCargoItems(
 					};
 					nutritionByIndex.set(
 						i,
-						raw.source === "user_override"
-							? withDerivedPer100g(raw, it.quantity, it.unit, it.name)
-							: raw,
+						scaleCargoNutritionToPackage(raw, it.quantity, it.unit, it.name),
 					);
 					return;
 				}
@@ -867,7 +868,7 @@ export async function ingestCargoItems(
 				// Derive density from the incoming package qty/unit, not merged total.
 				const mergeNutrition =
 					nutritionEngineOn && it.nutrition
-						? withDerivedPer100g(
+						? scaleCargoNutritionToPackage(
 								{
 									...it.nutrition,
 									source: it.nutrition.source ?? "user_override",
@@ -1241,8 +1242,17 @@ export async function updateItem(
 		};
 		nextNutrition =
 			raw.source === "user_override"
-				? withDerivedPer100g(raw, nextQuantity, nextUnit, nextName)
-				: raw;
+				? scaleCargoNutritionToPackage(
+						{ ...raw, per100g: raw.per100g },
+						nextQuantity,
+						nextUnit,
+						nextName,
+						{
+							previousQuantity: existing.quantity,
+							previousUnit: existing.unit as SupportedUnit,
+						},
+					)
+				: scaleCargoNutritionToPackage(raw, nextQuantity, nextUnit, nextName);
 	} else if (data.name !== undefined && data.name !== existing.name) {
 		nextNutrition = await maybeResolveCargoNutrition(
 			env,
@@ -1251,16 +1261,25 @@ export async function updateItem(
 			{ quantity: nextQuantity, unit: nextUnit },
 		);
 	} else if (
-		existing.nutrition?.source === "user_override" &&
-		!existing.nutrition.per100g &&
+		existing.nutrition &&
+		cargoPackageSizeChanged(
+			existing.quantity,
+			existing.unit,
+			nextQuantity,
+			nextUnit,
+		) &&
 		(data.quantity !== undefined || data.unit !== undefined)
 	) {
-		// Backfill per100g once package mass is known; keep existing per100g stable.
-		nextNutrition = withDerivedPer100g(
+		// Rescale package totals from density when qty/unit change (scan fix-ups).
+		nextNutrition = scaleCargoNutritionToPackage(
 			existing.nutrition,
 			nextQuantity,
 			nextUnit,
 			nextName,
+			{
+				previousQuantity: existing.quantity,
+				previousUnit: existing.unit as SupportedUnit,
+			},
 		);
 	}
 

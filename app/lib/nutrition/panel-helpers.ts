@@ -85,7 +85,8 @@ export function applyUserOverrideToSnapshot(
 		source: "user_override",
 		confidence: 1,
 		verified: true,
-		per100g: prev?.per100g ?? null,
+		// Clear prior density so package totals re-derive per100g on save/scale.
+		per100g: null,
 		perServing: nextValues,
 		fdcId: prev?.fdcId ?? null,
 		description: prev?.description ?? null,

@@ -6,7 +6,12 @@ import { TagChipEditor } from "~/components/shared/TagChipEditor";
 import type { cargo } from "~/db/schema";
 import { DOMAIN_LABELS, ITEM_DOMAINS } from "~/lib/domain";
 import { formatQuantityNumericString } from "~/lib/format-quantity";
+import {
+	cargoPackageSizeChanged,
+	scaleCargoNutritionToPackage,
+} from "~/lib/nutrition/package-scale";
 import type { NutritionSnapshot } from "~/lib/nutrition/types";
+import { type SupportedUnit, toSupportedUnit } from "~/lib/units";
 
 interface CargoEditModalProps {
 	item: typeof cargo.$inferSelect;
@@ -39,6 +44,35 @@ export function CargoEditModal({
 		item.nutrition ?? null,
 	);
 	const [nutritionEdited, setNutritionEdited] = useState(false);
+	const [quantityText, setQuantityText] = useState(() =>
+		formatQuantityNumericString(item.quantity, item.unit),
+	);
+	const [quantity, setQuantity] = useState(item.quantity);
+	const [unit, setUnit] = useState(item.unit);
+
+	const applyPackageChange = (nextQuantity: number, nextUnit: string) => {
+		if (
+			nutritionEngine &&
+			nutrition &&
+			cargoPackageSizeChanged(quantity, unit, nextQuantity, nextUnit)
+		) {
+			setNutrition(
+				scaleCargoNutritionToPackage(
+					nutrition,
+					nextQuantity,
+					toSupportedUnit(nextUnit) ?? null,
+					item.name,
+					{
+						previousQuantity: quantity,
+						previousUnit: toSupportedUnit(unit) ?? null,
+					},
+				),
+			);
+			// Preview only — do not mark nutritionEdited; server rescales on qty/unit save.
+		}
+		setQuantity(nextQuantity);
+		setUnit(nextUnit);
+	};
 
 	return (
 		<div className="fixed inset-0 bg-carbon/30 backdrop-blur-sm flex items-end md:items-center md:justify-center z-[80]">
@@ -96,10 +130,15 @@ export function CargoEditModal({
 								inputMode="decimal"
 								name="quantity"
 								id={`quantity-${item.id}`}
-								defaultValue={formatQuantityNumericString(
-									item.quantity,
-									item.unit,
-								)}
+								value={quantityText}
+								onChange={(e) => {
+									const raw = e.target.value;
+									setQuantityText(raw);
+									const parsed = Number(raw);
+									if (Number.isFinite(parsed)) {
+										applyPackageChange(parsed, unit);
+									}
+								}}
 								min={0}
 								step="any"
 								required
@@ -117,7 +156,11 @@ export function CargoEditModal({
 							<select
 								name="unit"
 								id={`unit-${item.id}`}
-								defaultValue={item.unit}
+								value={unit}
+								onChange={(e) => {
+									const nextUnit = e.target.value as SupportedUnit;
+									applyPackageChange(quantity, nextUnit);
+								}}
 								className="bg-platinum rounded-lg px-4 py-3 text-carbon focus:ring-2 focus:ring-hyper-green/50 focus:outline-none appearance-none"
 							>
 								<option value="unit">unit</option>

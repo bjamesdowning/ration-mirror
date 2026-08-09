@@ -2,8 +2,16 @@ import { useState } from "react";
 import { NutritionPanel } from "~/components/nutrition/NutritionPanel";
 import { TagChipEditor } from "~/components/shared/TagChipEditor";
 import { DOMAIN_LABELS, ITEM_DOMAINS } from "~/lib/domain";
+import {
+	cargoPackageSizeChanged,
+	scaleCargoNutritionToPackage,
+} from "~/lib/nutrition/package-scale";
 import type { NutritionSnapshot } from "~/lib/nutrition/types";
-import { SUPPORTED_UNITS, type SupportedUnit } from "~/lib/units";
+import {
+	SUPPORTED_UNITS,
+	type SupportedUnit,
+	toSupportedUnit,
+} from "~/lib/units";
 
 export type DockItemDraft = {
 	name: string;
@@ -41,8 +49,38 @@ export function DockItemFields({
 		Number.isFinite(value.quantity) ? String(value.quantity) : "",
 	);
 
-	const patch = (partial: Partial<DockItemDraft>) =>
-		onChange({ ...value, ...partial });
+	const patch = (partial: Partial<DockItemDraft>) => {
+		const next = { ...value, ...partial };
+		const qtyChanged =
+			partial.quantity !== undefined && partial.quantity !== value.quantity;
+		const unitChanged =
+			partial.unit !== undefined && partial.unit !== value.unit;
+		if (
+			showNutrition &&
+			value.nutrition &&
+			(qtyChanged || unitChanged) &&
+			cargoPackageSizeChanged(
+				value.quantity,
+				value.unit,
+				next.quantity,
+				next.unit,
+			)
+		) {
+			const nextUnit = toSupportedUnit(next.unit) ?? null;
+			const prevUnit = toSupportedUnit(value.unit) ?? null;
+			next.nutrition = scaleCargoNutritionToPackage(
+				value.nutrition,
+				next.quantity,
+				nextUnit,
+				next.name,
+				{
+					previousQuantity: value.quantity,
+					previousUnit: prevUnit,
+				},
+			);
+		}
+		onChange(next);
+	};
 
 	return (
 		<div className="space-y-3">

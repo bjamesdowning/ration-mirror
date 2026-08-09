@@ -114,5 +114,6 @@ describe("applyUserOverrideToSnapshot", () => {
 		expect(next.perServing?.proteinG).toBe(1);
 		expect(next.perServing?.fatG).toBe(0.3);
 		expect(next.fdcId).toBe(9003);
+		expect(next.per100g).toBeNull();
 	});
 });

@@ -82,6 +82,7 @@ struct MainTabView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var showingSettings = false
     @State private var showingGroupSettings = false
+    @State private var showingNutritionGoals = false
     @State private var showingScan = false
     @State private var orgGeneration = 0
     @State private var selectedTab: MainTab = .hub
@@ -164,6 +165,10 @@ struct MainTabView: View {
                 isTabActive: activatedTabs.contains(.manifest),
                 onOpenSettings: { showingSettings = true },
                 onOpenGroupSettings: { showingGroupSettings = true },
+                onOpenNutritionGoals: {
+                    guard env.session.clientFlags.isNutritionGoalsEnabled else { return }
+                    showingNutritionGoals = true
+                },
                 onPlanWeekComplete: { count in
                     selectedTab = .manifest
                     manifestSuccessMessage = "Added \(count) meals to Manifest"
@@ -216,6 +221,9 @@ struct MainTabView: View {
         }
         .sheet(isPresented: $showingScan) {
             ScanView()
+        }
+        .sheet(isPresented: $showingNutritionGoals) {
+            NutritionGoalsView()
         }
         .sheet(isPresented: Binding(
             get: { askConsent.isPresenting },

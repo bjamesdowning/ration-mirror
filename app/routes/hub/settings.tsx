@@ -1629,7 +1629,7 @@ function NutritionGoalsSection({
 					</span>
 					<input
 						type="number"
-						min={1}
+						min={0}
 						max={20000}
 						placeholder="Optional"
 						value={dailyEnergyKcal}
@@ -2963,7 +2963,7 @@ function TransferCreditsSection({
 						type="number"
 						inputMode="numeric"
 						name="amount"
-						min={1}
+						min={0}
 						max={maxAmount}
 						disabled={!sourceId}
 						required

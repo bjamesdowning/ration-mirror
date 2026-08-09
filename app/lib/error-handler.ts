@@ -250,6 +250,48 @@ export function handleApiError(error: unknown) {
 		);
 	}
 
+	if (
+		error instanceof Error &&
+		"code" in error &&
+		(error as { code?: string }).code === "nutrition_consent_required"
+	) {
+		return data(
+			{
+				error: error.message,
+				code: "nutrition_consent_required" as const,
+			},
+			{ status: 403 },
+		);
+	}
+
+	if (
+		error instanceof Error &&
+		"code" in error &&
+		(error as { code?: string }).code === "nutrition_unavailable"
+	) {
+		return data(
+			{
+				error: error.message,
+				code: "nutrition_unavailable" as const,
+			},
+			{ status: 422 },
+		);
+	}
+
+	if (
+		error instanceof Error &&
+		"code" in error &&
+		(error as { code?: string }).code === "entry_not_prepared"
+	) {
+		return data(
+			{
+				error: error.message,
+				code: "entry_not_prepared" as const,
+			},
+			{ status: 409 },
+		);
+	}
+
 	if (error instanceof GroupMembershipError) {
 		return data(
 			{ error: error.message, code: error.code },

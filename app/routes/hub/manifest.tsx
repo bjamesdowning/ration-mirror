@@ -53,6 +53,7 @@ import type {
 	MealPlanEntryWithMeal,
 } from "~/lib/manifest.server";
 import {
+	attachPersonalIntakeToEntries,
 	ensureMealPlan,
 	getTodayISO,
 	getTriggeredAllergens,
@@ -62,6 +63,7 @@ import {
 import { addDays, getCalendarDates } from "~/lib/manifest-dates";
 import { getExcludedManifestDates } from "~/lib/manifest-supply.server";
 import { checkMealReadiness } from "~/lib/matching.server";
+import { getActiveNutritionConsent } from "~/lib/nutrition/consent.server";
 import { aggregateManifestDayNutrition } from "~/lib/nutrition/day-totals";
 import { goalTargetsFromRow } from "~/lib/nutrition/goal-progress";
 import {
@@ -119,7 +121,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 	// the user opens the picker — not eagerly here. This removes an N+1 tag
 	// query and the full meal list payload from every Manifest page load.
 
-	const entries = await getWeekEntriesWithTags(
+	let entries = await getWeekEntriesWithTags(
 		db,
 		plan.id,
 		currentRangeStart,
@@ -181,10 +183,22 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 
 	const env = context.cloudflare.env;
 	const flagContext = buildFlagContext(request, env, { user });
-	const [nutritionManifest, nutritionGoals] = await Promise.all([
-		isFeatureEnabled(env, "nutrition-manifest", flagContext),
-		isFeatureEnabled(env, "nutrition-goals", flagContext),
-	]);
+	const [nutritionManifest, nutritionGoals, nutritionCookLogSplit] =
+		await Promise.all([
+			isFeatureEnabled(env, "nutrition-manifest", flagContext),
+			isFeatureEnabled(env, "nutrition-goals", flagContext),
+			isFeatureEnabled(env, "nutrition-cook-log-split", flagContext),
+		]);
+
+	let intakeConsentGranted = false;
+	if (nutritionCookLogSplit && nutritionManifest) {
+		const [attachedEntries, consentRow] = await Promise.all([
+			attachPersonalIntakeToEntries(db, user.id, groupId, entries),
+			getActiveNutritionConsent(db, user.id, "intake"),
+		]);
+		entries = attachedEntries;
+		intakeConsentGranted = consentRow != null;
+	}
 
 	const dayConsumedNutrients: Record<
 		string,
@@ -282,6 +296,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		dayConsumedNutrients,
 		goalTargets,
 		dayIntakeRows,
+		intakeConsentGranted,
 	};
 }
 
@@ -359,6 +374,7 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 		dayConsumedNutrients = {},
 		goalTargets = null,
 		dayIntakeRows = [],
+		intakeConsentGranted = false,
 	} = loaderData;
 
 	const supplyToggleFetcher = useFetcher<{
@@ -503,11 +519,12 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 	const nutritionCookLogSplitFlag =
 		rootData?.clientFlags?.nutritionCookLogSplit === true;
 	const showDayNutritionTotals = nutritionManifestFlag && nutritionGoalsFlag;
-	/** Split UI labels only — cook/log services stay dark until fully wired. */
-	const consumePrimaryLabel = nutritionCookLogSplitFlag ? "Cook" : "Eat";
-	const consumeAllLabel = nutritionCookLogSplitFlag
-		? "Cook All"
-		: "Consume All";
+	/** nutrition-cook-log-split — shared Cook replaces Consume; private Eat opens separately. */
+	const cookSplit = nutritionCookLogSplitFlag;
+	const eatEnabled = cookSplit && nutritionManifestFlag;
+	const cardMode: "legacy" | "split" = cookSplit ? "split" : "legacy";
+	const consumePrimaryLabel = cookSplit ? "Cook" : "Eat";
+	const consumeAllLabel = cookSplit ? "Cook All" : "Consume All";
 
 	const [calendarOpen, setCalendarOpen] = useState(false);
 
@@ -564,6 +581,55 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 	const copyErrorToast = useToast({ duration: 6000 });
 	const planWeekToast = useToast({ duration: 4000 });
 	const planWeekErrorToast = useToast({ duration: 6000 });
+
+	// -------------------------------------------------------------------------
+	// Cook (shared Cargo deduction + preparation) — nutrition-cook-log-split
+	// -------------------------------------------------------------------------
+	const cookFetcher = useFetcher<{
+		cooked?: number;
+		error?: string;
+		requiresConfirmation?: boolean;
+		partialCook?: boolean;
+		missingIngredients?: Array<{
+			name: string;
+			required: number;
+			available: number;
+			unit: string;
+		}>;
+		alreadyCookedIds?: string[];
+		entryIds?: string[];
+	}>();
+	const pendingCookEntryIds = useRef<string[]>([]);
+	const cookConfirmationHandled = useRef(false);
+	/** Set only for single-entry Cook submissions so we know which entry to
+	 * open the private Eat dialog for on success. Cook All never sets this. */
+	const singleCookEntryIdRef = useRef<string | null>(null);
+	const cookToast = useToast({ duration: 4000 });
+	const cookErrorToast = useToast({ duration: 6000 });
+
+	// -------------------------------------------------------------------------
+	// Eat (private personal intake log) — nutrition-cook-log-split + nutrition-manifest
+	// -------------------------------------------------------------------------
+	const intakeFetcher = useFetcher<{
+		intake?: {
+			id: string;
+			servings: number;
+			energyKcal: number;
+			proteinG: number;
+			carbsG: number;
+			fatG: number;
+			occurredAt: string;
+		};
+		idempotent?: boolean;
+		replaced?: boolean;
+		cleared?: boolean;
+		voidedIntakeId?: string | null;
+		error?: string;
+	}>();
+	const [eatEntry, setEatEntry] = useState<MealPlanEntryWithMeal | null>(null);
+	const eatToast = useToast({ duration: 4000 });
+	const eatRemovedToast = useToast({ duration: 4000 });
+	const eatErrorToast = useToast({ duration: 6000 });
 
 	const submitConsume = useCallback(
 		(
@@ -640,6 +706,89 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 		)
 			return;
 		handleConsume(ids);
+	};
+
+	// -------------------------------------------------------------------------
+	// Cook handlers (nutrition-cook-log-split)
+	// -------------------------------------------------------------------------
+	const submitCook = useCallback(
+		(entryIds: string[], confirmInsufficient = false) => {
+			cookFetcher.submit(JSON.stringify({ entryIds, confirmInsufficient }), {
+				method: "POST",
+				action: `/api/meal-plans/${plan.id}/entries/cook`,
+				encType: "application/json",
+			});
+		},
+		[cookFetcher.submit, plan.id],
+	);
+
+	const handleCook = (entryIds: string[]) => {
+		if (entryIds.length === 0) return;
+		pendingCookEntryIds.current = entryIds;
+		cookConfirmationHandled.current = false;
+		submitCook(entryIds, false);
+	};
+
+	const handleCookSingle = (entryId: string) => {
+		singleCookEntryIdRef.current = entryId;
+		handleCook([entryId]);
+	};
+
+	const handleCookAll = async (date: string) => {
+		const uncooked = entries.filter(
+			(e) => e.date === date && !e.cookedAt && !e.consumedAt,
+		);
+		const ids = uncooked.map((e) => e.id);
+		if (ids.length === 0) return;
+		if (
+			!(await confirm({
+				title: `Cook — ${ids.length} meal${ids.length === 1 ? "" : "s"} for this day?`,
+				message: "Ingredients will be deducted from Cargo.",
+				confirmLabel: "Cook",
+				variant: "warning",
+			}))
+		)
+			return;
+		singleCookEntryIdRef.current = null;
+		handleCook(ids);
+	};
+
+	const handlePrimaryAll = (date: string) => {
+		if (cookSplit) {
+			void handleCookAll(date);
+		} else {
+			void handleConsumeAll(date);
+		}
+	};
+
+	// -------------------------------------------------------------------------
+	// Eat handlers — private personal intake log (never touches Cargo)
+	// -------------------------------------------------------------------------
+	const handleOpenEat = (entryId: string) => {
+		const entry = entries.find((e) => e.id === entryId);
+		if (entry) setEatEntry(entry);
+	};
+
+	const handleEat = (entryId: string, servings: number, consent?: boolean) => {
+		intakeFetcher.submit(
+			JSON.stringify({
+				servings,
+				idempotencyKey: crypto.randomUUID(),
+				...(consent ? { consent: true } : {}),
+			}),
+			{
+				method: "POST",
+				action: `/api/meal-plans/${plan.id}/entries/${entryId}/intake`,
+				encType: "application/json",
+			},
+		);
+	};
+
+	const handleRemoveServing = (entryId: string) => {
+		intakeFetcher.submit(null, {
+			method: "DELETE",
+			action: `/api/meal-plans/${plan.id}/entries/${entryId}/intake`,
+		});
 	};
 
 	// -------------------------------------------------------------------------
@@ -728,12 +877,22 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 		[entries, activeDay],
 	);
 	const unconsumedForActiveDay = useMemo(
-		() => entries.filter((e) => e.date === activeDay && !e.consumedAt).length,
-		[entries, activeDay],
+		() =>
+			entries.filter(
+				(e) =>
+					e.date === activeDay &&
+					(cookSplit ? !(e.cookedAt || e.consumedAt) : !e.consumedAt),
+			).length,
+		[entries, activeDay, cookSplit],
 	);
 	const unconsumedForSelectedDay = useMemo(
-		() => entries.filter((e) => e.date === selectedDay && !e.consumedAt).length,
-		[entries, selectedDay],
+		() =>
+			entries.filter(
+				(e) =>
+					e.date === selectedDay &&
+					(cookSplit ? !(e.cookedAt || e.consumedAt) : !e.consumedAt),
+			).length,
+		[entries, selectedDay, cookSplit],
 	);
 
 	// Set of dates that have at least one planned meal (for DayTab dot indicator)
@@ -806,6 +965,84 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 		consumeErrorToast.show,
 		confirm,
 		submitConsume,
+	]);
+
+	// Cook confirmation flow + success/error toasts (nutrition-cook-log-split)
+	useEffect(() => {
+		if (cookFetcher.state !== "idle" || !cookFetcher.data) return;
+		const data = cookFetcher.data;
+
+		if (
+			data.requiresConfirmation &&
+			data.missingIngredients &&
+			!cookConfirmationHandled.current
+		) {
+			cookConfirmationHandled.current = true;
+			const names = data.missingIngredients.map((m) => m.name).join(", ");
+			void (async () => {
+				const ok = await confirm({
+					title: "Missing ingredients",
+					message: `You don't have enough: ${names}. Prepare anyway and deduct what's available from Cargo?`,
+					confirmLabel: "Cook anyway",
+					variant: "warning",
+				});
+				if (ok && pendingCookEntryIds.current.length > 0) {
+					submitCook(pendingCookEntryIds.current, true);
+				} else {
+					pendingCookEntryIds.current = [];
+					singleCookEntryIdRef.current = null;
+				}
+			})();
+			return;
+		}
+
+		if (typeof data.cooked === "number" && data.cooked > 0) {
+			revalidator.revalidate();
+			pendingCookEntryIds.current = [];
+			cookToast.show();
+			if (eatEnabled && singleCookEntryIdRef.current) {
+				const cookedEntryId = singleCookEntryIdRef.current;
+				const entry = entries.find((e) => e.id === cookedEntryId);
+				if (entry) setEatEntry(entry);
+			}
+			singleCookEntryIdRef.current = null;
+		} else if (data.error) {
+			pendingCookEntryIds.current = [];
+			singleCookEntryIdRef.current = null;
+			cookErrorToast.show();
+		}
+	}, [
+		cookFetcher.state,
+		cookFetcher.data,
+		revalidator.revalidate,
+		cookToast.show,
+		cookErrorToast.show,
+		confirm,
+		submitCook,
+		eatEnabled,
+		entries,
+	]);
+
+	// Eat (private intake log) success/error toasts — never mentions Cargo.
+	useEffect(() => {
+		if (intakeFetcher.state !== "idle" || !intakeFetcher.data) return;
+		const data = intakeFetcher.data;
+		if (data.intake) {
+			revalidator.revalidate();
+			eatToast.show();
+		} else if (data.cleared) {
+			revalidator.revalidate();
+			eatRemovedToast.show();
+		} else if (data.error) {
+			eatErrorToast.show();
+		}
+	}, [
+		intakeFetcher.state,
+		intakeFetcher.data,
+		revalidator.revalidate,
+		eatToast.show,
+		eatRemovedToast.show,
+		eatErrorToast.show,
 	]);
 
 	// Revalidate and show toasts after bulk copy / plan-week confirm
@@ -1006,8 +1243,12 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 								{unconsumedForSelectedDay > 0 && (
 									<button
 										type="button"
-										onClick={() => handleConsumeAll(selectedDay)}
-										disabled={consumeFetcher.state !== "idle"}
+										onClick={() => handlePrimaryAll(selectedDay)}
+										disabled={
+											cookSplit
+												? cookFetcher.state !== "idle"
+												: consumeFetcher.state !== "idle"
+										}
 										className="flex items-center gap-2 px-4 py-3 btn-secondary font-semibold rounded-lg transition-all disabled:opacity-50"
 										title={`${consumeAllLabel} for ${selectedDayLabel} (deduct from Cargo)`}
 									>
@@ -1042,7 +1283,7 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 				</div>
 
 				{/* Week summary bar */}
-				<WeekSummary entries={entries} />
+				<WeekSummary entries={entries} mode={cardMode} />
 
 				{/* Mobile: Day tabs + single-day view */}
 				<div className="md:hidden">
@@ -1065,9 +1306,14 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 								entries={entries}
 								planId={plan.id}
 								onAdd={handleAdd}
-								onConsume={handleConsumeSingle}
+								mode={cardMode}
+								onConsume={cookSplit ? handleCookSingle : handleConsumeSingle}
 								onCopy={setCopyEntry}
-								isConsuming={consumeFetcher.state !== "idle"}
+								isConsuming={
+									cookSplit
+										? cookFetcher.state !== "idle"
+										: consumeFetcher.state !== "idle"
+								}
 								showSnackSlot={showSnackSlot}
 								triggeredAllergensByMealId={triggeredAllergensByMealId}
 								readyMealIds={readyMealIds}
@@ -1082,6 +1328,9 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 								goalsChrome={showDayNutritionTotals}
 								goalTargets={showDayNutritionTotals ? goalTargets : null}
 								intakeRows={nutritionManifestFlag ? activeDayIntakes : []}
+								consumeLabel={consumePrimaryLabel}
+								onEat={eatEnabled ? handleOpenEat : undefined}
+								onEditServing={eatEnabled ? handleOpenEat : undefined}
 							/>
 						)}
 					</div>
@@ -1099,10 +1348,15 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 						entries={entries}
 						planId={plan.id}
 						onAdd={handleAdd}
-						onConsume={handleConsumeSingle}
+						mode={cardMode}
+						onConsume={cookSplit ? handleCookSingle : handleConsumeSingle}
 						onCopy={setCopyEntry}
 						onCopyDay={setCopyDayDate}
-						isConsuming={consumeFetcher.state !== "idle"}
+						isConsuming={
+							cookSplit
+								? cookFetcher.state !== "idle"
+								: consumeFetcher.state !== "idle"
+						}
 						today={today}
 						showSnackSlot={showSnackSlot}
 						selectedDate={selectedDay}
@@ -1117,6 +1371,9 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 						dayConsumedNutrients={
 							showDayNutritionTotals ? dayConsumedNutrients : undefined
 						}
+						consumeLabel={consumePrimaryLabel}
+						onEat={eatEnabled ? handleOpenEat : undefined}
+						onEditServing={eatEnabled ? handleOpenEat : undefined}
 					/>
 				</div>
 			</div>
@@ -1145,12 +1402,34 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 				/>
 			)}
 
-			{plateUpEntry && nutritionManifestFlag && (
+			{plateUpEntry && nutritionManifestFlag && !cookSplit && (
 				<PlateUpDialog
+					mode="legacy"
 					mealName={plateUpEntry.mealName}
 					defaultServings={1}
 					onConfirm={handlePlateUpConfirm}
 					onClose={() => setPlateUpEntry(null)}
+				/>
+			)}
+
+			{eatEntry && eatEnabled && (
+				<PlateUpDialog
+					mode="eat"
+					mealName={eatEntry.mealName}
+					defaultServings={eatEntry.personalIntake?.servings ?? 1}
+					intakeConsentGranted={intakeConsentGranted}
+					hasExistingIntake={!!eatEntry.personalIntake}
+					onConfirmEat={(servings, consent) => {
+						const entryId = eatEntry.id;
+						setEatEntry(null);
+						handleEat(entryId, servings, consent);
+					}}
+					onRemoveLog={() => {
+						const entryId = eatEntry.id;
+						setEatEntry(null);
+						handleRemoveServing(entryId);
+					}}
+					onClose={() => setEatEntry(null)}
 				/>
 			)}
 
@@ -1257,8 +1536,10 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 									id: "consume-all",
 									icon: <ConsumeIcon className="w-5 h-5" />,
 									label: consumeAllLabel,
-									onClick: () => handleConsumeAll(selectedDay),
-									disabled: consumeFetcher.state !== "idle",
+									onClick: () => handlePrimaryAll(selectedDay),
+									disabled: cookSplit
+										? cookFetcher.state !== "idle"
+										: consumeFetcher.state !== "idle",
 								},
 							]
 						: []),
@@ -1362,6 +1643,68 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 					title="Planning failed"
 					description="Could not save the week plan. Please try again."
 					onDismiss={planWeekErrorToast.hide}
+				/>
+			)}
+
+			{/* Cook success toast (nutrition-cook-log-split) */}
+			{cookToast.isOpen && (
+				<Toast
+					variant="success"
+					position="bottom-right"
+					title="Prepared"
+					description={
+						cookFetcher.data?.partialCook
+							? "Available ingredients deducted from Cargo."
+							: "Ingredients deducted from Cargo."
+					}
+					onDismiss={cookToast.hide}
+				/>
+			)}
+
+			{/* Cook error toast */}
+			{cookErrorToast.isOpen && cookFetcher.data?.error && (
+				<Toast
+					variant="info"
+					position="bottom-right"
+					title="Couldn't deduct ingredients"
+					description={cookFetcher.data.error.replace(
+						/^Insufficient Cargo for:\s*/i,
+						"You don't have enough: ",
+					)}
+					onDismiss={cookErrorToast.hide}
+				/>
+			)}
+
+			{/* Eat success toast — private log, never mentions Cargo */}
+			{eatToast.isOpen && (
+				<Toast
+					variant="success"
+					position="bottom-right"
+					title="Serving logged"
+					description="Your personal record has been updated."
+					onDismiss={eatToast.hide}
+				/>
+			)}
+
+			{/* Eat removed toast */}
+			{eatRemovedToast.isOpen && (
+				<Toast
+					variant="success"
+					position="bottom-right"
+					title="Log removed"
+					description="Your personal serving log has been cleared."
+					onDismiss={eatRemovedToast.hide}
+				/>
+			)}
+
+			{/* Eat error toast */}
+			{eatErrorToast.isOpen && (
+				<Toast
+					variant="info"
+					position="bottom-right"
+					title="Couldn't log serving"
+					description={intakeFetcher.data?.error ?? "Please try again."}
+					onDismiss={eatErrorToast.hide}
 				/>
 			)}
 

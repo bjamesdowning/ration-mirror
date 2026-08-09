@@ -265,8 +265,21 @@ struct MealRowView: View {
 
 struct ManifestEntryRow: View {
     let entry: ManifestEntry
+    /// Fail-closed default — legacy single-tap Consume until flags say otherwise.
+    var flags: ManifestEntryActionPolicy.Flags = .disabled
     let onConsume: () -> Void
+    var onCook: () -> Void = {}
+    var onLogServing: () -> Void = {}
+    var onEditServing: () -> Void = {}
     @ScaledMetric(relativeTo: .body) private var consumeIconPoints: CGFloat = 28
+
+    private var action: ManifestEntryAction {
+        ManifestEntryActionPolicy.primaryAction(
+            flags: flags,
+            isCooked: entry.isCooked,
+            hasPersonalIntake: entry.personalIntake != nil
+        )
+    }
 
     var body: some View {
         HStack(spacing: 12) {
@@ -280,8 +293,8 @@ struct ManifestEntryRow: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(entry.mealName.capitalized)
                         .rationBody()
-                        .strikethrough(entry.isConsumed)
-                        .foregroundStyle(entry.isConsumed ? Theme.muted : Theme.carbon)
+                        .strikethrough(entry.isCooked)
+                        .foregroundStyle(entry.isCooked ? Theme.muted : Theme.carbon)
                     Text(entry.mealType.capitalized)
                         .rationCaption()
                 }
@@ -289,23 +302,59 @@ struct ManifestEntryRow: View {
             .buttonStyle(.plain)
             .accessibilityLabel("\(entry.mealName.capitalized), \(entry.mealType.capitalized)")
             Spacer()
-            if entry.isConsumed {
-                Image(systemName: "checkmark.seal.fill")
-                    .foregroundStyle(Theme.hyperGreen)
-                    .accessibilityLabel("Consumed")
-            } else {
-                Button(action: onConsume) {
-                    Image(systemName: "fork.knife.circle.fill")
-                        .font(Typography.mono(consumeIconPoints))
-                        .foregroundStyle(Theme.hyperGreen)
-                        .frame(minWidth: 44, minHeight: 44)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Consume meal and deduct from Cargo")
-            }
+            actionControl
         }
         .padding(.vertical, 4)
         .accessibilityElement(children: .contain)
+    }
+
+    @ViewBuilder
+    private var actionControl: some View {
+        switch action {
+        case .legacyConsume:
+            prepareButton(action: onConsume)
+        case .cook:
+            prepareButton(action: onCook)
+        case .logServing:
+            Button(action: onLogServing) {
+                Image(systemName: "plus.circle.fill")
+                    .font(Typography.mono(consumeIconPoints))
+                    .foregroundStyle(Theme.hyperGreen)
+                    .frame(minWidth: 44, minHeight: 44)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(ManifestEntryActionPolicy.accessibilityLabel(for: action))
+        case .editServing:
+            Button(action: onEditServing) {
+                HStack(spacing: 4) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(Theme.hyperGreen)
+                    if let intake = entry.personalIntake {
+                        Text("\(Int(intake.energyKcal.rounded())) kcal")
+                            .font(Typography.dataCaption())
+                            .foregroundStyle(Theme.muted)
+                    }
+                }
+                .frame(minHeight: 44)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(ManifestEntryActionPolicy.accessibilityLabel(for: action))
+        case .none:
+            Image(systemName: "checkmark.seal.fill")
+                .foregroundStyle(Theme.hyperGreen)
+                .accessibilityLabel(ManifestEntryActionPolicy.accessibilityLabel(for: action))
+        }
+    }
+
+    private func prepareButton(action performAction: @escaping () -> Void) -> some View {
+        Button(action: performAction) {
+            Image(systemName: "fork.knife.circle.fill")
+                .font(Typography.mono(consumeIconPoints))
+                .foregroundStyle(Theme.hyperGreen)
+                .frame(minWidth: 44, minHeight: 44)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(ManifestEntryActionPolicy.accessibilityLabel(for: action))
     }
 }
 

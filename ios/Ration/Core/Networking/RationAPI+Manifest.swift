@@ -47,4 +47,31 @@ extension RationAPI {
         try await client.delete("manifest/entries/\(entryId)")
     }
 
+    // Cook — shared, org-scoped Cargo/preparation mutation (nutrition-cook-log-split).
+    func cookManifestEntries(
+        _ entryIds: [String],
+        confirmInsufficient: Bool? = nil
+    ) async throws -> CookEntriesResponse {
+        try await client.post(
+            "manifest/cook",
+            body: CookEntriesRequest(entryIds: entryIds, confirmInsufficient: confirmInsufficient)
+        )
+    }
+
+    // Eat — private personal intake upsert/clear. Entry must be cooked first.
+    func upsertManifestIntake(
+        entryId: String,
+        servings: Double,
+        idempotencyKey: String,
+        consent: Bool? = nil
+    ) async throws -> ManifestIntakeUpsertResponse {
+        try await client.post(
+            "manifest/entries/\(entryId)/intake",
+            body: ManifestIntakeUpsertRequest(servings: servings, idempotencyKey: idempotencyKey, consent: consent)
+        )
+    }
+
+    func clearManifestIntake(entryId: String) async throws -> ManifestIntakeClearResponse {
+        try await client.delete("manifest/entries/\(entryId)/intake")
+    }
 }

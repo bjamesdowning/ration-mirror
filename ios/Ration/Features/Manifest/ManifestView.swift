@@ -7,17 +7,20 @@ struct ManifestView: View {
     var isTabActive: Bool = false
     var onOpenSettings: () -> Void = {}
     var onOpenGroupSettings: () -> Void = {}
+    var onOpenNutritionGoals: () -> Void = {}
     var onPlanWeekComplete: (Int) -> Void = { _ in }
     @State private var model = ManifestViewModel()
     @State private var showingAddEntry = false
     @State private var showingPlanWeek = false
     @State private var showingOptions = false
     @State private var paywallContext: PaywallContext?
-    @State private var consumeUndoToken: String?
-    @State private var showConsumeUndo = false
-    @State private var pendingConsumeEntry: ManifestEntry?
-    @State private var consumeConfirmationMessage: String?
-    @State private var showConsumeConfirmation = false
+    @State private var pendingUndo: ManifestUndoToast?
+    /// Shared by legacy Consume and split Cook — both deduct Cargo and need the same
+    /// "insufficient stock, cook/consume anyway?" confirmation flow.
+    @State private var pendingPrepareEntry: ManifestEntry?
+    @State private var prepareConfirmationMessage: String?
+    @State private var showPrepareConfirmation = false
+    @State private var pendingEatEntry: ManifestEntry?
 
     private var organizationId: String? {
         env.session.activeOrganizationId
@@ -76,14 +79,11 @@ struct ManifestView: View {
                 }
             }
             .overlay(alignment: .bottom) {
-                if showConsumeUndo, consumeUndoToken != nil {
+                if let toast = pendingUndo {
                     UndoToast(
-                        message: "Meal consumed",
-                        onUndo: { Task { await undoConsume() } },
-                        onDismiss: {
-                            showConsumeUndo = false
-                            consumeUndoToken = nil
-                        }
+                        message: toast.message,
+                        onUndo: { Task { await performUndo(toast.token) } },
+                        onDismiss: { pendingUndo = nil }
                     )
                     .padding(
                         .bottom,
@@ -114,16 +114,28 @@ struct ManifestView: View {
                 }
             }
             .refreshable { await reload() }
-            .alert("Insufficient cargo", isPresented: $showConsumeConfirmation) {
-                Button("Consume anyway") {
-                    Task { await confirmConsumeDespiteShortfall() }
+            .alert("Insufficient cargo", isPresented: $showPrepareConfirmation) {
+                Button("Continue anyway") {
+                    Task { await confirmPrepareDespiteShortfall() }
                 }
                 Button("Cancel", role: .cancel) {
-                    pendingConsumeEntry = nil
-                    consumeConfirmationMessage = nil
+                    pendingPrepareEntry = nil
+                    prepareConfirmationMessage = nil
                 }
             } message: {
-                Text(consumeConfirmationMessage ?? "Missing ingredients. Consume anyway?")
+                Text(prepareConfirmationMessage ?? "Missing ingredients. Continue anyway?")
+            }
+            .sheet(item: $pendingEatEntry) { entry in
+                ManifestPlateUpSheet(
+                    entry: entry,
+                    hasIntakeConsent: model.manifest?.intakeConsentGranted ?? false,
+                    onSave: { servings, consent in
+                        await handleLogServing(entry, servings: servings, consent: consent)
+                    },
+                    onRemove: entry.personalIntake != nil
+                        ? { await handleClearServing(entry) }
+                        : nil
+                )
             }
     }
 
@@ -253,6 +265,18 @@ struct ManifestView: View {
         }
     }
 
+    private var entryActionFlags: ManifestEntryActionPolicy.Flags {
+        ManifestEntryActionPolicy.Flags(
+            isCookLogSplitEnabled: env.session.clientFlags.isNutritionCookLogSplitEnabled,
+            isNutritionManifestEnabled: env.session.clientFlags.isNutritionManifestEnabled
+        )
+    }
+
+    private var nutritionByDate: [String: NutritionDayTotals] {
+        guard let days = model.nutritionSummary?.days else { return [:] }
+        return Dictionary(days.map { ($0.date, $0) }, uniquingKeysWith: { first, _ in first })
+    }
+
     @ViewBuilder
     private func content(_ manifest: ManifestResponse, organizationId: String) -> some View {
         let entryDates = Set(manifest.entries.map(\.date))
@@ -269,6 +293,8 @@ struct ManifestView: View {
                 weekStartPref: model.weekStartPref,
                 entryDates: entryDates,
                 isLoading: model.isWeekNavigationBusy,
+                nutritionByDate: nutritionByDate,
+                onTapNutrientLine: env.session.clientFlags.isNutritionGoalsEnabled ? onOpenNutritionGoals : nil
             ) { start in
                 model.requestNavigateWeek(
                     to: start,
@@ -326,8 +352,18 @@ struct ManifestView: View {
                     ForEach(dayEntries) { entry in
                         ManifestEntryRow(
                             entry: entry,
+                            flags: entryActionFlags,
                             onConsume: {
-                                Task { await handleConsume(entry) }
+                                Task { await handlePrepare(entry) }
+                            },
+                            onCook: {
+                                Task { await handlePrepare(entry) }
+                            },
+                            onLogServing: {
+                                pendingEatEntry = entry
+                            },
+                            onEditServing: {
+                                pendingEatEntry = entry
                             }
                         )
                         .listRowBackground(Theme.surface)
@@ -353,33 +389,63 @@ struct ManifestView: View {
         .copilotScrollTracked(tab: .manifest, isActive: isTabActive)
     }
 
-    private func handleConsume(_ entry: ManifestEntry) async {
+    /// Deducts Cargo — routes to split Cook or legacy Consume based on `nutrition-cook-log-split`.
+    private func handlePrepare(_ entry: ManifestEntry) async {
         guard let organizationId else { return }
-        switch await model.consume(
-            entry,
-            api: env.api,
-            snapshots: env.snapshots,
-            online: env.network.isOnline,
-            organizationId: organizationId
-        ) {
-        case .success(let token):
-            consumeUndoToken = token
-            showConsumeUndo = true
-        case .needsConfirmation(let missing):
-            pendingConsumeEntry = entry
-            consumeConfirmationMessage = missingIngredientsMessage(missing)
-            showConsumeConfirmation = true
-        case .failed:
-            break
+        if entryActionFlags.isCookLogSplitEnabled {
+            switch await model.cook(
+                entry,
+                api: env.api,
+                snapshots: env.snapshots,
+                online: env.network.isOnline,
+                organizationId: organizationId
+            ) {
+            case .success(let token):
+                setUndo(token: token, message: "Meal cooked")
+            case .needsConfirmation(let missing):
+                pendingPrepareEntry = entry
+                prepareConfirmationMessage = missingIngredientsMessage(missing)
+                showPrepareConfirmation = true
+            case .failed:
+                break
+            }
+        } else {
+            switch await model.consume(
+                entry,
+                api: env.api,
+                snapshots: env.snapshots,
+                online: env.network.isOnline,
+                organizationId: organizationId
+            ) {
+            case .success(let token):
+                setUndo(token: token, message: "Meal consumed")
+            case .needsConfirmation(let missing):
+                pendingPrepareEntry = entry
+                prepareConfirmationMessage = missingIngredientsMessage(missing)
+                showPrepareConfirmation = true
+            case .failed:
+                break
+            }
         }
     }
 
-    private func confirmConsumeDespiteShortfall() async {
-        guard let entry = pendingConsumeEntry, let organizationId else { return }
-        pendingConsumeEntry = nil
-        consumeConfirmationMessage = nil
-        showConsumeConfirmation = false
-        switch await model.consume(
+    private func confirmPrepareDespiteShortfall() async {
+        guard let entry = pendingPrepareEntry, let organizationId else { return }
+        pendingPrepareEntry = nil
+        prepareConfirmationMessage = nil
+        showPrepareConfirmation = false
+        if entryActionFlags.isCookLogSplitEnabled {
+            if case .success(let token) = await model.cook(
+                entry,
+                confirmInsufficient: true,
+                api: env.api,
+                snapshots: env.snapshots,
+                online: env.network.isOnline,
+                organizationId: organizationId
+            ) {
+                setUndo(token: token, message: "Meal cooked")
+            }
+        } else if case .success(let token) = await model.consume(
             entry,
             confirmInsufficient: true,
             api: env.api,
@@ -387,12 +453,40 @@ struct ManifestView: View {
             online: env.network.isOnline,
             organizationId: organizationId
         ) {
-        case .success(let token):
-            consumeUndoToken = token
-            showConsumeUndo = true
-        case .needsConfirmation, .failed:
-            break
+            setUndo(token: token, message: "Meal consumed")
         }
+    }
+
+    /// Eat — private serving log. Returns an error message on failure for the sheet to display.
+    private func handleLogServing(_ entry: ManifestEntry, servings: Double, consent: Bool) async -> String? {
+        switch await model.logServing(
+            entry,
+            servings: servings,
+            idempotencyKey: UUID().uuidString,
+            consent: consent,
+            api: env.api
+        ) {
+        case .success(_, let token):
+            setUndo(token: token, message: "Serving logged")
+            return nil
+        case .consentRequired:
+            return "Allow personal serving logs to continue."
+        case .nutritionUnavailable:
+            return model.errorMessage ?? "Nutrition unavailable for this meal."
+        case .failed:
+            return model.errorMessage ?? "Couldn't log this serving."
+        }
+    }
+
+    private func handleClearServing(_ entry: ManifestEntry) async {
+        if let token = await model.clearServing(entry, api: env.api) {
+            setUndo(token: token, message: "Serving removed")
+        }
+    }
+
+    private func setUndo(token: String?, message: String) {
+        guard let token else { return }
+        pendingUndo = ManifestUndoToast(token: token, message: message)
     }
 
     private func missingIngredientsMessage(_ missing: [MissingIngredientDetail]) -> String {
@@ -411,7 +505,7 @@ struct ManifestView: View {
             )
             return "\(ingredient.name.capitalized): need \(required), have \(available)"
         }
-        return "Missing \(missing.count) ingredient\(missing.count == 1 ? "" : "s").\n\(lines.joined(separator: "\n"))\n\nConsume anyway and deduct what's available?"
+        return "Missing \(missing.count) ingredient\(missing.count == 1 ? "" : "s").\n\(lines.joined(separator: "\n"))\n\nContinue anyway and deduct what's available?"
     }
 
     private func createManifestShare() async {
@@ -427,14 +521,12 @@ struct ManifestView: View {
         await model.share.revoke { try await env.api.revokeManifestShare() }
     }
 
-    private func undoConsume() async {
-        guard let token = consumeUndoToken, env.network.isOnline, let organizationId else {
-            showConsumeUndo = false
-            consumeUndoToken = nil
+    private func performUndo(_ token: String) async {
+        guard env.network.isOnline, let organizationId else {
+            pendingUndo = nil
             return
         }
-        showConsumeUndo = false
-        consumeUndoToken = nil
+        pendingUndo = nil
         do {
             _ = try await env.api.undoAction(token: token)
             Haptics.light()
@@ -452,6 +544,12 @@ struct ManifestView: View {
             model.errorMessage = SnapshotRefreshPolicy.userFacingRefreshDetail(error)
         }
     }
+}
+
+/// Shared undo-toast payload for Consume, Cook, and Eat mutations.
+struct ManifestUndoToast: Equatable {
+    let token: String
+    let message: String
 }
 
 struct ManifestDaySupplyToggle: View {

@@ -1,8 +1,10 @@
 import { data } from "react-router";
 import { getUserSettings } from "~/lib/auth.server";
 import { handleApiError } from "~/lib/error-handler";
+import { isFeatureEnabled } from "~/lib/feature-flags/flags.server";
 import {
 	addEntry,
+	attachPersonalIntakeToEntries,
 	ensureMealPlan,
 	getTodayISO,
 	getWeekEntries,
@@ -11,6 +13,8 @@ import {
 import { getCalendarDates } from "~/lib/manifest-dates";
 import { getExcludedManifestDates } from "~/lib/manifest-supply.server";
 import { requireMobileActiveGroup } from "~/lib/mobile/auth.server";
+import { getActiveNutritionConsent } from "~/lib/nutrition/consent.server";
+import { buildMinimalFlagContext } from "~/lib/nutrition/persist.server";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import {
 	MealPlanEntryCreateSchema,
@@ -56,12 +60,42 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 			throw handleApiError(parsed.error);
 		}
 
-		const entries = await getWeekEntries(
+		let entries = await getWeekEntries(
 			context.cloudflare.env.DB,
 			plan.id,
 			parsed.data.startDate,
 			parsed.data.endDate,
 		);
+
+		const flagContext = buildMinimalFlagContext(context.cloudflare.env, userId);
+		const [cookLogSplit, nutritionManifest] = await Promise.all([
+			isFeatureEnabled(
+				context.cloudflare.env,
+				"nutrition-cook-log-split",
+				flagContext,
+			),
+			isFeatureEnabled(
+				context.cloudflare.env,
+				"nutrition-manifest",
+				flagContext,
+			),
+		]);
+
+		let intakeConsentGranted: boolean | undefined;
+		if (cookLogSplit && nutritionManifest) {
+			entries = await attachPersonalIntakeToEntries(
+				context.cloudflare.env.DB,
+				userId,
+				organizationId,
+				entries,
+			);
+			const consent = await getActiveNutritionConsent(
+				context.cloudflare.env.DB,
+				userId,
+				"intake",
+			);
+			intakeConsentGranted = consent != null;
+		}
 
 		const excludedDates = await getExcludedManifestDates(
 			context.cloudflare.env.DB,
@@ -83,6 +117,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 			endDate: parsed.data.endDate,
 			entries,
 			supplyDayInclusion,
+			...(intakeConsentGranted !== undefined ? { intakeConsentGranted } : {}),
 		};
 	} catch (e) {
 		return handleApiError(e);

@@ -2,13 +2,18 @@ import type { MealPlanEntryWithMeal } from "~/lib/manifest.server";
 
 interface WeekSummaryProps {
 	entries: MealPlanEntryWithMeal[];
+	/** nutrition-cook-log-split — count Prepared (cookedAt||consumedAt) instead of consumedAt. */
+	mode?: "legacy" | "split";
 }
 
-export function WeekSummary({ entries }: WeekSummaryProps) {
+export function WeekSummary({ entries, mode = "legacy" }: WeekSummaryProps) {
 	if (entries.length === 0) return null;
 
+	const isSplit = mode === "split";
 	const total = entries.length;
-	const consumed = entries.filter((e) => !!e.consumedAt).length;
+	const consumed = entries.filter((e) =>
+		isSplit ? !!(e.cookedAt ?? e.consumedAt) : !!e.consumedAt,
+	).length;
 	const remaining = total - consumed;
 	const progressPct = total > 0 ? Math.round((consumed / total) * 100) : 0;
 	const allDone = remaining === 0;
@@ -25,7 +30,9 @@ export function WeekSummary({ entries }: WeekSummaryProps) {
 			{/* Compact inline label */}
 			<span className="text-[11px] font-mono text-muted shrink-0 tabular-nums">
 				{allDone ? (
-					<span className="text-hyper-green font-semibold">✓ all done</span>
+					<span className="text-hyper-green font-semibold">
+						✓ all {isSplit ? "prepared" : "done"}
+					</span>
 				) : (
 					<>
 						<span className="text-hyper-green font-semibold">{consumed}</span>

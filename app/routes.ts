@@ -178,12 +178,20 @@ export default [
 		"routes/api/meal-plans.$id.entries.consume.ts",
 	),
 	route(
+		"api/meal-plans/:id/entries/cook",
+		"routes/api/meal-plans.$id.entries.cook.ts",
+	),
+	route(
 		"api/meal-plans/:id/entries/bulk",
 		"routes/api/meal-plans.$id.entries.bulk.ts",
 	),
 	route(
 		"api/meal-plans/:id/entries/:entryId",
 		"routes/api/meal-plans.$id.entries.$entryId.ts",
+	),
+	route(
+		"api/meal-plans/:id/entries/:entryId/intake",
+		"routes/api/meal-plans.$id.entries.$entryId.intake.ts",
 	),
 	route("api/meal-plans/:id/share", "routes/api/meal-plans.$id.share.ts"),
 	route(
@@ -449,6 +457,7 @@ export default [
 		"api/mobile/v1/manifest/consume",
 		"routes/api/mobile/v1.manifest.consume.ts",
 	),
+	route("api/mobile/v1/manifest/cook", "routes/api/mobile/v1.manifest.cook.ts"),
 	route(
 		"api/mobile/v1/manifest/plan-week",
 		"routes/api/mobile/v1.manifest.plan-week.ts",
@@ -461,6 +470,10 @@ export default [
 	route(
 		"api/mobile/v1/manifest/entries/:entryId",
 		"routes/api/mobile/v1.manifest.entries.$entryId.ts",
+	),
+	route(
+		"api/mobile/v1/manifest/entries/:entryId/intake",
+		"routes/api/mobile/v1.manifest.entries.$entryId.intake.ts",
 	),
 	route(
 		"api/mobile/v1/manifest/share",

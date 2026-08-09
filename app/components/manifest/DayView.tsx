@@ -28,6 +28,8 @@ interface DayViewProps {
 	entries: MealPlanEntryWithMeal[];
 	planId: string;
 	onAdd: (slot: SlotType, date: string) => void;
+	/** legacy: existing Eat/consume flow. split: Cook/Log-split (nutrition-cook-log-split). */
+	mode?: "legacy" | "split";
 	onConsume?: (entryId: string) => void;
 	onCopy?: (entry: MealPlanEntryWithMeal) => void;
 	isConsuming?: boolean;
@@ -44,6 +46,12 @@ interface DayViewProps {
 	consumedNutrients?: DayNutrientTotals | null;
 	/** Logged intake rows for this day (nutrition-manifest). */
 	intakeRows?: DayIntakeRow[];
+	/** split mode — label for the Cook button (e.g. "Cook"). */
+	consumeLabel?: string;
+	/** split mode — opens the private "Log my serving" dialog. */
+	onEat?: (entryId: string) => void;
+	/** split mode — opens the private dialog pre-filled with the existing log. */
+	onEditServing?: (entryId: string) => void;
 }
 
 const MONTH_NAMES = [
@@ -66,6 +74,7 @@ export function DayView({
 	entries,
 	planId,
 	onAdd,
+	mode = "legacy",
 	onConsume,
 	onCopy,
 	isConsuming = false,
@@ -80,14 +89,20 @@ export function DayView({
 	goalTargets = null,
 	consumedNutrients = null,
 	intakeRows = [],
+	consumeLabel,
+	onEat,
+	onEditServing,
 }: DayViewProps) {
 	const d = new Date(`${date}T00:00:00`);
 	const dayName = getDayName(date);
 	const formattedDate = `${MONTH_NAMES[d.getMonth()]} ${d.getDate()}`;
 
+	const isSplit = mode === "split";
 	const dayEntries = entries.filter((e) => e.date === date);
 	const totalCount = dayEntries.length;
-	const consumedCount = dayEntries.filter((e) => !!e.consumedAt).length;
+	const consumedCount = dayEntries.filter((e) =>
+		isSplit ? !!(e.cookedAt ?? e.consumedAt) : !!e.consumedAt,
+	).length;
 
 	const slots = showSnackSlot
 		? SLOT_TYPES
@@ -132,7 +147,7 @@ export function DayView({
 									: "text-muted"
 							}`}
 						>
-							{consumedCount} consumed
+							{consumedCount} {isSplit ? "prepared" : "consumed"}
 						</p>
 					</>
 				)}
@@ -204,12 +219,16 @@ export function DayView({
 					entries={dayEntries}
 					planId={planId}
 					onAdd={onAdd}
+					mode={mode}
 					onConsume={onConsume}
 					onCopy={onCopy}
 					isConsuming={isConsuming}
 					readOnly={readOnly}
 					triggeredAllergensByMealId={triggeredAllergensByMealId}
 					readyMealIds={readyMealIds}
+					consumeLabel={consumeLabel}
+					onEat={onEat}
+					onEditServing={onEditServing}
 				/>
 			))}
 		</div>

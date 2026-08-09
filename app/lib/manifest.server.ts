@@ -163,6 +163,8 @@ export interface MealPlanEntryWithMeal {
 	servingsOverride: number | null;
 	notes: string | null;
 	consumedAt: Date | null;
+	/** Shared preparation timestamp; falls back to consumedAt for legacy rows. */
+	cookedAt: Date | null;
 	createdAt: Date;
 	mealName: string;
 	mealServings: number;
@@ -172,6 +174,16 @@ export interface MealPlanEntryWithMeal {
 	mealTags?: string[];
 	/** meal.nutrition.perServing.energyKcal when snapshot exists. */
 	mealEnergyKcalPerServing?: number | null;
+	/** Current-user-only personal intake (never another member's). */
+	personalIntake?: {
+		id: string;
+		servings: number;
+		energyKcal: number;
+		proteinG: number;
+		carbsG: number;
+		fatG: number;
+		occurredAt: Date;
+	} | null;
 }
 
 export interface ConsumeManifestEntriesResult {
@@ -217,6 +229,7 @@ export async function getWeekEntries(
 			servingsOverride: mealPlanEntry.servingsOverride,
 			notes: mealPlanEntry.notes,
 			consumedAt: mealPlanEntry.consumedAt,
+			cookedAt: mealPlanEntry.cookedAt,
 			createdAt: mealPlanEntry.createdAt,
 			mealName: meal.name,
 			mealServings: meal.servings,
@@ -252,6 +265,7 @@ export async function getWeekEntries(
 			servingsOverride: r.servingsOverride,
 			notes: r.notes,
 			consumedAt: r.consumedAt ?? null,
+			cookedAt: r.cookedAt ?? r.consumedAt ?? null,
 			createdAt: r.createdAt,
 			mealName: r.mealName,
 			mealServings: r.mealServings ?? 1,
@@ -261,6 +275,44 @@ export async function getWeekEntries(
 			mealEnergyKcalPerServing: snap?.perServing?.energyKcal ?? null,
 		};
 	}) as MealPlanEntryWithMeal[];
+}
+
+/**
+ * Attach the caller's active personal intake to week entries (privacy-safe).
+ */
+export async function attachPersonalIntakeToEntries(
+	db: D1Database,
+	userId: string,
+	organizationId: string,
+	entries: MealPlanEntryWithMeal[],
+): Promise<MealPlanEntryWithMeal[]> {
+	if (entries.length === 0) return entries;
+	const { getActivePersonalIntakesForEntries } = await import(
+		"./nutrition/persist.server"
+	);
+	const map = await getActivePersonalIntakesForEntries(
+		db,
+		userId,
+		organizationId,
+		entries.map((e) => e.id),
+	);
+	return entries.map((entry) => {
+		const intake = map.get(entry.id);
+		return {
+			...entry,
+			personalIntake: intake
+				? {
+						id: intake.id,
+						servings: intake.servings,
+						energyKcal: intake.energyKcal,
+						proteinG: intake.proteinG,
+						carbsG: intake.carbsG,
+						fatG: intake.fatG,
+						occurredAt: intake.occurredAt,
+					}
+				: null,
+		};
+	});
 }
 
 async function attachMealTagsToEntries(

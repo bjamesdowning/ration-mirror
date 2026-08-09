@@ -122,13 +122,14 @@ function nullableNutrient(
 		if (value === "" || value === undefined) return undefined;
 		if (value === null) return null;
 		return value;
-	}, z.union([schema, z.null()]).optional()) as z.ZodType<
+		// Prefer `z.null()` before coerce schemas — `z.coerce.number()` maps null → 0.
+	}, z.union([z.null(), schema]).optional()) as z.ZodType<
 		number | null | undefined
 	>;
 }
 
 const goalEnergyField = nullableNutrient(
-	z.coerce.number().positive().max(20_000),
+	z.coerce.number().nonnegative().max(20_000),
 );
 const goalMacroField = nullableNutrient(
 	z.coerce.number().nonnegative().max(2_000),

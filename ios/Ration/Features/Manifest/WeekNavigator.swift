@@ -187,8 +187,16 @@ struct WeekNavigator: View {
     var weekStartPref: String = "sunday"
     var entryDates: Set<String> = []
     var isLoading: Bool = false
+    /// Optional day-keyed nutrient totals (nutrition-goals / nutrition-manifest). Empty hides the line.
+    var nutritionByDate: [String: NutritionDayTotals] = [:]
+    /// Tapping the nutrient line opens Nutrition Goals — `nil` renders it as static text.
+    var onTapNutrientLine: (() -> Void)?
     var onNavigate: (String) -> Void
     @ScaledMetric(relativeTo: .body) private var chevronPoints: CGFloat = 17
+
+    private var selectedDayNutrition: NutritionDayTotals? {
+        nutritionByDate[selectedDay]
+    }
 
     private var canGoBack: Bool {
         let target = ManifestDateHelpers.normalizedNavigationStart(
@@ -277,6 +285,36 @@ struct WeekNavigator: View {
                 }
                 .buttonStyle(.borderless)
             }
+
+            if let totals = selectedDayNutrition, totals.entryCount > 0 {
+                dayNutrientLine(totals)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func dayNutrientLine(_ totals: NutritionDayTotals) -> some View {
+        let content = HStack(spacing: 10) {
+            Label("\(Int(totals.energyKcal.rounded())) kcal", systemImage: "bolt.fill")
+            Text("P \(Int(totals.proteinG.rounded()))g")
+            Text("C \(Int(totals.carbsG.rounded()))g")
+            Text("F \(Int(totals.fatG.rounded()))g")
+        }
+        .font(Typography.dataCaption())
+        .foregroundStyle(Theme.muted)
+
+        let label = "\(Int(totals.energyKcal.rounded())) calories, \(Int(totals.proteinG.rounded())) grams protein, \(Int(totals.carbsG.rounded())) grams carbs, \(Int(totals.fatG.rounded())) grams fat logged today"
+
+        if let onTapNutrientLine {
+            Button(action: onTapNutrientLine) { content }
+                .buttonStyle(.borderless)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(label)
+                .accessibilityHint("Opens Nutrition Goals")
+        } else {
+            content
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(label)
         }
     }
 

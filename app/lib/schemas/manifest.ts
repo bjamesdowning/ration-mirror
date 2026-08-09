@@ -70,6 +70,20 @@ export const ConsumeEntriesRequestSchema = z.object({
 	portions: z.array(ConsumeEntryPortionSchema).max(50).optional(),
 });
 
+/** Shared Cook — Cargo + preparation only (nutrition-cook-log-split). */
+export const CookEntriesRequestSchema = z.object({
+	entryIds: z.array(z.string().uuid()).min(1).max(50),
+	confirmInsufficient: z.boolean().optional(),
+});
+
+/** Private Eat upsert — path-scoped entry; no client user/org IDs. */
+export const ManifestPersonalIntakeUpsertSchema = z.object({
+	servings: z.coerce.number().min(0.5).max(100),
+	idempotencyKey: z.string().uuid(),
+	/** Explicit first-use intake consent; server stamps grant time. */
+	consent: z.literal(true).optional(),
+});
+
 /**
  * Used by the bulk-add endpoint for both the "Copy Entry / Day" features
  * and the future AI meal planner. The AI planner will POST an identical

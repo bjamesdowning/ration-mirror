@@ -113,4 +113,24 @@ enum APIError: Error, LocalizedError, Sendable {
         let code = serverErrorCode ?? code ?? ""
         return code == "feature_gated"
     }
+
+    /// 403 Flagship gate from `assertFeatureEnabled` (e.g. `nutrition-goals`, `nutrition-cook-log-split`
+    /// off, or a fail-closed default). Server sends `code: "FEATURE_DISABLED"`.
+    var isFeatureDisabled: Bool {
+        guard statusCode == 403 else { return false }
+        return code == "FEATURE_DISABLED"
+    }
+
+    /// 403 first-use intake consent gate (`NutritionConsentRequiredError`) — show the
+    /// consent prompt and retry with `consent: true` rather than a generic error.
+    var isNutritionConsentRequired: Bool {
+        guard statusCode == 403 else { return false }
+        return code == "nutrition_consent_required"
+    }
+
+    /// 422 — meal has no usable nutrition snapshot; Eat cannot compute a serving.
+    var isNutritionUnavailable: Bool {
+        guard statusCode == 422 else { return false }
+        return code == "nutrition_unavailable"
+    }
 }

@@ -573,6 +573,12 @@ export type InsertNutritionIntakeInput = {
 	verified: 0 | 1;
 	occurredAt: Date;
 	kitchenEventId?: string | null;
+	schemaVersion?: number;
+	nutrientsJson?: Record<string, number | null> | null;
+	coverageJson?: Record<string, number> | null;
+	idempotencyKey?: string | null;
+	operationId?: string | null;
+	replacesIntakeId?: string | null;
 };
 
 export async function insertNutritionIntake(
@@ -603,10 +609,232 @@ export async function insertNutritionIntake(
 			verified: input.verified,
 			occurredAt: input.occurredAt,
 			kitchenEventId: input.kitchenEventId ?? null,
+			schemaVersion: input.schemaVersion ?? 1,
+			nutrientsJson: input.nutrientsJson ?? null,
+			coverageJson: input.coverageJson ?? null,
+			idempotencyKey: input.idempotencyKey ?? null,
+			operationId: input.operationId ?? null,
+			replacesIntakeId: input.replacesIntakeId ?? null,
 		})
 		.returning();
 
 	return row ?? null;
+}
+
+export type PersonalIntakeSummary = {
+	id: string;
+	entryId: string;
+	servings: number;
+	energyKcal: number;
+	proteinG: number;
+	carbsG: number;
+	fatG: number;
+	occurredAt: Date;
+	idempotencyKey: string | null;
+	replacesIntakeId: string | null;
+};
+
+/**
+ * Active (non-voided) personal intake for one Manifest entry.
+ */
+export async function getActivePersonalIntakeForEntry(
+	db: D1Database,
+	userId: string,
+	organizationId: string,
+	entryId: string,
+): Promise<typeof schema.nutritionIntake.$inferSelect | null> {
+	const d1 = drizzle(db, { schema });
+	const [row] = await d1
+		.select()
+		.from(schema.nutritionIntake)
+		.where(
+			and(
+				eq(schema.nutritionIntake.userId, userId),
+				eq(schema.nutritionIntake.organizationId, organizationId),
+				eq(schema.nutritionIntake.entryId, entryId),
+				isNull(schema.nutritionIntake.voidedAt),
+			),
+		)
+		.limit(1);
+	return row ?? null;
+}
+
+/**
+ * Active personal intakes for many entries (caller-scoped only).
+ * Uses chunkedQuery when entry ID lists may exceed D1 bind limits.
+ */
+export async function getActivePersonalIntakesForEntries(
+	db: D1Database,
+	userId: string,
+	organizationId: string,
+	entryIds: string[],
+): Promise<Map<string, PersonalIntakeSummary>> {
+	const unique = [...new Set(entryIds.filter(Boolean))];
+	const result = new Map<string, PersonalIntakeSummary>();
+	if (unique.length === 0) return result;
+
+	const d1 = drizzle(db, { schema });
+
+	const rows = await chunkedQuery(unique, (chunk) =>
+		d1
+			.select({
+				id: schema.nutritionIntake.id,
+				entryId: schema.nutritionIntake.entryId,
+				servings: schema.nutritionIntake.servings,
+				energyKcal: schema.nutritionIntake.energyKcal,
+				proteinG: schema.nutritionIntake.proteinG,
+				carbsG: schema.nutritionIntake.carbsG,
+				fatG: schema.nutritionIntake.fatG,
+				occurredAt: schema.nutritionIntake.occurredAt,
+				idempotencyKey: schema.nutritionIntake.idempotencyKey,
+				replacesIntakeId: schema.nutritionIntake.replacesIntakeId,
+			})
+			.from(schema.nutritionIntake)
+			.where(
+				and(
+					eq(schema.nutritionIntake.userId, userId),
+					eq(schema.nutritionIntake.organizationId, organizationId),
+					inArray(schema.nutritionIntake.entryId, chunk),
+					isNull(schema.nutritionIntake.voidedAt),
+				),
+			),
+	);
+
+	for (const row of rows) {
+		if (!row.entryId) continue;
+		result.set(row.entryId, {
+			id: row.id,
+			entryId: row.entryId,
+			servings: row.servings,
+			energyKcal: row.energyKcal,
+			proteinG: row.proteinG,
+			carbsG: row.carbsG,
+			fatG: row.fatG,
+			occurredAt: row.occurredAt,
+			idempotencyKey: row.idempotencyKey,
+			replacesIntakeId: row.replacesIntakeId,
+		});
+	}
+	return result;
+}
+
+/**
+ * Soft-void the caller's active intake for an entry. Returns the voided row.
+ */
+export async function voidActivePersonalIntake(
+	db: D1Database,
+	input: {
+		userId: string;
+		organizationId: string;
+		entryId: string;
+		now?: Date;
+	},
+): Promise<typeof schema.nutritionIntake.$inferSelect | null> {
+	const existing = await getActivePersonalIntakeForEntry(
+		db,
+		input.userId,
+		input.organizationId,
+		input.entryId,
+	);
+	if (!existing) return null;
+
+	const d1 = drizzle(db, { schema });
+	const now = input.now ?? new Date();
+	await d1
+		.update(schema.nutritionIntake)
+		.set({ voidedAt: now, voidedByUserId: input.userId })
+		.where(
+			and(
+				eq(schema.nutritionIntake.id, existing.id),
+				eq(schema.nutritionIntake.userId, input.userId),
+				isNull(schema.nutritionIntake.voidedAt),
+			),
+		);
+	return { ...existing, voidedAt: now, voidedByUserId: input.userId };
+}
+
+/**
+ * Atomically void prior active row (if any) and insert a replacement.
+ * Returns the new row and prior id (for undo restore).
+ */
+export async function replaceActivePersonalIntake(
+	db: D1Database,
+	input: InsertNutritionIntakeInput & {
+		entryId: string;
+		idempotencyKey: string;
+	},
+): Promise<{
+	row: typeof schema.nutritionIntake.$inferSelect;
+	replacedId: string | null;
+}> {
+	const prior = await getActivePersonalIntakeForEntry(
+		db,
+		input.userId,
+		input.organizationId,
+		input.entryId,
+	);
+
+	const d1 = drizzle(db, { schema });
+	const now = input.occurredAt;
+	const id = crypto.randomUUID();
+	const replacedId = prior?.id ?? null;
+
+	// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
+	const stmts: any[] = [];
+	if (prior) {
+		stmts.push(
+			d1
+				.update(schema.nutritionIntake)
+				.set({ voidedAt: now, voidedByUserId: input.userId })
+				.where(
+					and(
+						eq(schema.nutritionIntake.id, prior.id),
+						isNull(schema.nutritionIntake.voidedAt),
+					),
+				),
+		);
+	}
+
+	stmts.push(
+		d1.insert(schema.nutritionIntake).values({
+			id,
+			organizationId: input.organizationId,
+			userId: input.userId,
+			planId: input.planId ?? null,
+			entryId: input.entryId,
+			mealId: input.mealId ?? null,
+			manifestDate: input.manifestDate,
+			slotType: input.slotType ?? null,
+			servings: input.servings,
+			energyKcal: input.energyKcal,
+			proteinG: input.proteinG,
+			carbsG: input.carbsG,
+			fatG: input.fatG,
+			coverage: input.coverage,
+			source: input.source,
+			confidence: input.confidence,
+			verified: input.verified,
+			occurredAt: now,
+			kitchenEventId: input.kitchenEventId ?? null,
+			schemaVersion: input.schemaVersion ?? 2,
+			nutrientsJson: input.nutrientsJson ?? null,
+			coverageJson: input.coverageJson ?? null,
+			idempotencyKey: input.idempotencyKey,
+			operationId: input.operationId ?? null,
+			replacesIntakeId: replacedId,
+		}),
+	);
+
+	// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
+	await d1.batch(stmts as [any, ...any[]]);
+
+	const [row] = await d1
+		.select()
+		.from(schema.nutritionIntake)
+		.where(eq(schema.nutritionIntake.id, id))
+		.limit(1);
+	if (!row) throw new Error("Failed to insert nutrition intake");
+	return { row, replacedId };
 }
 
 export type NutritionSummaryResult = {

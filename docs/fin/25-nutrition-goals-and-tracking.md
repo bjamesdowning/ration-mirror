@@ -22,13 +22,16 @@ Flags off: Manifest nutrition chrome is unchanged (no preference strip).
 
 ## Manifest Eat (plate-up)
 
-On Manifest, **Eat** / consume can open a **plate-up** step when Manifest nutrition is on:
+**Legacy (Cook/Log split off):** On Manifest, **Eat** / consume can open a **plate-up** step when Manifest nutrition is on — choose servings, optionally log nutrition, and deduct pantry stock as usual.
 
-- Choose how many **servings** you ate (portion of the planned meal).
-- Confirm whether to **log nutrition** for that plate-up (default on when the feature is available).
-- Ration deducts pantry stock as usual and records intake from the meal’s nutrition snapshot scaled to portions.
+**Cook / Log split (when enabled for your account):**
 
-You can still consume without logging intake when the UI offers that choice.
+- **Cook** — Shared household action: deducts Cargo once and marks the plan entry *Prepared*. Does **not** write personal nutrition.
+- **Log my serving** / **Edit serving** — Private to you. Opens plate-up for how many servings **you** ate; records intake from the meal’s nutrition snapshot scaled to portions.
+- **Explicit intake consent** — First personal log requires checking an intake-consent checkbox (or API `consent: true`). Consent is **not** implied by Cook, Prepared status, or saving goals.
+- **Remove my log** — Clears your personal intake for that entry without undoing Cook/Prepared.
+
+You can Cook without ever logging a personal serving.
 
 ## Day totals and calendar
 
@@ -48,5 +51,5 @@ Ask Ration and MCP can read a date-range summary and set or clear goals when fla
 ## Related
 
 - *Nutrition overview* — USDA vs estimate vs blank.
-- *Manifest (meal plan)* — Consume and calendar controls.
+- *Manifest (meal plan)* — Consume / Cook / Log my serving and calendar controls.
 - *Hub dashboard and settings* — Goals UI and widgets.

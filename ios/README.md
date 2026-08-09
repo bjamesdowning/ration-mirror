@@ -179,7 +179,7 @@ Ration/
     ├── Supply/     # Shopping list with filters + dock FAB
     ├── Scan/       # Camera capture → resize → POST /scan
     ├── Galley/     # Meals CRUD, AI generate/import, match mode
-    ├── Manifest/   # Edge week rocker + toolbar Today, plan-week AI, consume
+    ├── Manifest/   # Edge week rocker + toolbar Today, plan-week AI, Cook/Eat (flag-gated)
     ├── Settings/   # Account settings (profile, tier, appearance, privacy, sign out)
     │               # GroupSettingsView — org switch, members, invite, credits transfer
     │               # TagsSettingsView — edit name/category/color, merge, delete (with confirm)
@@ -252,7 +252,10 @@ handler also opens the picker when access is lost remotely.
 | `/meals`, `/meals/:id`, `/meals/match` | GET | Galley browse + match |
 | `/meals/:id/cook`, `/meals/:id/toggle-active` | POST | Cook + supply selection |
 | `/supply`, `/supply/items`, `/supply/sync`, `/supply/complete` | various | Supply list |
-| `/manifest`, `/manifest/consume` | GET/POST | Meal plan |
+| `/manifest`, `/manifest/consume` | GET/POST | Meal plan (legacy Eat/consume) |
+| `/manifest/cook` | POST | Shared Cook → Prepared (`nutrition-cook-log-split`) |
+| `/manifest/entries/:entryId/intake` | POST/DELETE | Private Eat log / clear (explicit first-use intake consent) |
+| `/nutrition/summary`, `/nutrition/goals` | GET/… | Nutrition summary + goals (flag-gated) |
 | `/scan`, `/scan/:requestId` | POST/GET | Visual scan AI |
 | `/settings` | GET/PATCH | User preferences |
 | `/orgs` | GET | List groups for org picker / recovery |
@@ -293,6 +296,12 @@ Settings PATCH accepts `hubProfile` and `hubLayout` for customizable Hub widgets
 display-only range label and day pills. **Today** lives in the Manifest navigation toolbar
 (only when away from today’s window). The calendar “Go to date” sheet was removed to prevent
 misclicks next to Next.
+
+**Nutrition Cook/Eat split (iOS 1.3.23, flag-gated):** When `nutrition-cook-log-split` is on,
+Manifest **Cook** deducts Cargo and marks *Prepared* (no personal nutrition). **Log my serving**
+opens `ManifestPlateUpSheet` for private intake; first use requires an **explicit** intake-consent
+checkbox (`consent: true` on POST) — not implied by Cook or goals. Settings → Nutrition goals
+remain a separate explicit consent path. Flags off → legacy Consume/Eat only.
 
 **Manifest week rocker races (iOS 1.2.33):** Quiet revalidate / foreground refresh no longer
 resets the viewed week to today (anchor reset is org-change only). Rocker taps apply the target

@@ -37,6 +37,24 @@ final class ManifestViewModel {
         case failed
     }
 
+    enum CookOutcome: Sendable {
+        case success(undoToken: String?)
+        case needsConfirmation(missing: [MissingIngredientDetail])
+        case failed
+    }
+
+    enum IntakeOutcome: Sendable {
+        case success(intake: ManifestPersonalIntake, undoToken: String?)
+        /// First-use intake consent has not been granted — caller should show the
+        /// consent gate and retry with `consent: true`.
+        case consentRequired
+        case nutritionUnavailable
+        case failed
+    }
+
+    /// Day-keyed nutrient totals for the visible range (nutrition-goals / nutrition-manifest).
+    private(set) var nutritionSummary: NutritionSummary?
+
     func applyInitialAnchorIfNeeded() {
         guard !hasInitializedAnchor else { return }
         rangeStart = ManifestDateHelpers.initialRangeStart(
@@ -129,6 +147,7 @@ final class ManifestViewModel {
                     domain: SnapshotDomain.manifest
                 )
             }
+            await loadNutritionSummary(api: api, online: online)
         } catch {
             guard rangeStart == requestedStart else { return }
             if SnapshotRefreshPolicy.isIgnorableRefreshError(error) { return }
@@ -249,6 +268,9 @@ final class ManifestViewModel {
                 // Re-check before disk write: another navigation may have won mid-await.
                 guard isCurrentNavigation(generation) else { return }
                 await snapshots.save(data, domain: SnapshotDomain.manifest, organizationId: organizationId)
+                if isCurrentNavigation(generation) {
+                    await loadNutritionSummary(api: api, online: online)
+                }
                 // A superseded in-flight save can finish after a newer week was cached —
                 // rewrite the live week so offline restore cannot land on the stale one.
                 if !isCurrentNavigation(generation),
@@ -352,6 +374,101 @@ final class ManifestViewModel {
         }
     }
 
+    /// Split Cook — org-shared Cargo/preparation mutation. Never writes personal nutrition.
+    func cook(
+        _ entry: ManifestEntry,
+        confirmInsufficient: Bool = false,
+        api: RationAPI,
+        snapshots: SnapshotStore,
+        online: Bool,
+        organizationId: String
+    ) async -> CookOutcome {
+        do {
+            let result = try await api.cookManifestEntries(
+                [entry.id],
+                confirmInsufficient: confirmInsufficient ? true : nil
+            )
+            if result.requiresConfirmation == true,
+               let missing = result.missingIngredients,
+               !missing.isEmpty,
+               !confirmInsufficient
+            {
+                return .needsConfirmation(missing: missing)
+            }
+            Haptics.success()
+            markEntryCookedLocally(entryId: entry.id)
+            let undoToken = result.undoToken
+            await reloadManifestSilently(
+                api: api,
+                snapshots: snapshots,
+                online: online,
+                organizationId: organizationId
+            )
+            return .success(undoToken: undoToken)
+        } catch {
+            errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+            return .failed
+        }
+    }
+
+    /// Eat — private personal serving log. Requires the entry to already be cooked.
+    func logServing(
+        _ entry: ManifestEntry,
+        servings: Double,
+        idempotencyKey: String,
+        consent: Bool = false,
+        api: RationAPI
+    ) async -> IntakeOutcome {
+        do {
+            let result = try await api.upsertManifestIntake(
+                entryId: entry.id,
+                servings: servings,
+                idempotencyKey: idempotencyKey,
+                consent: consent ? true : nil
+            )
+            Haptics.success()
+            setPersonalIntakeLocally(entryId: entry.id, intake: result.intake)
+            return .success(intake: result.intake, undoToken: result.undoToken)
+        } catch {
+            if let apiError = error as? APIError, apiError.isNutritionConsentRequired {
+                return .consentRequired
+            }
+            if let apiError = error as? APIError, apiError.isNutritionUnavailable {
+                errorMessage = apiError.errorDescription
+                return .nutritionUnavailable
+            }
+            errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+            return .failed
+        }
+    }
+
+    /// Remove my logged serving ("Remove my log") — does not affect Cargo or Cook state.
+    func clearServing(_ entry: ManifestEntry, api: RationAPI) async -> String? {
+        do {
+            let result = try await api.clearManifestIntake(entryId: entry.id)
+            Haptics.light()
+            setPersonalIntakeLocally(entryId: entry.id, intake: nil)
+            return result.undoToken
+        } catch {
+            errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+            return nil
+        }
+    }
+
+    /// Loads day-keyed nutrient totals for the currently visible range. Fails closed and
+    /// silently when nutrition goals/manifest flags are off — no banner, no retry noise.
+    func loadNutritionSummary(api: RationAPI, online: Bool) async {
+        guard online else { return }
+        let endDate = ManifestDateHelpers.addDays(rangeStart, days: max(calendarSpan - 1, 0))
+        do {
+            nutritionSummary = try await api.nutritionSummary(from: rangeStart, to: endDate)
+        } catch let apiError as APIError where apiError.isFeatureDisabled {
+            nutritionSummary = nil
+        } catch {
+            // Nutrient line is a supplementary affordance — never surface as a blocking error.
+        }
+    }
+
     func deleteEntry(
         _ entry: ManifestEntry,
         api: RationAPI,
@@ -386,39 +503,46 @@ final class ManifestViewModel {
             startDate: manifest.startDate,
             endDate: manifest.endDate,
             entries: updated,
-            supplyDayInclusion: manifest.supplyDayInclusion
+            supplyDayInclusion: manifest.supplyDayInclusion,
+            intakeConsentGranted: manifest.intakeConsentGranted
         )
     }
 
     private func markEntryConsumedLocally(entryId: String) {
-        guard let manifest else { return }
-        let now = Date()
-        let updated = manifest.entries.map { entry -> ManifestEntry in
-            guard entry.id == entryId else { return entry }
-            return ManifestEntry(
-                id: entry.id,
-                planId: entry.planId,
-                mealId: entry.mealId,
-                date: entry.date,
-                slotType: entry.slotType,
-                orderIndex: entry.orderIndex,
-                servingsOverride: entry.servingsOverride,
-                notes: entry.notes,
-                consumedAt: now,
-                createdAt: entry.createdAt,
-                mealName: entry.mealName,
-                mealServings: entry.mealServings,
-                mealType: entry.mealType,
-                mealPrepTime: entry.mealPrepTime,
-                mealCookTime: entry.mealCookTime
-            )
+        updateEntry(entryId) { entry in
+            entry.consumedAt = Date()
         }
+    }
+
+    /// Optimistic local patch after a successful Cook — dual-writes `cookedAt` +
+    /// legacy `consumedAt` to mirror the server (`cookManifestEntries`).
+    func markEntryCookedLocally(entryId: String) {
+        let now = Date()
+        updateEntry(entryId) { entry in
+            entry.cookedAt = now
+            entry.consumedAt = now
+        }
+    }
+
+    /// Optimistic local patch after an Eat (log serving) upsert.
+    func setPersonalIntakeLocally(entryId: String, intake: ManifestPersonalIntake?) {
+        updateEntry(entryId) { entry in
+            entry.personalIntake = intake
+        }
+    }
+
+    private func updateEntry(_ entryId: String, mutate: (inout ManifestEntry) -> Void) {
+        guard let manifest else { return }
+        var updated = manifest.entries
+        guard let index = updated.firstIndex(where: { $0.id == entryId }) else { return }
+        mutate(&updated[index])
         self.manifest = ManifestResponse(
             plan: manifest.plan,
             startDate: manifest.startDate,
             endDate: manifest.endDate,
             entries: updated,
-            supplyDayInclusion: manifest.supplyDayInclusion
+            supplyDayInclusion: manifest.supplyDayInclusion,
+            intakeConsentGranted: manifest.intakeConsentGranted
         )
     }
 

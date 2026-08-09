@@ -5,6 +5,10 @@ import type { SlotType } from "~/lib/schemas/manifest";
 import { SLOT_LABELS } from "~/lib/schemas/manifest";
 import { MealSlotCard } from "./MealSlotCard";
 
+function isPrepared(entry: MealPlanEntryWithMeal): boolean {
+	return !!(entry.cookedAt ?? entry.consumedAt);
+}
+
 interface MealSlotProps {
 	slot: SlotType;
 	date: string;
@@ -12,6 +16,8 @@ interface MealSlotProps {
 	planId: string;
 	onAdd: (slot: SlotType, date: string) => void;
 	onConsume?: (entryId: string) => void;
+	onEat?: (entryId: string) => void;
+	onEditServing?: (entryId: string) => void;
 	onCopy?: (entry: MealPlanEntryWithMeal) => void;
 	isConsuming?: boolean;
 	readOnly?: boolean;
@@ -20,6 +26,8 @@ interface MealSlotProps {
 	triggeredAllergensByMealId?: Record<string, AllergenSlug[]>;
 	/** Pre-computed map of mealId → is-ready boolean. */
 	readyMealIds?: Record<string, boolean>;
+	mode?: "legacy" | "split";
+	consumeLabel?: string;
 }
 
 export function MealSlot({
@@ -29,20 +37,26 @@ export function MealSlot({
 	planId,
 	onAdd,
 	onConsume,
+	onEat,
+	onEditServing,
 	onCopy,
 	isConsuming = false,
 	readOnly = false,
 	compact = false,
 	triggeredAllergensByMealId = {},
 	readyMealIds = {},
+	mode = "legacy",
+	consumeLabel,
 }: MealSlotProps) {
 	const slotEntries = entries
 		.filter((e) => e.slotType === slot)
 		.sort((a, b) => a.orderIndex - b.orderIndex);
 
-	const consumedCount = slotEntries.filter((e) => !!e.consumedAt).length;
+	const preparedCount = slotEntries.filter((e) =>
+		mode === "split" ? isPrepared(e) : !!e.consumedAt,
+	).length;
 	const totalCount = slotEntries.length;
-	const allConsumed = totalCount > 0 && consumedCount === totalCount;
+	const allPrepared = totalCount > 0 && preparedCount === totalCount;
 
 	if (compact) {
 		return (
@@ -67,11 +81,15 @@ export function MealSlot({
 								planId={planId}
 								readOnly={readOnly}
 								onConsume={onConsume}
+								onEat={onEat}
+								onEditServing={onEditServing}
 								onCopy={onCopy}
 								isConsuming={isConsuming}
 								triggeredAllergens={triggeredAllergensByMealId[entry.mealId]}
 								isReady={readyMealIds[entry.mealId]}
 								mealTags={entry.mealTags}
+								mode={mode}
+								consumeLabel={consumeLabel}
 							/>
 						))}
 						{!readOnly && (
@@ -91,7 +109,6 @@ export function MealSlot({
 
 	return (
 		<div className="space-y-2">
-			{/* Slot header with consumed progress pill */}
 			<div className="flex items-center justify-between">
 				<h3 className="text-xs font-semibold text-muted uppercase tracking-widest font-mono">
 					{SLOT_LABELS[slot]}
@@ -99,17 +116,16 @@ export function MealSlot({
 				{totalCount > 0 && (
 					<span
 						className={`text-[10px] font-mono font-semibold px-1.5 py-0.5 rounded-full transition-colors ${
-							allConsumed
+							allPrepared
 								? "bg-hyper-green/15 text-hyper-green"
 								: "bg-platinum text-muted"
 						}`}
 					>
-						{consumedCount}/{totalCount}
+						{preparedCount}/{totalCount}
 					</span>
 				)}
 			</div>
 
-			{/* Assigned meals */}
 			<div className="space-y-2">
 				{slotEntries.map((entry) => (
 					<MealSlotCard
@@ -118,16 +134,19 @@ export function MealSlot({
 						planId={planId}
 						readOnly={readOnly}
 						onConsume={onConsume}
+						onEat={onEat}
+						onEditServing={onEditServing}
 						onCopy={onCopy}
 						isConsuming={isConsuming}
 						triggeredAllergens={triggeredAllergensByMealId[entry.mealId]}
 						isReady={readyMealIds[entry.mealId]}
 						mealTags={entry.mealTags}
+						mode={mode}
+						consumeLabel={consumeLabel}
 					/>
 				))}
 			</div>
 
-			{/* Add button */}
 			{!readOnly && (
 				<button
 					type="button"

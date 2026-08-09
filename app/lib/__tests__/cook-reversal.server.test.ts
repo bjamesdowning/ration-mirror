@@ -119,4 +119,74 @@ describe("applyUndoRecord", () => {
 		);
 		expect(batch).toHaveBeenCalled();
 	});
+
+	it("clears cookedAt/consumedAt for manifest_cook without touching intake", async () => {
+		planSelect.mockResolvedValue([{ id: "plan-1" }]);
+		const updateSet = vi.fn().mockReturnValue({
+			where: vi.fn().mockResolvedValue(undefined),
+		});
+		vi.doMock("drizzle-orm/d1", () => ({
+			drizzle: vi.fn(() => ({
+				select: vi.fn(() => ({
+					from: vi.fn().mockReturnThis(),
+					where: vi.fn().mockReturnThis(),
+					limit: planSelect,
+				})),
+				update: vi.fn(() => ({ set: updateSet })),
+				delete: deleteFn,
+				batch,
+			})),
+		}));
+
+		const { applyUndoRecord } = await import("../cook-reversal.server");
+		await applyUndoRecord({} as D1Database, "org-1", {
+			kind: "manifest_cook",
+			userId: "user-1",
+			planId: "plan-1",
+			manifestEntryIds: ["entry-1"],
+			deductions: [{ cargoId: "c1", quantity: 1 }],
+			eventIds: ["evt-cook"],
+		});
+
+		expect(deleteFn).not.toHaveBeenCalled();
+		expect(updateSet).toHaveBeenCalledWith({
+			cookedAt: null,
+			cookedByUserId: null,
+			consumedAt: null,
+		});
+		expect(buildKitchenEventDeleteStmts).toHaveBeenCalled();
+	});
+
+	it("voids intake and restores prior row for manifest_intake without cargo", async () => {
+		const updateSet = vi.fn().mockReturnValue({
+			where: vi.fn().mockResolvedValue(undefined),
+		});
+		vi.doMock("drizzle-orm/d1", () => ({
+			drizzle: vi.fn(() => ({
+				select: vi.fn(() => ({
+					from: vi.fn().mockReturnThis(),
+					where: vi.fn().mockReturnThis(),
+					limit: planSelect,
+				})),
+				update: vi.fn(() => ({ set: updateSet })),
+				delete: deleteFn,
+				batch,
+			})),
+		}));
+
+		buildCargoDeductionStatements.mockClear();
+		const { applyUndoRecord } = await import("../cook-reversal.server");
+		await applyUndoRecord({} as D1Database, "org-1", {
+			kind: "manifest_intake",
+			userId: "user-1",
+			deductions: [],
+			intakeIds: ["new-intake"],
+			restoreIntakeId: "prior-intake",
+		});
+
+		expect(buildCargoDeductionStatements).not.toHaveBeenCalled();
+		expect(buildKitchenEventDeleteStmts).not.toHaveBeenCalled();
+		expect(updateSet).toHaveBeenCalled();
+		expect(batch).toHaveBeenCalled();
+	});
 });

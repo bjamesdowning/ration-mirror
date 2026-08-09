@@ -20,6 +20,8 @@ interface WeekViewProps {
 	entries: MealPlanEntryWithMeal[];
 	planId: string;
 	onAdd: (slot: SlotType, date: string) => void;
+	/** legacy: existing Eat/consume flow. split: Cook/Log-split (nutrition-cook-log-split). */
+	mode?: "legacy" | "split";
 	onConsume?: (entryId: string) => void;
 	onCopy?: (entry: MealPlanEntryWithMeal) => void;
 	onCopyDay?: (date: string) => void;
@@ -39,6 +41,12 @@ interface WeekViewProps {
 	goalTargets?: UserGoalTargets | null;
 	/** Per-date consumed nutrients when goals chrome is on. */
 	dayConsumedNutrients?: Record<string, DayNutrientTotals>;
+	/** split mode — label for the Cook button (e.g. "Cook"). */
+	consumeLabel?: string;
+	/** split mode — opens the private "Log my serving" dialog. */
+	onEat?: (entryId: string) => void;
+	/** split mode — opens the private dialog pre-filled with the existing log. */
+	onEditServing?: (entryId: string) => void;
 }
 
 export function WeekView({
@@ -46,6 +54,7 @@ export function WeekView({
 	entries,
 	planId,
 	onAdd,
+	mode = "legacy",
 	onConsume,
 	onCopy,
 	onCopyDay,
@@ -63,7 +72,11 @@ export function WeekView({
 	goalsChrome = false,
 	goalTargets = null,
 	dayConsumedNutrients,
+	consumeLabel,
+	onEat,
+	onEditServing,
 }: WeekViewProps) {
+	const isSplit = mode === "split";
 	const slots = showSnackSlot
 		? SLOT_TYPES
 		: SLOT_TYPES.filter((s) => s !== "snack");
@@ -88,7 +101,9 @@ export function WeekView({
 
 				const dayEntries = entries.filter((e) => e.date === date);
 				const totalCount = dayEntries.length;
-				const consumedCount = dayEntries.filter((e) => !!e.consumedAt).length;
+				const consumedCount = dayEntries.filter((e) =>
+					isSplit ? !!(e.cookedAt ?? e.consumedAt) : !!e.consumedAt,
+				).length;
 				const allConsumed = totalCount > 0 && consumedCount === totalCount;
 
 				const isSelected = selectedDate === date;
@@ -131,7 +146,11 @@ export function WeekView({
 								{/* Meal count / completion indicator */}
 								{totalCount > 0 && (
 									<p className="text-[9px] font-mono mt-0.5 leading-none">
-										{allConsumed ? "✓ done" : `${consumedCount}/${totalCount}`}
+										{allConsumed
+											? isSplit
+												? "✓ prepared"
+												: "✓ done"
+											: `${consumedCount}/${totalCount}`}
 									</p>
 								)}
 								{progressStrip ? (
@@ -209,6 +228,7 @@ export function WeekView({
 									entries={dayEntries}
 									planId={planId}
 									onAdd={onAdd}
+									mode={mode}
 									onConsume={onConsume}
 									onCopy={onCopy}
 									isConsuming={isConsuming}
@@ -216,6 +236,9 @@ export function WeekView({
 									compact
 									triggeredAllergensByMealId={triggeredAllergensByMealId}
 									readyMealIds={readyMealIds}
+									consumeLabel={consumeLabel}
+									onEat={onEat}
+									onEditServing={onEditServing}
 								/>
 							))}
 						</div>

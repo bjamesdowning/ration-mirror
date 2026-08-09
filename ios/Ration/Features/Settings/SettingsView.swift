@@ -7,6 +7,7 @@ struct SettingsView: View {
     @State private var model = SettingsSessionViewModel()
     @State private var showingPaywall = false
     @State private var showingPrivacy = false
+    @State private var showingNutritionGoals = false
 
     var body: some View {
         NavigationStack {
@@ -31,6 +32,7 @@ struct SettingsView: View {
                 PaywallView(context: .settings())
             }
             .sheet(isPresented: $showingPrivacy) { PrivacySettingsView() }
+            .sheet(isPresented: $showingNutritionGoals) { NutritionGoalsView() }
         }
         .task { await model.load(api: env.api) }
     }
@@ -112,6 +114,12 @@ struct SettingsView: View {
                 Button("Terms of Service") { openURL(AppConfig.termsURL) }
                 if let consent = model.settings?.aiConsentAt, !consent.isEmpty {
                     LabeledContent("AI consent", value: "Granted")
+                }
+            }
+
+            if env.session.clientFlags.isNutritionGoalsEnabled {
+                Section("Nutrition") {
+                    Button("Nutrition Goals") { showingNutritionGoals = true }
                 }
             }
 

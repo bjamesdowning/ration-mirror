@@ -476,11 +476,68 @@ export function buildMobileOpenApiDocument(baseUrl: string) {
 			},
 			"/api/mobile/v1/manifest/consume": {
 				post: {
-					summary: "Mark manifest entries as consumed",
+					summary: "Mark manifest entries as consumed (legacy combined)",
 					description:
-						"Optional portions[] and logNutrition when nutrition-manifest is enabled (additive; omit for legacy clients).",
+						"Optional portions[] and logNutrition when nutrition-manifest is enabled (additive; omit for legacy clients). Prefer /manifest/cook + entry intake when nutrition-cook-log-split is on.",
 					security: [{ bearerAuth: [] }],
 					responses: { "200": { description: "Consume result" } },
+				},
+			},
+			"/api/mobile/v1/manifest/cook": {
+				post: {
+					summary: "Cook (prepare) manifest entries — shared Cargo deduction",
+					description:
+						"Requires nutrition-cook-log-split. Dual-writes cookedAt and legacy consumedAt. Never writes personal nutrition. Idempotent for already-prepared entry IDs.",
+					security: [{ bearerAuth: [] }],
+					responses: {
+						"200": {
+							description:
+								"Cook result with undoToken; requiresConfirmation when cargo short",
+						},
+						"403": { description: "FEATURE_DISABLED" },
+					},
+				},
+			},
+			"/api/mobile/v1/manifest/entries/{entryId}/intake": {
+				post: {
+					summary: "Log or edit personal serving (Eat)",
+					description:
+						"Requires nutrition-cook-log-split and nutrition-manifest. Entry must be prepared. Body: servings (0.5–100), idempotencyKey (uuid), optional consent:true for first-use intake consent. Never mutates Cargo.",
+					security: [{ bearerAuth: [] }],
+					parameters: [
+						{
+							name: "entryId",
+							in: "path",
+							required: true,
+							schema: { type: "string", format: "uuid" },
+						},
+					],
+					responses: {
+						"200": { description: "Personal intake summary + undoToken" },
+						"403": {
+							description: "FEATURE_DISABLED or nutrition_consent_required",
+						},
+						"409": { description: "entry_not_prepared" },
+						"422": { description: "nutrition_unavailable" },
+					},
+				},
+				delete: {
+					summary: "Remove my personal serving log",
+					description:
+						"Soft-voids the caller's active intake for the entry. Does not clear Prepared or restore Cargo.",
+					security: [{ bearerAuth: [] }],
+					parameters: [
+						{
+							name: "entryId",
+							in: "path",
+							required: true,
+							schema: { type: "string", format: "uuid" },
+						},
+					],
+					responses: {
+						"200": { description: "cleared + optional undoToken" },
+						"403": { description: "FEATURE_DISABLED" },
+					},
 				},
 			},
 			"/api/mobile/v1/nutrition/summary": {
@@ -521,7 +578,8 @@ export function buildMobileOpenApiDocument(baseUrl: string) {
 				},
 				post: {
 					summary: "Upsert versioned nutrition goal",
-					description: "Requires nutrition-goals and consentAt (GDPR Art. 9).",
+					description:
+						"Requires nutrition-goals and consent:true (or legacy consentAt). GDPR Art. 9.",
 					security: [{ bearerAuth: [] }],
 					responses: {
 						"200": { description: "Created/updated goal version" },

@@ -24,7 +24,7 @@ Symbol-first UI patterns for Ration native. Piloted on Supply (v1.4.4), rolled o
 | `TelemetryTagChip` | `ListRowViews.swift` | Color-aware tag chips via `TagPalette` (hex text + ~12.5% tint; Hyper-Green fallback) |
 | `CargoRowView` / `MealRowView` | `ListRowViews.swift` | Unified Telemetry Strip list rows |
 | `ListSwipeActions` | `ListSwipeActions.swift` | Shared inventory swipe modifiers (Cargo, Galley) |
-| `ManifestEntryRow` | `ListRowViews.swift` | Manifest day entries (slot glyph + consume) |
+| `ManifestEntryRow` | `ListRowViews.swift` | Manifest day entries (slot glyph + Cook/Eat actions) |
 
 | `RationAdaptiveMaterial` | `RationAdaptiveMaterial.swift` | Frosted surfaces with Reduce Transparency fallback |
 
@@ -53,6 +53,7 @@ Symbol-first UI patterns for Ration native. Piloted on Supply (v1.4.4), rolled o
 - **Cargo / Galley / Manifest** — Single `plus.circle.fill` icon FAB with action menu.
 - **Hub** — Icon scan FAB; stats cells are icon + number first.
 - **Manifest rows** — Slot glyph circle + meal name (no inline slot text).
+- **Manifest Cook / Prepared / Eat** (when `nutrition-cook-log-split` is on) — **Cook** is the shared Cargo/preparation action (flame or equivalent); *Prepared* is status chrome only (not a second primary CTA). **Log my serving** / Eat is the private intake action (fork/plate-up sheet) and must stay visually distinct from Cook. Do not imply nutrition logging from Cook alone.
 
 ## List swipe conventions
 
@@ -72,12 +73,12 @@ Inventory-style lists share leading Supply/Edit and a trailing soft+hard pattern
 
 **Where applied:** Cargo (inventory + search), Galley (meals + match mode).
 
-**Domain actions stay inline** (not swipes): Manifest Consume (`fork.knife.circle.fill`), Supply Check (leading swipe is the primary list action for shopping — see Supply below). Galley Cook is **not** inline on list rows — use trailing swipe or meal detail FAB.
+**Domain actions stay inline** (not swipes): Manifest Consume / Cook / Log my serving (`fork.knife.circle.fill` or split CTAs when nutrition flags are on), Supply Check (leading swipe is the primary list action for shopping — see Supply below). Galley Cook is **not** inline on list rows — use trailing swipe or meal detail FAB.
 
 **Other list deviations (documented, unchanged):**
 
 - **Supply** — Leading Check when unpurchased; trailing Snooze + Delete.
-- **Manifest / Plan week** — Trailing Delete only (`allowsFullSwipe: false`); consume is inline on the row.
+- **Manifest / Plan week** — Trailing Delete only (`allowsFullSwipe: false`); Cook/Eat (or legacy consume) is inline on the row.
 - **Hub edit** — Trailing reorder (Up/Down), not inventory CRUD.
 
 **Add flows** — Tab dock `IconFABMenuCore` menus; not swipe gestures.

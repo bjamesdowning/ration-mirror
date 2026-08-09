@@ -3,7 +3,11 @@ import type { CargoDeduction } from "./meals.server";
 
 export const UNDO_TOKEN_TTL_SECONDS = 5;
 
-export type UndoKind = "cook" | "manifest_consume";
+export type UndoKind =
+	| "cook"
+	| "manifest_consume"
+	| "manifest_cook"
+	| "manifest_intake";
 
 export interface UndoRecord {
 	userId: string;
@@ -14,8 +18,16 @@ export interface UndoRecord {
 	planId?: string;
 	/** Flight Recorder event ids to delete on undo. */
 	eventIds?: string[];
-	/** Private intake ids created by a legacy combined consume (explicit undo). */
+	/**
+	 * Private intake ids:
+	 * - legacy `manifest_consume`: delete these rows
+	 * - `manifest_intake`: void these rows (the newly written active intake)
+	 */
 	intakeIds?: string[];
+	/**
+	 * For `manifest_intake` edit undo: un-void this prior active row.
+	 */
+	restoreIntakeId?: string | null;
 }
 
 function undoKey(token: string): string {

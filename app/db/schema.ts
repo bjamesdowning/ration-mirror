@@ -1195,6 +1195,10 @@ export const nutritionIntake = sqliteTable(
 		uniqueIndex("nutrition_intake_user_idempotency_uidx")
 			.on(table.userId, table.idempotencyKey)
 			.where(sql`${table.idempotencyKey} IS NOT NULL`),
+		/** One active personal intake per user/org/entry (editable Eat). */
+		uniqueIndex("nutrition_intake_user_org_entry_active_uidx")
+			.on(table.userId, table.organizationId, table.entryId)
+			.where(sql`${table.entryId} IS NOT NULL AND ${table.voidedAt} IS NULL`),
 	],
 );
 

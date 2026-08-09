@@ -253,6 +253,73 @@ describe("NutritionGoalUpsertSchema", () => {
 		expect(modern.consent).toBe(true);
 		expect(modern.carbsG).toBeNull();
 	});
+
+	it("accepts zero kcal as an explicit energy target", () => {
+		const parsed = NutritionGoalUpsertSchema.parse({
+			dailyEnergyKcal: 0,
+			effectiveFrom: "2026-08-09",
+			consent: true,
+		});
+		expect(parsed.dailyEnergyKcal).toBe(0);
+	});
+
+	it("treats empty string energy as unset (undefined → null)", () => {
+		const parsed = NutritionGoalUpsertSchema.parse({
+			dailyEnergyKcal: "",
+			proteinG: 100,
+			effectiveFrom: "2026-08-09",
+			consent: true,
+		});
+		expect(parsed.dailyEnergyKcal).toBeNull();
+		expect(parsed.proteinG).toBe(100);
+	});
+
+	it("rejects all-null nutrient upsert", () => {
+		expect(() =>
+			NutritionGoalUpsertSchema.parse({
+				dailyEnergyKcal: null,
+				proteinG: null,
+				carbsG: null,
+				fatG: null,
+				fiberG: null,
+				effectiveFrom: "2026-08-09",
+				consent: true,
+			}),
+		).toThrow();
+	});
+});
+
+describe("Cook and Eat request schemas", () => {
+	it("accepts CookEntriesRequestSchema", async () => {
+		const { CookEntriesRequestSchema } = await import("../manifest");
+		const parsed = CookEntriesRequestSchema.parse({
+			entryIds: ["11111111-1111-4111-8111-111111111111"],
+			confirmInsufficient: true,
+		});
+		expect(parsed.entryIds).toHaveLength(1);
+		expect(parsed.confirmInsufficient).toBe(true);
+	});
+
+	it("accepts ManifestPersonalIntakeUpsertSchema with 0.5 servings", async () => {
+		const { ManifestPersonalIntakeUpsertSchema } = await import("../manifest");
+		const parsed = ManifestPersonalIntakeUpsertSchema.parse({
+			servings: 0.5,
+			idempotencyKey: "22222222-2222-4222-8222-222222222222",
+			consent: true,
+		});
+		expect(parsed.servings).toBe(0.5);
+		expect(parsed.consent).toBe(true);
+	});
+
+	it("rejects servings below 0.5", async () => {
+		const { ManifestPersonalIntakeUpsertSchema } = await import("../manifest");
+		expect(() =>
+			ManifestPersonalIntakeUpsertSchema.parse({
+				servings: 0.25,
+				idempotencyKey: "22222222-2222-4222-8222-222222222222",
+			}),
+		).toThrow();
+	});
 });
 
 describe("ConsumeEntriesRequestSchema portions", () => {

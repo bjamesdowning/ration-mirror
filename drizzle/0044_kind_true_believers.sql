@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX `nutrition_intake_user_org_entry_active_uidx` ON `nutrition_intake` (`user_id`,`organization_id`,`entry_id`) WHERE "nutrition_intake"."entry_id" IS NOT NULL AND "nutrition_intake"."voided_at" IS NULL;

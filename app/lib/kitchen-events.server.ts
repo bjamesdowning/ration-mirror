@@ -26,10 +26,13 @@ import {
 	type KitchenEventType,
 	kitchenEventTypeSchema,
 	type ManifestConsumedPayload,
+	type ManifestCookedPayload,
 	manifestConsumedPayloadSchema,
+	manifestCookedPayloadSchema,
 	type SupplyDockedPayload,
 	supplyDockedPayloadSchema,
 } from "~/lib/schemas/kitchen-events";
+import { redactPersonalNutritionFromPayload } from "./kitchen-event-privacy";
 import {
 	chunkArray,
 	D1_MAX_BOUND_PARAMS,
@@ -50,6 +53,7 @@ export const KITCHEN_EVENT_EXPIRY_DETECT_CAP = 500;
 type PayloadByType = {
 	galley_cooked: GalleyCookedPayload;
 	manifest_consumed: ManifestConsumedPayload;
+	manifest_cooked: ManifestCookedPayload;
 	supply_docked: SupplyDockedPayload;
 	cargo_expired: CargoExpiredPayload;
 	cargo_jettisoned: CargoJettisonedPayload;
@@ -70,6 +74,10 @@ export const KITCHEN_EVENT_REGISTRY: {
 	manifest_consumed: {
 		description: "Meal plan entry marked consumed from the Manifest",
 		zodPayloadSchema: manifestConsumedPayloadSchema,
+	},
+	manifest_cooked: {
+		description: "Meal plan entry prepared (shared Cargo deduction)",
+		zodPayloadSchema: manifestCookedPayloadSchema,
 	},
 	supply_docked: {
 		description: "Purchased supply item docked into cargo",
@@ -317,7 +325,9 @@ export async function getKitchenEvents(
 			mealId: r.mealId,
 			cargoId: r.cargoId,
 			subjectName: r.subjectName,
-			payload: (r.payload ?? {}) as Record<string, unknown>,
+			payload: redactPersonalNutritionFromPayload(
+				(r.payload ?? {}) as Record<string, unknown>,
+			),
 		})),
 		nextCursor,
 	};
@@ -393,7 +403,11 @@ export async function getKitchenStats(
 		.where(
 			and(
 				eq(kitchenEvent.organizationId, organizationId),
-				inArray(kitchenEvent.eventType, ["galley_cooked", "manifest_consumed"]),
+				inArray(kitchenEvent.eventType, [
+					"galley_cooked",
+					"manifest_consumed",
+					"manifest_cooked",
+				]),
 				gte(kitchenEvent.occurredAt, from),
 				lte(kitchenEvent.occurredAt, now),
 			),
@@ -403,7 +417,9 @@ export async function getKitchenStats(
 		.limit(10);
 
 	const cooked =
-		(countsByType.galley_cooked ?? 0) + (countsByType.manifest_consumed ?? 0);
+		(countsByType.galley_cooked ?? 0) +
+		(countsByType.manifest_consumed ?? 0) +
+		(countsByType.manifest_cooked ?? 0);
 
 	return {
 		window,
@@ -612,10 +628,6 @@ export function buildManifestConsumedEvent(input: {
 	source?: KitchenEventSource;
 	occurredAt?: Date;
 	id?: string;
-	energyKcal?: number;
-	portionServings?: number;
-	manifestDate?: string;
-	verified?: boolean;
 }): KitchenEventInput<"manifest_consumed"> {
 	return {
 		id: input.id,
@@ -633,14 +645,43 @@ export function buildManifestConsumedEvent(input: {
 			deductions: input.deductions,
 			partialCook: input.partialCook,
 			source: input.source,
-			...(input.energyKcal != null ? { energyKcal: input.energyKcal } : {}),
-			...(input.portionServings != null
-				? { portionServings: input.portionServings }
-				: {}),
-			...(input.manifestDate != null
-				? { manifestDate: input.manifestDate }
-				: {}),
-			...(input.verified != null ? { verified: input.verified } : {}),
+		},
+		occurredAt: input.occurredAt,
+	};
+}
+
+export function buildManifestCookedEvent(input: {
+	organizationId: string;
+	userId?: string | null;
+	mealId: string;
+	mealName: string;
+	planId: string;
+	entryIds: string[];
+	date?: string;
+	slotType?: string;
+	servings: number;
+	deductions: Array<{ cargoId: string; quantity: number }>;
+	partialCook?: boolean;
+	source?: KitchenEventSource;
+	occurredAt?: Date;
+	id?: string;
+}): KitchenEventInput<"manifest_cooked"> {
+	return {
+		id: input.id,
+		organizationId: input.organizationId,
+		userId: input.userId,
+		eventType: "manifest_cooked",
+		subjectName: input.mealName,
+		mealId: input.mealId,
+		payload: {
+			planId: input.planId,
+			entryIds: input.entryIds,
+			date: input.date,
+			slotType: input.slotType,
+			servings: input.servings,
+			deductions: input.deductions,
+			partialCook: input.partialCook,
+			source: input.source,
 		},
 		occurredAt: input.occurredAt,
 	};

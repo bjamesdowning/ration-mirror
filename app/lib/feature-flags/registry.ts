@@ -88,6 +88,18 @@ export const FLAG_REGISTRY: Record<string, FlagRegistryEntry> = {
 		clientVisible: true,
 		clientKey: "nutritionGoals",
 	},
+	"nutrition-cook-log-split": {
+		defaultEnabled: false,
+		description:
+			"Separate Manifest Cook (shared) from Log my serving (private intake)",
+		clientVisible: true,
+		clientKey: "nutritionCookLogSplit",
+	},
+	"nutrition-async-recompute": {
+		defaultEnabled: false,
+		description:
+			"Async queue-backed meal nutrition recompute (stub until queue wired)",
+	},
 };
 
 /** Registry keys — narrows as entries are added to FLAG_REGISTRY. */

@@ -14,6 +14,8 @@ export interface UndoRecord {
 	planId?: string;
 	/** Flight Recorder event ids to delete on undo. */
 	eventIds?: string[];
+	/** Private intake ids created by a legacy combined consume (explicit undo). */
+	intakeIds?: string[];
 }
 
 function undoKey(token: string): string {

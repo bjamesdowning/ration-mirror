@@ -38,6 +38,8 @@ export const AGENT_API_SCOPES = [
 	"mcp:manifest:write",
 	"mcp:supply:write",
 	"mcp:preferences:write",
+	"mcp:nutrition:read",
+	"mcp:nutrition:write",
 ] as const;
 
 export const MCP_TOOL_GROUPS = [

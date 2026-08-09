@@ -69,6 +69,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 				manifestEntryIds: result.entryIds,
 				planId: result.planId,
 				eventIds: result.eventIds,
+				intakeIds: result.intakeIds,
 			});
 		}
 

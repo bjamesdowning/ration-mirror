@@ -21,6 +21,10 @@ vi.mock("../readiness-cache.server", () => ({
 
 const batch = vi.fn().mockResolvedValue(undefined);
 const planSelect = vi.fn();
+const deleteWhere = vi.fn().mockResolvedValue(undefined);
+const deleteFn = vi.fn(() => ({
+	where: deleteWhere,
+}));
 
 vi.mock("drizzle-orm/d1", () => ({
 	drizzle: vi.fn(() => ({
@@ -34,6 +38,7 @@ vi.mock("drizzle-orm/d1", () => ({
 				where: vi.fn().mockResolvedValue(undefined),
 			}),
 		})),
+		delete: deleteFn,
 		batch,
 	})),
 }));
@@ -42,6 +47,8 @@ describe("applyUndoRecord", () => {
 	beforeEach(() => {
 		batch.mockClear();
 		planSelect.mockReset();
+		deleteFn.mockClear();
+		deleteWhere.mockClear();
 		buildCargoDeductionStatements.mockReset();
 		buildKitchenEventDeleteStmts.mockReset();
 		bumpReadinessCacheVersions.mockReset();
@@ -58,6 +65,7 @@ describe("applyUndoRecord", () => {
 			"org-1",
 			{
 				kind: "cook",
+				userId: "user-1",
 				deductions: [{ cargoId: "c1", quantity: 2 }],
 				eventIds: ["evt-1", "evt-2"],
 			},
@@ -69,6 +77,7 @@ describe("applyUndoRecord", () => {
 			"org-1",
 			["evt-1", "evt-2"],
 		);
+		expect(deleteFn).not.toHaveBeenCalled();
 		expect(batch).toHaveBeenCalledTimes(1);
 		const stmts = batch.mock.calls[0]?.[0] as unknown[];
 		expect(stmts).toEqual(
@@ -81,10 +90,33 @@ describe("applyUndoRecord", () => {
 		const { applyUndoRecord } = await import("../cook-reversal.server");
 		await applyUndoRecord({} as D1Database, "org-1", {
 			kind: "cook",
+			userId: "user-1",
 			deductions: [{ cargoId: "c1", quantity: 1 }],
 		});
 
 		expect(buildKitchenEventDeleteStmts).not.toHaveBeenCalled();
 		expect(batch).toHaveBeenCalledTimes(1);
+	});
+
+	it("deletes linked nutrition intake for legacy manifest_consume undo", async () => {
+		planSelect.mockResolvedValue([{ id: "plan-1" }]);
+		const { applyUndoRecord } = await import("../cook-reversal.server");
+		await applyUndoRecord({} as D1Database, "org-1", {
+			kind: "manifest_consume",
+			userId: "user-1",
+			planId: "plan-1",
+			manifestEntryIds: ["entry-1"],
+			deductions: [{ cargoId: "c1", quantity: 1 }],
+			eventIds: ["evt-1"],
+			intakeIds: ["intake-1"],
+		});
+
+		expect(deleteFn).toHaveBeenCalled();
+		expect(buildKitchenEventDeleteStmts).toHaveBeenCalledWith(
+			expect.anything(),
+			"org-1",
+			["evt-1"],
+		);
+		expect(batch).toHaveBeenCalled();
 	});
 });

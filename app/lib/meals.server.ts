@@ -41,6 +41,8 @@ import {
 	type MissingIngredientDetail,
 	resolveCargoBucketsForIngredient,
 } from "./matching.server";
+import { NUTRITION_MEAL_RECOMPUTE_CONCURRENCY } from "./nutrition/constants";
+import { mapWithConcurrency } from "./nutrition/map-concurrency";
 import {
 	buildMinimalFlagContext,
 	recomputeAndStoreMealNutrition,
@@ -882,8 +884,10 @@ export async function createMeals(
 			() => d1.batch(batch as [any, ...any[]]),
 			{ organizationRef: organizationId },
 		);
-		await Promise.all(
-			mealIds.map((id) =>
+		await mapWithConcurrency(
+			mealIds,
+			NUTRITION_MEAL_RECOMPUTE_CONCURRENCY,
+			(id) =>
 				recomputeAndStoreMealNutrition(
 					env,
 					db,
@@ -891,7 +895,6 @@ export async function createMeals(
 					organizationId,
 					buildMinimalFlagContext(env, options?.userId),
 				),
-			),
 		);
 	} else {
 		// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex

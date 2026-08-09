@@ -1,8 +1,16 @@
 /** Minimum matched-mass ratio before meal nutrition is considered "complete". */
 export const NUTRITION_COVERAGE_THRESHOLD = 0.9;
 
-/** KV key prefix for FDC resolve cache (v2 busts bad FTS LIMIT 1 hits). */
-export const NUTRITION_FDC_KV_PREFIX = "nutrition:fdc:v2:";
+/** KV key prefix for FDC resolve cache (includes matcher version). */
+export const NUTRITION_FDC_KV_PREFIX = "nutrition:fdc:";
+
+/** Bump when ranker / abstention rules change to bust stale KV hits. */
+export const NUTRITION_MATCHER_VERSION = "1.0.0";
+
+/** Build versioned KV cache key for food name resolve. */
+export function nutritionMatchCacheKey(normalizedName: string): string {
+	return `${NUTRITION_FDC_KV_PREFIX}m${NUTRITION_MATCHER_VERSION}:${normalizedName}`;
+}
 
 /** Cache TTL for food resolve hits (7 days). */
 export const NUTRITION_FDC_CACHE_TTL_SECONDS = 60 * 60 * 24 * 7;

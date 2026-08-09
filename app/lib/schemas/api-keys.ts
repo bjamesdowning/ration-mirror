@@ -11,6 +11,8 @@ export const VALID_API_SCOPES = [
 	"mcp:manifest:write",
 	"mcp:supply:write",
 	"mcp:preferences:write",
+	"mcp:nutrition:read",
+	"mcp:nutrition:write",
 ] as const;
 
 export type ApiScope = (typeof VALID_API_SCOPES)[number];

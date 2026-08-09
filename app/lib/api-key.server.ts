@@ -134,6 +134,8 @@ export const API_SCOPES = {
 	"mcp:manifest:write": "mcp:manifest:write",
 	"mcp:supply:write": "mcp:supply:write",
 	"mcp:preferences:write": "mcp:preferences:write",
+	"mcp:nutrition:read": "mcp:nutrition:read",
+	"mcp:nutrition:write": "mcp:nutrition:write",
 } as const;
 
 export type ApiScope = (typeof API_SCOPES)[keyof typeof API_SCOPES];

@@ -807,11 +807,11 @@ Avatars are served via `GET /api/user/avatar/:userId` and updated via `POST /api
 
 ### 4.7 Nutrition (feature-flagged)
 
-Nutrition is behind Flagship flags (registry default **off**): `nutrition-engine`, `nutrition-ai-estimate`, `nutrition-manifest`, `nutrition-goals`. See [Feature flags](docs/dev/feature-flags.md), [DPIA/consent notes](docs/dev/nutrition-dpia-notes.md), and help articles [`24`](docs/fin/24-nutrition-overview.md)–[`26`](docs/fin/26-editing-nutrition.md).
+Nutrition is behind Flagship flags (registry default **off**): `nutrition-engine`, `nutrition-ai-estimate`, `nutrition-manifest`, `nutrition-goals`, `nutrition-cook-log-split`, `nutrition-async-recompute`. See [Feature flags](docs/dev/feature-flags.md), [DPIA/consent notes](docs/dev/nutrition-dpia-notes.md), [rollout](docs/dev/nutrition-rollout.md), and help articles [`24`](docs/fin/24-nutrition-overview.md)–[`26`](docs/fin/26-editing-nutrition.md).
 
 - **Resolve** — USDA-shaped self-hosted `NUTRITION_DB` with FTS top-N + JS re-rank (KV `nutrition:fdc:v2:`); blank on miss for manual/CSV; labelled AI estimate only when request `ingestSource` is `scan_review` and `nutrition-ai-estimate` is on (client `allowAiEstimate` booleans are ignored).
 - **Cargo overrides → meals** — Meal recompute prefers org cargo `user_override` snapshots (linked `cargoId` or exact normalized name) over USDA; saving a Cargo override refreshes affected meals (bounded). Package qty/unit edits rescale cargo `perServing` from `per100g` (or override totals) so calories stay aligned — including OCR/USDA-style names (longest-phrase / leading-token density match, with temporary unlabelled 1 g/ml volume fallback until the quality-aware mass resolver lands).
-- **UI** — Cargo/Galley panels, scan review (`POST /api/nutrition/resolve`), Manifest Eat plate-up + day totals + ~13-month calendar, Settings goals (consent), Flight Recorder kcal on logged events.
+- **UI** — Cargo/Galley panels, scan review (`POST /api/nutrition/resolve`), Manifest Eat plate-up + day totals + ~13-month calendar, Settings goals (consent). Personal kcal stays on user-scoped intake APIs — not in shared Flight Recorder event payloads.
 - **APIs / MCP** — Summary and goals routes; tools `get_nutrition_summary`, `set_nutrition_goal`, `clear_nutrition_goal`. Intake retention ~396 days; erased on account purge.
 - **Dogfood** — Production enablement via Flagship `userId` allowlist only — never `FEATURE_FLAG_OVERRIDES` to turn nutrition **on**.
 
@@ -1177,7 +1177,7 @@ erDiagram
 | `api_key` | org + user | Programmatic API keys (SHA-256 hashed, prefix-indexed) | `key_prefix`, `org_id` |
 | `queue_job` | — | Scan and meal-generate job status for polling; D1-backed for strong consistency | `expires_at`, `(organization_id, status)` |
 
-**Flight Recorder:** Kitchen mutations emit typed events via [`app/lib/kitchen-events.server.ts`](app/lib/kitchen-events.server.ts) (`KITCHEN_EVENT_REGISTRY`). New metrics plug in by adding a registry entry + one emit at the call site. Query via MCP/Copilot (`get_kitchen_events`, `get_kitchen_stats`) or the Hub `flight-recorder` widget. The widget labels `manifest_consumed` as **Consumed** and shows kcal · servings from the payload when present (splitting Cooked vs Consumed chips when intake events exist). Daily cron detects `cargo_expired` and purges rows older than 13 months (`KITCHEN_EVENT_RETENTION_DAYS`).
+**Flight Recorder:** Kitchen mutations emit typed events via [`app/lib/kitchen-events.server.ts`](app/lib/kitchen-events.server.ts) (`KITCHEN_EVENT_REGISTRY`). New metrics plug in by adding a registry entry + one emit at the call site. Query via MCP/Copilot (`get_kitchen_events`, `get_kitchen_stats`) or the Hub `flight-recorder` widget. Shared event payloads are logistics-only (plan/entry IDs, Cargo deductions, servings) — personal kcal / plate-up fields are never written and are stripped on read/purge (`app/lib/kitchen-event-privacy.ts`). Operator backfill: `scripts/redact-legacy-nutrition-events.ts`. Daily cron detects `cargo_expired` and purges rows older than 13 months (`KITCHEN_EVENT_RETENTION_DAYS`).
 
 **D1 parameter limit:** D1 enforces a hard limit of 100 bound parameters per statement (vs. SQLite's 999). Dense multi-row writes (especially Supply sync materialize) also budget binds **across** a `db.batch()` call via `packByBindBudget`, because D1 may reject the batch script with `too many SQL variables`. Every bulk write is chunked using constants from [`app/lib/query-utils.server.ts`](app/lib/query-utils.server.ts):
 

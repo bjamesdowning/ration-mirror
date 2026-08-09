@@ -7,6 +7,7 @@ import {
 	sqliteTable,
 	text,
 	unique,
+	uniqueIndex,
 } from "drizzle-orm/sqlite-core";
 import type {
 	CargoNutritionSnapshot,
@@ -751,6 +752,11 @@ export const mealPlanEntry = sqliteTable(
 		servingsOverride: integer("servings_override"),
 		notes: text("notes"),
 		consumedAt: integer("consumed_at", { mode: "timestamp" }),
+		/** Shared preparation timestamp (dual-written with consumedAt during cook/log split). */
+		cookedAt: integer("cooked_at", { mode: "timestamp" }),
+		cookedByUserId: text("cooked_by_user_id").references(() => user.id, {
+			onDelete: "set null",
+		}),
 		createdAt: integer("created_at", { mode: "timestamp" })
 			.notNull()
 			.default(sql`(unixepoch())`),
@@ -763,6 +769,7 @@ export const mealPlanEntry = sqliteTable(
 			table.slotType,
 		),
 		index("mpe_meal_idx").on(table.mealId),
+		index("mpe_plan_cooked_at_idx").on(table.planId, table.cookedAt),
 	],
 );
 
@@ -774,6 +781,10 @@ export const mealPlanEntryRelations = relations(mealPlanEntry, ({ one }) => ({
 	meal: one(meal, {
 		fields: [mealPlanEntry.mealId],
 		references: [meal.id],
+	}),
+	cookedByUser: one(user, {
+		fields: [mealPlanEntry.cookedByUserId],
+		references: [user.id],
 	}),
 }));
 
@@ -1065,7 +1076,50 @@ export const nutritionGoalRelations = relations(nutritionGoal, ({ one }) => ({
 }));
 
 /**
+ * Server-stamped nutrition consent (purpose-level). Clients send `consent: true`;
+ * never trust client-authored grant timestamps.
+ */
+export const nutritionConsent = sqliteTable(
+	"nutrition_consent",
+	{
+		id: text("id")
+			.primaryKey()
+			.$defaultFn(() => crypto.randomUUID()),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		/** goals | intake | healthkit (reserved) */
+		purpose: text("purpose").notNull(),
+		policyVersion: text("policy_version").notNull(),
+		/** web | mobile | mcp | copilot */
+		source: text("source").notNull(),
+		grantedAt: integer("granted_at", { mode: "timestamp" }).notNull(),
+		withdrawnAt: integer("withdrawn_at", { mode: "timestamp" }),
+		createdAt: integer("created_at", { mode: "timestamp" })
+			.notNull()
+			.default(sql`(unixepoch())`),
+	},
+	(table) => [
+		index("nutrition_consent_user_purpose_idx").on(table.userId, table.purpose),
+		uniqueIndex("nutrition_consent_active_uidx")
+			.on(table.userId, table.purpose)
+			.where(sql`${table.withdrawnAt} IS NULL`),
+	],
+);
+
+export const nutritionConsentRelations = relations(
+	nutritionConsent,
+	({ one }) => ({
+		user: one(user, {
+			fields: [nutritionConsent.userId],
+			references: [user.id],
+		}),
+	}),
+);
+
+/**
  * Logged nutrition intake from manifest consume / cook flows.
+ * Additive v2 columns sit alongside legacy scalars for dual-read compatibility.
  */
 export const nutritionIntake = sqliteTable(
 	"nutrition_intake",
@@ -1101,6 +1155,23 @@ export const nutritionIntake = sqliteTable(
 		kitchenEventId: text("kitchen_event_id").references(() => kitchenEvent.id, {
 			onDelete: "set null",
 		}),
+		/** Snapshot contract version; 1 = legacy scalars only. */
+		schemaVersion: integer("schema_version").notNull().default(1),
+		/** Nullable v2 nutrient bag (JSON). */
+		nutrientsJson: text("nutrients_json", { mode: "json" }).$type<
+			Record<string, number | null>
+		>(),
+		/** Per-nutrient coverage bag (JSON). */
+		coverageJson: text("coverage_json", { mode: "json" }).$type<
+			Record<string, number>
+		>(),
+		idempotencyKey: text("idempotency_key"),
+		operationId: text("operation_id"),
+		replacesIntakeId: text("replaces_intake_id"),
+		voidedAt: integer("voided_at", { mode: "timestamp" }),
+		voidedByUserId: text("voided_by_user_id").references(() => user.id, {
+			onDelete: "set null",
+		}),
 		createdAt: integer("created_at", { mode: "timestamp" })
 			.notNull()
 			.default(sql`(unixepoch())`),
@@ -1114,6 +1185,16 @@ export const nutritionIntake = sqliteTable(
 			table.organizationId,
 			table.manifestDate,
 		),
+		index("nutrition_intake_user_history_idx").on(
+			table.userId,
+			table.organizationId,
+			table.manifestDate,
+			table.occurredAt,
+			table.id,
+		),
+		uniqueIndex("nutrition_intake_user_idempotency_uidx")
+			.on(table.userId, table.idempotencyKey)
+			.where(sql`${table.idempotencyKey} IS NOT NULL`),
 	],
 );
 

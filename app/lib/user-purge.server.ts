@@ -6,6 +6,7 @@ import { revokeAppleTokensForUser } from "~/lib/apple-token-revoke.server";
 import { reconcileSubscriptionCancelAtPeriodEnd } from "~/lib/billing.server";
 import { purgeCopilotConversationsForUser } from "~/lib/copilot/purge.server";
 import { retryOnD1Contention } from "~/lib/error-handler";
+import { redactAllNutritionPayloadsForUser } from "~/lib/kitchen-event-purge.server";
 import { log, redactId } from "~/lib/logging.server";
 import { deleteOrganization } from "~/lib/organizations.server";
 import { notifyPurgeFailure } from "~/lib/purge-failure-notify.server";
@@ -242,6 +243,12 @@ export async function purgeUserAccount(
 		await purgeCopilotConversationsForUser(env, userId);
 	} catch (error) {
 		throw wrapUserPurgeStep("user_wipe:copilot", error);
+	}
+
+	try {
+		await redactAllNutritionPayloadsForUser(db, userId);
+	} catch (error) {
+		throw wrapUserPurgeStep("user_wipe:kitchen_event_redact", error);
 	}
 
 	try {

@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+	addKnownNutrients,
 	addNutrients,
 	convertIngredientAmountToGrams,
-	emptyNutrients,
+	emptyNutrientRecord,
 	nutrientsPerServingFromTotal,
+	scaleNullableNutrientValues,
 	scaleNutrientsPer100g,
+	zeroNutrientAccumulator,
 } from "~/lib/nutrition/scale-nutrients";
 import type { NutrientsPer100g } from "~/lib/nutrition/types";
 
@@ -29,8 +32,12 @@ describe("scaleNutrientsPer100g", () => {
 	});
 
 	it("returns zeros for non-positive grams", () => {
-		expect(scaleNutrientsPer100g(CHICKEN, 0)).toEqual(emptyNutrients());
-		expect(scaleNutrientsPer100g(CHICKEN, -10)).toEqual(emptyNutrients());
+		expect(scaleNutrientsPer100g(CHICKEN, 0)).toEqual(
+			zeroNutrientAccumulator(),
+		);
+		expect(scaleNutrientsPer100g(CHICKEN, -10)).toEqual(
+			zeroNutrientAccumulator(),
+		);
 	});
 });
 
@@ -64,7 +71,39 @@ describe("nutrientsPerServingFromTotal", () => {
 	});
 
 	it("guards zero servings", () => {
-		expect(nutrientsPerServingFromTotal(CHICKEN, 0)).toEqual(emptyNutrients());
+		expect(nutrientsPerServingFromTotal(CHICKEN, 0)).toEqual(
+			zeroNutrientAccumulator(),
+		);
+	});
+});
+
+describe("nullable nutrient math", () => {
+	it("addKnownNutrients preserves null as unknown", () => {
+		const a = emptyNutrientRecord();
+		const b = { ...emptyNutrientRecord(), proteinG: 10, energyKcal: 100 };
+		const sum = addKnownNutrients(a, b);
+		expect(sum.energyKcal).toBe(100);
+		expect(sum.proteinG).toBe(10);
+		expect(sum.fatG).toBeNull();
+	});
+
+	it("scaleNullableNutrientValues preserves null fields", () => {
+		const values = {
+			energyKcal: 100,
+			proteinG: null,
+			fatG: 5,
+			carbG: null,
+			fiberG: null,
+			sugarG: 2,
+			satFatG: null,
+			sodiumMg: null,
+			saltG: null,
+		};
+		const scaled = scaleNullableNutrientValues(values, 2);
+		expect(scaled.energyKcal).toBe(200);
+		expect(scaled.proteinG).toBeNull();
+		expect(scaled.fatG).toBe(10);
+		expect(scaled.sugarG).toBe(4);
 	});
 });
 

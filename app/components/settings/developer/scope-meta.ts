@@ -55,6 +55,16 @@ export const SCOPE_META: Record<
 			"Manual MCP auth: update preferences and related settings via MCP",
 		color: "bg-hyper-green/20 text-hyper-green border border-hyper-green/30",
 	},
+	"mcp:nutrition:read": {
+		label: "MCP Nutrition Read (advanced)",
+		description: "Manual MCP auth: read personal nutrition goals and intake",
+		color: "bg-hyper-green/20 text-hyper-green border border-hyper-green/30",
+	},
+	"mcp:nutrition:write": {
+		label: "MCP Nutrition Write (advanced)",
+		description: "Manual MCP auth: log or update personal nutrition data",
+		color: "bg-hyper-green/20 text-hyper-green border border-hyper-green/30",
+	},
 };
 
 export const DEFAULT_SCOPES: ApiScope[] = ["inventory", "galley", "supply"];
@@ -66,6 +76,8 @@ export const MCP_SCOPE_ORDER: ApiScope[] = [
 	"mcp:manifest:write",
 	"mcp:supply:write",
 	"mcp:preferences:write",
+	"mcp:nutrition:read",
+	"mcp:nutrition:write",
 	"mcp",
 ];
 

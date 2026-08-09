@@ -22,66 +22,20 @@ cache:
       - bun.lock
   paths:
     - node_modules/
+    - .bun-install-cache/
 
-# # Install Dependencies
-# install_dependencies:
-#   stage: install
-#   script:
-#     # Use --ignore-scripts to skip native module compilation (like better-sqlite3) which fails in minimal CI environments.
-#     # This is safe because we target Cloudflare Workers and use D1 at runtime.
-#     - bun install --frozen-lockfile --ignore-scripts
-#     # Manually run cf-typegen since --ignore-scripts skips the postinstall hook.
-#     # This ensures types for D1, R2, etc. are available for the 'verify' stage.
-#     - bun run cf-typegen
-#   artifacts:
-#     paths:
-#       - node_modules/
-#       - worker-configuration.d.ts
-#     expire_in: 1 hour
-
-# test_unit:
-#   stage: verify
-#   needs:
-#     - install_dependencies
-#   script:
-#     - bun run test:unit --coverage
-#   coverage: '/All files[^|]*\|[^|]*\s+([\d\.]+)/'
-#   artifacts:
-#     when: always
-#     reports:
-#       junit: reports/junit.xml
-#       coverage_report:
-#         coverage_format: cobertura
-#         path: coverage/cobertura-coverage.xml
-#     paths:
-#       - coverage/
-#       - reports/
-#     expire_in: 1 week
-#   allow_failure: true
-
-# lint:
-#   stage: verify
-#   needs:
-#     - install_dependencies
-#   script:
-#     - bun run lint
-#   allow_failure: true
-
-# typecheck:
-#   stage: verify
-#   needs:
-#     - install_dependencies
-#   script:
-#     - bun run typecheck
-#   allow_failure: true
-
-# flag_check:
-#   stage: verify
-#   needs:
-#     - install_dependencies
-#   script:
-#     - bun run flag:check
-#   allow_failure: true
+# Required local-quality gate (re-enabled for nutrition hardening).
+# Workers Builds remains the production deploy path; this job must not allow_failure.
+verify:
+  stage: verify
+  script:
+    - bun install --frozen-lockfile --ignore-scripts
+    - bun run cf-typegen
+    - bun run lint
+    - bun run typecheck
+    - bun run test:unit
+    - bun run flag:check
+  allow_failure: false
 
 # Manual: upload docs corpus to R2 and reindex Copilot AI Search.
 # Trigger after docs/fin, docs/dev, docs/legal, content/blog, or README changes.

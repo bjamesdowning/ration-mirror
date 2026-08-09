@@ -9,6 +9,8 @@ import type { UndoRecord } from "./undo-token.server";
 /**
  * Atomically restores cargo and (for manifest consume) clears consumedAt in one D1 batch.
  * Also deletes Flight Recorder events recorded by the original action.
+ * Legacy combined consume also deletes nutrition_intake rows linked to those events
+ * for the undoing user (personal plate-up was part of the same operation).
  * Restores both quantity and baseQuantity so display/matching stay consistent.
  */
 export async function applyUndoRecord(
@@ -16,7 +18,13 @@ export async function applyUndoRecord(
 	organizationId: string,
 	record: Pick<
 		UndoRecord,
-		"kind" | "deductions" | "manifestEntryIds" | "planId" | "eventIds"
+		| "kind"
+		| "deductions"
+		| "manifestEntryIds"
+		| "planId"
+		| "eventIds"
+		| "userId"
+		| "intakeIds"
 	>,
 	options?: { kv?: KVNamespace },
 ): Promise<void> {
@@ -60,6 +68,33 @@ export async function applyUndoRecord(
 					),
 				),
 		);
+
+		// Legacy combined consume: reverse private intake for this user.
+		if (record.intakeIds?.length) {
+			stmts.push(
+				d1
+					.delete(schema.nutritionIntake)
+					.where(
+						and(
+							eq(schema.nutritionIntake.userId, record.userId),
+							eq(schema.nutritionIntake.organizationId, organizationId),
+							inArray(schema.nutritionIntake.id, record.intakeIds),
+						),
+					),
+			);
+		} else if (record.eventIds?.length) {
+			stmts.push(
+				d1
+					.delete(schema.nutritionIntake)
+					.where(
+						and(
+							eq(schema.nutritionIntake.userId, record.userId),
+							eq(schema.nutritionIntake.organizationId, organizationId),
+							inArray(schema.nutritionIntake.kitchenEventId, record.eventIds),
+						),
+					),
+			);
+		}
 	}
 
 	if (record.eventIds?.length) {

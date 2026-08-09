@@ -291,3 +291,44 @@ export async function trackWriteOperation<T>(
 		throw err;
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Nutrition ops counters (low-cardinality — no PII)
+// ---------------------------------------------------------------------------
+
+export type NutritionResolveOutcome = "hit" | "miss" | "ai";
+export type NutritionRecomputeTrigger = "cargo" | "meal" | "batch";
+export type NutritionIntakeSource = "manifest" | "cook";
+
+export function emitNutritionResolve(outcome: NutritionResolveOutcome): void {
+	emitOpsMetric({
+		route: "api",
+		blobs: ["nutrition_resolve", outcome],
+	});
+}
+
+export function emitNutritionRecomputeEnqueued(
+	trigger: NutritionRecomputeTrigger,
+): void {
+	emitOpsMetric({
+		route: "queue_consumer",
+		blobs: ["nutrition_recompute_enqueued", trigger],
+	});
+}
+
+export function emitNutritionRecomputeProcessed(
+	trigger: NutritionRecomputeTrigger,
+	outcome: "ok" | "skipped" | "failed",
+): void {
+	emitOpsMetric({
+		route: "queue_consumer",
+		blobs: ["nutrition_recompute_processed", trigger, outcome],
+	});
+}
+
+export function emitNutritionIntakeLogged(source: NutritionIntakeSource): void {
+	emitOpsMetric({
+		route: "api",
+		blobs: ["nutrition_intake_logged", source],
+	});
+}

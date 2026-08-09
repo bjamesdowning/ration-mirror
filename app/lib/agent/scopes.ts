@@ -6,4 +6,6 @@ export const AGENT_API_KEY_SCOPES = [
 	"mcp:manifest:write",
 	"mcp:supply:write",
 	"mcp:preferences:write",
+	"mcp:nutrition:read",
+	"mcp:nutrition:write",
 ] as const;

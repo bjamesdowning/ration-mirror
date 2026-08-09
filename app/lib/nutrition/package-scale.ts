@@ -1,16 +1,10 @@
-import {
-	convertQuantity,
-	getUnitFamily,
-	type SupportedUnit,
-} from "~/lib/units";
+import type { SupportedUnit } from "~/lib/units";
+import { gramsFromMassResolution } from "./mass-resolution";
 import {
 	nutrientsPer100gFromPackageTotals,
 	withDerivedPer100g,
 } from "./override-scale";
-import {
-	convertIngredientAmountToGrams,
-	scaleNutrientsPer100g,
-} from "./scale-nutrients";
+import { scaleNutrientsPer100g } from "./scale-nutrients";
 import type { NutritionSnapshot } from "./types";
 
 export type ScaleCargoNutritionOptions = {
@@ -20,33 +14,16 @@ export type ScaleCargoNutritionOptions = {
 };
 
 /**
- * Package mass for nutrition scaling. Prefers density-aware conversion; for
- * volume units with unknown density (common OCR/USDA names), assumes 1 g/ml
- * so liter/ml edits still rescale package totals.
- *
- * Compatibility only: this fallback is unlabelled. A later quality-aware mass
- * resolver will return method/confidence (`assumed_1g_ml` / estimated) so UI
- * and snapshots can show estimated weight instead of treating it as exact.
+ * Package mass for nutrition scaling. Delegates to quality-aware mass resolver.
+ * Volume units with unknown density use 1 g/ml (`assumed_1g_ml`) so liter/ml edits
+ * still rescale package totals.
  */
 export function gramsForNutritionPackage(
 	quantity: number | null | undefined,
 	unit: SupportedUnit | null | undefined,
 	name: string,
 ): number | null {
-	if (quantity == null || unit == null) return null;
-	if (!Number.isFinite(quantity) || quantity <= 0) return null;
-
-	const dense = convertIngredientAmountToGrams(quantity, unit, name);
-	if (dense != null && dense > 0) return dense;
-
-	if (getUnitFamily(unit) === "volume") {
-		const ml = convertQuantity(quantity, unit, "ml");
-		if (ml != null && Number.isFinite(ml) && ml > 0) {
-			return ml; // temporary unlabelled 1 g/ml fallback
-		}
-	}
-
-	return null;
+	return gramsFromMassResolution(quantity, unit, name);
 }
 
 /**

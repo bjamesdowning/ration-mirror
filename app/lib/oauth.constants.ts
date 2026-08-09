@@ -10,6 +10,8 @@ export const OAUTH_MCP_SCOPES = [
 	"mcp:manifest:write",
 	"mcp:supply:write",
 	"mcp:preferences:write",
+	"mcp:nutrition:read",
+	"mcp:nutrition:write",
 ] as const;
 
 export type OAuthMcpScope = (typeof OAUTH_MCP_SCOPES)[number];
@@ -150,6 +152,8 @@ export const OAUTH_SCOPE_LABELS: Record<OAuthMcpScope, string> = {
 	"mcp:manifest:write": "Manage meal plan entries",
 	"mcp:supply:write": "Manage Supply shopping lists",
 	"mcp:preferences:write": "Update account preferences",
+	"mcp:nutrition:read": "Read personal nutrition goals and intake summaries",
+	"mcp:nutrition:write": "Log or update personal nutrition goals and intake",
 };
 
 export function isApiKeyCredential(raw: string): boolean {

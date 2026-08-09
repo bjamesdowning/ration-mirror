@@ -25,7 +25,7 @@ Ration can attach **energy and macro nutrients** to Cargo items and Galley meals
 - **Galley** — Meal cards, detail, and edit can show per-serving energy/macros.
 - **Scan review** — Proposed nutrients appear before you add items to Cargo; edit there first.
 - **Manifest** — Day totals, Eat / plate-up intake logging, and a month calendar when Manifest nutrition is on. See *Nutrition goals and tracking*.
-- **Hub** — Flight Recorder can show energy on cook / consume events when intake was logged.
+- **Hub** — Flight Recorder shows shared kitchen logistics (not personal kcal).
 - **Settings** — Personal daily goals when goals are enabled. See *Editing nutrition* for how to correct values.
 
 ## Related

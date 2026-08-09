@@ -3,6 +3,7 @@ import type { HubWidgetProps } from "~/lib/types";
 const EVENT_LABELS: Record<string, string> = {
 	galley_cooked: "Cooked",
 	manifest_consumed: "Consumed",
+	manifest_cooked: "Prepared",
 	supply_docked: "Docked",
 	cargo_expired: "Expired",
 	cargo_jettisoned: "Jettisoned",
@@ -21,18 +22,14 @@ function formatRelative(isoOrDate: Date | string): string {
 }
 
 function formatConsumedDetail(payload: Record<string, unknown>): string | null {
-	const kcalRaw = payload.energyKcal;
-	const servingsRaw = payload.portionServings ?? payload.servings;
-	const parts: string[] = [];
-	if (typeof kcalRaw === "number" && Number.isFinite(kcalRaw)) {
-		parts.push(`${Math.round(kcalRaw).toLocaleString("en-US")} kcal`);
-	}
+	// Shared Flight Recorder must not show personal kcal / plate-up servings.
+	const servingsRaw = payload.servings;
 	if (typeof servingsRaw === "number" && Number.isFinite(servingsRaw)) {
 		const s =
 			servingsRaw % 1 === 0 ? String(servingsRaw) : servingsRaw.toFixed(1);
-		parts.push(`${s} serving${servingsRaw === 1 ? "" : "s"}`);
+		return `${s} serving${servingsRaw === 1 ? "" : "s"}`;
 	}
-	return parts.length > 0 ? parts.join(" · ") : null;
+	return null;
 }
 
 function StatChip({
@@ -81,8 +78,9 @@ export function FlightRecorderWidget({ data, size = "md" }: HubWidgetProps) {
 	const compact = size === "sm";
 	const recentLimit = compact ? 3 : 5;
 	const consumedCount = stats.countsByType.manifest_consumed ?? 0;
+	const preparedCount = stats.countsByType.manifest_cooked ?? 0;
 	const cookedOnly = stats.countsByType.galley_cooked ?? 0;
-	const splitConsume = consumedCount > 0;
+	const splitConsume = consumedCount > 0 || preparedCount > 0;
 	const statsGridClass = size === "lg" ? "grid-cols-4" : "grid-cols-2";
 
 	const chips: Array<{
@@ -92,7 +90,10 @@ export function FlightRecorderWidget({ data, size = "md" }: HubWidgetProps) {
 	}> = splitConsume
 		? [
 				{ label: "Cooked", value: cookedOnly },
-				{ label: "Consumed", value: consumedCount },
+				{
+					label: "Prepared",
+					value: consumedCount + preparedCount,
+				},
 				{ label: "Docked", value: stats.totals.docked },
 				{
 					label: "Expired",
@@ -138,7 +139,8 @@ export function FlightRecorderWidget({ data, size = "md" }: HubWidgetProps) {
 				<ul className="divide-y divide-platinum dark:divide-white/10">
 					{recent.slice(0, recentLimit).map((event) => {
 						const detail =
-							event.eventType === "manifest_consumed"
+							event.eventType === "manifest_consumed" ||
+							event.eventType === "manifest_cooked"
 								? formatConsumedDetail(event.payload)
 								: null;
 						return (

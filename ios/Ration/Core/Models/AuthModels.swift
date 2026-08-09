@@ -85,6 +85,8 @@ struct ClientFlags: Codable, Sendable, Equatable {
     var nutritionManifest: Bool?
     /// Personal nutrition goals and summary charts.
     var nutritionGoals: Bool?
+    /// Separate Manifest Cook from private Log my serving (additive).
+    var nutritionCookLogSplit: Bool?
 
     static let disabled = ClientFlags()
 
@@ -101,6 +103,7 @@ struct ClientFlags: Codable, Sendable, Equatable {
     var isNutritionAiEstimateEnabled: Bool { nutritionAiEstimate == true }
     var isNutritionManifestEnabled: Bool { nutritionManifest == true }
     var isNutritionGoalsEnabled: Bool { nutritionGoals == true }
+    var isNutritionCookLogSplitEnabled: Bool { nutritionCookLogSplit == true }
 }
 
 /// `GET /api/mobile/v1/client-flags` (unsigned)

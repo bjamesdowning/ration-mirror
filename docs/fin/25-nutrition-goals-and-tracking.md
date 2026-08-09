@@ -29,7 +29,7 @@ Intake rows older than roughly **396 days (~13 months)** are purged on the same 
 
 ## Flight Recorder
 
-The Hub **Flight Recorder** widget shows recent kitchen activity. When a cook or Manifest consume logged nutrition, the event can include **kcal** so you can spot intake alongside docks, cooks, and other events.
+The Hub **Flight Recorder** widget shows recent kitchen activity (cooks, docks, expiries). Shared events show preparation logistics only — **personal kcal and plate-up servings are not shown** to other household members. Your private intake history lives on nutrition summary/day views.
 
 ## Agents
 

@@ -4,6 +4,14 @@
  */
 
 export {
+	detectNutritionSchemaVersion,
+	isNutritionSnapshotV2,
+	matchQualityFromLegacy,
+	normalizeNutritionSnapshot,
+	projectNutritionSnapshotToLegacy,
+	upgradeNutritionSnapshotToV2,
+} from "./adapters";
+export {
 	computeMealNutrition,
 	type MealNutritionIngredientInput,
 } from "./compute-meal-nutrition";
@@ -13,7 +21,9 @@ export {
 	NUTRITION_COVERAGE_THRESHOLD,
 	NUTRITION_FDC_CACHE_TTL_SECONDS,
 	NUTRITION_FDC_KV_PREFIX,
+	NUTRITION_MATCHER_VERSION,
 	type NutrientKey,
+	nutritionMatchCacheKey,
 } from "./constants";
 export {
 	aggregateManifestDayNutrition,
@@ -27,6 +37,11 @@ export {
 	nutritionIntakeRetentionCutoff,
 	previousUtcCalendarDay,
 } from "./goal-effective";
+export {
+	gramsFromMassResolution,
+	type ResolveIngredientMassOptions,
+	resolveIngredientMass,
+} from "./mass-resolution";
 export {
 	type CargoOverrideCandidate,
 	nutrientsPer100gFromCargoOverride,
@@ -54,23 +69,38 @@ export {
 } from "./panel-helpers";
 export { type ParsedIngredient, parseIngredient } from "./parse-ingredient";
 export {
+	addKnownNutrients,
 	addNutrients,
 	convertIngredientAmount,
 	convertIngredientAmountToGrams,
+	emptyNutrientRecord,
 	emptyNutrients,
+	nutrientCoverageRatio,
 	nutrientsPerServingFromTotal,
+	projectNullableValuesToLegacy,
+	scaleNullableNutrientValues,
 	scaleNutrientsPer100g,
 	scaleNutrientValues,
+	toNullableNutrientValues,
+	zeroNutrientAccumulator,
 } from "./scale-nutrients";
 export type {
+	AnyNutritionSnapshot,
 	CargoNutritionSnapshot,
+	MassResolutionMethod,
+	MassResolutionResult,
 	MealNutritionResult,
 	MealNutritionSnapshot,
+	NullableNutrientValues,
 	NutrientAttribution,
 	NutrientsPer100g,
 	NutrientsPerServing,
 	NutrientValues,
+	NutritionMatchQuality,
+	NutritionSchemaVersion,
+	NutritionServingBasis,
 	NutritionSnapshot,
+	NutritionSnapshotV2,
 	NutritionSource,
 	ResolvedFood,
 } from "./types";

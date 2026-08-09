@@ -2,9 +2,9 @@ import type { SupportedUnit } from "~/lib/units";
 import {
 	addNutrients,
 	convertIngredientAmountToGrams,
-	emptyNutrients,
 	nutrientsPerServingFromTotal,
 	scaleNutrientsPer100g,
+	zeroNutrientAccumulator,
 } from "./scale-nutrients";
 import type {
 	MealNutritionResult,
@@ -40,7 +40,7 @@ export function computeMealNutrition(
 ): MealNutritionResult {
 	let matchedGrams = 0;
 	let totalGrams = 0;
-	let total = emptyNutrients();
+	let total = zeroNutrientAccumulator();
 	const attributions: NutrientAttribution[] = [];
 
 	for (let i = 0; i < ingredients.length; i++) {

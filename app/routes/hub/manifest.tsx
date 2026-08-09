@@ -198,7 +198,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 	}> = [];
 
 	if (nutritionManifest) {
-		const [summary, intakeRows] = await Promise.all([
+		const [summary, intakePage] = await Promise.all([
 			getNutritionSummary(
 				db,
 				user.id,
@@ -214,7 +214,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 				currentRangeEnd,
 			),
 		]);
-		dayIntakeRows = intakeRows.map((r) => ({
+		dayIntakeRows = intakePage.items.map((r) => ({
 			id: r.id,
 			manifestDate: r.manifestDate,
 			slotType: r.slotType,
@@ -475,6 +475,7 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 					aiPlanWeek?: boolean;
 					nutritionManifest?: boolean;
 					nutritionGoals?: boolean;
+					nutritionCookLogSplit?: boolean;
 				};
 		  }
 		| undefined;
@@ -483,7 +484,15 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 	const nutritionManifestFlag =
 		rootData?.clientFlags?.nutritionManifest === true;
 	const nutritionGoalsFlag = rootData?.clientFlags?.nutritionGoals === true;
+	const nutritionCookLogSplitFlag =
+		rootData?.clientFlags?.nutritionCookLogSplit === true;
 	const showDayNutritionTotals = nutritionManifestFlag && nutritionGoalsFlag;
+	/** Split UI labels only — cook/log services stay dark until fully wired. */
+	const consumePrimaryLabel = nutritionCookLogSplitFlag ? "Cook" : "Eat";
+	const consumeAllLabel = nutritionCookLogSplitFlag
+		? "Cook All"
+		: "Consume All";
+
 	const [calendarOpen, setCalendarOpen] = useState(false);
 
 	// -------------------------------------------------------------------------
@@ -607,9 +616,9 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 		if (ids.length === 0) return;
 		if (
 			!(await confirm({
-				title: `Consume all ${ids.length} meal${ids.length === 1 ? "" : "s"} for this day?`,
+				title: `${consumeAllLabel} — ${ids.length} meal${ids.length === 1 ? "" : "s"} for this day?`,
 				message: "Ingredients will be deducted from Cargo.",
-				confirmLabel: "Consume All",
+				confirmLabel: consumeAllLabel,
 				variant: "warning",
 			}))
 		)
@@ -984,10 +993,10 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 										onClick={() => handleConsumeAll(selectedDay)}
 										disabled={consumeFetcher.state !== "idle"}
 										className="flex items-center gap-2 px-4 py-3 btn-secondary font-semibold rounded-lg transition-all disabled:opacity-50"
-										title={`Consume all meals for ${selectedDayLabel} (deduct from Cargo)`}
+										title={`${consumeAllLabel} for ${selectedDayLabel} (deduct from Cargo)`}
 									>
 										<ConsumeIcon className="w-4 h-4" />
-										Consume {selectedDayLabel}
+										{consumePrimaryLabel} {selectedDayLabel}
 									</button>
 								)}
 								{aiPlanWeek && (
@@ -1229,7 +1238,7 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 								{
 									id: "consume-all",
 									icon: <ConsumeIcon className="w-5 h-5" />,
-									label: "Consume all",
+									label: consumeAllLabel,
 									onClick: () => handleConsumeAll(selectedDay),
 									disabled: consumeFetcher.state !== "idle",
 								},

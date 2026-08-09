@@ -18,6 +18,18 @@ export const D1_SAFE_BOUND_PARAMS = D1_MAX_BOUND_PARAMS - 1;
 const SQLITE_SAFE_VARIABLE_LIMIT = D1_SAFE_BOUND_PARAMS;
 
 /**
+ * Max nutrition_intake rows per INSERT.
+ * Columns bound on insert: id, organizationId, userId, planId, entryId, mealId,
+ * manifestDate, slotType, servings, energyKcal, proteinG, carbsG, fatG,
+ * coverage, source, confidence, verified, occurredAt, kitchenEventId = 19.
+ */
+export const NUTRITION_INTAKE_INSERT_COLUMNS = 19;
+
+export const D1_MAX_NUTRITION_INTAKE_ROWS_PER_STATEMENT = Math.floor(
+	D1_MAX_BOUND_PARAMS / NUTRITION_INTAKE_INSERT_COLUMNS,
+);
+
+/**
  * Max meal_ingredient rows per INSERT.
  * Includes generated id from $defaultFn plus base_quantity/base_unit,
  * so each row binds 10 params.

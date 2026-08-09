@@ -194,6 +194,8 @@ export interface ConsumeManifestEntriesResult {
 		unit: string;
 	}>;
 	eventIds?: string[];
+	/** Private intake rows created when nutrition plate-up ran (legacy combined undo). */
+	intakeIds?: string[];
 }
 
 export async function getWeekEntries(
@@ -403,7 +405,14 @@ export async function consumeManifestEntries(
 	});
 
 	if (uniqueEntries.length === 0) {
-		return { consumed: 0, deductions: [], entryIds: [], planId, eventIds: [] };
+		return {
+			consumed: 0,
+			deductions: [],
+			entryIds: [],
+			planId,
+			eventIds: [],
+			intakeIds: [],
+		};
 	}
 
 	const portionByEntry = new Map<string, number>();
@@ -471,6 +480,7 @@ export async function consumeManifestEntries(
 				requiresConfirmation: true,
 				missingIngredients,
 				eventIds: [],
+				intakeIds: [],
 			};
 		}
 	}
@@ -483,6 +493,7 @@ export async function consumeManifestEntries(
 	const now = new Date();
 	const consumedEntryIds: string[] = [];
 	const allEventIds: string[] = [];
+	const allIntakeIds: string[] = [];
 
 	// Per unique meal: plan deductions without writing, then atomically apply
 	// cargo updates + consumedAt marks in one D1 batch. If a later meal fails,
@@ -523,10 +534,6 @@ export async function consumeManifestEntries(
 			}
 		}
 
-		let intakeEnergyKcal = 0;
-		let intakePortionServings = 0;
-		let intakeVerified = true;
-		let intakeLogged = false;
 		const intakeRows: Array<{
 			id: string;
 			organizationId: string;
@@ -564,10 +571,6 @@ export async function consumeManifestEntries(
 				const coverage = snap?.coverage ?? 0;
 				const verified: 0 | 1 =
 					coverage >= NUTRITION_COVERAGE_THRESHOLD ? 1 : 0;
-				intakeEnergyKcal += scaled.energyKcal;
-				intakePortionServings += portion;
-				if (verified === 0) intakeVerified = false;
-				intakeLogged = true;
 				intakeRows.push({
 					id: crypto.randomUUID(),
 					organizationId,
@@ -627,18 +630,11 @@ export async function consumeManifestEntries(
 				partialCook: cookResult.partialCook,
 				source: options?.source,
 				occurredAt: now,
-				...(intakeLogged
-					? {
-							energyKcal: intakeEnergyKcal,
-							portionServings: intakePortionServings,
-							manifestDate: sharedDate ?? mealEntries[0]?.date,
-							verified: intakeVerified,
-						}
-					: {}),
 			}),
 		]);
 		stmts.push(...eventStmts);
 		allEventIds.push(...eventIds);
+		allIntakeIds.push(...intakeRows.map((row) => row.id));
 
 		for (const row of intakeRows) {
 			stmts.push(
@@ -691,6 +687,7 @@ export async function consumeManifestEntries(
 		skippedIngredients:
 			skippedIngredients.length > 0 ? skippedIngredients : undefined,
 		eventIds: allEventIds,
+		intakeIds: allIntakeIds,
 	};
 }
 
@@ -716,6 +713,8 @@ export async function addEntry(
 			name: meal.name,
 			servings: meal.servings,
 			type: meal.type,
+			prepTime: meal.prepTime,
+			cookTime: meal.cookTime,
 		})
 		.from(meal)
 		.where(
@@ -745,6 +744,8 @@ export async function addEntry(
 		mealName: mealRow.name,
 		mealServings: mealRow.servings ?? 1,
 		mealType: mealRow.type ?? "recipe",
+		mealPrepTime: mealRow.prepTime ?? null,
+		mealCookTime: mealRow.cookTime ?? null,
 	} as MealPlanEntryWithMeal;
 }
 
@@ -792,7 +793,13 @@ export async function updateEntry(
 
 	// Fetch meal details for return
 	const [mealRow] = await d1
-		.select({ name: meal.name, servings: meal.servings, type: meal.type })
+		.select({
+			name: meal.name,
+			servings: meal.servings,
+			type: meal.type,
+			prepTime: meal.prepTime,
+			cookTime: meal.cookTime,
+		})
 		.from(meal)
 		.where(
 			and(eq(meal.id, updated.mealId), eq(meal.organizationId, organizationId)),
@@ -804,6 +811,8 @@ export async function updateEntry(
 		mealName: mealRow?.name ?? "",
 		mealServings: mealRow?.servings ?? 1,
 		mealType: mealRow?.type ?? "recipe",
+		mealPrepTime: mealRow?.prepTime ?? null,
+		mealCookTime: mealRow?.cookTime ?? null,
 	} as MealPlanEntryWithMeal;
 }
 

@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+	AnyNutritionSnapshotSchema,
 	ConsumePortionsSchema,
 	NutritionGoalSchema,
 	NutritionGoalUpsertSchema,
+	NutritionRecomputeJobSchema,
 	NutritionResolveRequestSchema,
 	NutritionSnapshotSchema,
+	NutritionSnapshotV2Schema,
 	NutritionSummaryQuerySchema,
 	NutritionSummarySchema,
 } from "../nutrition";
@@ -46,6 +49,63 @@ describe("NutritionSnapshotSchema", () => {
 				description: null,
 			}),
 		).toThrow();
+	});
+});
+
+describe("NutritionSnapshotV2Schema", () => {
+	it("accepts v2 additive fields with nullable nutrients", () => {
+		const parsed = NutritionSnapshotV2Schema.parse({
+			schemaVersion: 2,
+			source: "usda",
+			confidence: 1,
+			verified: true,
+			sourceRef: "fdc:9003",
+			matchQuality: "verified",
+			servingBasis: "per100g",
+			nutrientCoverage: 0.9,
+			per100g: {
+				energyKcal: 52,
+				proteinG: null,
+				fatG: 0.2,
+				carbG: 14,
+				fiberG: 2.4,
+				sugarG: null,
+				satFatG: 0,
+				sodiumMg: 1,
+				saltG: null,
+			},
+			perServing: null,
+			fdcId: 9003,
+			description: "Apples, raw",
+		});
+		expect(parsed.schemaVersion).toBe(2);
+		expect(parsed.per100g?.proteinG).toBeNull();
+	});
+
+	it("accepts legacy v1 via union schema", () => {
+		const parsed = AnyNutritionSnapshotSchema.parse({
+			source: "usda",
+			confidence: 1,
+			verified: true,
+			per100g: null,
+			perServing: null,
+			fdcId: null,
+			description: null,
+		});
+		expect(parsed.source).toBe("usda");
+	});
+});
+
+describe("NutritionRecomputeJobSchema", () => {
+	it("accepts async recompute queue message", () => {
+		const parsed = NutritionRecomputeJobSchema.parse({
+			jobId: "11111111-1111-4111-8111-111111111111",
+			organizationId: "org-1",
+			mealId: "meal-1",
+			trigger: "meal",
+			enqueuedAt: "2026-08-09T12:00:00.000Z",
+		});
+		expect(parsed.trigger).toBe("meal");
 	});
 });
 

@@ -1,8 +1,8 @@
 import { normalizeForMatch } from "~/lib/matching";
 import {
 	NUTRITION_FDC_CACHE_TTL_SECONDS,
-	NUTRITION_FDC_KV_PREFIX,
 	NUTRITION_FDC_NEGATIVE_CACHE_TTL_SECONDS,
+	nutritionMatchCacheKey,
 } from "./constants";
 import { type FoodMatchCandidate, pickBestFoodMatch } from "./rank-food-match";
 import type { NutrientsPer100g, ResolvedFood } from "./types";
@@ -49,7 +49,7 @@ export async function resolveFoodName(
 	const normalized = normalizeForMatch(name);
 	if (!normalized) return null;
 
-	const cacheKey = `${NUTRITION_FDC_KV_PREFIX}${normalized}`;
+	const cacheKey = nutritionMatchCacheKey(normalized);
 	const kv = env.RATION_KV;
 
 	if (kv) {

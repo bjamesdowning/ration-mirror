@@ -1,4 +1,16 @@
-import { and, desc, eq, gte, inArray, isNull, lt, lte, sql } from "drizzle-orm";
+import {
+	and,
+	desc,
+	eq,
+	gt,
+	gte,
+	inArray,
+	isNull,
+	lt,
+	lte,
+	or,
+	sql,
+} from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import * as schema from "~/db/schema";
 import type { FlagshipEvaluationContext } from "~/lib/feature-flags/context.server";
@@ -641,8 +653,43 @@ export type NutritionIntakeRow = {
 	occurredAt: Date;
 };
 
+export type ListNutritionIntakesOptions = {
+	limit?: number;
+	/** Opaque cursor from a previous `nextCursor` (`manifestDate|occurredAtISO|id`). */
+	cursor?: string;
+};
+
+const MAX_INTAKE_LIST_LIMIT = 500;
+
+export type ListNutritionIntakesResult = {
+	items: NutritionIntakeRow[];
+	nextCursor: string | null;
+};
+
+export function encodeNutritionIntakeCursor(
+	manifestDate: string,
+	occurredAt: Date,
+	id: string,
+): string {
+	return `${manifestDate}|${occurredAt.toISOString()}|${id}`;
+}
+
+export function decodeNutritionIntakeCursor(
+	cursor: string,
+): { manifestDate: string; occurredAt: Date; id: string } | null {
+	const parts = cursor.split("|");
+	if (parts.length < 3) return null;
+	const manifestDate = parts[0] ?? "";
+	const occurredAt = new Date(parts[1] ?? "");
+	const id = parts.slice(2).join("|");
+	if (!/^\d{4}-\d{2}-\d{2}$/.test(manifestDate)) return null;
+	if (Number.isNaN(occurredAt.getTime()) || !id) return null;
+	return { manifestDate, occurredAt, id };
+}
+
 /**
  * Individual intake rows for a date range (Manifest day history).
+ * Cursor-paginated when `options.limit` is set; default cap 500 rows per call.
  */
 export async function listNutritionIntakesForRange(
 	db: D1Database,
@@ -650,8 +697,39 @@ export async function listNutritionIntakesForRange(
 	orgId: string,
 	from: string,
 	to: string,
-): Promise<NutritionIntakeRow[]> {
+	options: ListNutritionIntakesOptions = {},
+): Promise<ListNutritionIntakesResult> {
 	const d1 = drizzle(db, { schema });
+	const limit = Math.min(
+		Math.max(options.limit ?? MAX_INTAKE_LIST_LIMIT, 1),
+		MAX_INTAKE_LIST_LIMIT,
+	);
+	const decoded = options.cursor
+		? decodeNutritionIntakeCursor(options.cursor)
+		: null;
+
+	const baseWhere = and(
+		eq(schema.nutritionIntake.userId, userId),
+		eq(schema.nutritionIntake.organizationId, orgId),
+		gte(schema.nutritionIntake.manifestDate, from),
+		lte(schema.nutritionIntake.manifestDate, to),
+	);
+
+	const cursorWhere = decoded
+		? or(
+				gt(schema.nutritionIntake.manifestDate, decoded.manifestDate),
+				and(
+					eq(schema.nutritionIntake.manifestDate, decoded.manifestDate),
+					gt(schema.nutritionIntake.occurredAt, decoded.occurredAt),
+				),
+				and(
+					eq(schema.nutritionIntake.manifestDate, decoded.manifestDate),
+					eq(schema.nutritionIntake.occurredAt, decoded.occurredAt),
+					gt(schema.nutritionIntake.id, decoded.id),
+				),
+			)
+		: undefined;
+
 	const rows = await d1
 		.select({
 			id: schema.nutritionIntake.id,
@@ -669,21 +747,16 @@ export async function listNutritionIntakesForRange(
 		})
 		.from(schema.nutritionIntake)
 		.leftJoin(schema.meal, eq(schema.nutritionIntake.mealId, schema.meal.id))
-		.where(
-			and(
-				eq(schema.nutritionIntake.userId, userId),
-				eq(schema.nutritionIntake.organizationId, orgId),
-				gte(schema.nutritionIntake.manifestDate, from),
-				lte(schema.nutritionIntake.manifestDate, to),
-			),
-		)
+		.where(cursorWhere ? and(baseWhere, cursorWhere) : baseWhere)
 		.orderBy(
 			schema.nutritionIntake.manifestDate,
 			schema.nutritionIntake.occurredAt,
+			schema.nutritionIntake.id,
 		)
-		.limit(500);
+		.limit(limit + 1);
 
-	return rows.map((r) => ({
+	const page = rows.slice(0, limit);
+	const items = page.map((r) => ({
 		id: r.id,
 		manifestDate: r.manifestDate,
 		slotType: r.slotType,
@@ -697,6 +770,14 @@ export async function listNutritionIntakesForRange(
 		verified: r.verified,
 		occurredAt: r.occurredAt,
 	}));
+
+	const last = page.at(-1);
+	const nextCursor =
+		rows.length > limit && last
+			? encodeNutritionIntakeCursor(last.manifestDate, last.occurredAt, last.id)
+			: null;
+
+	return { items, nextCursor };
 }
 
 export async function getNutritionSummary(
@@ -706,71 +787,54 @@ export async function getNutritionSummary(
 	from: string,
 	to: string,
 ): Promise<NutritionSummaryResult> {
-	const d1 = drizzle(db);
-	const rows = await d1
-		.select()
-		.from(schema.nutritionIntake)
-		.where(
-			and(
-				eq(schema.nutritionIntake.userId, userId),
-				eq(schema.nutritionIntake.organizationId, orgId),
-				gte(schema.nutritionIntake.manifestDate, from),
-				lte(schema.nutritionIntake.manifestDate, to),
-			),
-		)
-		.orderBy(schema.nutritionIntake.manifestDate)
-		.limit(2000);
+	const d1 = drizzle(db, { schema });
+	const whereClause = and(
+		eq(schema.nutritionIntake.userId, userId),
+		eq(schema.nutritionIntake.organizationId, orgId),
+		gte(schema.nutritionIntake.manifestDate, from),
+		lte(schema.nutritionIntake.manifestDate, to),
+	);
 
-	const byDate = new Map<
-		string,
-		{
-			energyKcal: number;
-			proteinG: number;
-			carbsG: number;
-			fatG: number;
-			coverageSum: number;
-			entryCount: number;
-		}
-	>();
+	const [totalRow] = await d1
+		.select({
+			energyKcal: sql<number>`coalesce(sum(${schema.nutritionIntake.energyKcal}), 0)`,
+			proteinG: sql<number>`coalesce(sum(${schema.nutritionIntake.proteinG}), 0)`,
+			carbsG: sql<number>`coalesce(sum(${schema.nutritionIntake.carbsG}), 0)`,
+			fatG: sql<number>`coalesce(sum(${schema.nutritionIntake.fatG}), 0)`,
+		})
+		.from(schema.nutritionIntake)
+		.where(whereClause);
+
+	const dayRows = await d1
+		.select({
+			date: schema.nutritionIntake.manifestDate,
+			energyKcal: sql<number>`coalesce(sum(${schema.nutritionIntake.energyKcal}), 0)`,
+			proteinG: sql<number>`coalesce(sum(${schema.nutritionIntake.proteinG}), 0)`,
+			carbsG: sql<number>`coalesce(sum(${schema.nutritionIntake.carbsG}), 0)`,
+			fatG: sql<number>`coalesce(sum(${schema.nutritionIntake.fatG}), 0)`,
+			coverageAvg: sql<number>`coalesce(avg(${schema.nutritionIntake.coverage}), 0)`,
+			entryCount: sql<number>`count(*)`,
+		})
+		.from(schema.nutritionIntake)
+		.where(whereClause)
+		.groupBy(schema.nutritionIntake.manifestDate)
+		.orderBy(schema.nutritionIntake.manifestDate);
 
 	const totals = {
-		energyKcal: 0,
-		proteinG: 0,
-		carbsG: 0,
-		fatG: 0,
+		energyKcal: totalRow?.energyKcal ?? 0,
+		proteinG: totalRow?.proteinG ?? 0,
+		carbsG: totalRow?.carbsG ?? 0,
+		fatG: totalRow?.fatG ?? 0,
 	};
 
-	for (const row of rows) {
-		totals.energyKcal += row.energyKcal;
-		totals.proteinG += row.proteinG;
-		totals.carbsG += row.carbsG;
-		totals.fatG += row.fatG;
-
-		const bucket = byDate.get(row.manifestDate) ?? {
-			energyKcal: 0,
-			proteinG: 0,
-			carbsG: 0,
-			fatG: 0,
-			coverageSum: 0,
-			entryCount: 0,
-		};
-		bucket.energyKcal += row.energyKcal;
-		bucket.proteinG += row.proteinG;
-		bucket.carbsG += row.carbsG;
-		bucket.fatG += row.fatG;
-		bucket.coverageSum += row.coverage;
-		bucket.entryCount += 1;
-		byDate.set(row.manifestDate, bucket);
-	}
-
-	const days = [...byDate.entries()].map(([date, b]) => ({
-		date,
-		energyKcal: b.energyKcal,
-		proteinG: b.proteinG,
-		carbsG: b.carbsG,
-		fatG: b.fatG,
-		coverageAvg: b.entryCount > 0 ? b.coverageSum / b.entryCount : 0,
-		entryCount: b.entryCount,
+	const days = dayRows.map((row) => ({
+		date: row.date,
+		energyKcal: row.energyKcal,
+		proteinG: row.proteinG,
+		carbsG: row.carbsG,
+		fatG: row.fatG,
+		coverageAvg: row.coverageAvg,
+		entryCount: row.entryCount,
 	}));
 
 	const goalRow = await getActiveNutritionGoal(db, userId, to);

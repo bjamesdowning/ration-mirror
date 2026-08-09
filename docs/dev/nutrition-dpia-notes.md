@@ -7,7 +7,7 @@ Short processing notes for personal nutrition goals and Manifest Eat intake (GDP
 | Data | Storage | Purpose | Legal basis |
 |------|---------|---------|-------------|
 | Personal daily goals (kcal + macros) | D1 `nutrition_goal` (versioned) | Goals vs reality on Manifest / summary API | Explicit consent at save (`consentAt`) |
-| Intake from Manifest Eat (plate-up) | D1 `nutrition_intake` | Day totals, Flight Recorder, calendar history | Consent implied by using goals/Eat while features enabled; erase with account |
+| Intake from Manifest Eat (plate-up) | D1 `nutrition_intake` | Day totals, calendar history (user-scoped) | Consent implied by using goals/Eat while features enabled; erase with account; never copied into shared `kitchen_event` payloads |
 | Food composition snapshots on cargo/meals | JSON on `cargo` / `meal` | Pantry + recipe display | Legitimate interest / contract — USDA-shaped reference, not clinical advice |
 | AI nutrient estimates | Same snapshots (`source=ai_estimate`) | Fill USDA misses on AI ingest only | Same as AI ingest; labelled unverified |
 

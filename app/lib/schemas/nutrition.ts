@@ -10,6 +10,7 @@ export const NutritionSourceSchema = z.enum([
 const NutrientAmountSchema = z.number().nonnegative().max(100_000);
 const NullableNutrientAmountSchema = NutrientAmountSchema.nullable();
 
+/** Legacy v1 — core macros required; optional micronutrients nullable. */
 export const NutrientValuesSchema = z.object({
 	energyKcal: NutrientAmountSchema,
 	proteinG: NutrientAmountSchema,
@@ -22,6 +23,33 @@ export const NutrientValuesSchema = z.object({
 	saltG: NullableNutrientAmountSchema,
 });
 
+/** v2 — all nutrient amounts nullable (unknown ≠ zero). */
+export const NullableNutrientValuesSchema = z.object({
+	energyKcal: NullableNutrientAmountSchema,
+	proteinG: NullableNutrientAmountSchema,
+	fatG: NullableNutrientAmountSchema,
+	carbG: NullableNutrientAmountSchema,
+	fiberG: NullableNutrientAmountSchema,
+	sugarG: NullableNutrientAmountSchema,
+	satFatG: NullableNutrientAmountSchema,
+	sodiumMg: NullableNutrientAmountSchema,
+	saltG: NullableNutrientAmountSchema,
+});
+
+export const NutritionMatchQualitySchema = z.enum([
+	"verified",
+	"high",
+	"medium",
+	"low",
+	"unknown",
+]);
+
+export const NutritionServingBasisSchema = z.enum([
+	"per100g",
+	"perServing",
+	"package",
+]);
+
 export const NutritionSnapshotSchema = z.object({
 	source: NutritionSourceSchema,
 	confidence: z.number().min(0).max(1),
@@ -31,6 +59,23 @@ export const NutritionSnapshotSchema = z.object({
 	fdcId: z.number().int().nullable(),
 	description: z.string().nullable(),
 });
+
+/** v2 additive contract — extends legacy fields with nullable nutrient blocks. */
+export const NutritionSnapshotV2Schema = NutritionSnapshotSchema.extend({
+	schemaVersion: z.literal(2),
+	sourceRef: z.string().max(200).nullable(),
+	matchQuality: NutritionMatchQualitySchema,
+	servingBasis: NutritionServingBasisSchema.nullable(),
+	nutrientCoverage: z.number().min(0).max(1),
+	per100g: NullableNutrientValuesSchema.nullable(),
+	perServing: NullableNutrientValuesSchema.nullable(),
+});
+
+/** Accept legacy v1 or explicit v2 payloads. */
+export const AnyNutritionSnapshotSchema = z.union([
+	NutritionSnapshotV2Schema,
+	NutritionSnapshotSchema,
+]);
 
 export type NutritionSnapshotInput = z.infer<typeof NutritionSnapshotSchema>;
 
@@ -174,4 +219,18 @@ export const NutritionResolveRequestSchema = z.object({
 
 export type NutritionResolveRequest = z.infer<
 	typeof NutritionResolveRequestSchema
+>;
+
+/** Async nutrition recompute queue message (Slice 8 stub). */
+export const NutritionRecomputeJobSchema = z.object({
+	jobId: z.string().uuid(),
+	organizationId: z.string().min(1),
+	mealId: z.string().min(1).optional(),
+	cargoId: z.string().min(1).optional(),
+	trigger: z.enum(["cargo", "meal", "batch"]),
+	enqueuedAt: z.string().datetime(),
+});
+
+export type NutritionRecomputeJobMessage = z.infer<
+	typeof NutritionRecomputeJobSchema
 >;

@@ -5,6 +5,7 @@ import {
 	galleyCookedPayloadSchema,
 	kitchenEventTypeSchema,
 	manifestConsumedPayloadSchema,
+	manifestCookedPayloadSchema,
 	supplyDockedPayloadSchema,
 } from "../kitchen-events";
 
@@ -27,6 +28,34 @@ describe("kitchen event payload schemas", () => {
 				servings: 1,
 			}),
 		).toThrow();
+	});
+
+	it("still decodes legacy personal nutrition on manifest_consumed", () => {
+		const parsed = manifestConsumedPayloadSchema.parse({
+			planId: "p1",
+			entryIds: ["e1"],
+			servings: 2,
+			energyKcal: 400,
+			portionServings: 1,
+			verified: true,
+		});
+		expect(parsed.energyKcal).toBe(400);
+	});
+
+	it("accepts manifest_cooked logistics-only payload", () => {
+		const parsed = manifestCookedPayloadSchema.parse({
+			planId: "p1",
+			entryIds: ["e1"],
+			servings: 2,
+			deductions: [],
+		});
+		expect(parsed.planId).toBe("p1");
+	});
+
+	it("kitchenEventTypeSchema accepts manifest_cooked", () => {
+		expect(kitchenEventTypeSchema.parse("manifest_cooked")).toBe(
+			"manifest_cooked",
+		);
 	});
 
 	it("accepts supply_docked / cargo_expired / cargo_jettisoned", () => {

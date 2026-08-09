@@ -19,6 +19,7 @@ describe("getClientSafeFlags", () => {
 			nutritionAiEstimate: false,
 			nutritionManifest: false,
 			nutritionGoals: false,
+			nutritionCookLogSplit: false,
 		});
 	});
 });

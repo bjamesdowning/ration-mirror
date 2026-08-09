@@ -6,9 +6,19 @@ When nutrition goals and Manifest nutrition are enabled for your account, Ration
 
 ## Personal goals
 
-Open **Hub → Settings → Preferences** (or the nutrition goals section when shown). Set daily energy (kcal) and optional macros (protein, carbs, fat, fiber). Saving a goal requires **explicit consent** to store health-related personal data. You can clear the goal at any time.
+Open **Hub → Settings → Preferences** (nutrition goals section when the flag is on). Set **only the nutrients you care about** — energy (kcal) and/or any macros (protein, carbs, fat, fiber). Empty fields stay unset and are **not** shown on Manifest. At least one nutrient is required to save. Saving requires **explicit consent** to store health-related personal data. Clear removes the active goal.
 
-Day views and summaries can show consumed totals versus your active goal when both intake logging and goals are available.
+Goals are **personal to the signed-in user** (not shared with kitchen members). Each person in the same group can set different targets.
+
+## Manifest preference strip
+
+When both **nutrition-manifest** and **nutrition-goals** are on:
+
+- Days show adherence-neutral progress for **set targets only** (e.g. `1,240 / 2,000 kcal · 95 / 200 g protein`).
+- If you have no active goal, Manifest shows a compact **No goals** empty state with a link to Settings preferences.
+- Intake can still be logged without goals; the strip stays on “No goals” until you set preferences.
+
+Flags off: Manifest nutrition chrome is unchanged (no preference strip).
 
 ## Manifest Eat (plate-up)
 

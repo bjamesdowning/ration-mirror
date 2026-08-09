@@ -63,6 +63,7 @@ import { addDays, getCalendarDates } from "~/lib/manifest-dates";
 import { getExcludedManifestDates } from "~/lib/manifest-supply.server";
 import { checkMealReadiness } from "~/lib/matching.server";
 import { aggregateManifestDayNutrition } from "~/lib/nutrition/day-totals";
+import { goalTargetsFromRow } from "~/lib/nutrition/goal-progress";
 import {
 	getActiveNutritionGoal,
 	getNutritionSummary,
@@ -185,9 +186,23 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		isFeatureEnabled(env, "nutrition-goals", flagContext),
 	]);
 
-	const dayConsumedKcal: Record<string, number> = {};
-	const dayPlannedKcal: Record<string, number> = {};
-	let goalEnergyKcal: number | null = null;
+	const dayConsumedNutrients: Record<
+		string,
+		{
+			energyKcal: number;
+			proteinG: number;
+			carbsG: number;
+			fatG: number;
+			fiberG: number;
+		}
+	> = {};
+	let goalTargets: {
+		dailyEnergyKcal: number | null;
+		proteinG: number | null;
+		carbsG: number | null;
+		fatG: number | null;
+		fiberG: number | null;
+	} | null = null;
 	let dayIntakeRows: Array<{
 		id: string;
 		manifestDate: string;
@@ -225,6 +240,9 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		const intakes = summary.days.map((d) => ({
 			date: d.date,
 			energyKcal: d.energyKcal,
+			proteinG: d.proteinG,
+			carbsG: d.carbsG,
+			fatG: d.fatG,
 		}));
 		const aggregated = aggregateManifestDayNutrition(
 			entries.map((e) => ({
@@ -236,13 +254,12 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 			weekDates,
 		);
 		for (const [date, totals] of Object.entries(aggregated)) {
-			dayConsumedKcal[date] = totals.consumedKcal;
-			dayPlannedKcal[date] = totals.plannedKcal;
+			dayConsumedNutrients[date] = totals.consumed;
 		}
 		if (nutritionGoals) {
 			const goal =
 				summary.goal ?? (await getActiveNutritionGoal(db, user.id, today));
-			goalEnergyKcal = goal?.dailyEnergyKcal ?? null;
+			goalTargets = goalTargetsFromRow(goal);
 		}
 	}
 
@@ -262,9 +279,8 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		readyMealIds,
 		supplyDayInclusion,
 		nutritionManifest,
-		dayConsumedKcal,
-		dayPlannedKcal,
-		goalEnergyKcal,
+		dayConsumedNutrients,
+		goalTargets,
 		dayIntakeRows,
 	};
 }
@@ -340,8 +356,8 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 		triggeredAllergensByMealId,
 		readyMealIds,
 		supplyDayInclusion: initialSupplyDayInclusion,
-		dayConsumedKcal = {},
-		goalEnergyKcal = null,
+		dayConsumedNutrients = {},
+		goalTargets = null,
 		dayIntakeRows = [],
 	} = loaderData;
 
@@ -1058,12 +1074,13 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 								includedInSupply={supplyDayInclusion[activeDay] !== false}
 								onToggleSupplyInclusion={handleToggleSupplyInclusion}
 								togglingSupplyDate={togglingSupplyDate}
-								consumedKcal={
+								consumedNutrients={
 									showDayNutritionTotals
-										? (dayConsumedKcal[activeDay] ?? null)
+										? (dayConsumedNutrients[activeDay] ?? null)
 										: null
 								}
-								goalEnergyKcal={showDayNutritionTotals ? goalEnergyKcal : null}
+								goalsChrome={showDayNutritionTotals}
+								goalTargets={showDayNutritionTotals ? goalTargets : null}
 								intakeRows={nutritionManifestFlag ? activeDayIntakes : []}
 							/>
 						)}
@@ -1095,10 +1112,11 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 						supplyDayInclusion={supplyDayInclusion}
 						onToggleSupplyInclusion={handleToggleSupplyInclusion}
 						togglingSupplyDate={togglingSupplyDate}
-						dayConsumedKcal={
-							showDayNutritionTotals ? dayConsumedKcal : undefined
+						goalsChrome={showDayNutritionTotals}
+						goalTargets={showDayNutritionTotals ? goalTargets : null}
+						dayConsumedNutrients={
+							showDayNutritionTotals ? dayConsumedNutrients : undefined
 						}
-						goalEnergyKcal={showDayNutritionTotals ? goalEnergyKcal : null}
 					/>
 				</div>
 			</div>

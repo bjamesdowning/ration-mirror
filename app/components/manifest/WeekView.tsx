@@ -1,7 +1,15 @@
+import { Link } from "react-router";
 import type { AllergenSlug } from "~/lib/allergens";
 import type { MealPlanEntryWithMeal } from "~/lib/manifest.server";
 import { getDayName } from "~/lib/manifest-dates";
-import { formatConsumedVsGoalKcal } from "~/lib/nutrition/day-totals";
+import {
+	type DayNutrientTotals,
+	emptyDayNutrientTotals,
+	formatGoalProgressStrip,
+	hasAnyGoalTarget,
+	selectGoalProgressLines,
+	type UserGoalTargets,
+} from "~/lib/nutrition/day-totals";
 import type { SlotType } from "~/lib/schemas/manifest";
 import { SLOT_TYPES } from "~/lib/schemas/manifest";
 import { ManifestDaySupplyToggle } from "./ManifestDaySupplyToggle";
@@ -26,10 +34,11 @@ interface WeekViewProps {
 	supplyDayInclusion?: Record<string, boolean>;
 	onToggleSupplyInclusion?: (date: string) => void;
 	togglingSupplyDate?: string | null;
-	/** Per-date consumed kcal when nutrition-manifest is on. */
-	dayConsumedKcal?: Record<string, number>;
-	/** Active daily energy goal when nutrition-goals is on. */
-	goalEnergyKcal?: number | null;
+	/** Both nutrition-manifest + nutrition-goals client flags on. */
+	goalsChrome?: boolean;
+	goalTargets?: UserGoalTargets | null;
+	/** Per-date consumed nutrients when goals chrome is on. */
+	dayConsumedNutrients?: Record<string, DayNutrientTotals>;
 }
 
 export function WeekView({
@@ -51,8 +60,9 @@ export function WeekView({
 	supplyDayInclusion = {},
 	onToggleSupplyInclusion,
 	togglingSupplyDate = null,
-	dayConsumedKcal,
-	goalEnergyKcal = null,
+	goalsChrome = false,
+	goalTargets = null,
+	dayConsumedNutrients,
 }: WeekViewProps) {
 	const slots = showSnackSlot
 		? SLOT_TYPES
@@ -64,6 +74,8 @@ export function WeekView({
 			: dates.length === 5
 				? "grid-cols-5"
 				: "grid-cols-7";
+
+	const showNoGoals = goalsChrome && !hasAnyGoalTarget(goalTargets);
 
 	return (
 		<div className={`grid ${gridCols} gap-2 min-w-0`}>
@@ -80,6 +92,14 @@ export function WeekView({
 				const allConsumed = totalCount > 0 && consumedCount === totalCount;
 
 				const isSelected = selectedDate === date;
+				const progressStrip = goalsChrome
+					? formatGoalProgressStrip(
+							selectGoalProgressLines(
+								goalTargets,
+								dayConsumedNutrients?.[date] ?? emptyDayNutrientTotals(),
+							),
+						)
+					: "";
 
 				return (
 					<div
@@ -114,14 +134,19 @@ export function WeekView({
 										{allConsumed ? "✓ done" : `${consumedCount}/${totalCount}`}
 									</p>
 								)}
-								{goalEnergyKcal != null && dayConsumedKcal?.[date] != null && (
-									<p className="text-[9px] font-mono mt-0.5 leading-none opacity-90">
-										{formatConsumedVsGoalKcal(
-											dayConsumedKcal[date] ?? 0,
-											goalEnergyKcal,
-										)}
+								{progressStrip ? (
+									<p
+										className="text-[8px] font-mono mt-0.5 leading-tight opacity-90 px-0.5 line-clamp-2"
+										title={progressStrip}
+									>
+										{progressStrip}
 									</p>
-								)}
+								) : null}
+								{showNoGoals ? (
+									<p className="text-[8px] font-mono mt-0.5 leading-tight opacity-90">
+										No goals
+									</p>
+								) : null}
 							</button>
 							{/* Copy day button — overlaid top-right, always visible when day has entries */}
 							{!readOnly && onCopyDay && totalCount > 0 && (
@@ -197,6 +222,17 @@ export function WeekView({
 					</div>
 				);
 			})}
+			{showNoGoals ? (
+				<p className="col-span-full text-xs text-muted font-mono mt-1">
+					No goals ·{" "}
+					<Link
+						to="/hub/settings"
+						className="text-hyper-green underline-offset-2 hover:underline"
+					>
+						Set preferences
+					</Link>
+				</p>
+			) : null}
 		</div>
 	);
 }

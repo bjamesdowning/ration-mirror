@@ -8,6 +8,7 @@ import {
 	getNutritionSummary,
 	upsertNutritionGoal,
 } from "../../nutrition/persist.server";
+import { resolveNutritionGoalConsentAt } from "../../nutrition/resolve-goal-consent.server";
 import {
 	NutritionGoalUpsertSchema,
 	NutritionSummaryQuerySchema,
@@ -93,8 +94,24 @@ export function createNutritionToolDefs(env: McpToolsEnv) {
 		defineSharedTool({
 			name: "set_nutrition_goal",
 			description:
-				"Upsert the caller's personal daily nutrition goal (energy + macros). Requires nutrition-goals and an explicit consentAt timestamp (Art. 9 health data). Not medical advice — do not prescribe diets.",
-			inputSchema: NutritionGoalUpsertSchema,
+				"Upsert the caller's personal daily nutrition goal (any subset of energy/macros; at least one required). Requires nutrition-goals and consent:true or legacy consentAt (Art. 9). Not medical advice — do not prescribe diets.",
+			inputSchema: z.object({
+				dailyEnergyKcal: z
+					.number()
+					.positive()
+					.max(20_000)
+					.nullable()
+					.optional(),
+				proteinG: z.number().nonnegative().max(2_000).nullable().optional(),
+				carbsG: z.number().nonnegative().max(2_000).nullable().optional(),
+				fatG: z.number().nonnegative().max(2_000).nullable().optional(),
+				fiberG: z.number().nonnegative().max(500).nullable().optional(),
+				effectiveFrom: z
+					.string()
+					.regex(/^\d{4}-\d{2}-\d{2}$/, "Must be YYYY-MM-DD"),
+				consentAt: z.coerce.date().optional(),
+				consent: z.boolean().optional(),
+			}),
 			scopes: ["mcp:preferences:write"],
 			rateLimitCategory: "mcp_write",
 			audit: true,
@@ -112,15 +129,30 @@ export function createNutritionToolDefs(env: McpToolsEnv) {
 						"Enable nutrition-goals for this environment, or manage goals later in Hub → Settings when the flag is on.",
 					);
 				}
+				const parsed = NutritionGoalUpsertSchema.safeParse(a);
+				if (!parsed.success) {
+					return err(
+						"set_nutrition_goal",
+						"invalid_input",
+						"Set at least one nutrient target and provide consent:true or consentAt.",
+						{ details: parsed.error.flatten() },
+					);
+				}
+				const consentAt = await resolveNutritionGoalConsentAt(
+					env.DB,
+					ctx.userId,
+					"mcp",
+					parsed.data,
+				);
 				const created = await upsertNutritionGoal(env.DB, {
 					userId: ctx.userId,
-					dailyEnergyKcal: a.dailyEnergyKcal,
-					proteinG: a.proteinG,
-					carbsG: a.carbsG,
-					fatG: a.fatG,
-					fiberG: a.fiberG ?? null,
-					effectiveFrom: a.effectiveFrom,
-					consentAt: a.consentAt,
+					dailyEnergyKcal: parsed.data.dailyEnergyKcal,
+					proteinG: parsed.data.proteinG,
+					carbsG: parsed.data.carbsG,
+					fatG: parsed.data.fatG,
+					fiberG: parsed.data.fiberG ?? null,
+					effectiveFrom: parsed.data.effectiveFrom,
+					consentAt,
 				});
 				return ok("set_nutrition_goal", {
 					goal: created ? serializeGoal(created) : null,

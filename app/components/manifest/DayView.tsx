@@ -1,7 +1,15 @@
+import { Link } from "react-router";
 import type { AllergenSlug } from "~/lib/allergens";
 import type { MealPlanEntryWithMeal } from "~/lib/manifest.server";
 import { getDayName } from "~/lib/manifest-dates";
-import { formatConsumedVsGoalKcal } from "~/lib/nutrition/day-totals";
+import {
+	type DayNutrientTotals,
+	emptyDayNutrientTotals,
+	formatGoalProgressStrip,
+	hasAnyGoalTarget,
+	selectGoalProgressLines,
+	type UserGoalTargets,
+} from "~/lib/nutrition/day-totals";
 import type { SlotType } from "~/lib/schemas/manifest";
 import { SLOT_LABELS, SLOT_TYPES } from "~/lib/schemas/manifest";
 import { ManifestDaySupplyToggle } from "./ManifestDaySupplyToggle";
@@ -30,8 +38,10 @@ interface DayViewProps {
 	includedInSupply?: boolean;
 	onToggleSupplyInclusion?: (date: string) => void;
 	togglingSupplyDate?: string | null;
-	consumedKcal?: number | null;
-	goalEnergyKcal?: number | null;
+	/** Both nutrition-manifest + nutrition-goals client flags on. */
+	goalsChrome?: boolean;
+	goalTargets?: UserGoalTargets | null;
+	consumedNutrients?: DayNutrientTotals | null;
 	/** Logged intake rows for this day (nutrition-manifest). */
 	intakeRows?: DayIntakeRow[];
 }
@@ -66,8 +76,9 @@ export function DayView({
 	includedInSupply = true,
 	onToggleSupplyInclusion,
 	togglingSupplyDate = null,
-	consumedKcal = null,
-	goalEnergyKcal = null,
+	goalsChrome = false,
+	goalTargets = null,
+	consumedNutrients = null,
 	intakeRows = [],
 }: DayViewProps) {
 	const d = new Date(`${date}T00:00:00`);
@@ -83,6 +94,14 @@ export function DayView({
 		: SLOT_TYPES.filter((s) => s !== "snack");
 
 	const dayIntakes = intakeRows.filter(Boolean);
+	const progressLines = goalsChrome
+		? selectGoalProgressLines(
+				goalTargets,
+				consumedNutrients ?? emptyDayNutrientTotals(),
+			)
+		: [];
+	const progressStrip = formatGoalProgressStrip(progressLines);
+	const showNoGoals = goalsChrome && !hasAnyGoalTarget(goalTargets);
 
 	return (
 		<div className="space-y-5">
@@ -117,14 +136,26 @@ export function DayView({
 						</p>
 					</>
 				)}
-				{goalEnergyKcal != null && consumedKcal != null && (
+				{progressStrip ? (
+					<>
+						<span className="text-xs text-muted/40 font-mono">·</span>
+						<p className="text-xs text-muted font-mono">{progressStrip}</p>
+					</>
+				) : null}
+				{showNoGoals ? (
 					<>
 						<span className="text-xs text-muted/40 font-mono">·</span>
 						<p className="text-xs text-muted font-mono">
-							{formatConsumedVsGoalKcal(consumedKcal, goalEnergyKcal)} kcal
+							No goals ·{" "}
+							<Link
+								to="/hub/settings"
+								className="text-hyper-green underline-offset-2 hover:underline"
+							>
+								Set preferences
+							</Link>
 						</p>
 					</>
-				)}
+				) : null}
 			</div>
 
 			{dayIntakes.length > 0 && (

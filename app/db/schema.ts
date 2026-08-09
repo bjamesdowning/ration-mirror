@@ -1051,10 +1051,10 @@ export const nutritionGoal = sqliteTable(
 		userId: text("user_id")
 			.notNull()
 			.references(() => user.id, { onDelete: "cascade" }),
-		dailyEnergyKcal: real("daily_energy_kcal").notNull(),
-		proteinG: real("protein_g").notNull(),
-		carbsG: real("carbs_g").notNull(),
-		fatG: real("fat_g").notNull(),
+		dailyEnergyKcal: real("daily_energy_kcal"),
+		proteinG: real("protein_g"),
+		carbsG: real("carbs_g"),
+		fatG: real("fat_g"),
 		fiberG: real("fiber_g"),
 		/** Inclusive start date YYYY-MM-DD (UTC calendar). */
 		effectiveFrom: text("effective_from").notNull(),

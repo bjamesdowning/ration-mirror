@@ -9,6 +9,7 @@ import {
 	getActiveNutritionGoal,
 	upsertNutritionGoal,
 } from "~/lib/nutrition/persist.server";
+import { resolveNutritionGoalConsentAt } from "~/lib/nutrition/resolve-goal-consent.server";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import { NutritionGoalUpsertSchema } from "~/lib/schemas/nutrition";
 import type { Route } from "./+types/v1.nutrition.goals";
@@ -94,6 +95,12 @@ export async function action({ request, context }: Route.ActionArgs) {
 			);
 		}
 
+		const consentAt = await resolveNutritionGoalConsentAt(
+			env.DB,
+			userId,
+			"mobile",
+			parsed.data,
+		);
 		const created = await upsertNutritionGoal(env.DB, {
 			userId,
 			dailyEnergyKcal: parsed.data.dailyEnergyKcal,
@@ -102,7 +109,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 			fatG: parsed.data.fatG,
 			fiberG: parsed.data.fiberG ?? null,
 			effectiveFrom: parsed.data.effectiveFrom,
-			consentAt: parsed.data.consentAt,
+			consentAt,
 		});
 
 		return { goal: created ? serializeGoal(created) : null };

@@ -114,24 +114,102 @@ export type ConsumePortionsInput = z.infer<typeof ConsumePortionsSchema>;
 
 const ISO_DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 
-export const NutritionGoalSchema = z.object({
-	dailyEnergyKcal: z.coerce.number().positive().max(20_000),
-	proteinG: z.coerce.number().nonnegative().max(2_000),
-	carbsG: z.coerce.number().nonnegative().max(2_000),
-	fatG: z.coerce.number().nonnegative().max(2_000),
-	fiberG: z.coerce.number().nonnegative().max(500).nullable().optional(),
-	effectiveFrom: z
-		.string()
-		.regex(ISO_DATE_REGEX, "effectiveFrom must be YYYY-MM-DD"),
-	consentAt: z.coerce.date().optional(),
-});
+/** Empty / omitted → undefined; keep 0 as an explicit target; null stays null. */
+function nullableNutrient(
+	schema: z.ZodTypeAny,
+): z.ZodType<number | null | undefined> {
+	return z.preprocess((value) => {
+		if (value === "" || value === undefined) return undefined;
+		if (value === null) return null;
+		return value;
+	}, z.union([schema, z.null()]).optional()) as z.ZodType<
+		number | null | undefined
+	>;
+}
+
+const goalEnergyField = nullableNutrient(
+	z.coerce.number().positive().max(20_000),
+);
+const goalMacroField = nullableNutrient(
+	z.coerce.number().nonnegative().max(2_000),
+);
+const goalFiberField = nullableNutrient(
+	z.coerce.number().nonnegative().max(500),
+);
+
+function countSetGoalNutrients(data: {
+	dailyEnergyKcal?: number | null;
+	proteinG?: number | null;
+	carbsG?: number | null;
+	fatG?: number | null;
+	fiberG?: number | null;
+}): number {
+	return [
+		data.dailyEnergyKcal,
+		data.proteinG,
+		data.carbsG,
+		data.fatG,
+		data.fiberG,
+	].filter((v) => v != null && Number.isFinite(v)).length;
+}
+
+const NutritionGoalFieldsSchema = z
+	.object({
+		dailyEnergyKcal: goalEnergyField,
+		proteinG: goalMacroField,
+		carbsG: goalMacroField,
+		fatG: goalMacroField,
+		fiberG: goalFiberField,
+		effectiveFrom: z
+			.string()
+			.regex(ISO_DATE_REGEX, "effectiveFrom must be YYYY-MM-DD"),
+		consentAt: z.coerce.date().optional(),
+		/** Preferred consent signal — server stamps grant time. */
+		consent: z.boolean().optional(),
+	})
+	.superRefine((data, ctx) => {
+		if (countSetGoalNutrients(data) < 1) {
+			ctx.addIssue({
+				code: z.ZodIssueCode.custom,
+				message: "Set at least one nutrient target",
+				path: ["dailyEnergyKcal"],
+			});
+		}
+	});
+
+function normalizeGoalFields(data: z.infer<typeof NutritionGoalFieldsSchema>) {
+	return {
+		dailyEnergyKcal: data.dailyEnergyKcal ?? null,
+		proteinG: data.proteinG ?? null,
+		carbsG: data.carbsG ?? null,
+		fatG: data.fatG ?? null,
+		fiberG: data.fiberG ?? null,
+		effectiveFrom: data.effectiveFrom,
+		consentAt: data.consentAt,
+		consent: data.consent,
+	};
+}
+
+export const NutritionGoalSchema =
+	NutritionGoalFieldsSchema.transform(normalizeGoalFields);
 
 export type NutritionGoalInput = z.infer<typeof NutritionGoalSchema>;
 
-/** POST/PATCH body — consent timestamp required for Art. 9 health data. */
-export const NutritionGoalUpsertSchema = NutritionGoalSchema.extend({
-	consentAt: z.coerce.date(),
-});
+/**
+ * POST/PATCH body — accept legacy `consentAt` or boolean `consent: true`
+ * (server stamps via nutrition_consent).
+ */
+export const NutritionGoalUpsertSchema = NutritionGoalFieldsSchema.superRefine(
+	(data, ctx) => {
+		if (data.consent !== true && data.consentAt == null) {
+			ctx.addIssue({
+				code: z.ZodIssueCode.custom,
+				message: "consent or consentAt is required",
+				path: ["consent"],
+			});
+		}
+	},
+).transform(normalizeGoalFields);
 
 export type NutritionGoalUpsertInput = z.infer<
 	typeof NutritionGoalUpsertSchema
@@ -190,10 +268,10 @@ export const NutritionSummarySchema = z.object({
 	days: z.array(NutritionDayTotalsSchema),
 	goal: z
 		.object({
-			dailyEnergyKcal: z.number(),
-			proteinG: z.number(),
-			carbsG: z.number(),
-			fatG: z.number(),
+			dailyEnergyKcal: z.number().nullable(),
+			proteinG: z.number().nullable(),
+			carbsG: z.number().nullable(),
+			fatG: z.number().nullable(),
 			fiberG: z.number().nullable(),
 			effectiveFrom: z.string(),
 			effectiveTo: z.string().nullable(),

@@ -143,6 +143,27 @@ describe("NutritionGoalSchema", () => {
 		expect(parsed.dailyEnergyKcal).toBe(2200);
 		expect(parsed.fiberG).toBe(30);
 	});
+
+	it("accepts partial targets (kcal + protein only)", () => {
+		const parsed = NutritionGoalSchema.parse({
+			dailyEnergyKcal: 2000,
+			proteinG: 200,
+			effectiveFrom: "2026-08-01",
+		});
+		expect(parsed.dailyEnergyKcal).toBe(2000);
+		expect(parsed.proteinG).toBe(200);
+		expect(parsed.carbsG).toBeNull();
+		expect(parsed.fatG).toBeNull();
+		expect(parsed.fiberG).toBeNull();
+	});
+
+	it("rejects empty nutrient targets", () => {
+		expect(() =>
+			NutritionGoalSchema.parse({
+				effectiveFrom: "2026-08-01",
+			}),
+		).toThrow();
+	});
 });
 
 describe("NutritionSummarySchema", () => {
@@ -202,7 +223,7 @@ describe("NutritionSummaryQuerySchema", () => {
 });
 
 describe("NutritionGoalUpsertSchema", () => {
-	it("requires consentAt", () => {
+	it("requires consent or consentAt", () => {
 		expect(() =>
 			NutritionGoalUpsertSchema.parse({
 				dailyEnergyKcal: 2000,
@@ -213,7 +234,7 @@ describe("NutritionGoalUpsertSchema", () => {
 			}),
 		).toThrow();
 
-		const parsed = NutritionGoalUpsertSchema.parse({
+		const legacy = NutritionGoalUpsertSchema.parse({
 			dailyEnergyKcal: 2000,
 			proteinG: 100,
 			carbsG: 200,
@@ -221,7 +242,16 @@ describe("NutritionGoalUpsertSchema", () => {
 			effectiveFrom: "2026-08-09",
 			consentAt: "2026-08-09T12:00:00.000Z",
 		});
-		expect(parsed.consentAt).toBeInstanceOf(Date);
+		expect(legacy.consentAt).toBeInstanceOf(Date);
+
+		const modern = NutritionGoalUpsertSchema.parse({
+			dailyEnergyKcal: 2000,
+			proteinG: 200,
+			effectiveFrom: "2026-08-09",
+			consent: true,
+		});
+		expect(modern.consent).toBe(true);
+		expect(modern.carbsG).toBeNull();
 	});
 });
 

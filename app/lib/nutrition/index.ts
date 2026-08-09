@@ -28,9 +28,18 @@ export {
 export {
 	aggregateManifestDayNutrition,
 	type DayConsumedIntakeInput,
+	type DayNutrientTotals,
 	type DayNutritionEntryInput,
+	emptyDayNutrientTotals,
+	formatConsumedVsGoal,
 	formatConsumedVsGoalKcal,
+	formatGoalProgressStrip,
+	type GoalProgressLine,
+	goalTargetsFromRow,
+	hasAnyGoalTarget,
 	type ManifestDayNutritionTotals,
+	selectGoalProgressLines,
+	type UserGoalTargets,
 } from "./day-totals";
 export {
 	isGoalEffectiveOnDate,

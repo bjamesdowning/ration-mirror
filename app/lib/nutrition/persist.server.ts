@@ -438,10 +438,10 @@ export async function getActiveNutritionGoal(
 
 export type UpsertNutritionGoalInput = {
 	userId: string;
-	dailyEnergyKcal: number;
-	proteinG: number;
-	carbsG: number;
-	fatG: number;
+	dailyEnergyKcal: number | null;
+	proteinG: number | null;
+	carbsG: number | null;
+	fatG: number | null;
 	fiberG?: number | null;
 	effectiveFrom: string;
 	consentAt: Date;
@@ -628,10 +628,10 @@ export type NutritionSummaryResult = {
 		entryCount: number;
 	}>;
 	goal: {
-		dailyEnergyKcal: number;
-		proteinG: number;
-		carbsG: number;
-		fatG: number;
+		dailyEnergyKcal: number | null;
+		proteinG: number | null;
+		carbsG: number | null;
+		fatG: number | null;
 		fiberG: number | null;
 		effectiveFrom: string;
 		effectiveTo: string | null;
@@ -713,6 +713,7 @@ export async function listNutritionIntakesForRange(
 		eq(schema.nutritionIntake.organizationId, orgId),
 		gte(schema.nutritionIntake.manifestDate, from),
 		lte(schema.nutritionIntake.manifestDate, to),
+		isNull(schema.nutritionIntake.voidedAt),
 	);
 
 	const cursorWhere = decoded
@@ -793,6 +794,7 @@ export async function getNutritionSummary(
 		eq(schema.nutritionIntake.organizationId, orgId),
 		gte(schema.nutritionIntake.manifestDate, from),
 		lte(schema.nutritionIntake.manifestDate, to),
+		isNull(schema.nutritionIntake.voidedAt),
 	);
 
 	const [totalRow] = await d1

@@ -1510,10 +1510,10 @@ function NutritionGoalsSection({
 	initialGoal,
 }: {
 	initialGoal: {
-		dailyEnergyKcal: number;
-		proteinG: number;
-		carbsG: number;
-		fatG: number;
+		dailyEnergyKcal: number | null;
+		proteinG: number | null;
+		carbsG: number | null;
+		fatG: number | null;
 		fiberG: number | null;
 		effectiveFrom: string;
 	} | null;
@@ -1526,15 +1526,43 @@ function NutritionGoalsSection({
 	const revalidator = useRevalidator();
 	const [consent, setConsent] = useState(false);
 	const [dailyEnergyKcal, setDailyEnergyKcal] = useState(
-		String(initialGoal?.dailyEnergyKcal ?? 2000),
+		initialGoal?.dailyEnergyKcal != null
+			? String(initialGoal.dailyEnergyKcal)
+			: "",
 	);
-	const [proteinG, setProteinG] = useState(String(initialGoal?.proteinG ?? 0));
-	const [carbsG, setCarbsG] = useState(String(initialGoal?.carbsG ?? 0));
-	const [fatG, setFatG] = useState(String(initialGoal?.fatG ?? 0));
+	const [proteinG, setProteinG] = useState(
+		initialGoal?.proteinG != null ? String(initialGoal.proteinG) : "",
+	);
+	const [carbsG, setCarbsG] = useState(
+		initialGoal?.carbsG != null ? String(initialGoal.carbsG) : "",
+	);
+	const [fatG, setFatG] = useState(
+		initialGoal?.fatG != null ? String(initialGoal.fatG) : "",
+	);
 	const [fiberG, setFiberG] = useState(
 		initialGoal?.fiberG != null ? String(initialGoal.fiberG) : "",
 	);
 	const isSaving = fetcher.state !== "idle";
+
+	const parseOptionalNutrient = (raw: string): number | null => {
+		const trimmed = raw.trim();
+		if (trimmed === "") return null;
+		const n = Number(trimmed);
+		return Number.isFinite(n) ? n : null;
+	};
+
+	const nutrientPayload = {
+		dailyEnergyKcal: parseOptionalNutrient(dailyEnergyKcal),
+		proteinG: parseOptionalNutrient(proteinG),
+		carbsG: parseOptionalNutrient(carbsG),
+		fatG: parseOptionalNutrient(fatG),
+		fiberG: parseOptionalNutrient(fiberG),
+	};
+	const hasAtLeastOneNutrient = Object.values(nutrientPayload).some(
+		(v) => v != null,
+	);
+	const canSave =
+		hasAtLeastOneNutrient && (consent || Boolean(initialGoal)) && !isSaving;
 
 	useEffect(() => {
 		if (fetcher.state === "idle" && fetcher.data && !fetcher.data.error) {
@@ -1543,16 +1571,12 @@ function NutritionGoalsSection({
 	}, [fetcher.state, fetcher.data, revalidator]);
 
 	const handleSave = () => {
-		if (!consent && !initialGoal) return;
+		if (!canSave) return;
 		fetcher.submit(
 			JSON.stringify({
-				dailyEnergyKcal: Number(dailyEnergyKcal),
-				proteinG: Number(proteinG) || 0,
-				carbsG: Number(carbsG) || 0,
-				fatG: Number(fatG) || 0,
-				fiberG: fiberG === "" ? null : Number(fiberG),
+				...nutrientPayload,
 				effectiveFrom: getTodayISO(),
-				consentAt: new Date().toISOString(),
+				consent: true,
 			}),
 			{
 				method: "POST",
@@ -1569,12 +1593,34 @@ function NutritionGoalsSection({
 		});
 	};
 
+	const activeSummaryParts: string[] = [];
+	if (initialGoal) {
+		if (initialGoal.dailyEnergyKcal != null) {
+			activeSummaryParts.push(
+				`${Math.round(initialGoal.dailyEnergyKcal).toLocaleString()} kcal`,
+			);
+		}
+		if (initialGoal.proteinG != null) {
+			activeSummaryParts.push(`${Math.round(initialGoal.proteinG)} g protein`);
+		}
+		if (initialGoal.carbsG != null) {
+			activeSummaryParts.push(`${Math.round(initialGoal.carbsG)} g carbs`);
+		}
+		if (initialGoal.fatG != null) {
+			activeSummaryParts.push(`${Math.round(initialGoal.fatG)} g fat`);
+		}
+		if (initialGoal.fiberG != null) {
+			activeSummaryParts.push(`${Math.round(initialGoal.fiberG)} g fiber`);
+		}
+	}
+
 	return (
 		<div className="glass-panel rounded-xl p-6">
 			<h3 className="text-xs text-label text-muted mb-1">Nutrition goals</h3>
 			<p className="text-sm text-muted mb-4">
-				Optional daily energy and macro targets. Shown neutrally on Manifest day
-				totals (consumed / goal). Health-related data requires explicit consent.
+				Set only the nutrients you care about. Manifest shows those targets as
+				consumed / goal (adherence-neutral). Leave a field empty to hide it.
+				Health-related data requires explicit consent.
 			</p>
 			<div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
 				<label className="block space-y-1">
@@ -1585,6 +1631,7 @@ function NutritionGoalsSection({
 						type="number"
 						min={1}
 						max={20000}
+						placeholder="Optional"
 						value={dailyEnergyKcal}
 						onChange={(e) => setDailyEnergyKcal(e.target.value)}
 						className="w-full px-2 py-2 text-sm border border-platinum rounded-lg bg-transparent font-mono"
@@ -1597,6 +1644,7 @@ function NutritionGoalsSection({
 					<input
 						type="number"
 						min={0}
+						placeholder="Optional"
 						value={proteinG}
 						onChange={(e) => setProteinG(e.target.value)}
 						className="w-full px-2 py-2 text-sm border border-platinum rounded-lg bg-transparent font-mono"
@@ -1609,6 +1657,7 @@ function NutritionGoalsSection({
 					<input
 						type="number"
 						min={0}
+						placeholder="Optional"
 						value={carbsG}
 						onChange={(e) => setCarbsG(e.target.value)}
 						className="w-full px-2 py-2 text-sm border border-platinum rounded-lg bg-transparent font-mono"
@@ -1621,6 +1670,7 @@ function NutritionGoalsSection({
 					<input
 						type="number"
 						min={0}
+						placeholder="Optional"
 						value={fatG}
 						onChange={(e) => setFatG(e.target.value)}
 						className="w-full px-2 py-2 text-sm border border-platinum rounded-lg bg-transparent font-mono"
@@ -1629,11 +1679,12 @@ function NutritionGoalsSection({
 			</div>
 			<label className="block space-y-1 mt-3 max-w-[12rem]">
 				<span className="text-[10px] font-mono uppercase text-muted">
-					Fiber g (optional)
+					Fiber g
 				</span>
 				<input
 					type="number"
 					min={0}
+					placeholder="Optional"
 					value={fiberG}
 					onChange={(e) => setFiberG(e.target.value)}
 					className="w-full px-2 py-2 text-sm border border-platinum rounded-lg bg-transparent font-mono"
@@ -1655,7 +1706,7 @@ function NutritionGoalsSection({
 				<button
 					type="button"
 					onClick={handleSave}
-					disabled={isSaving || (!consent && !initialGoal)}
+					disabled={!canSave}
 					className="px-4 py-2 text-sm font-semibold rounded-lg bg-hyper-green text-on-hyper-green disabled:opacity-40"
 				>
 					{isSaving ? "Saving…" : "Save goal"}
@@ -1671,10 +1722,16 @@ function NutritionGoalsSection({
 					</button>
 				)}
 			</div>
-			{initialGoal && (
+			{initialGoal && activeSummaryParts.length > 0 && (
 				<p className="text-xs text-muted mt-3 font-mono">
 					Active from {initialGoal.effectiveFrom}:{" "}
-					{Math.round(initialGoal.dailyEnergyKcal).toLocaleString()} kcal
+					{activeSummaryParts.join(" · ")}
+				</p>
+			)}
+			{!initialGoal && (
+				<p className="text-xs text-muted mt-3">
+					No goals set — Manifest will show a quiet empty state until you save
+					at least one nutrient.
 				</p>
 			)}
 		</div>
@@ -1687,10 +1744,10 @@ function PreferencesSection({
 }: {
 	settings: UserSettings;
 	nutritionGoal?: {
-		dailyEnergyKcal: number;
-		proteinG: number;
-		carbsG: number;
-		fatG: number;
+		dailyEnergyKcal: number | null;
+		proteinG: number | null;
+		carbsG: number | null;
+		fatG: number | null;
 		fiberG: number | null;
 		effectiveFrom: string;
 	} | null;

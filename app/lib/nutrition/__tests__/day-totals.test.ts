@@ -34,16 +34,37 @@ describe("aggregateManifestDayNutrition", () => {
 		expect(result["2026-08-09"]).toEqual({
 			date: "2026-08-09",
 			plannedKcal: 1050,
+			consumed: {
+				energyKcal: 750,
+				proteinG: 0,
+				carbsG: 0,
+				fatG: 0,
+				fiberG: 0,
+			},
 			consumedKcal: 750,
 		});
 		expect(result["2026-08-10"]).toEqual({
 			date: "2026-08-10",
 			plannedKcal: 500,
+			consumed: {
+				energyKcal: 0,
+				proteinG: 0,
+				carbsG: 0,
+				fatG: 0,
+				fiberG: 0,
+			},
 			consumedKcal: 0,
 		});
 		expect(result["2026-08-11"]).toEqual({
 			date: "2026-08-11",
 			plannedKcal: 0,
+			consumed: {
+				energyKcal: 0,
+				proteinG: 0,
+				carbsG: 0,
+				fatG: 0,
+				fiberG: 0,
+			},
 			consumedKcal: 0,
 		});
 	});

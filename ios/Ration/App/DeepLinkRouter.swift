@@ -1,6 +1,11 @@
 import Foundation
 import Observation
 
+struct ManifestAddEntryPrefill: Equatable, Sendable {
+    let mealId: String
+    let date: String
+}
+
 /// Phase-aware deep-link queue — stores intent until the tab shell is ready,
 /// then exposes one-shot flags for feature sheets.
 @MainActor
@@ -10,6 +15,7 @@ final class DeepLinkRouter {
     private(set) var galleyGeneratePending = false
     private(set) var galleyImportPending = false
     private(set) var manifestPlanWeekPending = false
+    private(set) var manifestAddEntryPending: ManifestAddEntryPrefill?
 
     var pending: AppEnvironment.DeepLinkDestination? {
         queue.first
@@ -25,6 +31,7 @@ final class DeepLinkRouter {
         galleyGeneratePending = false
         galleyImportPending = false
         manifestPlanWeekPending = false
+        manifestAddEntryPending = nil
     }
 
     /// Applies the pending destination once startup and org context are ready.
@@ -50,6 +57,9 @@ final class DeepLinkRouter {
         case .manifestPlanWeek:
             selectedTab = .manifest
             manifestPlanWeekPending = true
+        case .manifestAddEntry(let mealId, let date):
+            selectedTab = .manifest
+            manifestAddEntryPending = ManifestAddEntryPrefill(mealId: mealId, date: date)
         }
         queue.removeFirst()
     }
@@ -57,4 +67,5 @@ final class DeepLinkRouter {
     func acknowledgeGalleyGenerate() { galleyGeneratePending = false }
     func acknowledgeGalleyImport() { galleyImportPending = false }
     func acknowledgeManifestPlanWeek() { manifestPlanWeekPending = false }
+    func acknowledgeManifestAddEntry() { manifestAddEntryPending = nil }
 }

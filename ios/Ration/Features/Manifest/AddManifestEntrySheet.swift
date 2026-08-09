@@ -8,7 +8,18 @@ struct AddManifestEntrySheet: View {
     @Environment(AppEnvironment.self) private var env
     @State private var model = AddManifestEntryViewModel()
     let defaultDate: String?
+    let preselectedMealId: String?
     let onSave: (String, String, String) async -> String?
+
+    init(
+        defaultDate: String?,
+        preselectedMealId: String? = nil,
+        onSave: @escaping (String, String, String) async -> String?
+    ) {
+        self.defaultDate = defaultDate
+        self.preselectedMealId = preselectedMealId
+        self.onSave = onSave
+    }
 
     var body: some View {
         NavigationStack {
@@ -58,8 +69,12 @@ struct AddManifestEntrySheet: View {
                 }
             }
             .task {
+                model.preselectedMealId = preselectedMealId
                 if let defaultDate, let parsed = Self.parseISODate(defaultDate) {
                     model.date = parsed
+                }
+                if model.slotType == "dinner" || preselectedMealId != nil {
+                    model.slotType = AddManifestEntryViewModel.inferSlotType()
                 }
                 await model.loadMeals(api: env.api)
             }

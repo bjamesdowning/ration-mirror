@@ -177,6 +177,41 @@ final class NutritionModelsDecodingTests: XCTestCase {
         XCTAssertEqual(response.missingIngredients?.first?.name, "flour")
     }
 
+    func testDecodesGalleyCookMealResponseWithManifestBridge() throws {
+        let json = """
+        {
+          "cooked": true,
+          "ingredientsDeducted": 1,
+          "servings": 2,
+          "bridgedToManifest": true,
+          "offerPersonalLog": true,
+          "autoCreated": true,
+          "planId": "plan-1",
+          "entry": {
+            "id": "entry-1",
+            "planId": "plan-1",
+            "mealId": "meal-1",
+            "date": "2026-08-09",
+            "slotType": "dinner",
+            "mealName": "Pasta",
+            "mealServings": 2,
+            "mealType": "recipe",
+            "mealEnergyKcalPerServing": 400,
+            "cookedAt": "2026-08-09T18:00:00.000Z",
+            "consumedAt": "2026-08-09T18:00:00.000Z"
+          },
+          "undoToken": "tok-bridge"
+        }
+        """.data(using: .utf8)!
+        let response = try decoder.decode(CookMealResponse.self, from: json)
+        XCTAssertEqual(response.cooked, true)
+        XCTAssertEqual(response.bridgedToManifest, true)
+        XCTAssertEqual(response.offerPersonalLog, true)
+        XCTAssertEqual(response.entry?.id, "entry-1")
+        XCTAssertEqual(response.entry?.mealEnergyKcalPerServing, 400)
+        XCTAssertEqual(response.undoToken, "tok-bridge")
+    }
+
     // MARK: - Eat (intake)
 
     func testDecodesManifestIntakeUpsertResponse() throws {

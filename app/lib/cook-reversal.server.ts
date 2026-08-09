@@ -12,7 +12,8 @@ import type { UndoRecord } from "./undo-token.server";
  * - `cook` (Galley): restore cargo + delete kitchen events
  * - `manifest_consume` (legacy): restore cargo, clear consumedAt, delete intake + events
  * - `manifest_cook`: restore cargo, clear cookedAt/cookedByUserId/consumedAt, delete events;
- *   never touches nutrition_intake
+ *   never touches nutrition_intake. Optionally deletes auto-created entries
+ *   listed in `deleteManifestEntryIds`.
  * - `manifest_intake`: void the new personal row and optionally restore the replaced row;
  *   never restores Cargo or clears Prepared state
  */
@@ -24,6 +25,7 @@ export async function applyUndoRecord(
 		| "kind"
 		| "deductions"
 		| "manifestEntryIds"
+		| "deleteManifestEntryIds"
 		| "planId"
 		| "eventIds"
 		| "userId"
@@ -127,21 +129,39 @@ export async function applyUndoRecord(
 			throw new Error("Meal plan not found or unauthorized");
 		}
 
-		stmts.push(
-			d1
-				.update(schema.mealPlanEntry)
-				.set({
-					cookedAt: null,
-					cookedByUserId: null,
-					consumedAt: null,
-				})
-				.where(
-					and(
-						eq(schema.mealPlanEntry.planId, record.planId),
-						inArray(schema.mealPlanEntry.id, record.manifestEntryIds),
+		const toDelete = new Set(record.deleteManifestEntryIds ?? []);
+		const toClear = record.manifestEntryIds.filter((id) => !toDelete.has(id));
+
+		if (toClear.length > 0) {
+			stmts.push(
+				d1
+					.update(schema.mealPlanEntry)
+					.set({
+						cookedAt: null,
+						cookedByUserId: null,
+						consumedAt: null,
+					})
+					.where(
+						and(
+							eq(schema.mealPlanEntry.planId, record.planId),
+							inArray(schema.mealPlanEntry.id, toClear),
+						),
 					),
-				),
-		);
+			);
+		}
+
+		if (toDelete.size > 0) {
+			stmts.push(
+				d1
+					.delete(schema.mealPlanEntry)
+					.where(
+						and(
+							eq(schema.mealPlanEntry.planId, record.planId),
+							inArray(schema.mealPlanEntry.id, [...toDelete]),
+						),
+					),
+			);
+		}
 		// Intentionally does NOT touch nutrition_intake — other members' Eat rows stay.
 	}
 

@@ -10,6 +10,8 @@ interface MealPickerProps {
 	meals: MealForPicker[];
 	/** True while the meal list is being fetched on first open. */
 	isLoading?: boolean;
+	/** Prefill selection (e.g. Galley → Add to Manifest). */
+	initialMealId?: string | null;
 	onSelect: (meal: MealForPicker, servingsOverride?: number) => void;
 	onClose: () => void;
 }
@@ -19,6 +21,7 @@ export function MealPicker({
 	slot,
 	meals,
 	isLoading = false,
+	initialMealId = null,
 	onSelect,
 	onClose,
 }: MealPickerProps) {
@@ -26,10 +29,20 @@ export function MealPicker({
 	const [selectedMeal, setSelectedMeal] = useState<MealForPicker | null>(null);
 	const [servings, setServings] = useState<number | "">("");
 	const searchRef = useRef<HTMLInputElement>(null);
+	const didPrefill = useRef(false);
 
 	useEffect(() => {
 		searchRef.current?.focus();
 	}, []);
+
+	useEffect(() => {
+		if (didPrefill.current || !initialMealId || meals.length === 0) return;
+		const match = meals.find((m) => m.id === initialMealId);
+		if (match) {
+			setSelectedMeal(match);
+			didPrefill.current = true;
+		}
+	}, [initialMealId, meals]);
 
 	// Close on Escape
 	useEffect(() => {

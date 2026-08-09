@@ -1,14 +1,17 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { cookMealWithConfirmation } from "../../cook-confirmation.server";
 import { cookDeductionNote } from "../../cook-feedback";
+import { cookMealFromGalley } from "../../galley-cook-manifest.server";
+import { getTodayISO } from "../../manifest-dates";
 import {
 	clearMealSelections,
 	upsertMealSelection,
 	validateMealOwnership,
 } from "../../meal-selection.server";
 import { createMeal, deleteMeal, updateMeal } from "../../meals.server";
+import { buildMinimalFlagContext } from "../../nutrition/persist.server";
 import { parseDirections } from "../../schemas/directions";
+import { SLOT_TYPES } from "../../schemas/manifest";
 import { McpCreateMealSchema, McpUpdateMealSchema } from "../../schemas/meal";
 import { err, ok } from "../envelope";
 import {
@@ -197,26 +200,37 @@ export function createGalleyToolDefs(env: McpToolsEnv) {
 		defineSharedTool({
 			name: "consume_meal",
 			description:
-				"Mark a meal as cooked and deduct ingredients from the pantry. Use after the user reports cooking/eating a meal.",
+				"Mark a meal as cooked and deduct ingredients from the pantry. When nutrition-cook-log-split is on, also places a Prepared entry on today's Manifest. Use after the user reports cooking/eating a meal.",
 			inputSchema: z.object({
 				mealId: z.string().uuid(),
 				servings: z.number().int().positive().optional(),
 				confirmInsufficient: z.boolean().optional(),
+				date: z
+					.string()
+					.regex(/^\d{4}-\d{2}-\d{2}$/)
+					.optional()
+					.describe(
+						"Local YYYY-MM-DD for Manifest bridge (defaults to today UTC).",
+					),
+				slotType: z.enum(SLOT_TYPES).optional(),
 			}),
 			scopes: ["mcp:galley:write", "mcp:inventory:write"],
 			rateLimitCategory: "mcp_write",
 			audit: true,
 			needsApproval: (args) => args.confirmInsufficient === true,
 			handler: async (ctx, a) => {
-				const result = await cookMealWithConfirmation(
+				const result = await cookMealFromGalley(
 					env,
 					ctx.organizationId,
 					a.mealId,
 					{
+						flagContext: buildMinimalFlagContext(env, ctx.userId),
 						servings: a.servings,
 						confirmInsufficient: a.confirmInsufficient,
 						userId: ctx.userId,
 						source: "mcp",
+						date: a.date ?? getTodayISO(),
+						slotType: a.slotType,
 					},
 				);
 				if (result.requiresConfirmation) {
@@ -237,6 +251,9 @@ export function createGalleyToolDefs(env: McpToolsEnv) {
 					deductions: result.deductions,
 					partialCook: result.partialCook ?? false,
 					skippedIngredients: result.skippedIngredients,
+					bridgedToManifest: result.bridgedToManifest,
+					entryId: result.entry?.id,
+					offerPersonalLog: result.offerPersonalLog,
 					note: cookDeductionNote({
 						partialCook: result.partialCook,
 						skippedIngredients: result.skippedIngredients,

@@ -99,11 +99,20 @@ extension RationAPI {
     func cookMeal(
         id: String,
         servings: Int? = nil,
-        confirmInsufficient: Bool? = nil
+        confirmInsufficient: Bool? = nil,
+        date: String? = nil,
+        slotType: String? = nil,
+        localHour: Int? = nil
     ) async throws -> CookMealResponse {
         try await client.post(
             "meals/\(id)/cook",
-            body: CookMealRequest(servings: servings, confirmInsufficient: confirmInsufficient)
+            body: CookMealRequest(
+                servings: servings,
+                confirmInsufficient: confirmInsufficient,
+                date: date,
+                slotType: slotType,
+                localHour: localHour
+            )
         )
     }
 

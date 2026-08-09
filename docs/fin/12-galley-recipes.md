@@ -16,7 +16,8 @@ Both can appear in the **Manifest** and in cookable-meal matching. See *Matching
 - **Delete meal** — Remove the meal from Galley (confirm when prompted).
 - **Toggle active for Supply** — Mark meals to include in Supply sync. Selection bars show counts.
 - **Clear selections** — Clear all active meal selections for Supply.
-- **Cook / consume** — Deduct ingredients from Cargo for the chosen **servings**. Semantic matching links ingredient names to pantry lines. If stock is short, confirm before cooking with what’s available (short-stock confirm).
+- **Cook / consume** — Deduct ingredients from Cargo for the chosen **servings**. Semantic matching links ingredient names to pantry lines. If stock is short, confirm before cooking with what’s available (short-stock confirm). When **nutrition-cook-log-split** is on for your account, Cook also places the meal as *Prepared* on **today’s Manifest** (reusing an uncooked plan row when present) and may offer **Log my serving** for personal intake—same plate-up as Manifest Eat. Flags off: Cargo-only cook (no Manifest write).
+- **Add to Manifest** — When cook/log-split is on, schedule this meal via Manifest Add-to-plan with meal and day prefilled; you confirm slot and Add. Hidden when the flag is off.
 - **AI generate** — Propose recipes from your pantry. Cost: see *AI meal generation* and *AI credits explained* (typically **2 credits**).
 - **URL import** — Import a recipe from an HTTPS page into Galley. Cost: see *Import a recipe from a URL* and *AI credits explained* (typically **1 credit**).
 - **Export / import** — Exchange Galley data via the app’s JSON export/import (and REST Galley import for power users).

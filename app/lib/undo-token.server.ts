@@ -16,6 +16,11 @@ export interface UndoRecord {
 	deductions: CargoDeduction[];
 	manifestEntryIds?: string[];
 	planId?: string;
+	/**
+	 * Galley Cook→Manifest: delete these entry ids on undo after clearing cook
+	 * state (auto-created plan rows only — never reused planned entries).
+	 */
+	deleteManifestEntryIds?: string[];
 	/** Flight Recorder event ids to delete on undo. */
 	eventIds?: string[];
 	/**

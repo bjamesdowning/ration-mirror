@@ -1,15 +1,22 @@
 import { data } from "react-router";
 import { z } from "zod";
-import { cookMealWithConfirmation } from "~/lib/cook-confirmation.server";
 import { handleApiError } from "~/lib/error-handler";
+import { buildFlagContext } from "~/lib/feature-flags/context.server";
+import { cookMealFromGalley } from "~/lib/galley-cook-manifest.server";
 import { requireMobileActiveGroup } from "~/lib/mobile/auth.server";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
+import { SLOT_TYPES } from "~/lib/schemas/manifest";
 import { tryStoreUndoToken } from "~/lib/undo-token.server";
 import type { Route } from "./+types/v1.meals.$id.cook";
+
+const ISO_DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 
 const CookRequestSchema = z.object({
 	servings: z.coerce.number().int().min(1).optional(),
 	confirmInsufficient: z.boolean().optional(),
+	date: z.string().regex(ISO_DATE_REGEX).optional(),
+	slotType: z.enum(SLOT_TYPES).optional(),
+	localHour: z.coerce.number().int().min(0).max(23).optional(),
 });
 
 export async function action({ request, context, params }: Route.ActionArgs) {
@@ -40,6 +47,9 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 
 		let servings: number | undefined;
 		let confirmInsufficient: boolean | undefined;
+		let date: string | undefined;
+		let slotType: (typeof SLOT_TYPES)[number] | undefined;
+		let localHour: number | undefined;
 		const contentType = request.headers.get("content-type") ?? "";
 		if (contentType.includes("application/json")) {
 			const json = await request.json();
@@ -47,18 +57,56 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 			if (parsed.success) {
 				servings = parsed.data.servings;
 				confirmInsufficient = parsed.data.confirmInsufficient;
+				date = parsed.data.date;
+				slotType = parsed.data.slotType;
+				localHour = parsed.data.localHour;
 			}
 		}
 
-		const result = await cookMealWithConfirmation(
+		const flagContext = buildFlagContext(request, context.cloudflare.env, {
+			user: { id: userId },
+		});
+
+		const result = await cookMealFromGalley(
 			context.cloudflare.env,
 			organizationId,
 			id,
-			{ servings, confirmInsufficient, userId, source: "mobile" },
+			{
+				flagContext,
+				servings,
+				confirmInsufficient,
+				userId,
+				source: "mobile",
+				date,
+				slotType,
+				localHour,
+			},
 		);
 
 		let undoToken: string | undefined;
-		if (result.deductions.length > 0 || (result.eventIds?.length ?? 0) > 0) {
+		if (result.bridgedToManifest && result.cooked && result.planId) {
+			const entryIds = result.manifestEntryIds ?? [];
+			if (
+				entryIds.length > 0 &&
+				(result.deductions.length > 0 ||
+					result.autoCreated ||
+					(result.eventIds?.length ?? 0) > 0)
+			) {
+				undoToken = await tryStoreUndoToken(context.cloudflare.env.RATION_KV, {
+					userId,
+					organizationId,
+					kind: "manifest_cook",
+					deductions: result.deductions,
+					manifestEntryIds: entryIds,
+					planId: result.planId,
+					eventIds: result.eventIds,
+					deleteManifestEntryIds: result.autoCreated ? entryIds : undefined,
+				});
+			}
+		} else if (
+			!result.bridgedToManifest &&
+			(result.deductions.length > 0 || (result.eventIds?.length ?? 0) > 0)
+		) {
 			undoToken = await tryStoreUndoToken(context.cloudflare.env.RATION_KV, {
 				userId,
 				organizationId,
@@ -68,7 +116,22 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 			});
 		}
 
-		return { ...result, undoToken };
+		return {
+			cooked: result.cooked,
+			ingredientsDeducted: result.ingredientsDeducted,
+			servings: result.servings,
+			deductions: result.deductions,
+			requiresConfirmation: result.requiresConfirmation,
+			missingIngredients: result.missingIngredients,
+			partialCook: result.partialCook,
+			skippedIngredients: result.skippedIngredients,
+			bridgedToManifest: result.bridgedToManifest,
+			offerPersonalLog: result.offerPersonalLog,
+			autoCreated: result.autoCreated,
+			entry: result.entry,
+			planId: result.planId,
+			undoToken,
+		};
 	} catch (e) {
 		return handleApiError(e);
 	}

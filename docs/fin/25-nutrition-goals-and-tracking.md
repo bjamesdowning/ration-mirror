@@ -33,6 +33,16 @@ Flags off: Manifest nutrition chrome is unchanged (no preference strip).
 
 You can Cook without ever logging a personal serving.
 
+## Galley Cook and Add to Manifest
+
+When **nutrition-cook-log-split** is on (same Flagship cohort as Manifest Cook/Eat):
+
+- **Galley → Cook meal** prepares a Manifest entry for **today** (household-visible) and may open **Log my serving** when **nutrition-manifest** is also on.
+- **Galley → Add to Manifest** opens Add-to-plan with the meal and day set; you still confirm before it is scheduled.
+- Other household members see the Prepared meal on Manifest and can log their own serving separately.
+
+Flags off: Galley Cook does not touch Manifest; Add to Manifest is not shown.
+
 ## Day totals and calendar
 
 - **Day view** — Lists intake rows for the active day (energy and macros when present).

@@ -463,7 +463,7 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 		}
 	}, [pickerFetcher.data, pickerFetcher.state, pickerFetcher.load]);
 
-	const [searchParams] = useSearchParams();
+	const [searchParams, setSearchParams] = useSearchParams();
 
 	// Planning always starts from today (or the week's first day if it's in the
 	// future), so users never accidentally schedule meals in the past.
@@ -494,7 +494,10 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 	const [pickerOpen, setPickerOpen] = useState(false);
 	const [pickerSlot, setPickerSlot] = useState<SlotType>("dinner");
 	const [pickerDate, setPickerDate] = useState(today);
-
+	const [pickerInitialMealId, setPickerInitialMealId] = useState<string | null>(
+		null,
+	);
+	const galleyAddPrefillHandled = useRef(false);
 	// Share modal
 	const [shareOpen, setShareOpen] = useState(false);
 	const [isFilterSheetOpen, setIsFilterSheetOpen] = useState(false);
@@ -525,6 +528,34 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 	const cardMode: "legacy" | "split" = cookSplit ? "split" : "legacy";
 	const consumePrimaryLabel = cookSplit ? "Cook" : "Eat";
 	const consumeAllLabel = cookSplit ? "Cook All" : "Consume All";
+
+	// Galley → Add to Manifest deep-link (flag-gated)
+	useEffect(() => {
+		if (galleyAddPrefillHandled.current) return;
+		if (!cookSplit) return;
+		const addMeal = searchParams.get("addMeal");
+		if (!addMeal) return;
+		galleyAddPrefillHandled.current = true;
+		const day = searchParams.get("day") ?? today;
+		const slotRaw = searchParams.get("slot");
+		const slot: SlotType =
+			slotRaw === "breakfast" ||
+			slotRaw === "lunch" ||
+			slotRaw === "dinner" ||
+			slotRaw === "snack"
+				? slotRaw
+				: "dinner";
+		setActiveDay(day);
+		setSelectedDay(day);
+		setPickerDate(day);
+		setPickerSlot(slot);
+		setPickerInitialMealId(addMeal);
+		setPickerOpen(true);
+		const next = new URLSearchParams(searchParams);
+		next.delete("addMeal");
+		next.delete("slot");
+		setSearchParams(next, { replace: true });
+	}, [cookSplit, searchParams, setSearchParams, today]);
 
 	const [calendarOpen, setCalendarOpen] = useState(false);
 
@@ -1385,8 +1416,12 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 					slot={pickerSlot}
 					meals={pickerMeals}
 					isLoading={pickerMealsLoading}
+					initialMealId={pickerInitialMealId}
 					onSelect={handleMealSelect}
-					onClose={() => setPickerOpen(false)}
+					onClose={() => {
+						setPickerOpen(false);
+						setPickerInitialMealId(null);
+					}}
 				/>
 			)}
 

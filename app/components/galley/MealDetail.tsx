@@ -1,7 +1,13 @@
 import { ExternalLink, Minus, Plus } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Link, useFetcher, useRouteLoaderData } from "react-router";
+import {
+	Link,
+	useFetcher,
+	useNavigate,
+	useRouteLoaderData,
+} from "react-router";
 import { CheckIcon, PlusIcon } from "~/components/icons/PageIcons";
+import { PlateUpDialog } from "~/components/manifest/PlateUpDialog";
 import { NutritionPanel } from "~/components/nutrition/NutritionPanel";
 import { AllergenWarningBadge } from "~/components/shared/AllergenWarningBadge";
 import { useQuantityFormatter } from "~/components/shared/DisplayQuantity";
@@ -14,6 +20,8 @@ import type { CargoLinkedIngredient } from "~/lib/cargo-links";
 import { useConfirm } from "~/lib/confirm-context";
 import { galleyPartialCookDescription } from "~/lib/cook-feedback";
 import { log } from "~/lib/logging.client";
+import { getTodayISO } from "~/lib/manifest-dates";
+import { inferSlotTypeFromLocalHour } from "~/lib/manifest-slot";
 import type { IngredientMatch, MissingIngredient } from "~/lib/matching.server";
 import type { MealNutritionSnapshot } from "~/lib/nutrition/types";
 import { scaleQuantity } from "~/lib/scale";
@@ -179,6 +187,7 @@ export function MealDetail({
 	};
 
 	const { confirm } = useConfirm();
+	const navigate = useNavigate();
 	const deleteFetcher = useFetcher();
 	const toggleSupplyFetcher = useFetcher<{
 		success?: boolean;
@@ -194,11 +203,28 @@ export function MealDetail({
 			skippedIngredients?: Array<{ name: string }>;
 			missingIngredients?: { name: string }[];
 			deductions?: unknown[];
+			bridgedToManifest?: boolean;
+			offerPersonalLog?: boolean;
+			planId?: string;
+			entry?: {
+				id: string;
+				mealName: string;
+				mealEnergyKcalPerServing?: number | null;
+			};
+			undoToken?: string;
 		};
 		error?: string;
 	}>();
+	const intakeFetcher = useFetcher();
 	const cookPartialToast = useToast({ duration: 5000 });
 	const lastCookFeedback = useRef<unknown>(null);
+	const lastEatOffer = useRef<unknown>(null);
+	const [eatEntry, setEatEntry] = useState<{
+		id: string;
+		mealName: string;
+		planId: string;
+	} | null>(null);
+	const [intakeConsentGranted, setIntakeConsentGranted] = useState(false);
 	const isCooking = fetcher.state !== "idle";
 	const isDeleting = deleteFetcher.state !== "idle";
 	const isCooked = fetcher.data?.result?.cooked === true;
@@ -209,6 +235,20 @@ export function MealDetail({
 					"You don't have enough: ",
 				)
 			: null;
+
+	const rootData = useRouteLoaderData("root") as
+		| {
+				clientFlags?: {
+					nutritionEngine?: boolean;
+					nutritionCookLogSplit?: boolean;
+					nutritionManifest?: boolean;
+				};
+		  }
+		| undefined;
+	const nutritionEngine = rootData?.clientFlags?.nutritionEngine === true;
+	const cookLogSplit = rootData?.clientFlags?.nutritionCookLogSplit === true;
+	const nutritionManifest = rootData?.clientFlags?.nutritionManifest === true;
+	const offerEatEnabled = cookLogSplit && nutritionManifest;
 
 	const handleServingsChange = (next: number) => {
 		const clamped = Math.max(MIN_SERVINGS, Math.min(MAX_SERVINGS, next));
@@ -279,19 +319,23 @@ export function MealDetail({
 	const submitCook = useCallback(
 		(confirmInsufficient = false) => {
 			lastCookFeedback.current = null;
-			fetcher.submit(
-				JSON.stringify({
-					servings: desiredServings,
-					confirmInsufficient,
-				}),
-				{
-					method: "POST",
-					action: `/api/meals/${meal.id}/cook`,
-					encType: "application/json",
-				},
-			);
+			lastEatOffer.current = null;
+			const body: Record<string, unknown> = {
+				servings: desiredServings,
+				confirmInsufficient,
+			};
+			if (cookLogSplit) {
+				const now = new Date();
+				body.date = getTodayISO();
+				body.localHour = now.getHours();
+			}
+			fetcher.submit(JSON.stringify(body), {
+				method: "POST",
+				action: `/api/meals/${meal.id}/cook`,
+				encType: "application/json",
+			});
 		},
-		[fetcher, meal.id, desiredServings],
+		[fetcher, meal.id, desiredServings, cookLogSplit],
 	);
 
 	useEffect(() => {
@@ -320,10 +364,33 @@ export function MealDetail({
 		cookPartialToast.show();
 	}, [fetcher.state, fetcher.data, cookPartialToast.show]);
 
+	useEffect(() => {
+		if (fetcher.state !== "idle") return;
+		const result = fetcher.data?.result;
+		if (
+			!result?.cooked ||
+			!result.offerPersonalLog ||
+			!result.entry ||
+			!result.planId ||
+			!offerEatEnabled
+		) {
+			return;
+		}
+		if (fetcher.data === lastEatOffer.current) return;
+		lastEatOffer.current = fetcher.data;
+		setEatEntry({
+			id: result.entry.id,
+			mealName: result.entry.mealName,
+			planId: result.planId,
+		});
+	}, [fetcher.state, fetcher.data, offerEatEnabled]);
+
 	const cookSuccessMessage = isCooked
 		? fetcher.data?.result?.partialCook
 			? galleyPartialCookDescription(fetcher.data?.result?.skippedIngredients)
-			: "Cargo updated successfully"
+			: fetcher.data?.result?.bridgedToManifest
+				? "Cargo updated — added to today's Manifest"
+				: "Cargo updated successfully"
 		: null;
 
 	const handleCookSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -333,7 +400,9 @@ export function MealDetail({
 		if (
 			!(await confirm({
 				title: `Cook this meal for ${servingLabel}?`,
-				message: "It will deduct ingredients from your Cargo.",
+				message: cookLogSplit
+					? "Ingredients will be deducted from Cargo and the meal will appear as Prepared on today's Manifest."
+					: "It will deduct ingredients from your Cargo.",
 				confirmLabel: "Cook Now",
 				variant: "warning",
 			}))
@@ -342,13 +411,33 @@ export function MealDetail({
 		submitCook(false);
 	};
 
+	const handleAddToManifest = () => {
+		const day = getTodayISO();
+		const slot = inferSlotTypeFromLocalHour(new Date().getHours());
+		navigate(
+			`/hub/manifest?day=${encodeURIComponent(day)}&addMeal=${encodeURIComponent(meal.id)}&slot=${slot}`,
+		);
+	};
+
+	const handleEat = (entryId: string, servings: number, consent?: boolean) => {
+		if (!eatEntry) return;
+		intakeFetcher.submit(
+			JSON.stringify({
+				servings,
+				idempotencyKey: crypto.randomUUID(),
+				...(consent ? { consent: true } : {}),
+			}),
+			{
+				method: "POST",
+				action: `/api/meal-plans/${eatEntry.planId}/entries/${entryId}/intake`,
+				encType: "application/json",
+			},
+		);
+	};
+
 	const ingredientNames = meal.ingredients.map((i) => i.ingredientName);
 	const triggeredAllergens = detectAllergens(ingredientNames, userAllergens);
 	const sourceUrl = meal.customFields?.sourceUrl as string | undefined;
-	const rootData = useRouteLoaderData("root") as
-		| { clientFlags?: { nutritionEngine?: boolean } }
-		| undefined;
-	const nutritionEngine = rootData?.clientFlags?.nutritionEngine === true;
 
 	const mealDescriptionBlock = (
 		<>
@@ -664,6 +753,16 @@ export function MealDetail({
 						)}
 					</button>
 
+					{cookLogSplit && (
+						<button
+							type="button"
+							onClick={handleAddToManifest}
+							className="mb-4 w-full flex items-center justify-center gap-2 font-semibold px-6 py-3 rounded-xl bg-platinum text-carbon border border-platinum hover:border-hyper-green/50 transition-all"
+						>
+							Add to Manifest
+						</button>
+					)}
+
 					{/* Cook Action */}
 					{cookError && (
 						<div
@@ -712,7 +811,9 @@ export function MealDetail({
 						{!isCooked && !cookError && (
 							<p className="text-xs text-center mt-2 text-muted">
 								{desiredServings === baseServings
-									? "This will deduct ingredients from Cargo"
+									? cookLogSplit
+										? "Deducts Cargo and marks Prepared on today's Manifest"
+										: "This will deduct ingredients from Cargo"
 									: `Scaled for ${desiredServings} serving${desiredServings !== 1 ? "s" : ""} (base: ${baseServings})`}
 							</p>
 						)}
@@ -740,6 +841,21 @@ export function MealDetail({
 						fetcher.data?.result?.skippedIngredients,
 					)}
 					onDismiss={cookPartialToast.hide}
+				/>
+			)}
+			{eatEntry && offerEatEnabled && (
+				<PlateUpDialog
+					mode="eat"
+					mealName={eatEntry.mealName}
+					defaultServings={1}
+					intakeConsentGranted={intakeConsentGranted}
+					onConfirmEat={(servings, consent) => {
+						const entryId = eatEntry.id;
+						if (consent) setIntakeConsentGranted(true);
+						setEatEntry(null);
+						handleEat(entryId, servings, consent);
+					}}
+					onClose={() => setEatEntry(null)}
 				/>
 			)}
 		</div>

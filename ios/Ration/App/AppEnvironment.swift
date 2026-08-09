@@ -13,6 +13,8 @@ final class AppEnvironment {
         case galleyGenerate
         case galleyImport
         case manifestPlanWeek
+        /// Open Manifest Add-to-plan with meal + date prefilled (nutrition-cook-log-split).
+        case manifestAddEntry(mealId: String, date: String)
     }
 
     let auth: AuthManager

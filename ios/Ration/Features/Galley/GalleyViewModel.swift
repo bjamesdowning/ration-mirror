@@ -13,7 +13,9 @@ final class GalleyViewModel {
             servings: Int,
             ingredientsDeducted: Int,
             partialCook: Bool,
-            skippedIngredients: [MissingIngredientDetail]
+            skippedIngredients: [MissingIngredientDetail],
+            offerPersonalLog: Bool,
+            bridgedEntry: CookMealBridgedEntry?
         )
         case needsConfirmation(missing: [MissingIngredientDetail])
         case failed
@@ -113,6 +115,8 @@ final class GalleyViewModel {
         _ mealId: String,
         servings: Int? = nil,
         confirmInsufficient: Bool = false,
+        bridgeDate: String? = nil,
+        bridgeLocalHour: Int? = nil,
         api: RationAPI
     ) async -> CookOutcome {
         mutationTask?.cancel()
@@ -122,6 +126,8 @@ final class GalleyViewModel {
                 mealId,
                 servings: servings,
                 confirmInsufficient: confirmInsufficient,
+                bridgeDate: bridgeDate,
+                bridgeLocalHour: bridgeLocalHour,
                 api: api
             )
         }
@@ -363,6 +369,8 @@ final class GalleyViewModel {
         _ mealId: String,
         servings: Int? = nil,
         confirmInsufficient: Bool = false,
+        bridgeDate: String? = nil,
+        bridgeLocalHour: Int? = nil,
         api: RationAPI
     ) async -> CookOutcome {
         do {
@@ -370,7 +378,9 @@ final class GalleyViewModel {
                 try await api.cookMeal(
                     id: mealId,
                     servings: servings,
-                    confirmInsufficient: confirmInsufficient ? true : nil
+                    confirmInsufficient: confirmInsufficient ? true : nil,
+                    date: bridgeDate,
+                    localHour: bridgeLocalHour
                 )
             }
             guard !Task.isCancelled else { return .failed }
@@ -387,7 +397,9 @@ final class GalleyViewModel {
                 servings: result.servings ?? servings ?? 1,
                 ingredientsDeducted: result.ingredientsDeducted ?? 0,
                 partialCook: result.partialCook ?? false,
-                skippedIngredients: result.skippedIngredients ?? []
+                skippedIngredients: result.skippedIngredients ?? [],
+                offerPersonalLog: result.offerPersonalLog == true,
+                bridgedEntry: result.entry
             )
         } catch is CancellationError {
             return .failed

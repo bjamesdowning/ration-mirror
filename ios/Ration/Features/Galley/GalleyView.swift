@@ -24,9 +24,19 @@ struct GalleyView: View {
     @State private var showCookUndo = false
     @State private var editingMeal: Meal?
     @State private var paywallContext: PaywallContext?
+    @State private var pendingEatEntry: ManifestEntry?
+    @State private var intakeConsentGranted = false
 
     private var organizationId: String? {
         env.session.activeOrganizationId
+    }
+
+    private var cookLogSplitEnabled: Bool {
+        env.session.clientFlags.isNutritionCookLogSplitEnabled
+    }
+
+    private var offerEatEnabled: Bool {
+        cookLogSplitEnabled && env.session.clientFlags.isNutritionManifestEnabled
     }
 
     private var loadTaskKey: String {
@@ -258,6 +268,38 @@ struct GalleyView: View {
         } message: {
             Text(cookConfirmationMessage ?? "Missing ingredients. Cook anyway?")
         }
+        .sheet(item: $pendingEatEntry) { entry in
+            ManifestPlateUpSheet(
+                entry: entry,
+                hasIntakeConsent: intakeConsentGranted,
+                onSave: { servings, consent in
+                    await logServingFromGalley(entry: entry, servings: servings, consent: consent)
+                }
+            )
+        }
+    }
+
+    @MainActor
+    private func logServingFromGalley(entry: ManifestEntry, servings: Double, consent: Bool) async -> String? {
+        do {
+            let result = try await env.api.upsertManifestIntake(
+                entryId: entry.id,
+                servings: servings,
+                idempotencyKey: UUID().uuidString,
+                consent: consent ? true : nil
+            )
+            if result.intakeConsentGranted == true {
+                intakeConsentGranted = true
+            }
+            Haptics.success()
+            cookSuccessMessage = "Serving logged"
+            return nil
+        } catch {
+            if let apiError = error as? APIError, apiError.isNutritionConsentRequired {
+                return "Allow personal serving logs to continue."
+            }
+            return (error as? APIError)?.errorDescription ?? error.localizedDescription
+        }
     }
 
     private func reload(organizationId: String? = nil) async {
@@ -466,24 +508,43 @@ struct GalleyView: View {
     }
 
     private func handleCook(mealId: String, servings: Int? = nil, confirmInsufficient: Bool = false) async {
+        let bridgeDate = cookLogSplitEnabled ? ManifestDateHelpers.todayISO() : nil
+        let bridgeHour = cookLogSplitEnabled
+            ? Calendar.current.component(.hour, from: Date())
+            : nil
         switch await model.runCook(
             mealId,
             servings: servings,
             confirmInsufficient: confirmInsufficient,
+            bridgeDate: bridgeDate,
+            bridgeLocalHour: bridgeHour,
             api: env.api
         ) {
-        case .success(let undoToken, let cookedServings, let ingredientsDeducted, let partialCook, let skipped):
+        case .success(
+            let undoToken,
+            let cookedServings,
+            let ingredientsDeducted,
+            let partialCook,
+            let skipped,
+            let offerPersonalLog,
+            let bridgedEntry
+        ):
             env.notifyCargoDataChanged()
-            cookSuccessMessage = GalleyViewModel.cookSuccessMessage(
+            var message = GalleyViewModel.cookSuccessMessage(
                 servings: cookedServings,
                 ingredientsDeducted: ingredientsDeducted,
                 partialCook: partialCook,
                 skippedIngredients: skipped
             )
-            // Always replace prior undo state so a cook without a token cannot
-            // leave a stale UndoToast bound to an older deduction.
+            if bridgedEntry != nil {
+                message += " · Added to today's Manifest"
+            }
+            cookSuccessMessage = message
             cookUndoToken = undoToken
             showCookUndo = undoToken != nil
+            if offerEatEnabled, offerPersonalLog, let bridgedEntry {
+                pendingEatEntry = bridgedEntry.asManifestEntry()
+            }
         case .needsConfirmation(let missing):
             pendingCookMealId = mealId
             cookConfirmationMessage = missingIngredientsMessage(missing)

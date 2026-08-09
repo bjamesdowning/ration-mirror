@@ -21,7 +21,17 @@ struct MealDetailView: View {
     @State private var showCookUndo = false
     @State private var cookConfirmationMessage: String?
     @State private var showCookConfirmation = false
+    @State private var pendingEatEntry: ManifestEntry?
+    @State private var intakeConsentGranted = false
     @Environment(\.dismiss) private var dismiss
+
+    private var cookLogSplitEnabled: Bool {
+        env.session.clientFlags.isNutritionCookLogSplitEnabled
+    }
+
+    private var offerEatEnabled: Bool {
+        cookLogSplitEnabled && env.session.clientFlags.isNutritionManifestEnabled
+    }
 
     var body: some View {
         ScrollView {
@@ -100,6 +110,18 @@ struct MealDetailView: View {
                 Button { Task { await cook() } } label: {
                     Label("Cook meal", systemImage: "flame")
                 }
+                if cookLogSplitEnabled {
+                    Button {
+                        env.openDeepLink(
+                            .manifestAddEntry(
+                                mealId: mealId,
+                                date: ManifestDateHelpers.todayISO()
+                            )
+                        )
+                    } label: {
+                        Label("Add to Manifest", systemImage: "calendar.badge.plus")
+                    }
+                }
                 Button { Task { await toggleSupply() } } label: {
                     Label(
                         isSelectedForSupply ? "Remove from Supply" : "Add to Supply",
@@ -159,6 +181,15 @@ struct MealDetailView: View {
             }
         } message: {
             Text(cookConfirmationMessage ?? "Missing ingredients. Cook anyway?")
+        }
+        .sheet(item: $pendingEatEntry) { entry in
+            ManifestPlateUpSheet(
+                entry: entry,
+                hasIntakeConsent: intakeConsentGranted,
+                onSave: { servings, consent in
+                    await logServing(entry: entry, servings: servings, consent: consent)
+                }
+            )
         }
     }
 
@@ -330,11 +361,17 @@ struct MealDetailView: View {
     @MainActor
     private func cook(confirmInsufficient: Bool = false) async {
         do {
+            let bridgeDate = cookLogSplitEnabled ? ManifestDateHelpers.todayISO() : nil
+            let bridgeHour = cookLogSplitEnabled
+                ? Calendar.current.component(.hour, from: Date())
+                : nil
             let result = try await MutationRetry.once {
                 try await env.api.cookMeal(
                     id: mealId,
                     servings: desiredServings,
-                    confirmInsufficient: confirmInsufficient ? true : nil
+                    confirmInsufficient: confirmInsufficient ? true : nil,
+                    date: bridgeDate,
+                    localHour: bridgeHour
                 )
             }
             if result.requiresConfirmation == true,
@@ -347,20 +384,51 @@ struct MealDetailView: View {
                 return
             }
             Haptics.success()
-            cookMessage = GalleyViewModel.cookSuccessMessage(
+            var message = GalleyViewModel.cookSuccessMessage(
                 servings: result.servings ?? desiredServings,
                 ingredientsDeducted: result.ingredientsDeducted ?? 0,
                 partialCook: result.partialCook ?? false,
                 skippedIngredients: result.skippedIngredients ?? []
             )
-            // Always replace prior undo state so a cook without a token cannot
-            // leave a stale UndoToast bound to an older deduction.
+            if result.bridgedToManifest == true {
+                message += " · Added to today's Manifest"
+            }
+            cookMessage = message
             cookUndoToken = result.undoToken
             showCookUndo = result.undoToken != nil
             env.notifyCargoDataChanged()
             await loadAvailability()
+            if offerEatEnabled,
+               result.offerPersonalLog == true,
+               let bridged = result.entry
+            {
+                pendingEatEntry = bridged.asManifestEntry()
+            }
         } catch {
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+        }
+    }
+
+    @MainActor
+    private func logServing(entry: ManifestEntry, servings: Double, consent: Bool) async -> String? {
+        do {
+            let result = try await env.api.upsertManifestIntake(
+                entryId: entry.id,
+                servings: servings,
+                idempotencyKey: UUID().uuidString,
+                consent: consent ? true : nil
+            )
+            if result.intakeConsentGranted == true {
+                intakeConsentGranted = true
+            }
+            Haptics.success()
+            cookMessage = "Serving logged"
+            return nil
+        } catch {
+            if let apiError = error as? APIError, apiError.isNutritionConsentRequired {
+                return "Allow personal serving logs to continue."
+            }
+            return (error as? APIError)?.errorDescription ?? error.localizedDescription
         }
     }
 

@@ -11,6 +11,7 @@ struct ManifestView: View {
     var onPlanWeekComplete: (Int) -> Void = { _ in }
     @State private var model = ManifestViewModel()
     @State private var showingAddEntry = false
+    @State private var addEntryPrefillMealId: String?
     @State private var showingPlanWeek = false
     @State private var showingOptions = false
     @State private var showingJumpCalendar = false
@@ -114,6 +115,18 @@ struct ManifestView: View {
                     env.deepLinkRouter.acknowledgeManifestPlanWeek()
                 }
             }
+            .onChange(of: env.deepLinkRouter.manifestAddEntryPending, initial: true) { _, pending in
+                guard let pending else { return }
+                guard env.session.clientFlags.isNutritionCookLogSplitEnabled else {
+                    env.deepLinkRouter.acknowledgeManifestAddEntry()
+                    return
+                }
+                model.selectedDay = pending.date
+                addEntryPrefillMealId = pending.mealId
+                showingAddEntry = true
+                env.deepLinkRouter.acknowledgeManifestAddEntry()
+            }
+            }
             .refreshable { await reload() }
             .alert("Insufficient cargo", isPresented: $showPrepareConfirmation) {
                 Button("Continue anyway") {
@@ -212,7 +225,10 @@ struct ManifestView: View {
             }
             .background(Theme.ceramic)
             .sheet(isPresented: $showingAddEntry) {
-                AddManifestEntrySheet(defaultDate: model.selectedDay) { mealId, date, slot in
+                AddManifestEntrySheet(
+                    defaultDate: model.selectedDay,
+                    preselectedMealId: addEntryPrefillMealId
+                ) { mealId, date, slot in
                     guard let organizationId = env.session.activeOrganizationId else {
                         return "Organization not ready."
                     }
@@ -227,6 +243,7 @@ struct ManifestView: View {
                     )
                     return ok ? nil : model.errorMessage
                 }
+                .onDisappear { addEntryPrefillMealId = nil }
             }
             .sheet(isPresented: $showingPlanWeek) {
                 PlanWeekSheet { count in

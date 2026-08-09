@@ -157,6 +157,41 @@ describe("applyUndoRecord", () => {
 		expect(buildKitchenEventDeleteStmts).toHaveBeenCalled();
 	});
 
+	it("deletes auto-created entries on manifest_cook undo", async () => {
+		planSelect.mockResolvedValue([{ id: "plan-1" }]);
+		const updateSet = vi.fn().mockReturnValue({
+			where: vi.fn().mockResolvedValue(undefined),
+		});
+		const deleteWhere = vi.fn().mockResolvedValue(undefined);
+		deleteFn.mockReturnValue({ where: deleteWhere });
+		vi.doMock("drizzle-orm/d1", () => ({
+			drizzle: vi.fn(() => ({
+				select: vi.fn(() => ({
+					from: vi.fn().mockReturnThis(),
+					where: vi.fn().mockReturnThis(),
+					limit: planSelect,
+				})),
+				update: vi.fn(() => ({ set: updateSet })),
+				delete: deleteFn,
+				batch,
+			})),
+		}));
+
+		const { applyUndoRecord } = await import("../cook-reversal.server");
+		await applyUndoRecord({} as D1Database, "org-1", {
+			kind: "manifest_cook",
+			userId: "user-1",
+			planId: "plan-1",
+			manifestEntryIds: ["entry-new"],
+			deleteManifestEntryIds: ["entry-new"],
+			deductions: [],
+			eventIds: ["evt-cook"],
+		});
+
+		expect(deleteFn).toHaveBeenCalled();
+		expect(updateSet).not.toHaveBeenCalled();
+	});
+
 	it("voids intake and restores prior row for manifest_intake without cargo", async () => {
 		const updateSet = vi.fn().mockReturnValue({
 			where: vi.fn().mockResolvedValue(undefined),

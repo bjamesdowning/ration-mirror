@@ -143,6 +143,27 @@ struct MealMatchResponse: Codable, Sendable {
 struct CookMealRequest: Encodable, Sendable {
     var servings: Int?
     var confirmInsufficient: Bool?
+    /// Local YYYY-MM-DD — enables Manifest bridge when nutrition-cook-log-split is on.
+    var date: String?
+    var slotType: String?
+    var localHour: Int?
+}
+
+struct CookMealBridgedEntry: Codable, Sendable, Identifiable {
+    let id: String
+    let planId: String
+    let mealId: String
+    let date: String
+    let slotType: String
+    let mealName: String
+    let mealServings: Int?
+    let mealType: String?
+    let mealEnergyKcalPerServing: Double?
+    let mealProteinGPerServing: Double?
+    let mealCarbsGPerServing: Double?
+    let mealFatGPerServing: Double?
+    let cookedAt: String?
+    let consumedAt: String?
 }
 
 struct CookMealResponse: Codable, Sendable {
@@ -154,6 +175,41 @@ struct CookMealResponse: Codable, Sendable {
     let missingIngredients: [MissingIngredientDetail]?
     let partialCook: Bool?
     let skippedIngredients: [MissingIngredientDetail]?
+    let bridgedToManifest: Bool?
+    let offerPersonalLog: Bool?
+    let autoCreated: Bool?
+    let planId: String?
+    let entry: CookMealBridgedEntry?
+}
+
+extension CookMealBridgedEntry {
+    func asManifestEntry() -> ManifestEntry {
+        let cookedDate = cookedAt.flatMap { ISO8601DateFormatter().date(from: $0) }
+        let consumedDate = consumedAt.flatMap { ISO8601DateFormatter().date(from: $0) }
+        return ManifestEntry(
+            id: id,
+            planId: planId,
+            mealId: mealId,
+            date: date,
+            slotType: slotType,
+            orderIndex: 0,
+            servingsOverride: nil,
+            notes: nil,
+            consumedAt: consumedDate ?? cookedDate,
+            cookedAt: cookedDate ?? consumedDate,
+            createdAt: Date(),
+            mealName: mealName,
+            mealServings: mealServings ?? 1,
+            mealType: mealType ?? "recipe",
+            mealPrepTime: nil,
+            mealCookTime: nil,
+            mealEnergyKcalPerServing: mealEnergyKcalPerServing,
+            mealProteinGPerServing: mealProteinGPerServing,
+            mealCarbsGPerServing: mealCarbsGPerServing,
+            mealFatGPerServing: mealFatGPerServing,
+            personalIntake: nil
+        )
+    }
 }
 
 struct ToggleActiveResponse: Codable, Sendable {

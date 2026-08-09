@@ -90,9 +90,20 @@ vi.mock("~/lib/meals.server", () => ({
 	deleteMeal: vi.fn(),
 }));
 
-vi.mock("~/lib/cook-confirmation.server", () => ({
-	cookMealWithConfirmation: vi.fn(),
+vi.mock("~/lib/galley-cook-manifest.server", () => ({
+	cookMealFromGalley: vi.fn(),
 }));
+
+vi.mock("~/lib/nutrition/persist.server", async (importOriginal) => {
+	const actual =
+		await importOriginal<typeof import("~/lib/nutrition/persist.server")>();
+	return {
+		...actual,
+		buildMinimalFlagContext: vi.fn((_env: unknown, userId: string) => ({
+			userId,
+		})),
+	};
+});
 
 vi.mock("~/lib/ledger.server", () => ({
 	checkBalance: vi.fn(),
@@ -170,8 +181,8 @@ const { matchMeals } = await import("~/lib/matching.server");
 const { getMealsPage, updateMeal, createMeal, deleteMeal } = await import(
 	"~/lib/meals.server"
 );
-const { cookMealWithConfirmation } = await import(
-	"~/lib/cook-confirmation.server"
+const { cookMealFromGalley } = await import(
+	"~/lib/galley-cook-manifest.server"
 );
 const { checkRateLimit } = await import("~/lib/rate-limiter.server");
 const {
@@ -861,15 +872,18 @@ describe("MCP tools", () => {
 				mealId: "00000000-0000-0000-0000-000000000001",
 			});
 			expect(result.content[0]?.text).toContain("Rate limit exceeded");
-			expect(cookMealWithConfirmation).not.toHaveBeenCalled();
+			expect(cookMealFromGalley).not.toHaveBeenCalled();
 		});
 
 		it("cooks meal and returns success", async () => {
-			vi.mocked(cookMealWithConfirmation).mockResolvedValueOnce({
+			vi.mocked(cookMealFromGalley).mockResolvedValueOnce({
 				cooked: true,
 				deductions: [{ cargoId: "c1", quantity: 1 }],
 				servings: 2,
 				ingredientsDeducted: 1,
+				bridgedToManifest: false,
+				offerPersonalLog: false,
+				autoCreated: false,
 			});
 			const server = makeServer();
 			const result = await getToolHandler(
@@ -884,7 +898,7 @@ describe("MCP tools", () => {
 		});
 
 		it("returns partial cook note when some ingredients are skipped", async () => {
-			vi.mocked(cookMealWithConfirmation).mockResolvedValueOnce({
+			vi.mocked(cookMealFromGalley).mockResolvedValueOnce({
 				cooked: true,
 				deductions: [{ cargoId: "c1", quantity: 100 }],
 				servings: 2,
@@ -893,6 +907,9 @@ describe("MCP tools", () => {
 				skippedIngredients: [
 					{ name: "eggs", required: 4, available: 0, unit: "count" },
 				],
+				bridgedToManifest: false,
+				offerPersonalLog: false,
+				autoCreated: false,
 			});
 			const server = makeServer();
 			const result = await getToolHandler(
@@ -910,13 +927,16 @@ describe("MCP tools", () => {
 		});
 
 		it("returns requiresConfirmation when cargo is insufficient", async () => {
-			vi.mocked(cookMealWithConfirmation).mockResolvedValueOnce({
+			vi.mocked(cookMealFromGalley).mockResolvedValueOnce({
 				cooked: false,
 				deductions: [],
 				requiresConfirmation: true,
 				missingIngredients: [
 					{ name: "potatoes", required: 2, available: 0, unit: "lb" },
 				],
+				bridgedToManifest: false,
+				offerPersonalLog: false,
+				autoCreated: false,
 			});
 			const server = makeServer();
 			const result = await getToolHandler(

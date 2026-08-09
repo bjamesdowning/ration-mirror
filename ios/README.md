@@ -298,11 +298,13 @@ tappable range label that opens a native graphical **Go to date** calendar (gate
 (only when away from today’s window). When `nutrition-goals` is on, the day strip shows
 kcal progress (`ThinProgressBar` + `consumed / target`) instead of absolute macros only.
 
-**Nutrition Cook/Eat split (iOS 1.3.23, flag-gated):** When `nutrition-cook-log-split` is on,
+**Nutrition Cook/Eat split (iOS 1.3.24, flag-gated):** When `nutrition-cook-log-split` is on,
 Manifest **Cook** deducts Cargo and marks *Prepared* (no personal nutrition). **Log my serving**
 opens `ManifestPlateUpSheet` for private intake; first use requires an **explicit** intake-consent
-checkbox (`consent: true` on POST) — not implied by Cook or goals. Settings → Nutrition goals
-remain a separate explicit consent path. Flags off → legacy Consume/Eat only.
+checkbox (`consent: true` on POST) — not implied by Cook or goals. Galley **Cook meal** bridges
+onto today’s Manifest and may offer the same Eat sheet; **Add to Manifest** deep-links to
+Add-to-plan with meal + day prefilled. Settings → Nutrition goals remain a separate explicit
+consent path. Flags off → legacy Consume/Eat only; Galley Cook stays cargo-only.
 
 **Nutrition goals + cargo override (iOS 1.3.23):** Nutrition Goals toolbar is Cancel/Save
 (Save dismisses on success) with `MutationRetry` and `asOf` on GET. Cargo/Scan nutrition

@@ -8,9 +8,10 @@ Conduct a thorough code review following Ration's quality standards before mergi
 - [ ] `bun run lint` passes without errors
 - [ ] `bun run typecheck` passes without type errors
 - [ ] `bun run test:unit` passes (all tests green)
-- [ ] If `ios/` or mobile API contracts changed, `bun run ios:check` passes on a Mac with full Xcode + iOS simulator runtime
+- [ ] If `ios/` or mobile API contracts changed, `bun run ios:check` passes on a Mac with full Xcode + iOS simulator runtime (`exit_code == 0` and `** TEST SUCCEEDED **`)
 - [ ] No `console.log` statements in production code
 - [ ] No unused variables or imports
+- [ ] Edited Swift: brace/structure sanity (stray `}` after a modifier block can close `body` early — fails Archive with “Expected declaration” / “Extraneous }”)
 
 ### 2. Cloudflare Workers Compatibility
 - [ ] No Node.js APIs used (`fs`, `net`, `child_process`)
@@ -50,6 +51,11 @@ Conduct a thorough code review following Ration's quality standards before mergi
 - [ ] Mobile-first responsive design
 - [ ] Primary actions accessible in "Thumb Zone"
 - [ ] Native iOS screens use Ration design tokens/components from `ios/Ration/Core/Design/`
+
+### 8. Verify evidence (when checks are run as part of review)
+- [ ] Gate commands were not piped through `tail`/`head` without `pipefail` / explicit status re-exit
+- [ ] Pass claims cite real exit code `0` (and iOS success marker when applicable)
+- [ ] Contradictory logs (`BUILD FAILED` + wrapper exit 0) are treated as **fail**
 
 ## Review Summary
 

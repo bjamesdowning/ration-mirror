@@ -15,6 +15,13 @@ No code is "Done" until:
 
 You are the gatekeeper. Reject any "Solution" that breaks the build.
 
+## Verify evidence (agents)
+
+- Do **not** claim a gate passed unless the command’s real exit code is `0`.
+- Never run quality gates as `cmd 2>&1 | tail` / `| head` without `set -o pipefail` or `status=$?` + `exit $status` after a log file. `| tail` alone masks failures (known false-pass that shipped a broken Swift Archive).
+- For `bun run ios:check`, also require `** TEST SUCCEEDED **` in the log. Web Biome/Vitest/`tsc` do not compile Swift.
+- If output contains `BUILD FAILED` / `error: script` but the wrapper exit is 0, treat as **failed**.
+
 ## Code Quality
 
 - **Style:** Functional Programming over OOP. Composition over Inheritance

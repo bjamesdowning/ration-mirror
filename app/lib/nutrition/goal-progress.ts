@@ -7,7 +7,7 @@ export type DayNutrientTotals = {
 	proteinG: number;
 	carbsG: number;
 	fatG: number;
-	/** Intake rows do not store fiber yet — remains 0 until intake tracks it. */
+	/** Intake rows store fiber in nutrientsJson; summary rolls known fiberG into day/totals when present. */
 	fiberG: number;
 };
 

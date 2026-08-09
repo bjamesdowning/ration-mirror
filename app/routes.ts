@@ -454,6 +454,10 @@ export default [
 	route("api/mobile/v1/account", "routes/api/mobile/v1.account.ts"),
 	route("api/mobile/v1/manifest", "routes/api/mobile/v1.manifest.ts"),
 	route(
+		"api/mobile/v1/manifest/planned-dates",
+		"routes/api/mobile/v1.manifest.planned-dates.ts",
+	),
+	route(
 		"api/mobile/v1/manifest/consume",
 		"routes/api/mobile/v1.manifest.consume.ts",
 	),

@@ -208,6 +208,79 @@ enum ManifestDateHelpers {
         let maxDate = date(fromISO: maxISO) ?? Date()
         return minDate ... maxDate
     }
+
+    /// Caption under Manifest jump calendar (matches web `HISTORY_KEPT_TITLE`).
+    static let historyKeptTitle = "History kept for 13 months"
+
+    /// Year/month from `YYYY-MM-DD`. Invalid input falls back to today.
+    static func parseYearMonth(_ iso: String) -> (year: Int, month: Int) {
+        let parts = iso.split(separator: "-").compactMap { Int($0) }
+        if parts.count >= 2, parts[0] >= 1, (1...12).contains(parts[1]) {
+            return (parts[0], parts[1])
+        }
+        let today = todayISO()
+        let fallback = today.split(separator: "-").compactMap { Int($0) }
+        if fallback.count >= 2 {
+            return (fallback[0], fallback[1])
+        }
+        let now = Date()
+        return (calendar.component(.year, from: now), calendar.component(.month, from: now))
+    }
+
+    /// Inclusive first/last calendar day of a month (1–12).
+    static func monthBounds(year: Int, month: Int) -> (from: String, to: String) {
+        let from = String(format: "%04d-%02d-01", year, month)
+        var comps = DateComponents()
+        comps.year = year
+        comps.month = month
+        comps.day = 1
+        guard let first = calendar.date(from: comps),
+              let range = calendar.range(of: .day, in: .month, for: first)
+        else {
+            return (from, from)
+        }
+        let to = String(format: "%04d-%02d-%02d", year, month, range.count)
+        return (from, to)
+    }
+
+    /// Month grid of YYYY-MM-DD cells (leading/trailing adjacent-month days).
+    /// Always returns complete weeks aligned to `weekStartPref` (≤ 42 days).
+    static func buildMonthGrid(year: Int, month: Int, weekStartPref: String) -> [String] {
+        let bounds = monthBounds(year: year, month: month)
+        let start = weekStart(for: bounds.from, preference: weekStartPref)
+        var dates: [String] = []
+        var cursor = start
+        for i in 0..<42 {
+            dates.append(cursor)
+            cursor = addDays(cursor, days: 1)
+            if cursor > bounds.to, (i + 1) % 7 == 0 { break }
+        }
+        return dates
+    }
+
+    /// Shift a year/month by ±N months.
+    static func shiftYearMonth(year: Int, month: Int, delta: Int) -> (year: Int, month: Int) {
+        var comps = DateComponents()
+        comps.year = year
+        comps.month = month
+        comps.day = 1
+        guard let base = calendar.date(from: comps),
+              let shifted = calendar.date(byAdding: .month, value: delta, to: base)
+        else {
+            return (year, month)
+        }
+        return (
+            calendar.component(.year, from: shifted),
+            calendar.component(.month, from: shifted)
+        )
+    }
+
+    /// Weekday column headers for the Manifest month grid.
+    static func weekdayLabels(weekStartPref: String) -> [String] {
+        weekStartPref == "monday"
+            ? ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+            : ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+    }
 }
 
 struct WeekNavigator: View {

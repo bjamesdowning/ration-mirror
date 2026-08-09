@@ -1,6 +1,7 @@
 import { data } from "react-router";
 import { getUserSettings } from "~/lib/auth.server";
 import { handleApiError } from "~/lib/error-handler";
+import { buildFlagContext } from "~/lib/feature-flags/context.server";
 import { isFeatureEnabled } from "~/lib/feature-flags/flags.server";
 import {
 	addEntry,
@@ -14,7 +15,6 @@ import { getCalendarDates } from "~/lib/manifest-dates";
 import { getExcludedManifestDates } from "~/lib/manifest-supply.server";
 import { requireMobileActiveGroup } from "~/lib/mobile/auth.server";
 import { getActiveNutritionConsent } from "~/lib/nutrition/consent.server";
-import { buildMinimalFlagContext } from "~/lib/nutrition/persist.server";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import {
 	MealPlanEntryCreateSchema,
@@ -67,7 +67,9 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 			parsed.data.endDate,
 		);
 
-		const flagContext = buildMinimalFlagContext(context.cloudflare.env, userId);
+		const flagContext = buildFlagContext(request, context.cloudflare.env, {
+			user: { id: userId },
+		});
 		const [cookLogSplit, nutritionManifest] = await Promise.all([
 			isFeatureEnabled(
 				context.cloudflare.env,

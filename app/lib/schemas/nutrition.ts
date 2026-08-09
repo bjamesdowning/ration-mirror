@@ -262,6 +262,8 @@ export const NutritionDayTotalsSchema = z.object({
 	proteinG: z.number(),
 	carbsG: z.number(),
 	fatG: z.number(),
+	/** Known fiber from nutrientsJson rollup; omitted when unknown. */
+	fiberG: z.number().optional(),
 	coverageAvg: z.number(),
 	entryCount: z.number().int(),
 });
@@ -274,6 +276,7 @@ export const NutritionSummarySchema = z.object({
 		proteinG: z.number(),
 		carbsG: z.number(),
 		fatG: z.number(),
+		fiberG: z.number().optional(),
 	}),
 	days: z.array(NutritionDayTotalsSchema),
 	goal: z

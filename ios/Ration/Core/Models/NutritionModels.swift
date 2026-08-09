@@ -74,6 +74,8 @@ struct NutritionDayTotals: Codable, Sendable, Identifiable, Equatable {
     let proteinG: Double
     let carbsG: Double
     let fatG: Double
+    /// Known fiber from intake nutrientsJson rollup; omitted when unknown.
+    var fiberG: Double? = nil
     let coverageAvg: Double
     let entryCount: Int
 
@@ -85,6 +87,7 @@ struct NutritionDayTotals: Codable, Sendable, Identifiable, Equatable {
             proteinG: 0,
             carbsG: 0,
             fatG: 0,
+            fiberG: nil,
             coverageAvg: 0,
             entryCount: 0
         )
@@ -97,9 +100,10 @@ struct NutritionSummary: Codable, Sendable, Equatable {
         let proteinG: Double
         let carbsG: Double
         let fatG: Double
+        var fiberG: Double? = nil
     }
 
-    /// Active goal snapshot as of the summary range (nullable — Fiber lives here, not on day totals).
+    /// Active goal snapshot as of the summary range.
     struct Goal: Codable, Sendable, Equatable {
         let dailyEnergyKcal: Double?
         let proteinG: Double?
@@ -109,9 +113,10 @@ struct NutritionSummary: Codable, Sendable, Equatable {
         let effectiveFrom: String
         let effectiveTo: String?
 
-        /// True when at least one Manifest-relevant target is set (kcal / P / C / F; fiber is goal-only).
+        /// True when at least one Manifest-relevant target is set.
         var hasAnyManifestTarget: Bool {
             dailyEnergyKcal != nil || proteinG != nil || carbsG != nil || fatG != nil
+                || fiberG != nil
         }
     }
 

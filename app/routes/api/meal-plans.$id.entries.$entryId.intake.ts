@@ -1,6 +1,7 @@
 import { data } from "react-router";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { handleApiError } from "~/lib/error-handler";
+import { buildFlagContext } from "~/lib/feature-flags/context.server";
 import { getActiveNutritionConsent } from "~/lib/nutrition/consent.server";
 import {
 	clearManifestPersonalIntake,
@@ -37,6 +38,10 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 		);
 	}
 
+	const flagContext = buildFlagContext(request, context.cloudflare.env, {
+		user,
+	});
+
 	try {
 		if (request.method === "POST") {
 			const json = await request.json();
@@ -59,6 +64,7 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 					idempotencyKey: parsed.data.idempotencyKey,
 					consent: parsed.data.consent,
 					consentSource: "web",
+					flagContext,
 				},
 			);
 
@@ -90,6 +96,7 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 				userId: user.id,
 				planId,
 				entryId,
+				flagContext,
 			});
 			return {
 				cleared: result.cleared,

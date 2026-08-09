@@ -4,8 +4,8 @@
 
 1. Apply D1 migration `0044_kind_true_believers` (unique active intake per user/org/entry) — `bun run db:migrate:prod` (operator-owned; do not run from CI casually).
 2. Deploy Workers (web + mobile API) that include Cook/Eat split routes **and** Galley Cook→Manifest bridge.
-3. Ship / verify TestFlight **iOS ≥ shipping `MARKETING_VERSION`** (Cook/Prepared/Eat UI, Galley **Add to Manifest**, Galley Cook→Manifest + plate-up). Older binaries (e.g. **1.3.17**) must not be targeted.
-4. Enable Flagship with a **compound** rule: `userId` allowlist **+** `clientPlatform` equals `ios` **+** `clientVersion` ≥ shipping version (never turn nutrition **on** via `FEATURE_FLAG_OVERRIDES`).
+3. Ship / verify TestFlight **iOS ≥ `1.3.25`** (Cook/Prepared/Eat UI, Galley **Add to Manifest**, Galley Cook→Manifest + plate-up, jump-calendar dots, day Intake log). Older binaries (e.g. **1.3.17**) must not be targeted. Note: `X-Ration-Client` sends marketing version only — dogfood relies on **userId allowlist** + installing the latest TestFlight build of 1.3.25 (marketing alone cannot distinguish successive 1.3.25 builds).
+4. Enable Flagship with a **compound** rule: `userId` allowlist **+** `clientPlatform` equals `ios` **+** `clientVersion` ≥ `1.3.25` (never turn nutrition **on** via `FEATURE_FLAG_OVERRIDES`).
 
 **Prefer default off + version gate**, not default on with exclusions for old clients. Missing `clientVersion` must evaluate **off** (fail closed). iOS sends `X-Ration-Client: ios/<MARKETING_VERSION>` on API/session calls.
 

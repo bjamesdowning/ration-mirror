@@ -390,6 +390,7 @@ export async function getConsumedIntakeDatesForRange(
 				eq(nutritionIntake.organizationId, organizationId),
 				gte(nutritionIntake.manifestDate, startDate),
 				lte(nutritionIntake.manifestDate, endDate),
+				isNull(nutritionIntake.voidedAt),
 			),
 		)
 		.orderBy(nutritionIntake.manifestDate)

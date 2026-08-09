@@ -174,4 +174,6 @@ If the feature needs gradual rollout or a dashboard kill-switch, run **`/add-fea
 - [ ] Migrations generated and applied
 - [ ] Tests written
 - [ ] Feature flag (if requested) — see `/add-feature-flag`
-- [ ] Code passes lint and typecheck
+- [ ] Code passes lint and typecheck (real exit codes — never `| tail` without `pipefail`)
+- [ ] If `ios/` touched: `bun run ios:check` with exit `0` and `** TEST SUCCEEDED **`
+- [ ] Ship with `/long-commit` (or `/quick-commit` only if already reviewed)

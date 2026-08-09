@@ -32,7 +32,6 @@ vi.mock("../persist.server", async () => {
 		);
 	return {
 		...actual,
-		buildMinimalFlagContext: () => ({}),
 		replaceActivePersonalIntake: (...args: unknown[]) =>
 			replaceActivePersonalIntake(...args),
 		voidActivePersonalIntake: (...args: unknown[]) =>
@@ -126,6 +125,7 @@ describe("upsertManifestPersonalIntake", () => {
 				entryId,
 				servings: 1,
 				idempotencyKey: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+				flagContext: { userId, clientPlatform: "ios", clientVersion: "1.3.25" },
 			}),
 		).rejects.toMatchObject({ code: "nutrition_consent_required" });
 
@@ -165,7 +165,17 @@ describe("upsertManifestPersonalIntake", () => {
 			idempotencyKey: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
 			consent: true,
 			consentSource: "web",
+			flagContext: { userId, clientPlatform: "web", clientVersion: "1.7.49" },
 		});
+
+		expect(assertFeatureEnabled).toHaveBeenCalledWith(
+			env,
+			"nutrition-cook-log-split",
+			expect.objectContaining({
+				clientPlatform: "web",
+				clientVersion: "1.7.49",
+			}),
+		);
 
 		expect(grantNutritionConsent).toHaveBeenCalledWith(
 			env.DB,
@@ -231,6 +241,7 @@ describe("upsertManifestPersonalIntake", () => {
 				servings: 1,
 				idempotencyKey: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
 				consent: true,
+				flagContext: { userId },
 			}),
 		).rejects.toMatchObject({ code: "nutrition_unavailable" });
 	});

@@ -8,6 +8,7 @@ import { and, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { meal, mealPlan, mealPlanEntry, nutritionIntake } from "~/db/schema";
 import { assertFeatureEnabled } from "~/lib/feature-flags/assert-enabled.server";
+import type { FlagshipEvaluationContext } from "~/lib/feature-flags/context.server";
 import {
 	assertNutritionConsent,
 	grantNutritionConsent,
@@ -16,7 +17,6 @@ import {
 } from "~/lib/nutrition/consent.server";
 import { NUTRITION_COVERAGE_THRESHOLD } from "~/lib/nutrition/constants";
 import {
-	buildMinimalFlagContext,
 	getActivePersonalIntakeForEntry,
 	type PersonalIntakeSummary,
 	replaceActivePersonalIntake,
@@ -114,11 +114,19 @@ export async function upsertManifestPersonalIntake(
 		consent?: boolean;
 		consentSource?: NutritionConsentSource;
 		occurredAt?: Date;
+		/**
+		 * Full Flagship context from the route (includes clientPlatform/clientVersion).
+		 * Callers with a Request must pass buildFlagContext(...); do not omit.
+		 */
+		flagContext: FlagshipEvaluationContext;
 	},
 ): Promise<UpsertManifestPersonalIntakeResult> {
-	const flagContext = buildMinimalFlagContext(env, input.userId);
-	await assertFeatureEnabled(env, "nutrition-cook-log-split", flagContext);
-	await assertFeatureEnabled(env, "nutrition-manifest", flagContext);
+	await assertFeatureEnabled(
+		env,
+		"nutrition-cook-log-split",
+		input.flagContext,
+	);
+	await assertFeatureEnabled(env, "nutrition-manifest", input.flagContext);
 
 	try {
 		await assertNutritionConsent(env.DB, input.userId, "intake");
@@ -258,11 +266,16 @@ export async function clearManifestPersonalIntake(
 		userId: string;
 		planId: string;
 		entryId: string;
+		/** Full Flagship context from the route (includes clientPlatform/clientVersion). */
+		flagContext: FlagshipEvaluationContext;
 	},
 ): Promise<ClearManifestPersonalIntakeResult> {
-	const flagContext = buildMinimalFlagContext(env, input.userId);
-	await assertFeatureEnabled(env, "nutrition-cook-log-split", flagContext);
-	await assertFeatureEnabled(env, "nutrition-manifest", flagContext);
+	await assertFeatureEnabled(
+		env,
+		"nutrition-cook-log-split",
+		input.flagContext,
+	);
+	await assertFeatureEnabled(env, "nutrition-manifest", input.flagContext);
 
 	const d1 = drizzle(env.DB);
 	const [plan] = await d1
@@ -316,6 +329,7 @@ export async function logManifestNutritionIntake(
 		occurredAt?: Date;
 		consent?: boolean;
 		consentSource?: NutritionConsentSource;
+		flagContext: FlagshipEvaluationContext;
 	},
 ): Promise<{
 	intakes: Array<{ id: string; entryId: string | null; servings: number }>;
@@ -336,6 +350,7 @@ export async function logManifestNutritionIntake(
 		occurredAt: input.occurredAt,
 		consent: input.consent,
 		consentSource: input.consentSource,
+		flagContext: input.flagContext,
 	});
 	return {
 		intakes: [

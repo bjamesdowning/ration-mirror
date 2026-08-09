@@ -161,6 +161,13 @@ struct ManifestEntryDeleteResponse: Codable, Sendable {
     let deleted: Bool
 }
 
+/// GET `/api/mobile/v1/manifest/planned-dates?from=&to=`
+/// `consumedDates` only present when `nutrition-manifest` is enabled server-side.
+struct ManifestPlannedDatesResponse: Codable, Sendable {
+    let dates: [String]
+    var consumedDates: [String]? = nil
+}
+
 // MARK: - Cook (shared, org-scoped — Cargo + preparation only, never personal nutrition)
 // `POST /api/mobile/v1/manifest/cook` — gated by `nutrition-cook-log-split`.
 

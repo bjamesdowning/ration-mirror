@@ -62,7 +62,7 @@ struct MealDetailView: View {
                         nutrients: displayMeal.nutrition?.displayNutrients,
                         provenance: "Meal",
                         coverage: displayMeal.nutrition?.coverage,
-                        emptyMessage: "No nutrition profile yet. Ensure ingredients have nutrition, then recompute on web."
+                        emptyMessage: "No nutrition profile yet. Ensure ingredients have nutrition, then save the meal to recompute."
                     )
                 }
                 if !displayMeal.ingredients.isEmpty {

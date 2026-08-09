@@ -292,21 +292,23 @@ Settings PATCH accepts `hubProfile` and `hubLayout` for customizable Hub widgets
 
 **Copilot Textual markdown (iOS 1.2.16):** Assistant replies (Ask + onboarding briefing) render with Textual `StructuredText` — structured lists/headings/code, Hyper-Green links, native text selection. Requires iOS 18. MarkdownUI removed.
 
-**Manifest date chrome (iOS 1.3.23+):** Week navigator uses edge chevrons (≥44pt), a
-tappable range label that opens a native graphical **Go to date** calendar (gated by
-`nutrition-manifest`, ~13-month history retention), day pills, and toolbar **Today**
-(only when away from today’s window). When `nutrition-goals` is on, the day strip shows
-kcal progress (`ThinProgressBar` + `consumed / target`) instead of absolute macros only.
+**Manifest date chrome (iOS 1.3.25+):** Week navigator uses edge chevrons (≥44pt), a
+tappable range label that opens a **Go to date** month grid with planned (Hyper-Green) and
+intake (muted) dots when `nutrition-manifest` is on (~13-month history retention), day pills,
+and toolbar **Today** (only when away from today’s window). When `nutrition-goals` is on,
+the day strip shows kcal progress (`ThinProgressBar` + `consumed / target`) instead of
+absolute macros only; fiber appears on the strip only when day totals include known fiber.
 
-**Nutrition Cook/Eat split (iOS 1.3.24, flag-gated):** When `nutrition-cook-log-split` is on,
+**Nutrition Cook/Eat split (iOS 1.3.25, flag-gated):** When `nutrition-cook-log-split` is on,
 Manifest **Cook** deducts Cargo and marks *Prepared* (no personal nutrition). **Log my serving**
 opens `ManifestPlateUpSheet` for private intake; first use requires an **explicit** intake-consent
 checkbox (`consent: true` on POST) — not implied by Cook or goals. Galley **Cook meal** bridges
 onto today’s Manifest and may offer the same Eat sheet; **Add to Manifest** deep-links to
-Add-to-plan with meal + day prefilled. Settings → Nutrition goals remain a separate explicit
-consent path. Flags off → legacy Consume/Eat only; Galley Cook stays cargo-only.
+Add-to-plan with meal + day prefilled (`ration://manifest/add?mealId=&date=`). Day view shows
+an Intake log derived from personal intake on entries. Settings → Nutrition goals remain a
+separate explicit consent path. Flags off → legacy Consume/Eat only; Galley Cook stays cargo-only.
 
-**Nutrition goals + cargo override (iOS 1.3.23):** Nutrition Goals toolbar is Cancel/Save
+**Nutrition goals + cargo override (iOS 1.3.25):** Nutrition Goals toolbar is Cancel/Save
 (Save dismisses on success) with `MutationRetry` and `asOf` on GET. Cargo/Scan nutrition
 editors only send `user_override` when macros are explicitly edited — qty/unit-only saves
 omit nutrition so the server can density-scale USDA/AI snapshots.

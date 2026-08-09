@@ -845,6 +845,8 @@ export type NutritionSummaryResult = {
 		proteinG: number;
 		carbsG: number;
 		fatG: number;
+		/** Present only when ≥1 intake contributed a known fiberG from nutrientsJson. */
+		fiberG?: number;
 	};
 	days: Array<{
 		date: string;
@@ -852,6 +854,8 @@ export type NutritionSummaryResult = {
 		proteinG: number;
 		carbsG: number;
 		fatG: number;
+		/** Present only when ≥1 intake that day contributed known fiberG. */
+		fiberG?: number;
 		coverageAvg: number;
 		entryCount: number;
 	}>;
@@ -1057,15 +1061,39 @@ export async function getNutritionSummary(
 		fatG: totalRow?.fatG ?? 0,
 	};
 
-	const days = dayRows.map((row) => ({
-		date: row.date,
-		energyKcal: row.energyKcal,
-		proteinG: row.proteinG,
-		carbsG: row.carbsG,
-		fatG: row.fatG,
-		coverageAvg: row.coverageAvg,
-		entryCount: row.entryCount,
-	}));
+	// Fiber lives in nutrientsJson (no fiber_g scalar). Roll up only known values;
+	// omit fiberG from days/totals when no intake contributed a finite number.
+	const jsonRows = await d1
+		.select({
+			date: schema.nutritionIntake.manifestDate,
+			nutrientsJson: schema.nutritionIntake.nutrientsJson,
+		})
+		.from(schema.nutritionIntake)
+		.where(whereClause);
+
+	const fiberByDate = new Map<string, number>();
+	let fiberTotal: number | undefined;
+	for (const row of jsonRows) {
+		const raw = row.nutrientsJson as Record<string, unknown> | null;
+		const fiber = raw?.fiberG;
+		if (typeof fiber !== "number" || !Number.isFinite(fiber)) continue;
+		fiberByDate.set(row.date, (fiberByDate.get(row.date) ?? 0) + fiber);
+		fiberTotal = (fiberTotal ?? 0) + fiber;
+	}
+
+	const days = dayRows.map((row) => {
+		const fiberG = fiberByDate.get(row.date);
+		return {
+			date: row.date,
+			energyKcal: row.energyKcal,
+			proteinG: row.proteinG,
+			carbsG: row.carbsG,
+			fatG: row.fatG,
+			...(fiberG != null ? { fiberG } : {}),
+			coverageAvg: row.coverageAvg,
+			entryCount: row.entryCount,
+		};
+	});
 
 	const goalRow = await getActiveNutritionGoal(db, userId, to);
 	const goal = goalRow
@@ -1080,7 +1108,16 @@ export async function getNutritionSummary(
 			}
 		: null;
 
-	return { from, to, totals, days, goal };
+	return {
+		from,
+		to,
+		totals: {
+			...totals,
+			...(fiberTotal != null ? { fiberG: fiberTotal } : {}),
+		},
+		days,
+		goal,
+	};
 }
 
 /**

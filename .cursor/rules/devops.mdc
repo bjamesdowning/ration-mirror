@@ -16,6 +16,8 @@ description: CI/CD pipeline patterns, deployment workflows, quality gates, and r
 - **Preview:** Every Merge Request should generate a unique, ephemeral Preview URL for stakeholder verification
 - **Automation:** Run `bun run lint`, `bun run typecheck`, and `bun run test:unit` in CI
 - **iOS Automation:** For changes under `ios/` or mobile API/auth/billing contracts, run `bun run ios:check` on a macOS runner with full Xcode, an iOS Simulator runtime, and XcodeGen installed
+- **Exit-code integrity:** Local agent/`/long-commit`/`/quick-commit` verify shells must preserve gate exit codes. Do not pipe gates through `tail`/`head` without `pipefail` or explicit status re-exit — that pattern has falsely reported `ios:check` success while Xcode Cloud Archive failed
+- **iOS pass marker:** Treat `ios:check` as green only with exit `0` **and** `** TEST SUCCEEDED **` in the log; Apple Connect Archive is not an acceptable first compile gate
 
 ## Deployment Safety
 

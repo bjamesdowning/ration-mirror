@@ -42,7 +42,7 @@ enum NutritionGoalProgress {
     }
 
     /// Compact Manifest day-strip lines for nutrients that have a positive target.
-    /// Fiber is omitted (goal-only; not on day totals).
+    /// Fiber appears only when day.fiberG is known (honest — no false 0).
     struct ManifestStripLine: Equatable {
         let key: String
         let label: String
@@ -95,6 +95,15 @@ enum NutritionGoalProgress {
                 key: "fat",
                 label: "F",
                 actual: day.fatG,
+                target: target,
+                unit: "g"
+            ))
+        }
+        if let target = goal.fiberG, target > 0, let fiberActual = day.fiberG {
+            lines.append(ManifestStripLine(
+                key: "fiber",
+                label: "Fiber",
+                actual: fiberActual,
                 target: target,
                 unit: "g"
             ))

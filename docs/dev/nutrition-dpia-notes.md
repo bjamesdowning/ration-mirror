@@ -13,7 +13,7 @@ Short processing notes for personal nutrition goals and Manifest Eat intake (GDP
 
 ## Controls
 
-- Feature flags default **off**; production dogfood via Flagship `userId` allowlist only (see [feature-flags.md](feature-flags.md)), plus compound `ios` + `clientVersion` ≥ `1.3.23` for Cook/Eat split — see [nutrition-rollout.md](nutrition-rollout.md).
+- Feature flags default **off**; production dogfood via Flagship `userId` allowlist only (see [feature-flags.md](feature-flags.md)), plus compound `ios` + `clientVersion` ≥ `1.3.25` for Cook/Eat split — see [nutrition-rollout.md](nutrition-rollout.md).
 - Goal upsert requires `consent: true` or legacy `consentAt`; clear goals closes open versions.
 - Intake upsert requires prior intake consent **or** `consent: true` on the first log; Cook never writes intake.
 - Intake retention **~396 days** (aligned with kitchen events); purge on account erase.

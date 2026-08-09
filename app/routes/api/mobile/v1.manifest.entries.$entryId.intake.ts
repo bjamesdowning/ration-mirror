@@ -1,5 +1,6 @@
 import { data } from "react-router";
 import { handleApiError } from "~/lib/error-handler";
+import { buildFlagContext } from "~/lib/feature-flags/context.server";
 import { ensureMealPlan } from "~/lib/manifest.server";
 import { requireMobileActiveGroup } from "~/lib/mobile/auth.server";
 import { getActiveNutritionConsent } from "~/lib/nutrition/consent.server";
@@ -44,6 +45,9 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 			context.cloudflare.env.DB,
 			organizationId,
 		);
+		const flagContext = buildFlagContext(request, context.cloudflare.env, {
+			user: { id: userId },
+		});
 
 		if (request.method === "POST") {
 			const body = await request.json();
@@ -59,6 +63,7 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 					idempotencyKey: parsed.idempotencyKey,
 					consent: parsed.consent,
 					consentSource: "mobile",
+					flagContext,
 				},
 			);
 
@@ -103,6 +108,7 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 				userId,
 				planId: plan.id,
 				entryId,
+				flagContext,
 			});
 
 			let undoToken: string | undefined;

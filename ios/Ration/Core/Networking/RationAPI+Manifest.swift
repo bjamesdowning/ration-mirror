@@ -39,6 +39,17 @@ extension RationAPI {
         try await client.get("manifest/plan-week/\(requestId)")
     }
 
+    /// Month-scoped planned (and optional intake) calendar markers.
+    func manifestPlannedDates(from: String, to: String) async throws -> ManifestPlannedDatesResponse {
+        try await client.get(
+            "manifest/planned-dates",
+            query: [
+                URLQueryItem(name: "from", value: from),
+                URLQueryItem(name: "to", value: to),
+            ]
+        )
+    }
+
     func bulkManifest(_ body: BulkManifestRequest) async throws -> BulkManifestResponse {
         try await client.post("manifest/bulk", body: body)
     }

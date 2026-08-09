@@ -192,4 +192,53 @@ final class ManifestDateHelpersTests: XCTestCase {
         )
         XCTAssertTrue(visible.contains(picked))
     }
+
+    func testParseYearMonth() {
+        let parsed = ManifestDateHelpers.parseYearMonth("2026-08-09")
+        XCTAssertEqual(parsed.year, 2026)
+        XCTAssertEqual(parsed.month, 8)
+    }
+
+    func testMonthBoundsInclusive() {
+        let feb = ManifestDateHelpers.monthBounds(year: 2026, month: 2)
+        XCTAssertEqual(feb.from, "2026-02-01")
+        XCTAssertEqual(feb.to, "2026-02-28")
+        let leap = ManifestDateHelpers.monthBounds(year: 2024, month: 2)
+        XCTAssertEqual(leap.to, "2024-02-29")
+    }
+
+    func testBuildMonthGridSundayStart() {
+        let grid = ManifestDateHelpers.buildMonthGrid(year: 2026, month: 8, weekStartPref: "sunday")
+        XCTAssertEqual(grid.first, "2026-07-26")
+        XCTAssertTrue(grid.contains("2026-08-01"))
+        XCTAssertTrue(grid.contains("2026-08-31"))
+        XCTAssertEqual(grid.count % 7, 0)
+        XCTAssertEqual(grid.last, "2026-09-05")
+    }
+
+    func testBuildMonthGridMondayStart() {
+        let grid = ManifestDateHelpers.buildMonthGrid(year: 2026, month: 8, weekStartPref: "monday")
+        XCTAssertEqual(grid.first, "2026-07-27")
+        XCTAssertEqual(grid.count % 7, 0)
+    }
+
+    func testShiftYearMonthAcrossYearBoundary() {
+        let prev = ManifestDateHelpers.shiftYearMonth(year: 2026, month: 1, delta: -1)
+        XCTAssertEqual(prev.year, 2025)
+        XCTAssertEqual(prev.month, 12)
+        let next = ManifestDateHelpers.shiftYearMonth(year: 2025, month: 12, delta: 1)
+        XCTAssertEqual(next.year, 2026)
+        XCTAssertEqual(next.month, 1)
+    }
+
+    func testWeekdayLabels() {
+        XCTAssertEqual(
+            ManifestDateHelpers.weekdayLabels(weekStartPref: "sunday"),
+            ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+        )
+        XCTAssertEqual(
+            ManifestDateHelpers.weekdayLabels(weekStartPref: "monday"),
+            ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+        )
+    }
 }

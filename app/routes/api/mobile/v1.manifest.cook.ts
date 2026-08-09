@@ -1,10 +1,10 @@
 import { data } from "react-router";
 import { handleApiError } from "~/lib/error-handler";
 import { assertFeatureEnabled } from "~/lib/feature-flags/assert-enabled.server";
+import { buildFlagContext } from "~/lib/feature-flags/context.server";
 import { ensureMealPlan } from "~/lib/manifest.server";
 import { cookManifestEntries } from "~/lib/manifest-cook.server";
 import { requireMobileActiveGroup } from "~/lib/mobile/auth.server";
-import { buildMinimalFlagContext } from "~/lib/nutrition/persist.server";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import { CookEntriesRequestSchema } from "~/lib/schemas/manifest";
 import { tryStoreUndoToken } from "~/lib/undo-token.server";
@@ -33,10 +33,13 @@ export async function action({ request, context }: Route.ActionArgs) {
 			);
 		}
 
+		const flagContext = buildFlagContext(request, context.cloudflare.env, {
+			user: { id: userId },
+		});
 		await assertFeatureEnabled(
 			context.cloudflare.env,
 			"nutrition-cook-log-split",
-			buildMinimalFlagContext(context.cloudflare.env, userId),
+			flagContext,
 		);
 
 		const body = await request.json();

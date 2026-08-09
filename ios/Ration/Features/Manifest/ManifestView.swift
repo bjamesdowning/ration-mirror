@@ -251,9 +251,18 @@ struct ManifestView: View {
                 }
             }
             .sheet(isPresented: $showingJumpCalendar) {
-                ManifestJumpCalendarSheet(initialDay: model.selectedDay) { isoDay in
-                    jumpToCalendarDay(isoDay)
-                }
+                ManifestJumpCalendarSheet(
+                    initialDay: model.selectedDay,
+                    weekStartPref: model.weekStartPref,
+                    showConsumedMarkers: env.session.clientFlags.isNutritionManifestEnabled,
+                    loadMarkers: { from, to in
+                        let response = try await env.api.manifestPlannedDates(from: from, to: to)
+                        return (response.dates, response.consumedDates ?? [])
+                    },
+                    onSelect: { isoDay in
+                        jumpToCalendarDay(isoDay)
+                    }
+                )
             }
         }
     }
@@ -421,6 +430,45 @@ struct ManifestView: View {
                                     organizationId: organizationId
                                 )
                             }
+                        }
+                    }
+                }
+
+                if entryActionFlags.isCookLogSplitEnabled,
+                   entryActionFlags.isNutritionManifestEnabled
+                {
+                    let intakeRows = dayEntries.compactMap { entry -> (id: String, name: String, intake: ManifestPersonalIntake)? in
+                        guard let intake = entry.personalIntake else { return nil }
+                        return (entry.id, entry.mealName, intake)
+                    }
+                    if !intakeRows.isEmpty {
+                        Section {
+                            ForEach(intakeRows, id: \.id) { row in
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(row.name)
+                                        .rationBody()
+                                        .foregroundStyle(Theme.carbon)
+                                    Text(
+                                        String(
+                                            format: "%.1f serving%@ · %.0f kcal · P %.0fg · C %.0fg · F %.0fg",
+                                            row.intake.servings,
+                                            row.intake.servings == 1 ? "" : "s",
+                                            row.intake.energyKcal,
+                                            row.intake.proteinG,
+                                            row.intake.carbsG,
+                                            row.intake.fatG
+                                        )
+                                    )
+                                    .rationCaption()
+                                    .foregroundStyle(Theme.muted)
+                                }
+                                .listRowBackground(Theme.surface)
+                            }
+                        } header: {
+                            Text("Intake log")
+                                .rationCaption()
+                                .textCase(.uppercase)
+                                .foregroundStyle(Theme.muted)
                         }
                     }
                 }

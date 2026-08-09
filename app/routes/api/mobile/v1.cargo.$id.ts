@@ -82,6 +82,7 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 				organizationId,
 				id,
 				input,
+				{ userId },
 			);
 			if (!updated) throw data({ error: "Not Found" }, { status: 404 });
 			const [withTags] = await attachTagsToCargo(context.cloudflare.env.DB, [

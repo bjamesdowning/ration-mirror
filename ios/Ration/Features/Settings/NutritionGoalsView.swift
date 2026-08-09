@@ -71,6 +71,13 @@ final class NutritionGoalsViewModel {
         value.truncatingRemainder(dividingBy: 1) == 0 ? String(Int(value)) : String(value)
     }
 
+    /// Empty / whitespace → nil; keep 0 as an explicit target.
+    private static func parseOptional(_ raw: String) -> Double? {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, trimmed != "—" else { return nil }
+        return Double(trimmed)
+    }
+
     func save(api: RationAPI) async -> Bool {
         guard hasAnyValue else {
             errorMessage = "Set at least one nutrient target."
@@ -81,11 +88,11 @@ final class NutritionGoalsViewModel {
         defer { isSaving = false }
         do {
             let body = NutritionGoalUpsertRequest(
-                dailyEnergyKcal: Double(dailyEnergyKcal),
-                proteinG: Double(proteinG),
-                carbsG: Double(carbsG),
-                fatG: Double(fatG),
-                fiberG: Double(fiberG),
+                dailyEnergyKcal: Self.parseOptional(dailyEnergyKcal),
+                proteinG: Self.parseOptional(proteinG),
+                carbsG: Self.parseOptional(carbsG),
+                fatG: Self.parseOptional(fatG),
+                fiberG: Self.parseOptional(fiberG),
                 effectiveFrom: ManifestDateHelpers.todayISO(),
                 // Server records first-use goals consent; idempotent to re-send on every edit.
                 consent: true

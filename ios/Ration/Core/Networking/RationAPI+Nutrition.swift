@@ -24,4 +24,15 @@ extension RationAPI {
             ]
         )
     }
+
+    /// Propose cargo nutrition snapshots for scan review — gated by `nutrition-engine`.
+    func resolveNutrition(
+        names: [String],
+        ingestSource: String? = nil
+    ) async throws -> NutritionResolveResponse {
+        try await client.post(
+            "nutrition/resolve",
+            body: NutritionResolveRequest(names: names, ingestSource: ingestSource)
+        )
+    }
 }

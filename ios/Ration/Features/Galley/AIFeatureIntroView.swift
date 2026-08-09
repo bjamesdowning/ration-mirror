@@ -7,6 +7,8 @@ struct AIFeatureInlineIntro: View {
     let creditCost: Int
     var costLabel: String = "per use"
     var nextSteps: String?
+    /// Optional nutrition / feature hint (shown when nutrition-engine is on).
+    var hint: String? = nil
     @Environment(AppEnvironment.self) private var env
 
     var body: some View {
@@ -33,6 +35,13 @@ struct AIFeatureInlineIntro: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
+            }
+
+            if let hint {
+                Text(hint)
+                    .rationCaption()
+                    .foregroundStyle(Theme.muted)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             Text("Uses \(creditCost) credit\(creditCost == 1 ? "" : "s") \(costLabel). You have \(env.session.credits).")

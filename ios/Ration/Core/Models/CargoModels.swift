@@ -27,6 +27,8 @@ struct CargoItem: Codable, Sendable, Identifiable, Hashable {
     let expiresAt: Date?
     let createdAt: Date
     let updatedAt: Date
+    /// Additive — present when nutrition-engine has resolved/overridden cargo nutrition.
+    var nutrition: NutritionSnapshot? = nil
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -43,6 +45,7 @@ struct CargoItem: Codable, Sendable, Identifiable, Hashable {
         expiresAt = try c.decodeIfPresent(Date.self, forKey: .expiresAt)
         createdAt = try c.decode(Date.self, forKey: .createdAt)
         updatedAt = try c.decode(Date.self, forKey: .updatedAt)
+        nutrition = try c.decodeIfPresent(NutritionSnapshot.self, forKey: .nutrition)
     }
 
     /// Optimistic Mark Empty — clears authored and base quantity, keeps the row.
@@ -60,7 +63,8 @@ struct CargoItem: Codable, Sendable, Identifiable, Hashable {
             status: status,
             expiresAt: expiresAt,
             createdAt: createdAt,
-            updatedAt: updatedAt
+            updatedAt: updatedAt,
+            nutrition: nutrition
         )
     }
 
@@ -77,7 +81,8 @@ struct CargoItem: Codable, Sendable, Identifiable, Hashable {
         status: String,
         expiresAt: Date?,
         createdAt: Date,
-        updatedAt: Date
+        updatedAt: Date,
+        nutrition: NutritionSnapshot? = nil
     ) {
         self.id = id
         self.organizationId = organizationId
@@ -92,6 +97,7 @@ struct CargoItem: Codable, Sendable, Identifiable, Hashable {
         self.expiresAt = expiresAt
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+        self.nutrition = nutrition
     }
 
     var tagSlugs: [String] { tags.map(\.slug) }
@@ -113,6 +119,7 @@ struct CreateCargoRequest: Codable, Sendable {
     let domain: String
     var tags: [String] = []
     var expiresAt: Date?
+    var nutrition: NutritionSnapshot? = nil
 }
 
 struct CreateCargoResponse: Codable, Sendable {
@@ -144,10 +151,23 @@ struct BatchCargoItem: Encodable, Sendable {
     var domain: String = "food"
     var tags: [String] = []
     var expiresAt: Date?
+    var nutrition: NutritionSnapshot? = nil
 }
 
 struct BatchCargoRequest: Encodable, Sendable {
     let items: [BatchCargoItem]
+    /// Trusted scan path — enables AI nutrition fill server-side when flag is on.
+    var ingestSource: String? = nil
+
+    enum CodingKeys: String, CodingKey {
+        case items, ingestSource
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(items, forKey: .items)
+        try container.encodeIfPresent(ingestSource, forKey: .ingestSource)
+    }
 }
 
 struct BatchCargoResponse: Codable, Sendable {
@@ -176,9 +196,11 @@ struct UpdateCargoRequest: Encodable, Sendable {
     var tags: [String]?
     /// Defaults to `.omit` so quantity-only updates do not clear expiry.
     var expiresAt: OptionalDateUpdate = .omit
+    /// When non-nil, persists a user nutrition override (nutrition-engine).
+    var nutrition: NutritionSnapshot? = nil
 
     enum CodingKeys: String, CodingKey {
-        case name, quantity, unit, domain, tags, expiresAt
+        case name, quantity, unit, domain, tags, expiresAt, nutrition
     }
 
     func encode(to encoder: Encoder) throws {
@@ -188,6 +210,7 @@ struct UpdateCargoRequest: Encodable, Sendable {
         try container.encodeIfPresent(unit, forKey: .unit)
         try container.encodeIfPresent(domain, forKey: .domain)
         try container.encodeIfPresent(tags, forKey: .tags)
+        try container.encodeIfPresent(nutrition, forKey: .nutrition)
         switch expiresAt {
         case .omit:
             break

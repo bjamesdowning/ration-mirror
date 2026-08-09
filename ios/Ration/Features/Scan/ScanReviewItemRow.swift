@@ -44,6 +44,11 @@ struct ScanReviewItemRow: View {
                             .rationCaption()
                             .foregroundStyle(Theme.muted)
                     }
+                    if let kcal = item.estimatedEnergyKcal {
+                        Text("\(Int(kcal.rounded())) kcal · \(item.nutrition?.provenanceLabel ?? "Nutrition")")
+                            .rationCaption()
+                            .foregroundStyle(Theme.muted)
+                    }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
 

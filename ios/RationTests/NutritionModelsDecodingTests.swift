@@ -79,6 +79,26 @@ final class NutritionModelsDecodingTests: XCTestCase {
         XCTAssertFalse(json.contains("proteinG"))
     }
 
+    func testDecodesNutritionGoalClearResponseWithBoolCleared() throws {
+        let json = Data(#"{"cleared": true, "goal": null}"#.utf8)
+        let response = try decoder.decode(NutritionGoalClearResponse.self, from: json)
+        XCTAssertTrue(response.cleared)
+        XCTAssertNil(response.goal)
+    }
+
+    /// Legacy / mistaken server payloads returned the open-goal count as an Int.
+    func testDecodesNutritionGoalClearResponseWithNumericCleared() throws {
+        let json = Data(#"{"cleared": 1, "goal": null}"#.utf8)
+        let response = try decoder.decode(NutritionGoalClearResponse.self, from: json)
+        XCTAssertTrue(response.cleared)
+    }
+
+    func testDecodesNutritionGoalClearResponseWithZeroCleared() throws {
+        let json = Data(#"{"cleared": 0, "goal": null}"#.utf8)
+        let response = try decoder.decode(NutritionGoalClearResponse.self, from: json)
+        XCTAssertFalse(response.cleared)
+    }
+
     // MARK: - Nutrition Summary
 
     func testDecodesNutritionSummaryWithDaysAndGoal() throws {
@@ -228,6 +248,9 @@ final class NutritionModelsDecodingTests: XCTestCase {
           "mealName": "Soup", "mealServings": 2, "mealType": "recipe",
           "mealPrepTime": null, "mealCookTime": null,
           "mealEnergyKcalPerServing": 320,
+          "mealProteinGPerServing": 20,
+          "mealCarbsGPerServing": 30,
+          "mealFatGPerServing": 10,
           "personalIntake": {
             "id": "intake-9", "servings": 1, "energyKcal": 320, "proteinG": 20, "carbsG": 30, "fatG": 10,
             "occurredAt": "2026-01-01T13:05:00Z"
@@ -237,6 +260,76 @@ final class NutritionModelsDecodingTests: XCTestCase {
         let entry = try decoder.decode(ManifestEntry.self, from: json)
         XCTAssertNotNil(entry.cookedAt)
         XCTAssertEqual(entry.mealEnergyKcalPerServing, 320)
+        XCTAssertEqual(entry.mealProteinGPerServing, 20)
+        XCTAssertEqual(entry.mealCarbsGPerServing, 30)
+        XCTAssertEqual(entry.mealFatGPerServing, 10)
         XCTAssertEqual(entry.personalIntake?.id, "intake-9")
+    }
+
+    // MARK: - Cargo / Meal nutrition snapshots
+
+    func testDecodesCargoNutritionSnapshot() throws {
+        let json = """
+        {
+          "source": "usda",
+          "confidence": 0.9,
+          "verified": true,
+          "per100g": { "energyKcal": 52, "proteinG": 0.3, "fatG": 0.2, "carbG": 14 },
+          "perServing": { "energyKcal": 95, "proteinG": 0.5, "fatG": 0.3, "carbG": 25, "fiberG": 4 },
+          "fdcId": 171688,
+          "description": "Apples, raw"
+        }
+        """.data(using: .utf8)!
+        let snap = try decoder.decode(NutritionSnapshot.self, from: json)
+        XCTAssertEqual(snap.source, "usda")
+        XCTAssertEqual(snap.provenanceLabel, "USDA")
+        XCTAssertEqual(snap.displayNutrients?.energyKcal, 95)
+        XCTAssertEqual(snap.displayNutrients?.carbG, 25)
+    }
+
+    func testDecodesMealNutritionSnapshot() throws {
+        let json = """
+        {
+          "perServing": { "energyKcal": 450, "proteinG": 28, "fatG": 12, "carbG": 40 },
+          "coverage": 0.85,
+          "computedAt": "2026-01-01T12:00:00Z"
+        }
+        """.data(using: .utf8)!
+        let snap = try decoder.decode(MealNutritionSnapshot.self, from: json)
+        XCTAssertEqual(snap.coverage, 0.85)
+        XCTAssertEqual(snap.displayNutrients?.proteinG, 28)
+    }
+
+    func testApplyingMacrosMarksUserOverride() {
+        let usda = NutritionSnapshot(
+            source: "usda",
+            confidence: 0.8,
+            verified: false,
+            per100g: nil,
+            perServing: NutrientValues(energyKcal: 100, proteinG: 5, fatG: 2, carbG: 10),
+            fdcId: 9,
+            description: "Milk"
+        )
+        let edited = usda.applyingMacros(energyKcal: 110)
+        XCTAssertEqual(edited.source, "user_override")
+        XCTAssertEqual(edited.verified, true)
+        XCTAssertNil(edited.per100g)
+        XCTAssertEqual(edited.perServing?.energyKcal, 110)
+        XCTAssertEqual(edited.perServing?.proteinG, 5)
+        XCTAssertEqual(edited.fdcId, 9)
+    }
+
+    func testDecodesNutritionResolveResponseWithNullSnapshot() throws {
+        let json = Data(#"{"snapshots":{"milk":null,"apple":{"source":"usda","confidence":1,"verified":true,"per100g":null,"perServing":{"energyKcal":52,"proteinG":0.3,"fatG":0.2,"carbG":14},"fdcId":1,"description":null}}}"#.utf8)
+        let response = try decoder.decode(NutritionResolveResponse.self, from: json)
+        XCTAssertEqual(response.snapshots.count, 2)
+        guard let milkEntry = response.snapshots["milk"] else {
+            return XCTFail("Expected milk key")
+        }
+        XCTAssertNil(milkEntry)
+        guard let appleEntry = response.snapshots["apple"] else {
+            return XCTFail("Expected apple key")
+        }
+        XCTAssertEqual(appleEntry?.displayNutrients?.energyKcal, 52)
     }
 }

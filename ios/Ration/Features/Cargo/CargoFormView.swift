@@ -19,6 +19,7 @@ struct CargoFormView: View {
     @State private var tags: [String]
     @State private var hasExpiry: Bool
     @State private var expiresAt: Date
+    @State private var nutrition: NutritionSnapshot?
     @State private var tagSuggestions: [String] = []
     @State private var isSaving = false
     @State private var errorMessage: String?
@@ -43,6 +44,7 @@ struct CargoFormView: View {
             _tags = State(initialValue: [])
             _hasExpiry = State(initialValue: false)
             _expiresAt = State(initialValue: Date().addingTimeInterval(60 * 60 * 24 * 7))
+            _nutrition = State(initialValue: nil)
         case let .edit(item):
             _name = State(initialValue: item.name)
             _quantity = State(initialValue: String(item.quantity))
@@ -51,6 +53,7 @@ struct CargoFormView: View {
             _tags = State(initialValue: item.tagSlugs)
             _hasExpiry = State(initialValue: item.expiresAt != nil)
             _expiresAt = State(initialValue: item.expiresAt ?? Date())
+            _nutrition = State(initialValue: item.nutrition)
         }
     }
 
@@ -58,6 +61,16 @@ struct CargoFormView: View {
         switch mode {
         case .create: "Add cargo"
         case .edit: "Edit Cargo"
+        }
+    }
+
+    private var nutritionPayload: NutritionSnapshot? {
+        guard env.session.clientFlags.isNutritionEngineEnabled else { return nil }
+        switch mode {
+        case .create:
+            return nutrition
+        case let .edit(item):
+            return nutrition == item.nutrition ? nil : nutrition
         }
     }
 
@@ -92,6 +105,10 @@ struct CargoFormView: View {
                     if hasExpiry {
                         DatePicker("Expires", selection: $expiresAt, displayedComponents: .date)
                     }
+                }
+
+                if env.session.clientFlags.isNutritionEngineEnabled {
+                    NutritionEditorSection(nutrition: $nutrition)
                 }
 
                 if let errorMessage {
@@ -151,7 +168,8 @@ struct CargoFormView: View {
                     unit: unit.isEmpty ? "unit" : unit,
                     domain: domain,
                     tags: tags,
-                    expiresAt: hasExpiry ? expiresAt : nil
+                    expiresAt: hasExpiry ? expiresAt : nil,
+                    nutrition: nutritionPayload
                 )
                 _ = try await env.api.createCargo(body)
             case let .edit(item):
@@ -163,7 +181,8 @@ struct CargoFormView: View {
                         unit: unit,
                         domain: domain,
                         tags: tags,
-                        expiresAt: hasExpiry ? .set(expiresAt) : .clear
+                        expiresAt: hasExpiry ? .set(expiresAt) : .clear,
+                        nutrition: nutritionPayload
                     )
                 )
             }

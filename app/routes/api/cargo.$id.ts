@@ -38,6 +38,7 @@ export async function action({ request, params, context }: Route.ActionArgs) {
 			groupId,
 			id,
 			input,
+			{ userId: user.id },
 		);
 
 		if (!updated) {

@@ -27,6 +27,14 @@ struct CargoDetailView: View {
                         if !item.tags.isEmpty {
                             tagsSection(item.tags)
                         }
+                        if env.session.clientFlags.isNutritionEngineEnabled {
+                            NutritionDetailSection(
+                                title: "Nutrition",
+                                nutrients: item.nutrition?.displayNutrients,
+                                provenance: item.nutrition?.provenanceLabel ?? "Blank",
+                                emptyMessage: "No nutrition data yet. Resolve from scan review or edit macros on this item."
+                            )
+                        }
                         connectedMealsSection(cargoItem: item)
                     }
                     .padding(16)

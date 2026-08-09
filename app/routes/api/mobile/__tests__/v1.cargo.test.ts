@@ -6,6 +6,7 @@ const getCargoPage = vi.fn();
 const getCargoCount = vi.fn();
 const attachTagsToCargo = vi.fn();
 const getActiveCargoIds = vi.fn();
+const addOrMergeItem = vi.fn();
 
 vi.mock("~/lib/mobile/auth.server", () => ({
 	requireMobileActiveGroup: (...args: unknown[]) =>
@@ -21,7 +22,7 @@ vi.mock("~/lib/cargo.server", async (importOriginal) => ({
 	getCargoPage: (...args: unknown[]) => getCargoPage(...args),
 	getCargoCount: (...args: unknown[]) => getCargoCount(...args),
 	attachTagsToCargo: (...args: unknown[]) => attachTagsToCargo(...args),
-	addOrMergeItem: vi.fn(),
+	addOrMergeItem: (...args: unknown[]) => addOrMergeItem(...args),
 }));
 
 vi.mock("~/lib/rate-limiter.server", async (importOriginal) => {
@@ -112,5 +113,62 @@ describe("GET /api/mobile/v1/cargo", () => {
 		expect(result.total).toBe(1);
 		expect(result.activeCargoIds).toEqual(["cargo_1"]);
 		expect(result.nextCursor).toBeNull();
+	});
+});
+
+describe("POST /api/mobile/v1/cargo", () => {
+	beforeEach(() => {
+		for (const m of [
+			requireMobileActiveGroup,
+			checkRateLimit,
+			addOrMergeItem,
+			attachTagsToCargo,
+		]) {
+			m.mockReset();
+		}
+		requireMobileActiveGroup.mockResolvedValue({
+			userId: "user_1",
+			organizationId: "org_1",
+		});
+		checkRateLimit.mockResolvedValue({ allowed: true });
+	});
+
+	it("passes userId into addOrMergeItem for nutrition Flagship context", async () => {
+		addOrMergeItem.mockResolvedValue({
+			status: "created",
+			item: { id: "cargo_new", name: "oats" },
+		});
+		attachTagsToCargo.mockResolvedValue([
+			{ id: "cargo_new", name: "oats", tags: [] },
+		]);
+
+		const { action } = await import("~/routes/api/mobile/v1.cargo");
+		await action({
+			request: new Request("https://ration.mayutic.com/api/mobile/v1/cargo", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					name: "oats",
+					quantity: 1,
+					unit: "kg",
+					domain: "food",
+					tags: [],
+				}),
+			}),
+			context: {
+				cloudflare: {
+					env: { DB: {}, RATION_KV: {} },
+					ctx: { waitUntil: vi.fn() },
+				},
+			} as never,
+			params: {},
+		} as never);
+
+		expect(addOrMergeItem).toHaveBeenCalledWith(
+			expect.anything(),
+			"org_1",
+			expect.objectContaining({ name: "oats" }),
+			expect.objectContaining({ userId: "user_1" }),
+		);
 	});
 });

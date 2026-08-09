@@ -26,8 +26,14 @@ function serializeGoal(
 		fiberG: row.fiberG,
 		effectiveFrom: row.effectiveFrom,
 		effectiveTo: row.effectiveTo,
-		consentAt: row.consentAt,
-		createdAt: row.createdAt,
+		consentAt:
+			row.consentAt instanceof Date
+				? row.consentAt.toISOString()
+				: row.consentAt,
+		createdAt:
+			row.createdAt instanceof Date
+				? row.createdAt.toISOString()
+				: row.createdAt,
 	};
 }
 
@@ -78,8 +84,12 @@ export async function action({ request, context }: Route.ActionArgs) {
 		}
 
 		if (request.method === "DELETE") {
-			const cleared = await clearNutritionGoal(env.DB, userId, getTodayISO());
-			return { cleared, goal: null };
+			const clearedCount = await clearNutritionGoal(
+				env.DB,
+				userId,
+				getTodayISO(),
+			);
+			return { cleared: clearedCount > 0, goal: null };
 		}
 
 		if (request.method !== "POST" && request.method !== "PATCH") {

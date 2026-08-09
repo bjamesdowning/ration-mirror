@@ -46,6 +46,15 @@ struct MealDetailView: View {
                 )
                 header(displayMeal)
                 servingsStepper(baseServings: max(displayMeal.servings ?? 1, 1))
+                if env.session.clientFlags.isNutritionEngineEnabled {
+                    NutritionDetailSection(
+                        title: "Nutrition (per serving)",
+                        nutrients: displayMeal.nutrition?.displayNutrients,
+                        provenance: "Meal",
+                        coverage: displayMeal.nutrition?.coverage,
+                        emptyMessage: "No nutrition profile yet. Ensure ingredients have nutrition, then recompute on web."
+                    )
+                }
                 if !displayMeal.ingredients.isEmpty {
                     ingredients(displayMeal)
                 }

@@ -116,6 +116,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 				waitUntil: context.cloudflare.ctx.waitUntil.bind(
 					context.cloudflare.ctx,
 				),
+				userId,
 			},
 		);
 

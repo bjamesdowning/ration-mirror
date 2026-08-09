@@ -38,4 +38,22 @@ final class UpdateCargoRequestEncodingTests: XCTestCase {
         let decoded = try XCTUnwrap(ISO8601DateFormatter().date(from: encoded))
         XCTAssertEqual(decoded.timeIntervalSince1970, date.timeIntervalSince1970, accuracy: 0.001)
     }
+
+    func testEncodesNutritionOverride() throws {
+        let body = UpdateCargoRequest(
+            nutrition: NutritionSnapshot.blankUserOverride().applyingMacros(
+                energyKcal: 200,
+                proteinG: 10,
+                fatG: 8,
+                carbG: 20
+            )
+        )
+        let data = try JSON.encoder.encode(body)
+        let json = try XCTUnwrap(String(data: data, encoding: .utf8))
+        XCTAssertTrue(json.contains("\"source\":\"user_override\""))
+        XCTAssertTrue(json.contains("\"energyKcal\":200"))
+        XCTAssertTrue(json.contains("\"carbG\":20"))
+        XCTAssertTrue(json.contains("\"fiberG\":null"))
+        XCTAssertTrue(json.contains("\"per100g\":null"))
+    }
 }

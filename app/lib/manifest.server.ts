@@ -172,8 +172,11 @@ export interface MealPlanEntryWithMeal {
 	mealPrepTime: number | null;
 	mealCookTime: number | null;
 	mealTags?: string[];
-	/** meal.nutrition.perServing.energyKcal when snapshot exists. */
+	/** meal.nutrition.perServing macros when snapshot exists (for Eat preview). */
 	mealEnergyKcalPerServing?: number | null;
+	mealProteinGPerServing?: number | null;
+	mealCarbsGPerServing?: number | null;
+	mealFatGPerServing?: number | null;
 	/** Current-user-only personal intake (never another member's). */
 	personalIntake?: {
 		id: string;
@@ -273,6 +276,9 @@ export async function getWeekEntries(
 			mealPrepTime: r.mealPrepTime ?? null,
 			mealCookTime: r.mealCookTime ?? null,
 			mealEnergyKcalPerServing: snap?.perServing?.energyKcal ?? null,
+			mealProteinGPerServing: snap?.perServing?.proteinG ?? null,
+			mealCarbsGPerServing: snap?.perServing?.carbG ?? null,
+			mealFatGPerServing: snap?.perServing?.fatG ?? null,
 		};
 	}) as MealPlanEntryWithMeal[];
 }

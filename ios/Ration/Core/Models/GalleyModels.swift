@@ -32,6 +32,8 @@ struct Meal: Codable, Sendable, Identifiable {
     let updatedAt: Date
     let tags: [Tag]
     let ingredients: [MealIngredient]
+    /// Additive meal.nutrition aggregate when nutrition-engine has computed it.
+    var nutrition: MealNutritionSnapshot? = nil
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -50,6 +52,7 @@ struct Meal: Codable, Sendable, Identifiable {
         updatedAt = try c.decode(Date.self, forKey: .updatedAt)
         tags = c.decodeTolerantTags(forKey: .tags)
         ingredients = try c.decodeIfPresent([MealIngredient].self, forKey: .ingredients) ?? []
+        nutrition = try c.decodeIfPresent(MealNutritionSnapshot.self, forKey: .nutrition)
     }
 
     init(
@@ -67,7 +70,8 @@ struct Meal: Codable, Sendable, Identifiable {
         createdAt: Date,
         updatedAt: Date,
         tags: [Tag],
-        ingredients: [MealIngredient]
+        ingredients: [MealIngredient],
+        nutrition: MealNutritionSnapshot? = nil
     ) {
         self.id = id
         self.organizationId = organizationId
@@ -84,6 +88,7 @@ struct Meal: Codable, Sendable, Identifiable {
         self.updatedAt = updatedAt
         self.tags = tags
         self.ingredients = ingredients
+        self.nutrition = nutrition
     }
 
     var tagSlugs: [String] { tags.map(\.slug) }

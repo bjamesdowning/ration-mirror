@@ -76,7 +76,10 @@ struct GenerateMealSheet: View {
                     detail: "Each generation returns 3 meal ideas from your Cargo—recipes you can make with what you have.",
                     creditCost: creditCost,
                     costLabel: "per generation",
-                    nextSteps: "Review all 3, pick the ones you like, then save them to Galley."
+                    nextSteps: "Review all 3, pick the ones you like, then save them to Galley.",
+                    hint: env.session.clientFlags.isNutritionEngineEnabled
+                        ? "Nutrition (when available): USDA match first; AI estimates are labelled—edit before saving."
+                        : nil
                 )
                 TextField("Optional customization (e.g. vegetarian)", text: $model.customization, axis: .vertical)
                     .textFieldStyle(.roundedBorder)

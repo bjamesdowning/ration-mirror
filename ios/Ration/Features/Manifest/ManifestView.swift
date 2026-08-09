@@ -402,6 +402,7 @@ struct ManifestView: View {
             ) {
             case .success(let token):
                 setUndo(token: token, message: "Meal cooked")
+                offerEatAfterCook(entry)
             case .needsConfirmation(let missing):
                 pendingPrepareEntry = entry
                 prepareConfirmationMessage = missingIngredientsMessage(missing)
@@ -444,6 +445,7 @@ struct ManifestView: View {
                 organizationId: organizationId
             ) {
                 setUndo(token: token, message: "Meal cooked")
+                offerEatAfterCook(entry)
             }
         } else if case .success(let token) = await model.consume(
             entry,
@@ -455,6 +457,16 @@ struct ManifestView: View {
         ) {
             setUndo(token: token, message: "Meal consumed")
         }
+    }
+
+    /// Mirror web: after a successful Cook, offer optional personal Eat plate-up.
+    private func offerEatAfterCook(_ entry: ManifestEntry) {
+        guard ManifestEntryActionPolicy.canEverLogServing(flags: entryActionFlags) else {
+            return
+        }
+        // Prefer the refreshed entry (now prepared) when available.
+        let refreshed = model.manifest?.entries.first(where: { $0.id == entry.id }) ?? entry
+        pendingEatEntry = refreshed
     }
 
     /// Eat — private serving log. Returns an error message on failure for the sheet to display.

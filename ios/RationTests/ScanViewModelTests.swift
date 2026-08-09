@@ -50,6 +50,45 @@ final class EditableScanResultItemTests: XCTestCase {
         XCTAssertFalse(message.isEmpty)
     }
 
+    func testToBatchCargoItemIncludesNutrition() throws {
+        var item = sampleItem(name: "Milk")
+        item.nutrition = NutritionSnapshot(
+            source: "usda",
+            confidence: 0.9,
+            verified: true,
+            per100g: nil,
+            perServing: NutrientValues(energyKcal: 120, proteinG: 8, fatG: 5, carbG: 12),
+            fdcId: 1,
+            description: nil
+        )
+        let batch = item.toBatchCargoItem()
+        XCTAssertEqual(batch.nutrition?.provenanceLabel, "USDA")
+        XCTAssertEqual(batch.nutrition?.displayNutrients?.energyKcal, 120)
+
+        let data = try JSONEncoder().encode(batch)
+        let json = try XCTUnwrap(String(data: data, encoding: .utf8))
+        XCTAssertTrue(json.contains("\"energyKcal\":120"))
+        XCTAssertTrue(json.contains("\"carbG\":12"))
+    }
+
+    func testApplyingEditPreservesNutrition() {
+        var item = sampleItem()
+        item.nutrition = .blankUserOverride().applyingMacros(energyKcal: 50)
+        guard case let .saved(updated) = item.applyingEdit(
+            name: "Tomatoes",
+            quantityText: "2",
+            unit: "kg",
+            domain: "food",
+            tags: [],
+            hasExpiry: false,
+            expiresAt: nil,
+            nutrition: item.nutrition
+        ) else {
+            return XCTFail("Expected saved")
+        }
+        XCTAssertEqual(updated.nutrition?.displayNutrients?.energyKcal, 50)
+    }
+
     func testToBatchCargoItemNormalizesName() {
         let item = sampleItem(name: "  Cherry Tomatoes  ")
         let batch = item.toBatchCargoItem()

@@ -93,7 +93,10 @@ struct ImportRecipeSheet: View {
                     detail: "Paste an HTTPS recipe webpage URL and Ration extracts ingredients and directions into Galley. Video links and non-recipe pages aren’t supported. Some sites block automated imports — if so, Ration will try loading the page on your device; if that fails too, add the meal manually.",
                     creditCost: creditCost,
                     costLabel: "per import",
-                    nextSteps: "Review the imported meal before adding to Galley."
+                    nextSteps: "Review the imported meal before adding to Galley.",
+                    hint: env.session.clientFlags.isNutritionEngineEnabled
+                        ? "Nutrition (when available): USDA match first; AI estimates are labelled—edit before saving."
+                        : nil
                 )
                 TextField("Recipe URL", text: $model.url)
                     .textInputAutocapitalization(.never)

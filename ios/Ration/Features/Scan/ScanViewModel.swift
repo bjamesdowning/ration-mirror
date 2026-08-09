@@ -59,7 +59,13 @@ final class ScanViewModel {
                 Haptics.light()
                 state = .processing(requestId: requestId)
                 Task { await AIErrorHandling.refreshCredits(session: session, api: api) }
-                await poll(requestId: requestId, api: api, generation: generation)
+                await poll(
+                    requestId: requestId,
+                    api: api,
+                    generation: generation,
+                    nutritionEngine: session.clientFlags.isNutritionEngineEnabled,
+                    nutritionAiEstimate: session.clientFlags.isNutritionAiEstimateEnabled
+                )
             } catch is CancellationError {
                 return
             } catch {
@@ -77,7 +83,13 @@ final class ScanViewModel {
         }
     }
 
-    func poll(requestId: String, api: RationAPI, generation: Int) async {
+    func poll(
+        requestId: String,
+        api: RationAPI,
+        generation: Int,
+        nutritionEngine: Bool = false,
+        nutritionAiEstimate: Bool = false
+    ) async {
         let poller = AIJobPoller<ScanStatusResponse>(
             fetchStatus: { try await api.scanStatus(requestId: $0) },
             interpretStatus: { result in
@@ -95,6 +107,12 @@ final class ScanViewModel {
             reviewItems = items.map { EditableScanResultItem(from: $0) }
             editingItemId = nil
             state = .completed(requestId: requestId)
+            await resolveNutritionIfNeeded(
+                api: api,
+                generation: generation,
+                nutritionEngine: nutritionEngine,
+                nutritionAiEstimate: nutritionAiEstimate
+            )
         } catch is CancellationError {
             return
         } catch AIJobPollError.timedOut {
@@ -110,6 +128,39 @@ final class ScanViewModel {
                     from: (error as? APIError)?.errorDescription ?? error.localizedDescription
                 )
             )
+        }
+    }
+
+    /// Soft-fail USDA / AI estimate proposal after OCR (web ScanResultsModal parity).
+    func resolveNutritionIfNeeded(
+        api: RationAPI,
+        generation: Int,
+        nutritionEngine: Bool,
+        nutritionAiEstimate: Bool
+    ) async {
+        guard nutritionEngine else { return }
+        let names = Array(
+            Set(
+                reviewItems
+                    .map { $0.name.trimmingCharacters(in: .whitespacesAndNewlines) }
+                    .filter { !$0.isEmpty }
+            )
+        )
+        guard !names.isEmpty else { return }
+        do {
+            let response = try await api.resolveNutrition(
+                names: names,
+                ingestSource: nutritionAiEstimate ? "scan_review" : nil
+            )
+            guard isCurrent(generation) else { return }
+            for index in reviewItems.indices {
+                let key = reviewItems[index].name.trimmingCharacters(in: .whitespacesAndNewlines)
+                if let entry = response.snapshots[key] {
+                    reviewItems[index].nutrition = entry
+                }
+            }
+        } catch {
+            // Soft-fail — batch confirm can still resolve when nutrition is omitted.
         }
     }
 
@@ -147,7 +198,7 @@ final class ScanViewModel {
         }
     }
 
-    func confirmToCargo(api: RationAPI) async {
+    func confirmToCargo(api: RationAPI, nutritionAiEstimate: Bool = false) async {
         guard editingItemId == nil else {
             state = .failed("Finish editing before adding to Cargo.")
             return
@@ -159,8 +210,12 @@ final class ScanViewModel {
         }
         state = .confirming
         let batchItems = chosen.map { $0.toBatchCargoItem() }
+        let request = BatchCargoRequest(
+            items: batchItems,
+            ingestSource: nutritionAiEstimate ? "scan_review" : nil
+        )
         do {
-            let result = try await api.batchAddCargo(BatchCargoRequest(items: batchItems))
+            let result = try await api.batchAddCargo(request)
             if let ctx = CapacityUpgrade.context(fromBatchErrors: result.errors) {
                 paywallContext = ctx
                 shouldShowPaywall = true

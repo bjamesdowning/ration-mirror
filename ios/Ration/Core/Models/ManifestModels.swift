@@ -28,6 +28,9 @@ struct ManifestEntry: Codable, Sendable, Identifiable {
     let mealCookTime: Int?
     /// `meal.nutrition.perServing.energyKcal` when a nutrition snapshot exists (nutrition-manifest).
     var mealEnergyKcalPerServing: Double? = nil
+    var mealProteinGPerServing: Double? = nil
+    var mealCarbsGPerServing: Double? = nil
+    var mealFatGPerServing: Double? = nil
     /// Current-user-only personal intake — never another member's (nutrition-cook-log-split).
     var personalIntake: ManifestPersonalIntake? = nil
 

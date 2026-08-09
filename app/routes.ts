@@ -492,6 +492,10 @@ export default [
 		"routes/api/mobile/v1.nutrition.goals.ts",
 	),
 	route(
+		"api/mobile/v1/nutrition/resolve",
+		"routes/api/mobile/v1.nutrition.resolve.ts",
+	),
+	route(
 		"api/mobile/v1/meals/:id/cook",
 		"routes/api/mobile/v1.meals.$id.cook.ts",
 	),

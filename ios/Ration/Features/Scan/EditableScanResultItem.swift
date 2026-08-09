@@ -10,6 +10,8 @@ struct EditableScanResultItem: Identifiable, Equatable, Sendable {
     var expiresAt: Date?
     var confidence: Double?
     var selected: Bool
+    /// Proposed / user-edited nutrition from resolve or manual override.
+    var nutrition: NutritionSnapshot?
 
     init(from item: ScanResultItem, selected: Bool = true) {
         id = item.id
@@ -27,6 +29,7 @@ struct EditableScanResultItem: Identifiable, Equatable, Sendable {
         }
         confidence = item.confidence
         self.selected = selected
+        nutrition = nil
     }
 
     var isLowConfidence: Bool {
@@ -35,6 +38,10 @@ struct EditableScanResultItem: Identifiable, Equatable, Sendable {
 
     var hasExpiry: Bool {
         expiresAt != nil
+    }
+
+    var estimatedEnergyKcal: Double? {
+        nutrition?.displayNutrients?.energyKcal
     }
 
     static func formatQuantity(_ value: Double) -> String {
@@ -57,7 +64,8 @@ struct EditableScanResultItem: Identifiable, Equatable, Sendable {
         domain: String,
         tags: [String],
         hasExpiry: Bool,
-        expiresAt: Date?
+        expiresAt: Date?,
+        nutrition: NutritionSnapshot? = nil
     ) -> SaveResult {
         let trimmed = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
@@ -72,6 +80,7 @@ struct EditableScanResultItem: Identifiable, Equatable, Sendable {
             updated.domain = domain
             updated.tags = tags
             updated.expiresAt = hasExpiry ? expiresAt : nil
+            updated.nutrition = nutrition ?? self.nutrition
             return .saved(updated)
         case let .invalid(message):
             return .invalidQuantity(message)
@@ -86,7 +95,8 @@ struct EditableScanResultItem: Identifiable, Equatable, Sendable {
             domain: domain ?? "food",
             tags: tags,
             hasExpiry: expiresAt != nil,
-            expiresAt: expiresAt
+            expiresAt: expiresAt,
+            nutrition: nutrition
         )
     }
 
@@ -97,7 +107,8 @@ struct EditableScanResultItem: Identifiable, Equatable, Sendable {
             unit: unit.isEmpty ? "unit" : unit,
             domain: domain ?? "food",
             tags: tags,
-            expiresAt: expiresAt
+            expiresAt: expiresAt,
+            nutrition: nutrition
         )
     }
 }

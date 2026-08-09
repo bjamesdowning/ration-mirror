@@ -96,7 +96,10 @@ struct ScanView: View {
                     detail: "AI reads grocery receipts, product labels, or photos of your fridge, pantry, or shelves—and suggests items to add to Cargo.",
                     creditCost: scanCreditCost,
                     costLabel: "per scan",
-                    nextSteps: "Review detected items and edit names, quantities, or units before confirming to Cargo."
+                    nextSteps: "Review detected items and edit names, quantities, or units before confirming to Cargo.",
+                    hint: env.session.clientFlags.isNutritionEngineEnabled
+                        ? "Nutrition (when available): USDA match first; AI estimates are labelled—edit before saving."
+                        : nil
                 )
                 AIFeaturePrimaryButton(label: "Open camera", creditCost: scanCreditCost) {
                     proceedAfterIntro()
@@ -133,7 +136,7 @@ struct ScanView: View {
                         Text("Ready to review").rationHeadline()
                         Text("\(model.reviewItems.count) item\(model.reviewItems.count == 1 ? "" : "s") from scan \(requestId.prefix(8))…")
                             .rationCaption()
-                        Text("Tap edit to adjust name, quantity, tags, domain, or expiry")
+                        Text("Tap edit to adjust name, quantity, tags, domain, expiry, or nutrition")
                             .rationCaption()
                             .foregroundStyle(Theme.muted)
                     }
@@ -153,7 +156,12 @@ struct ScanView: View {
                         )
                     }
                     Button("Add selected to Cargo") {
-                        Task { await model.confirmToCargo(api: env.api) }
+                        Task {
+                            await model.confirmToCargo(
+                                api: env.api,
+                                nutritionAiEstimate: env.session.clientFlags.isNutritionAiEstimateEnabled
+                            )
+                        }
                     }
                     .buttonStyle(PrimaryButtonStyle())
                     .disabled(model.selectedCount == 0 || model.isEditing || editingItem != nil)

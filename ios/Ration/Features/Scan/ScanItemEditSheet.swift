@@ -14,6 +14,7 @@ struct ScanItemEditSheet: View {
     @State private var tags: [String]
     @State private var hasExpiry: Bool
     @State private var expiresAt: Date
+    @State private var nutrition: NutritionSnapshot?
     @State private var tagSuggestions: [String] = []
     @State private var validationError: String?
     @FocusState private var focusedField: Field?
@@ -32,6 +33,7 @@ struct ScanItemEditSheet: View {
         _tags = State(initialValue: item.tags)
         _hasExpiry = State(initialValue: item.expiresAt != nil)
         _expiresAt = State(initialValue: item.expiresAt ?? Date().addingTimeInterval(60 * 60 * 24 * 7))
+        _nutrition = State(initialValue: item.nutrition)
     }
 
     var body: some View {
@@ -60,6 +62,10 @@ struct ScanItemEditSheet: View {
                     if hasExpiry {
                         DatePicker("Expires", selection: $expiresAt, displayedComponents: .date)
                     }
+                }
+
+                if env.session.clientFlags.isNutritionEngineEnabled {
+                    NutritionEditorSection(nutrition: $nutrition)
                 }
 
                 if let validationError {
@@ -99,7 +105,8 @@ struct ScanItemEditSheet: View {
             domain: domain,
             tags: tags,
             hasExpiry: hasExpiry,
-            expiresAt: expiresAt
+            expiresAt: expiresAt,
+            nutrition: nutrition
         ) {
         case let .saved(updated):
             if let error = onSave(updated) {

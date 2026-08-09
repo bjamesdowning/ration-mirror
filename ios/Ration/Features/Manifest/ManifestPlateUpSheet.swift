@@ -35,6 +35,28 @@ struct ManifestPlateUpSheet: View {
         return perServing * servings
     }
 
+    private var estimatedProteinG: Double? {
+        guard let perServing = entry.mealProteinGPerServing else { return nil }
+        return perServing * servings
+    }
+
+    private var estimatedCarbsG: Double? {
+        guard let perServing = entry.mealCarbsGPerServing else { return nil }
+        return perServing * servings
+    }
+
+    private var estimatedFatG: Double? {
+        guard let perServing = entry.mealFatGPerServing else { return nil }
+        return perServing * servings
+    }
+
+    private var hasAnyNutritionEstimate: Bool {
+        estimatedEnergyKcal != nil
+            || estimatedProteinG != nil
+            || estimatedCarbsG != nil
+            || estimatedFatG != nil
+    }
+
     private var servingsLabel: String {
         servings.truncatingRemainder(dividingBy: 1) == 0
             ? String(format: "%.0f", servings)
@@ -56,7 +78,7 @@ struct ManifestPlateUpSheet: View {
                 }
 
                 Section {
-                    Stepper(value: $servings, in: 0.5 ... 10, step: 0.5) {
+                    Stepper(value: $servings, in: 0.5 ... 100, step: 0.5) {
                         HStack {
                             Text("Portion")
                             Spacer()
@@ -64,15 +86,42 @@ struct ManifestPlateUpSheet: View {
                                 .foregroundStyle(Theme.muted)
                         }
                     }
-                    if let estimatedEnergyKcal {
-                        LabeledContent("Estimated", value: "\(Int(estimatedEnergyKcal.rounded())) kcal")
+                    if hasAnyNutritionEstimate {
+                        if let estimatedEnergyKcal {
+                            LabeledContent(
+                                "Calories",
+                                value: "\(Int(estimatedEnergyKcal.rounded())) kcal"
+                            )
+                        }
+                        if let estimatedProteinG {
+                            LabeledContent(
+                                "Protein",
+                                value: formatGrams(estimatedProteinG)
+                            )
+                        }
+                        if let estimatedCarbsG {
+                            LabeledContent(
+                                "Carbs",
+                                value: formatGrams(estimatedCarbsG)
+                            )
+                        }
+                        if let estimatedFatG {
+                            LabeledContent(
+                                "Fat",
+                                value: formatGrams(estimatedFatG)
+                            )
+                        }
                     } else {
                         Text("Nutrition unavailable for this meal.")
                             .rationCaption()
                             .foregroundStyle(Theme.muted)
                     }
                 } footer: {
-                    Text("Full macros (protein, carbs, fat) are calculated from the meal's nutrition profile when you save.")
+                    if hasAnyNutritionEstimate {
+                        Text("Estimates scale with portion. Saving logs these nutrients to your private intake.")
+                    } else {
+                        Text("This meal has no nutrition profile yet — open it in Galley after nutrition resolve, or skip logging calories.")
+                    }
                 }
 
                 if !hasIntakeConsent {
@@ -111,6 +160,13 @@ struct ManifestPlateUpSheet: View {
                 }
             }
         }
+    }
+
+    private func formatGrams(_ value: Double) -> String {
+        if value.truncatingRemainder(dividingBy: 1) == 0 {
+            return "\(Int(value)) g"
+        }
+        return String(format: "%.1f g", value)
     }
 
     @MainActor

@@ -126,7 +126,6 @@ struct ManifestView: View {
                 showingAddEntry = true
                 env.deepLinkRouter.acknowledgeManifestAddEntry()
             }
-            }
             .refreshable { await reload() }
             .alert("Insufficient cargo", isPresented: $showPrepareConfirmation) {
                 Button("Continue anyway") {

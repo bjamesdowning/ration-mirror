@@ -43,14 +43,21 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 				{ status: 400 },
 			);
 		}
-		const { entryIds, confirmInsufficient } = parsed.data;
+		const { entryIds, confirmInsufficient, logNutrition, portions } =
+			parsed.data;
 
 		const result = await consumeManifestEntries(
 			context.cloudflare.env,
 			groupId,
 			planId,
 			entryIds,
-			{ confirmInsufficient, userId: user.id, source: "web" },
+			{
+				confirmInsufficient,
+				logNutrition,
+				portions,
+				userId: user.id,
+				source: "web",
+			},
 		);
 
 		return result;

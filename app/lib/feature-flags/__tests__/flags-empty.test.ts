@@ -15,6 +15,10 @@ describe("getClientSafeFlags", () => {
 			aiGenerateMeal: false,
 			aiPlanWeek: false,
 			appReviewLogin: false,
+			nutritionEngine: false,
+			nutritionAiEstimate: false,
+			nutritionManifest: false,
+			nutritionGoals: false,
 		});
 	});
 });

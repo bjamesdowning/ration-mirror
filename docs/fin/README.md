@@ -17,7 +17,7 @@ Engineering implementation detail remains in the root README. Compliance prose l
 | Collection | Articles |
 |------------|----------|
 | A — Overview | `01`–`06` |
-| B — User flows | `10`–`19` |
+| B — User flows | `10`–`19`, `24`–`26` (nutrition) |
 | C — Billing & tiers | `20`–`23` |
 | D — MCP & API | `30`–`34` |
 | E — Security & privacy | `40`–`42` |

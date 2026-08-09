@@ -71,4 +71,30 @@ describe("resolveCopilotActiveTools", () => {
 		expect(tools).toContain("commit_manifest_plan");
 		expect(tools).toContain("add_cargo_item");
 	});
+
+	it("scopes nutrition tools for calorie / intake keywords", () => {
+		const tools = resolveCopilotActiveTools(
+			[
+				...ALL,
+				"get_nutrition_summary",
+				"set_nutrition_goal",
+				"clear_nutrition_goal",
+				"consume_manifest_entries",
+			],
+			"How many kcal did I consume this week vs my goal?",
+		);
+		expect(tools).toContain("get_nutrition_summary");
+		expect(tools).toContain("set_nutrition_goal");
+		expect(tools).toContain("clear_nutrition_goal");
+		expect(tools).toContain("consume_manifest_entries");
+	});
+
+	it("includes consume_manifest_entries for ate / consumed nutrition phrasing", () => {
+		const tools = resolveCopilotActiveTools(
+			[...ALL, "consume_manifest_entries", "get_nutrition_summary"],
+			"I ate lunch and want nutrition logged",
+		);
+		expect(tools).toContain("consume_manifest_entries");
+		expect(tools).toContain("get_nutrition_summary");
+	});
 });

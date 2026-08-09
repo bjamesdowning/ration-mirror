@@ -4,6 +4,7 @@ vi.mock("cloudflare:workers", () => ({ waitUntil: vi.fn() }));
 
 import {
 	buildGetContextCapabilities,
+	buildNutritionCapabilityNotes,
 	buildSuggestedNextActions,
 } from "../agent/onboarding.server";
 import {
@@ -140,6 +141,38 @@ describe("get_context onboarding helpers", () => {
 		);
 		expect(actions.some((a) => a.action === "add_cargo_item")).toBe(true);
 		expect(actions.some((a) => a.action === "search_ingredients")).toBe(true);
+	});
+
+	it("exposes nutrition capability flags when enabled", () => {
+		const capabilities = buildGetContextCapabilities(["mcp:read"], {
+			engine: true,
+			manifest: true,
+			goals: true,
+		});
+		expect(capabilities.nutritionEngine).toBe(true);
+		expect(capabilities.nutritionManifest).toBe(true);
+		expect(capabilities.nutritionGoals).toBe(true);
+		expect(capabilities.canWriteNutritionGoals).toBe(false);
+
+		const withPrefs = buildGetContextCapabilities(
+			["mcp:read", "mcp:preferences:write"],
+			{ engine: false, manifest: false, goals: true },
+		);
+		expect(withPrefs.canWriteNutritionGoals).toBe(true);
+		expect(withPrefs.nutritionEngine).toBe(false);
+	});
+
+	it("buildNutritionCapabilityNotes lists enabled flags only", () => {
+		expect(
+			buildNutritionCapabilityNotes({
+				engine: true,
+				manifest: false,
+				goals: true,
+			}),
+		).toEqual([
+			expect.stringContaining("nutrition-engine"),
+			expect.stringContaining("nutrition-goals"),
+		]);
 	});
 });
 

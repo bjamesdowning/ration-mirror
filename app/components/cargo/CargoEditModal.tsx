@@ -1,8 +1,12 @@
+import { useState } from "react";
 import type { useFetcher } from "react-router";
+import { useRouteLoaderData } from "react-router";
+import { NutritionPanel } from "~/components/nutrition/NutritionPanel";
 import { TagChipEditor } from "~/components/shared/TagChipEditor";
 import type { cargo } from "~/db/schema";
 import { DOMAIN_LABELS, ITEM_DOMAINS } from "~/lib/domain";
 import { formatQuantityNumericString } from "~/lib/format-quantity";
+import type { NutritionSnapshot } from "~/lib/nutrition/types";
 
 interface CargoEditModalProps {
 	item: typeof cargo.$inferSelect;
@@ -27,6 +31,15 @@ export function CargoEditModal({
 	fetcher,
 	isUpdating,
 }: CargoEditModalProps) {
+	const rootData = useRouteLoaderData("root") as
+		| { clientFlags?: { nutritionEngine?: boolean } }
+		| undefined;
+	const nutritionEngine = rootData?.clientFlags?.nutritionEngine === true;
+	const [nutrition, setNutrition] = useState<NutritionSnapshot | null>(
+		item.nutrition ?? null,
+	);
+	const [nutritionEdited, setNutritionEdited] = useState(false);
+
 	return (
 		<div className="fixed inset-0 bg-carbon/30 backdrop-blur-sm flex items-end md:items-center md:justify-center z-[80]">
 			<div className="bg-ceramic rounded-t-2xl md:rounded-2xl shadow-xl p-6 w-full md:max-w-md md:mx-4 max-h-[90vh] overflow-y-auto safe-area-pb">
@@ -44,6 +57,13 @@ export function CargoEditModal({
 				<fetcher.Form method="post" className="space-y-4">
 					<input type="hidden" name="intent" value="update" />
 					<input type="hidden" name="itemId" value={item.id} />
+					{nutritionEngine && nutritionEdited && (
+						<input
+							type="hidden"
+							name="nutrition"
+							value={nutrition ? JSON.stringify(nutrition) : "null"}
+						/>
+					)}
 
 					<div className="flex flex-col gap-2">
 						<label
@@ -161,6 +181,18 @@ export function CargoEditModal({
 							className="bg-platinum rounded-lg px-4 py-3 text-carbon focus:ring-2 focus:ring-hyper-green/50 focus:outline-none"
 						/>
 					</div>
+
+					{nutritionEngine && (
+						<NutritionPanel
+							mode="cargo"
+							nutrition={nutrition}
+							editable
+							onChange={(snap) => {
+								setNutrition(snap);
+								setNutritionEdited(true);
+							}}
+						/>
+					)}
 
 					{fetcher.data?.errors && (
 						<div className="text-danger text-sm">

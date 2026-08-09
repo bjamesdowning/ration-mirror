@@ -41,6 +41,12 @@ We collect data regarding items in your digital Cargo ("Cargo Data") and images 
 > We process this data **only** on the basis of your **explicit consent (GDPR Art. 9(2)(a))** — specifically, the act of adding allergen information in your account settings. You may withdraw this consent at any time by removing your allergen selections. Allergen data is used solely to personalise your experience within the Service and is never shared with third parties for marketing purposes.
 <!-- /section -->
 
+### Nutrition goals and intake
+
+When nutrition features are enabled for your account, you may optionally set **personal daily nutrition goals** (energy and macros) and log **intake** when you mark Manifest meals as eaten (plate-up). Goal storage requires your **explicit consent** at save time; you may clear goals at any time. Food composition lookups use a **self-hosted USDA-shaped reference database** operated by us (not a live third-party USDA API call for each lookup). Optional AI nutrient estimates on AI ingest paths are labelled as estimates and are not medical advice.
+
+Intake history is retained for approximately **396 days (~13 months)** and then deleted automatically. Nutrition goals and intake records are erased when you purge your account (see Section 11).
+
 ## 3. Cookies
 
 We use cookies strictly necessary for the operation of our Service and to provide functionality you request. Per GDPR Article 13(1)(f), we disclose each cookie below:
@@ -79,7 +85,7 @@ Where the General Data Protection Regulation (GDPR) or UK GDPR applies, we rely 
 - **Legal obligation (Art. 6(1)(c)):** Payment records and transaction history retained to comply with applicable tax, VAT, and financial reporting laws, including obligations to Revenue in Ireland.
 - **Legitimate interests (Art. 6(1)(f)):** Security monitoring, fraud prevention, and service improvement — where our interests do not override your rights and freedoms.
 
-For allergen and dietary restriction data (special category data), we rely on your **explicit consent (GDPR Art. 9(2)(a))** as the legal basis. See Section 2 above.
+For allergen and dietary restriction data (special category data), we rely on your **explicit consent (GDPR Art. 9(2)(a))** as the legal basis. See Section 2 above. Personal nutrition goals, when you set them, are likewise stored only with your **explicit consent** at save time.
 
 ## 7. Magic Link Authentication
 
@@ -138,7 +144,7 @@ If you have questions or wish to exercise your rights, please contact us directl
 
 We will retain your Personal Data only for as long as is necessary for the purposes set out in this Privacy Policy. We will retain and use your Personal Data to the extent necessary to comply with our legal obligations, resolve disputes, and enforce our legal agreements and policies.
 
-**Right to be Forgotten:** You have the right to request the deletion of your account and all associated data. Upon such request, we will permanently purge your Personal Data, Usage Data, Cargo Data, Visual Data, and copilot conversation state from our systems (D1 Databases, Vectorize Indexes, R2 Storage, and copilot Durable Objects). You can initiate this process through the "Purge Account" function in your profile settings.
+**Right to be Forgotten:** You have the right to request the deletion of your account and all associated data. Upon such request, we will permanently purge your Personal Data, Usage Data, Cargo Data, Visual Data, nutrition goals and intake records, and copilot conversation state from our systems (D1 Databases, Vectorize Indexes, R2 Storage, and copilot Durable Objects). You can initiate this process through the "Purge Account" function in your profile settings.
 
 **Groups you own:** For groups where other members have joined, ownership is automatically transferred to an admin or member when you delete your account. If you are the sole member (including when invitations are pending and not yet accepted), the group and all its data are permanently deleted. You may use the "Transfer ownership" option in group settings to hand off a group to another member before deleting your account.
 

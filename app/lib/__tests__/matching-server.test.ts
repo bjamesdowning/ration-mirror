@@ -145,6 +145,7 @@ describe("strictMatch", () => {
 		prepTime: 10,
 		cookTime: 20,
 		customFields: null,
+		nutrition: null,
 		createdAt: new Date(),
 		updatedAt: new Date(),
 	});

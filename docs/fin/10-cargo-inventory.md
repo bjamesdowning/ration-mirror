@@ -10,7 +10,7 @@ Domains separate **food**, **household**, and **alcohol** for filtering and poli
 
 - **List / filter / search** — Browse Cargo; filter by domain, tags, or status; search by name.
 - **Add item** — Enter name, quantity, unit, domain, and optional tags/expiry from Cargo or flows that dock purchases from Supply.
-- **Edit item** — Change quantity, unit, name, domain, tags, or expiry on the detail screen.
+- **Edit item** — Change quantity, unit, name, domain, tags, or expiry on the detail screen. When nutrition is enabled, edit energy/macros on the nutrition panel (user override)—see *Editing nutrition* and *Nutrition overview*.
 - **Mark empty** — Set quantity to **0** without deleting the row (keeps a restock reminder).
 - **Jettison / delete** — Permanently remove the item from Cargo.
 - **Merge or add as new** — When Ration detects a very similar existing item, choose **merge** (combine quantity) or **add as new**.
@@ -19,6 +19,6 @@ Domains separate **food**, **household**, and **alcohol** for filtering and poli
 - **Promote to provision** — Create a single-ingredient **provision** in Galley from a Cargo item for quick planning. See *Galley (recipes and provisions)*.
 - **Receipt / batch ingest** — Accept line items from a **receipt scan** (or batch ingest) through the same dedup/merge path. Scan cost: see *Receipt scanning* and *AI credits explained* (typically **2 credits**).
 - **CSV import / export** — Spreadsheet-style import and export (limits and format shown in the app). Large imports may also use the REST API with an inventory-scoped key.
-- **Open detail + linked meals** — View full item fields and which Galley meals use this pantry line.
+- **Open detail + linked meals** — View full item fields, optional nutrition snapshot, and which Galley meals use this pantry line.
 
 If merge prompts or limits differ from this text, follow the **in-app** controls. Tier capacity for inventory count follows the **owner’s** plan — see *Free vs Crew Member*.

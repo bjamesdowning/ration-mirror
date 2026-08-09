@@ -1,10 +1,19 @@
 import type { AllergenSlug } from "~/lib/allergens";
 import type { MealPlanEntryWithMeal } from "~/lib/manifest.server";
 import { getDayName } from "~/lib/manifest-dates";
+import { formatConsumedVsGoalKcal } from "~/lib/nutrition/day-totals";
 import type { SlotType } from "~/lib/schemas/manifest";
-import { SLOT_TYPES } from "~/lib/schemas/manifest";
+import { SLOT_LABELS, SLOT_TYPES } from "~/lib/schemas/manifest";
 import { ManifestDaySupplyToggle } from "./ManifestDaySupplyToggle";
 import { MealSlot } from "./MealSlot";
+
+export type DayIntakeRow = {
+	id: string;
+	slotType: string | null;
+	servings: number;
+	energyKcal: number;
+	mealName: string | null;
+};
 
 interface DayViewProps {
 	date: string;
@@ -21,6 +30,10 @@ interface DayViewProps {
 	includedInSupply?: boolean;
 	onToggleSupplyInclusion?: (date: string) => void;
 	togglingSupplyDate?: string | null;
+	consumedKcal?: number | null;
+	goalEnergyKcal?: number | null;
+	/** Logged intake rows for this day (nutrition-manifest). */
+	intakeRows?: DayIntakeRow[];
 }
 
 const MONTH_NAMES = [
@@ -53,6 +66,9 @@ export function DayView({
 	includedInSupply = true,
 	onToggleSupplyInclusion,
 	togglingSupplyDate = null,
+	consumedKcal = null,
+	goalEnergyKcal = null,
+	intakeRows = [],
 }: DayViewProps) {
 	const d = new Date(`${date}T00:00:00`);
 	const dayName = getDayName(date);
@@ -65,6 +81,8 @@ export function DayView({
 	const slots = showSnackSlot
 		? SLOT_TYPES
 		: SLOT_TYPES.filter((s) => s !== "snack");
+
+	const dayIntakes = intakeRows.filter(Boolean);
 
 	return (
 		<div className="space-y-5">
@@ -99,7 +117,53 @@ export function DayView({
 						</p>
 					</>
 				)}
+				{goalEnergyKcal != null && consumedKcal != null && (
+					<>
+						<span className="text-xs text-muted/40 font-mono">·</span>
+						<p className="text-xs text-muted font-mono">
+							{formatConsumedVsGoalKcal(consumedKcal, goalEnergyKcal)} kcal
+						</p>
+					</>
+				)}
 			</div>
+
+			{dayIntakes.length > 0 && (
+				<div className="rounded-xl border border-platinum bg-platinum/30 px-3 py-2 space-y-1.5">
+					<p className="text-[10px] font-mono font-semibold uppercase tracking-widest text-muted">
+						Intake log
+					</p>
+					<ul className="space-y-1">
+						{dayIntakes.map((row) => {
+							const slotLabel =
+								row.slotType && SLOT_TYPES.includes(row.slotType as SlotType)
+									? SLOT_LABELS[row.slotType as SlotType]
+									: null;
+							const servingsLabel =
+								row.servings % 1 === 0
+									? String(row.servings)
+									: row.servings.toFixed(1);
+							return (
+								<li
+									key={row.id}
+									className="flex items-baseline justify-between gap-3 text-xs font-mono"
+								>
+									<span className="text-carbon truncate min-w-0">
+										{row.mealName ?? "Meal"}
+										{slotLabel ? (
+											<span className="text-muted"> · {slotLabel}</span>
+										) : null}
+									</span>
+									<span className="text-muted whitespace-nowrap">
+										{Math.round(row.energyKcal).toLocaleString("en-US")} kcal
+										{" · "}
+										{servingsLabel} sv
+									</span>
+								</li>
+							);
+						})}
+					</ul>
+				</div>
+			)}
 
 			{slots.map((slot) => (
 				<MealSlot

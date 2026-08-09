@@ -2,7 +2,7 @@
 
 ## Hub home
 
-The **hub dashboard** shows configurable **widgets**: inventory stats, cookable meals, partial matches, expiring cargo, supply preview, and manifest preview. You can change **layout presets** and per-widget visibility, size, and filters where the UI allows.
+The **hub dashboard** shows configurable **widgets**: inventory stats, cookable meals, partial matches, expiring cargo, supply preview, manifest preview, and **Flight Recorder** (recent kitchen activity; may include kcal when intake was logged). You can change **layout presets** and per-widget visibility, size, and filters where the UI allows.
 
 ## Main areas
 
@@ -25,7 +25,7 @@ Open **Hub → Settings**:
 
 - **Account** — Display name, avatar, default group after sign-in.
 - **Group** — Active group name/avatar, members, invitations (when tier allows), roles, ownership transfer, credit transfer, org tags, supply planning horizon. See *Groups and membership*.
-- **Preferences** — Allergens, unit display mode, and other kitchen preferences shown in the UI.
+- **Preferences** — Allergens, unit display mode, and other kitchen preferences shown in the UI. When nutrition goals are enabled, set or clear **daily nutrition goals** here (consent required on save)—see *Nutrition goals and tracking*.
 - **Developer** — Overview path chooser, **MCP** (OAuth connect + grant management), and **API Keys** (REST v1 and advanced MCP scopes). See *API key safety*, *MCP overview*, and *REST API (v1) overview*.
 - **Help & Feedback** — Links into the self-serve guide at `/help` (same docs used by Ask Ration). See *Ask Ration vs reading the guide*.
 - **Danger Zone** — Delete group (when allowed), and **purge account** (irreversible). Read all warnings. Account purge removes user data and handles owned groups per product rules (transfer or delete). See *Data, privacy, and deletion*.
@@ -47,7 +47,7 @@ After Stripe checkout you may land with **`transaction=success`** so the hub ref
 - Customize hub **widgets** and **presets**.
 - Update **Account** profile and **default group**.
 - Manage **Group** membership, tags, and owner/admin admin flows.
-- Edit **Preferences** (allergens, units).
+- Edit **Preferences** (allergens, units, and nutrition goals when enabled).
 - Configure **Developer** MCP and API keys.
 - Open **Help** (`/help`) or give feedback.
 - Run **Danger Zone** purge or group delete only when you intend permanent loss.

@@ -16,11 +16,13 @@ import {
 	mealPlanEntry,
 	mealTag,
 	member,
+	nutritionIntake,
 	tag,
 	user,
 } from "../db/schema";
 import { type AllergenSlug, detectAllergens } from "./allergens";
 import { buildCargoDeductionStatements } from "./cargo-deduction.server";
+import { isFeatureEnabled } from "./feature-flags/flags.server";
 import {
 	buildKitchenEventInserts,
 	buildManifestConsumedEvent,
@@ -29,6 +31,10 @@ import { log } from "./logging.server";
 import { getExcludedManifestDates } from "./manifest-supply.server";
 import { getMealMissingIngredients } from "./matching.server";
 import { type CargoDeduction, cookMeal } from "./meals.server";
+import { NUTRITION_COVERAGE_THRESHOLD } from "./nutrition/constants";
+import { buildMinimalFlagContext } from "./nutrition/persist.server";
+import { scaleNutrientValues } from "./nutrition/scale-nutrients";
+import type { MealNutritionSnapshot } from "./nutrition/types";
 import { chunkedQuery } from "./query-utils.server";
 import { bumpReadinessCacheVersions } from "./readiness-cache.server";
 import type { KitchenEventSource } from "./schemas/kitchen-events";
@@ -164,6 +170,8 @@ export interface MealPlanEntryWithMeal {
 	mealPrepTime: number | null;
 	mealCookTime: number | null;
 	mealTags?: string[];
+	/** meal.nutrition.perServing.energyKcal when snapshot exists. */
+	mealEnergyKcalPerServing?: number | null;
 }
 
 export interface ConsumeManifestEntriesResult {
@@ -213,6 +221,7 @@ export async function getWeekEntries(
 			mealType: meal.type,
 			mealPrepTime: meal.prepTime,
 			mealCookTime: meal.cookTime,
+			mealNutrition: meal.nutrition,
 		})
 		.from(mealPlanEntry)
 		.innerJoin(meal, eq(mealPlanEntry.mealId, meal.id))
@@ -229,14 +238,27 @@ export async function getWeekEntries(
 			mealPlanEntry.orderIndex,
 		);
 
-	return rows.map((r) => ({
-		...r,
-		consumedAt: r.consumedAt ?? null,
-		mealServings: r.mealServings ?? 1,
-		mealType: r.mealType ?? "recipe",
-		mealPrepTime: r.mealPrepTime ?? null,
-		mealCookTime: r.mealCookTime ?? null,
-	})) as MealPlanEntryWithMeal[];
+	return rows.map((r) => {
+		const snap = r.mealNutrition as MealNutritionSnapshot | null;
+		return {
+			id: r.id,
+			planId: r.planId,
+			mealId: r.mealId,
+			date: r.date,
+			slotType: r.slotType,
+			orderIndex: r.orderIndex,
+			servingsOverride: r.servingsOverride,
+			notes: r.notes,
+			consumedAt: r.consumedAt ?? null,
+			createdAt: r.createdAt,
+			mealName: r.mealName,
+			mealServings: r.mealServings ?? 1,
+			mealType: r.mealType ?? "recipe",
+			mealPrepTime: r.mealPrepTime ?? null,
+			mealCookTime: r.mealCookTime ?? null,
+			mealEnergyKcalPerServing: snap?.perServing?.energyKcal ?? null,
+		};
+	}) as MealPlanEntryWithMeal[];
 }
 
 async function attachMealTagsToEntries(
@@ -262,6 +284,59 @@ export async function getWeekEntriesWithTags(
 	return attachMealTagsToEntries(db, entries);
 }
 
+/**
+ * Distinct YYYY-MM-DD dates that have ≥1 meal_plan_entry in [startDate, endDate].
+ * Used by the Manifest month calendar overlay for planned-meal dots.
+ */
+export async function getPlannedDatesForRange(
+	db: D1Database,
+	planId: string,
+	startDate: string,
+	endDate: string,
+): Promise<string[]> {
+	const d1 = drizzle(db);
+	const rows = await d1
+		.selectDistinct({ date: mealPlanEntry.date })
+		.from(mealPlanEntry)
+		.where(
+			and(
+				eq(mealPlanEntry.planId, planId),
+				gte(mealPlanEntry.date, startDate),
+				lte(mealPlanEntry.date, endDate),
+			),
+		)
+		.orderBy(mealPlanEntry.date)
+		.limit(400);
+	return rows.map((r) => r.date);
+}
+
+/**
+ * Distinct intake calendar days in range for a user+org (nutrition-manifest).
+ */
+export async function getConsumedIntakeDatesForRange(
+	db: D1Database,
+	userId: string,
+	organizationId: string,
+	startDate: string,
+	endDate: string,
+): Promise<string[]> {
+	const d1 = drizzle(db);
+	const rows = await d1
+		.selectDistinct({ date: nutritionIntake.manifestDate })
+		.from(nutritionIntake)
+		.where(
+			and(
+				eq(nutritionIntake.userId, userId),
+				eq(nutritionIntake.organizationId, organizationId),
+				gte(nutritionIntake.manifestDate, startDate),
+				lte(nutritionIntake.manifestDate, endDate),
+			),
+		)
+		.orderBy(nutritionIntake.manifestDate)
+		.limit(400);
+	return rows.map((r) => r.date);
+}
+
 // ---------------------------------------------------------------------------
 // Consume entries (deduct ingredients from Cargo, mark as consumed)
 // ---------------------------------------------------------------------------
@@ -275,6 +350,12 @@ export async function consumeManifestEntries(
 		confirmInsufficient?: boolean;
 		userId?: string | null;
 		source?: KitchenEventSource;
+		/**
+		 * Defaults to true when nutrition-manifest is enabled, except mobile
+		 * without portions (legacy clients) which defaults to false.
+		 */
+		logNutrition?: boolean;
+		portions?: Array<{ entryId: string; servings: number }>;
 	},
 ): Promise<ConsumeManifestEntriesResult> {
 	const d1 = drizzle(env.DB);
@@ -300,6 +381,7 @@ export async function consumeManifestEntries(
 			servingsOverride: mealPlanEntry.servingsOverride,
 			mealServings: meal.servings,
 			mealName: meal.name,
+			mealNutrition: meal.nutrition,
 		})
 		.from(mealPlanEntry)
 		.innerJoin(meal, eq(mealPlanEntry.mealId, meal.id))
@@ -323,6 +405,30 @@ export async function consumeManifestEntries(
 	if (uniqueEntries.length === 0) {
 		return { consumed: 0, deductions: [], entryIds: [], planId, eventIds: [] };
 	}
+
+	const portionByEntry = new Map<string, number>();
+	for (const p of options?.portions ?? []) {
+		portionByEntry.set(p.entryId, p.servings);
+	}
+
+	// Mobile clients without plate-up (e.g. iOS 1.3.17) omit portions — do not
+	// invent intake unless they explicitly opt in via logNutrition or portions.
+	const hasPortions = (options?.portions?.length ?? 0) > 0;
+	const defaultLogNutrition =
+		options?.source === "mobile" &&
+		options?.logNutrition === undefined &&
+		!hasPortions
+			? false
+			: options?.logNutrition !== false;
+
+	const shouldLogNutrition =
+		defaultLogNutrition &&
+		!!options?.userId &&
+		(await isFeatureEnabled(
+			env,
+			"nutrition-manifest",
+			buildMinimalFlagContext(env, options.userId),
+		));
 
 	// 3. Cook each unique meal once with aggregated servings. Entries for the
 	//    same mealId are combined so we call cookMeal M times (unique meals)
@@ -417,6 +523,75 @@ export async function consumeManifestEntries(
 			}
 		}
 
+		let intakeEnergyKcal = 0;
+		let intakePortionServings = 0;
+		let intakeVerified = true;
+		let intakeLogged = false;
+		const intakeRows: Array<{
+			id: string;
+			organizationId: string;
+			userId: string;
+			planId: string;
+			entryId: string;
+			mealId: string;
+			manifestDate: string;
+			slotType: string | null;
+			servings: number;
+			energyKcal: number;
+			proteinG: number;
+			carbsG: number;
+			fatG: number;
+			coverage: number;
+			source: string;
+			confidence: number;
+			verified: 0 | 1;
+			occurredAt: Date;
+			kitchenEventId: string;
+		}> = [];
+
+		const eventId = crypto.randomUUID();
+
+		if (shouldLogNutrition && options?.userId) {
+			for (const entry of mealEntries) {
+				const portion = portionByEntry.has(entry.id)
+					? (portionByEntry.get(entry.id) ?? 0)
+					: (entry.servingsOverride ?? entry.mealServings ?? 1);
+				if (!Number.isFinite(portion) || portion <= 0) continue;
+				const snap = entry.mealNutrition as MealNutritionSnapshot | null;
+				const perServing = snap?.perServing;
+				if (!perServing) continue;
+				const scaled = scaleNutrientValues(perServing, portion);
+				const coverage = snap?.coverage ?? 0;
+				const verified: 0 | 1 =
+					coverage >= NUTRITION_COVERAGE_THRESHOLD ? 1 : 0;
+				intakeEnergyKcal += scaled.energyKcal;
+				intakePortionServings += portion;
+				if (verified === 0) intakeVerified = false;
+				intakeLogged = true;
+				intakeRows.push({
+					id: crypto.randomUUID(),
+					organizationId,
+					userId: options.userId,
+					planId,
+					entryId: entry.id,
+					mealId,
+					manifestDate: entry.date,
+					slotType: entry.slotType ?? null,
+					servings: portion,
+					energyKcal: scaled.energyKcal,
+					proteinG: scaled.proteinG,
+					carbsG: scaled.carbG,
+					fatG: scaled.fatG,
+					coverage,
+					source: "meal",
+					confidence: coverage,
+					verified,
+					occurredAt: now,
+					kitchenEventId: eventId,
+				});
+			}
+		}
+
 		// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
 		const stmts: any[] = await buildCargoDeductionStatements(
 			d1,
@@ -438,6 +613,7 @@ export async function consumeManifestEntries(
 
 		const { stmts: eventStmts, eventIds } = buildKitchenEventInserts(d1, [
 			buildManifestConsumedEvent({
+				id: eventId,
 				organizationId,
 				userId: options?.userId,
 				mealId,
@@ -451,10 +627,44 @@ export async function consumeManifestEntries(
 				partialCook: cookResult.partialCook,
 				source: options?.source,
 				occurredAt: now,
+				...(intakeLogged
+					? {
+							energyKcal: intakeEnergyKcal,
+							portionServings: intakePortionServings,
+							manifestDate: sharedDate ?? mealEntries[0]?.date,
+							verified: intakeVerified,
+						}
+					: {}),
 			}),
 		]);
 		stmts.push(...eventStmts);
 		allEventIds.push(...eventIds);
+
+		for (const row of intakeRows) {
+			stmts.push(
+				d1.insert(nutritionIntake).values({
+					id: row.id,
+					organizationId: row.organizationId,
+					userId: row.userId,
+					planId: row.planId,
+					entryId: row.entryId,
+					mealId: row.mealId,
+					manifestDate: row.manifestDate,
+					slotType: row.slotType,
+					servings: row.servings,
+					energyKcal: row.energyKcal,
+					proteinG: row.proteinG,
+					carbsG: row.carbsG,
+					fatG: row.fatG,
+					coverage: row.coverage,
+					source: row.source,
+					confidence: row.confidence,
+					verified: row.verified,
+					occurredAt: row.occurredAt,
+					kitchenEventId: row.kitchenEventId,
+				}),
+			);
+		}
 
 		trackD1BatchSize("consumeManifestEntries", stmts.length, {
 			organizationRef: organizationId,

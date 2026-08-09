@@ -46,6 +46,7 @@ export async function action({ request, params, context }: Route.ActionArgs) {
 				groupId,
 				id,
 				input,
+				{ env: context.cloudflare.env, userId: user.id },
 			);
 			return { meal };
 		}

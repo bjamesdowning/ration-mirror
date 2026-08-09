@@ -1,6 +1,6 @@
 {
 	"name": "ration",
-	"version": "1.7.29",
+	"version": "1.7.36",
 	"private": true,
 	"license": "SEE LICENSE IN LICENSE",
 	"type": "module",
@@ -34,6 +34,7 @@
 		"db:reset:local": "bun scripts/e2e-prep-local.ts --force-reset",
 		"db:migrate:dev": "wrangler d1 migrations apply ration-db-dev --remote --env dev",
 		"db:migrate:prod": "wrangler d1 migrations apply DB --remote",
+		"db:nutrition:seed:local": "wrangler d1 execute ration-nutrition --local --file=nutrition-db/schema.sql && wrangler d1 execute ration-nutrition --local --file=nutrition-db/seed-minimal.sql",
 		"dev:mcp": "wrangler dev --config wrangler.mcp.jsonc --env dev",
 		"deploy:mcp": "wrangler deploy --config wrangler.mcp.jsonc --env=''",
 		"dev:copilot": "wrangler dev --config wrangler.copilot.jsonc --env dev",

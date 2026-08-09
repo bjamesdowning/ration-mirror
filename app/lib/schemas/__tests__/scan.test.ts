@@ -168,4 +168,45 @@ describe("BatchAddCargoSchema", () => {
 		});
 		expect(result.success).toBe(false);
 	});
+
+	it("accepts optional nutrition snapshot per item", () => {
+		const result = BatchAddCargoSchema.safeParse({
+			items: [
+				{
+					...validItem,
+					nutrition: {
+						source: "user_override",
+						confidence: 1,
+						verified: true,
+						per100g: null,
+						perServing: {
+							energyKcal: 100,
+							proteinG: 5,
+							fatG: 2,
+							carbG: 10,
+							fiberG: null,
+							sugarG: null,
+							satFatG: null,
+							sodiumMg: null,
+							saltG: null,
+						},
+						fdcId: null,
+						description: null,
+					},
+				},
+			],
+		});
+		expect(result.success).toBe(true);
+		if (result.success) {
+			expect(result.data.items[0].nutrition?.source).toBe("user_override");
+			expect(result.data.items[0].nutrition?.perServing?.energyKcal).toBe(100);
+		}
+	});
+
+	it("accepts null nutrition", () => {
+		const result = BatchAddCargoSchema.safeParse({
+			items: [{ ...validItem, nutrition: null }],
+		});
+		expect(result.success).toBe(true);
+	});
 });

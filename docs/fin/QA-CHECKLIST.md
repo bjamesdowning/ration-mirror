@@ -25,6 +25,8 @@ Ask each in Ask Ration (with `search_docs`) and optionally open the matching `/h
 | 8 | How do I connect Claude via MCP? | `31` |
 | 9 | Where is the privacy policy? | `41` → `/legal/privacy` |
 | 10 | Paid but credits missing? | `61`, `21` |
+| 11 | Where do nutrients come from? USDA vs estimate? | `24`, `26` |
+| 12 | How do nutrition goals and Eat / plate-up work? | `25`, `15` |
 
 ## `/help` surface
 

@@ -12,7 +12,7 @@ Both can appear in the **Manifest** and in cookable-meal matching. See *Matching
 ## Actions
 
 - **Create recipe or provision** — Use **Galley → New** (or equivalent) to enter title, ingredients, units, servings, and directions. Link ingredients to Cargo when possible for better cook and shopping accuracy.
-- **Edit meal** — Open a meal and **Edit** ingredients, tags, times, or narrative fields.
+- **Edit meal** — Open a meal and **Edit** ingredients, tags, times, or narrative fields. When nutrition is enabled, detail and edit can show per-serving energy/macros (from ingredients or a stored snapshot)—see *Nutrition overview* and *Editing nutrition*.
 - **Delete meal** — Remove the meal from Galley (confirm when prompted).
 - **Toggle active for Supply** — Mark meals to include in Supply sync. Selection bars show counts.
 - **Clear selections** — Clear all active meal selections for Supply.

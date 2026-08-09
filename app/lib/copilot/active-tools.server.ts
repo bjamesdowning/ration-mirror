@@ -68,6 +68,13 @@ const SUPPLY_WRITE = [
 
 const PREFERENCES_WRITE = ["update_user_preferences"] as const;
 
+const NUTRITION_TOOLS = [
+	"get_nutrition_summary",
+	"set_nutrition_goal",
+	"clear_nutrition_goal",
+	"consume_manifest_entries",
+] as const;
+
 function includesAny(text: string, needles: RegExp[]): boolean {
 	return needles.some((needle) => needle.test(text));
 }
@@ -152,6 +159,17 @@ export function resolveCopilotActiveTools(
 		/\bunit mode\b/,
 		/\bsettings\b/,
 	]);
+	const wantNutrition = includesAny(text, [
+		/\bcalorie/,
+		/\bkcal\b/,
+		/\bmacro/,
+		/\bnutrition/,
+		/\bgoal\b/,
+		/\bate\b/,
+		/\bconsumed\b/,
+		/\bprotein\b/,
+		/\bintake\b/,
+	]);
 
 	const addGroup = (group: readonly string[]) => {
 		for (const name of group) {
@@ -165,6 +183,7 @@ export function resolveCopilotActiveTools(
 		wantManifest,
 		wantSupply,
 		wantPrefs,
+		wantNutrition,
 	].filter(Boolean).length;
 
 	// Multi-part requests (e.g. "create meal plan and fill inventory"): open all writes.
@@ -174,12 +193,14 @@ export function resolveCopilotActiveTools(
 		addGroup(MANIFEST_WRITE);
 		addGroup(SUPPLY_WRITE);
 		addGroup(PREFERENCES_WRITE);
+		addGroup(NUTRITION_TOOLS);
 	} else {
 		if (wantInventory) addGroup(INVENTORY_WRITE);
 		if (wantGalley) addGroup(GALLEY_WRITE);
 		if (wantManifest) addGroup(MANIFEST_WRITE);
 		if (wantSupply) addGroup(SUPPLY_WRITE);
 		if (wantPrefs) addGroup(PREFERENCES_WRITE);
+		if (wantNutrition) addGroup(NUTRITION_TOOLS);
 	}
 
 	// No write-domain match: keep core reads only (plus any already selected).

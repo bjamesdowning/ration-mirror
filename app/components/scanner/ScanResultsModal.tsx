@@ -1,8 +1,9 @@
 import { AlertTriangle, Calendar, Check, Edit2, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useFetcher } from "react-router";
+import { useFetcher, useRouteLoaderData } from "react-router";
 import { DOMAIN_LABELS, type ITEM_DOMAINS } from "~/lib/domain";
 import { normalizeForMatch, tokenMatchScore } from "~/lib/matching";
+import type { NutritionSnapshot } from "~/lib/nutrition/types";
 import {
 	areIngredientUnitsCompatible,
 	convertForIngredient,
@@ -48,6 +49,21 @@ export function ScanResultsModal({
 	const [dismissedMerges, setDismissedMerges] = useState<Set<string>>(
 		new Set(),
 	);
+	const rootData = useRouteLoaderData("root") as
+		| {
+				clientFlags?: {
+					nutritionEngine?: boolean;
+					nutritionAiEstimate?: boolean;
+				};
+		  }
+		| undefined;
+	const nutritionEngine = rootData?.clientFlags?.nutritionEngine === true;
+	const nutritionAiEstimate =
+		rootData?.clientFlags?.nutritionAiEstimate === true;
+	const isAiIngestSource =
+		result.metadata.source === "image" || result.metadata.source === "pdf";
+	const allowAiNutritionEstimate = isAiIngestSource && nutritionAiEstimate;
+	const [nutritionResolved, setNutritionResolved] = useState(false);
 
 	const dismissMerge = (id: string) =>
 		setDismissedMerges((prev) => new Set(prev).add(id));
@@ -148,6 +164,61 @@ export function ScanResultsModal({
 		return map;
 	}, [items, findMergeMatch, dismissedMerges]);
 
+	// Propose nutrition snapshots after scan results load (nutrition-engine).
+	useEffect(() => {
+		if (!nutritionEngine || nutritionResolved) return;
+		const names = [
+			...new Set(
+				result.items.map((i) => i.name.trim()).filter((n) => n.length > 0),
+			),
+		];
+		if (names.length === 0) {
+			setNutritionResolved(true);
+			return;
+		}
+
+		let cancelled = false;
+		void (async () => {
+			try {
+				const response = await fetch("/api/nutrition/resolve", {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({
+						names,
+						...(allowAiNutritionEstimate ? { allowAiEstimate: true } : {}),
+					}),
+				});
+				if (!response.ok || cancelled) return;
+				const body = (await response.json()) as {
+					snapshots?: Record<string, NutritionSnapshot | null>;
+				};
+				const snapshots = body.snapshots ?? {};
+				if (cancelled) return;
+				setItems((prev) =>
+					prev.map((item) => {
+						const snap = snapshots[item.name.trim()];
+						return snap !== undefined
+							? { ...item, nutrition: snap ?? null }
+							: item;
+					}),
+				);
+			} catch {
+				// Soft-fail: ingest still resolves on confirm when nutrition omitted.
+			} finally {
+				if (!cancelled) setNutritionResolved(true);
+			}
+		})();
+
+		return () => {
+			cancelled = true;
+		};
+	}, [
+		nutritionEngine,
+		allowAiNutritionEstimate,
+		nutritionResolved,
+		result.items,
+	]);
+
 	// Handle submit
 	const handleSubmit = () => {
 		const itemsToAdd = selectedItems.map((item) => {
@@ -160,11 +231,15 @@ export function ScanResultsModal({
 				tags: item.tags,
 				expiresAt: item.expiresAt,
 				mergeTargetId: mergeMatch?.target.id,
+				...(item.nutrition != null ? { nutrition: item.nutrition } : {}),
 			};
 		});
 
-		// biome-ignore lint/suspicious/noExplicitAny: fetcher submit type limitation
-		fetcher.submit(JSON.stringify({ items: itemsToAdd }) as any, {
+		const batchBody = JSON.stringify({
+			items: itemsToAdd,
+			...(allowAiNutritionEstimate ? { allowAiNutritionEstimate: true } : {}),
+		});
+		fetcher.submit(batchBody, {
 			method: "POST",
 			action: "/api/cargo/batch",
 			encType: "application/json",
@@ -329,6 +404,7 @@ export function ScanResultsModal({
 								item={item}
 								mergeMatch={mergeMatch ?? null}
 								isEditing={editingId === item.id}
+								nutritionEngine={nutritionEngine}
 								onToggleSelection={toggleSelection}
 								onStartEdit={(id) => setEditingId(id)}
 								onCancelEdit={() => setEditingId(null)}
@@ -384,6 +460,7 @@ interface ScanResultItemRowProps {
 	item: ScanResultItem;
 	mergeMatch: MergeMatch | null;
 	isEditing: boolean;
+	nutritionEngine: boolean;
 	onToggleSelection: (id: string) => void;
 	onStartEdit: (id: string) => void;
 	onCancelEdit: () => void;
@@ -395,6 +472,7 @@ function ScanResultItemRow({
 	item,
 	mergeMatch,
 	isEditing,
+	nutritionEngine,
 	onToggleSelection,
 	onStartEdit,
 	onCancelEdit,
@@ -403,12 +481,17 @@ function ScanResultItemRow({
 }: ScanResultItemRowProps) {
 	const [editedItem, setEditedItem] = useState(item);
 
+	useEffect(() => {
+		if (isEditing) setEditedItem(item);
+	}, [isEditing, item]);
+
 	if (isEditing) {
 		return (
 			<div className="bg-carbon/30 border border-hyper-green/50 rounded-lg p-4 space-y-3">
 				<DockItemFields
 					key={`cargo-${item.id}`}
 					idPrefix={`cargo-${item.id}`}
+					showNutrition={nutritionEngine}
 					value={{
 						name: editedItem.name,
 						quantity: editedItem.quantity,
@@ -416,6 +499,7 @@ function ScanResultItemRow({
 						domain: editedItem.domain || "food",
 						tags: editedItem.tags ?? [],
 						expiresAt: editedItem.expiresAt,
+						nutrition: editedItem.nutrition,
 					}}
 					onChange={(next) =>
 						setEditedItem({
@@ -428,6 +512,7 @@ function ScanResultItemRow({
 							domain: next.domain as ItemDomain,
 							tags: next.tags ?? [],
 							expiresAt: next.expiresAt || undefined,
+							nutrition: next.nutrition,
 						})
 					}
 				/>
@@ -454,6 +539,9 @@ function ScanResultItemRow({
 
 	const isLowConfidence =
 		typeof item.confidence === "number" && item.confidence < 0.7;
+	const kcal =
+		item.nutrition?.perServing?.energyKcal ??
+		item.nutrition?.per100g?.energyKcal;
 
 	return (
 		<div
@@ -495,6 +583,9 @@ function ScanResultItemRow({
 										{" "}
 										• Expires: {new Date(item.expiresAt).toLocaleDateString()}
 									</>
+								)}
+								{nutritionEngine && kcal != null && Number.isFinite(kcal) && (
+									<> • {Math.round(kcal)} kcal</>
 								)}
 							</p>
 							{mergeMatch && (

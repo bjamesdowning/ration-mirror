@@ -51,6 +51,15 @@ describe("getCopilotSystemPrompt", () => {
 		expect(prompt).toContain("Never loop remove_cargo_item");
 	});
 
+	it("includes nutrition guidance and no medical advice", () => {
+		const prompt = getCopilotSystemPrompt();
+		expect(prompt).toContain("Nutrition (when flags enabled");
+		expect(prompt).toContain("consume_manifest_entries");
+		expect(prompt).toContain("get_nutrition_summary");
+		expect(prompt).toContain("Do not give medical");
+		expect(prompt).toContain("feature_disabled");
+	});
+
 	it("includes readable output formatting guidance", () => {
 		const prompt = getCopilotSystemPrompt();
 		expect(prompt).toContain("Output format:");

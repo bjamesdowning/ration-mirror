@@ -42,6 +42,10 @@ import {
 	resolveCargoBucketsForIngredient,
 } from "./matching.server";
 import {
+	buildMinimalFlagContext,
+	recomputeAndStoreMealNutrition,
+} from "./nutrition/persist.server";
+import {
 	chunkArray,
 	chunkedQuery,
 	D1_MAX_BOUND_PARAMS,
@@ -88,6 +92,10 @@ export type MealWriteOptions = {
 	tagIdsBySlug?: Map<string, string>;
 	/** Skip trailing getMeal() when the caller only needs success/failure. */
 	skipReturnRead?: boolean;
+	/** Env for nutrition recompute (updateMeal / optional create paths). */
+	env?: Env;
+	/** Optional user id for nutrition flag evaluation context. */
+	userId?: string | null;
 };
 
 async function resolveMealTagIds(
@@ -236,6 +244,7 @@ export async function getMeals(
 					prepTime: meal.prepTime,
 					cookTime: meal.cookTime,
 					customFields: meal.customFields,
+					nutrition: meal.nutrition,
 					createdAt: meal.createdAt,
 					updatedAt: meal.updatedAt,
 				})
@@ -261,6 +270,7 @@ export async function getMeals(
 					prepTime: meal.prepTime,
 					cookTime: meal.cookTime,
 					customFields: meal.customFields,
+					nutrition: meal.nutrition,
 					createdAt: meal.createdAt,
 					updatedAt: meal.updatedAt,
 				})
@@ -358,6 +368,7 @@ export async function getMealsPage(
 		prepTime: meal.prepTime,
 		cookTime: meal.cookTime,
 		customFields: meal.customFields,
+		nutrition: meal.nutrition,
 		createdAt: meal.createdAt,
 		updatedAt: meal.updatedAt,
 	} as const;
@@ -751,6 +762,16 @@ export async function createMeal(
 		},
 	);
 
+	if (env) {
+		await recomputeAndStoreMealNutrition(
+			env,
+			db,
+			mealId,
+			organizationId,
+			buildMinimalFlagContext(env, options?.userId),
+		);
+	}
+
 	return options?.skipReturnRead
 		? null
 		: await getMeal(db, organizationId, mealId);
@@ -854,6 +875,17 @@ export async function createMeals(
 			() => d1.batch(batch as [any, ...any[]]),
 			{ organizationRef: organizationId },
 		);
+		await Promise.all(
+			mealIds.map((id) =>
+				recomputeAndStoreMealNutrition(
+					env,
+					db,
+					id,
+					organizationId,
+					buildMinimalFlagContext(env),
+				),
+			),
+		);
 	} else {
 		// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
 		await d1.batch(batch as [any, ...any[]]);
@@ -947,6 +979,17 @@ export async function updateMeal(
 
 	// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
 	await d1.batch(batch as [any, ...any[]]);
+
+	const nutritionEnv = options?.env;
+	if (nutritionEnv) {
+		await recomputeAndStoreMealNutrition(
+			nutritionEnv,
+			db,
+			mealId,
+			organizationId,
+			buildMinimalFlagContext(nutritionEnv, options?.userId),
+		);
+	}
 
 	return options?.skipReturnRead
 		? null

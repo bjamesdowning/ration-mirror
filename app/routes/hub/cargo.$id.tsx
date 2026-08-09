@@ -65,7 +65,10 @@ export async function loader({ request, params, context }: Route.LoaderArgs) {
 }
 
 export async function action({ request, params, context }: Route.ActionArgs) {
-	const { groupId } = await requireActiveGroup(context, request);
+	const {
+		groupId,
+		session: { user },
+	} = await requireActiveGroup(context, request);
 	const { id } = params;
 	if (!id) throw redirect("/hub/cargo");
 
@@ -102,7 +105,7 @@ export async function action({ request, params, context }: Route.ActionArgs) {
 						.filter((t) => t.length > 0)
 				: [];
 			const expiresAtValue = formData.get("expiresAt");
-			const payload = {
+			const payload: Record<string, unknown> = {
 				name: formData.get("name"),
 				quantity: formData.get("quantity"),
 				unit: formData.get("unit"),
@@ -114,6 +117,15 @@ export async function action({ request, params, context }: Route.ActionArgs) {
 						: expiresAtValue,
 			};
 
+			const nutritionRaw = formData.get("nutrition");
+			if (typeof nutritionRaw === "string" && nutritionRaw.length > 0) {
+				try {
+					payload.nutrition = JSON.parse(nutritionRaw);
+				} catch {
+					return { success: false, error: "Invalid nutrition payload" };
+				}
+			}
+
 			const parsed = CargoItemSchema.safeParse(payload);
 			if (!parsed.success) {
 				return { success: false, errors: parsed.error.flatten() };
@@ -124,6 +136,7 @@ export async function action({ request, params, context }: Route.ActionArgs) {
 				groupId,
 				id,
 				parsed.data,
+				{ userId: user.id },
 			);
 			if (!updated) {
 				return { success: false, error: "Item not found or unauthorized" };

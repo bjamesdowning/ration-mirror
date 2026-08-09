@@ -11,12 +11,13 @@ The **Manifest** is the meal plan calendar for the **active group**. Each day ha
 
 - **Navigate week** — Move between weeks with the Manifest week controls.
 - **Calendar span** — View and edit the visible plan range the UI exposes (week-focused navigation).
+- **Month calendar** — When Manifest nutrition is on, tap the center date range for a month overlay (planned-meal dots, intake markers; older than ~13 months muted). See *Nutrition goals and tracking*.
 - **Add entry** — Place a Galley meal into a day and slot.
 - **Update entry** — Change meal, slot, or servings override for an existing entry.
 - **Remove entry** — Delete a plan entry.
 - **Bulk / copy** — Copy a day’s meals to other days, or bulk-add entries (including after AI plan confirm).
 - **AI plan week** — Draft a week from your Galley and preferences. Runs asynchronously, returns a **preview** you confirm before bulk-add. Cost: see *AI credits explained* (typically **3 credits**). Only meals in **your** Galley are eligible.
-- **Consume entries** — Mark selected plan entries as cooked and deduct matched ingredients from Cargo. When matching is uncertain, the system prefers **not** to subtract the wrong item.
+- **Consume / Eat** — Mark selected plan entries as cooked and deduct matched ingredients from Cargo. When matching is uncertain, the system prefers **not** to subtract the wrong item. With Manifest nutrition on, a **plate-up** step can ask portions and whether to log intake; day view shows that day’s totals.
 - **Day include / exclude for Supply** — Toggle whether each plan day contributes to Supply sync (default: included).
 - **Share** — Create a **read-only** meal plan share link when the owner’s tier allows (**Crew Member**). See *Free vs Crew Member*.
 

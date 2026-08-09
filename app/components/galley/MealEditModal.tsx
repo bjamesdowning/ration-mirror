@@ -1,7 +1,10 @@
 import type { useFetcher } from "react-router";
+import { useRouteLoaderData } from "react-router";
 import { MealBuilder } from "~/components/galley/MealBuilder";
 import { WarningIcon } from "~/components/icons/PageIcons";
+import { NutritionPanel } from "~/components/nutrition/NutritionPanel";
 import type { meal } from "~/db/schema";
+import type { MealNutritionSnapshot } from "~/lib/nutrition/types";
 import type { MealInput } from "~/lib/schemas/meal"; // Implied type
 import type { TagRecord } from "~/lib/tags";
 import { toTagRecords } from "~/lib/tags";
@@ -28,6 +31,7 @@ interface MealEditModalProps {
 		}[];
 		equipment?: string[] | null;
 		customFields?: Record<string, unknown> | null;
+		nutrition?: MealNutritionSnapshot | null;
 	};
 	availableIngredients: InventoryItem[];
 	tagSuggestions?: string[];
@@ -43,6 +47,11 @@ export function MealEditModal({
 	onClose,
 	fetcher,
 }: MealEditModalProps) {
+	const rootData = useRouteLoaderData("root") as
+		| { clientFlags?: { nutritionEngine?: boolean } }
+		| undefined;
+	const nutritionEngine = rootData?.clientFlags?.nutritionEngine === true;
+
 	const normalizeCustomFields = (
 		customFields: Record<string, unknown> | null | undefined,
 	): Record<string, string> => {
@@ -96,6 +105,16 @@ export function MealEditModal({
 					<div className="bg-danger/10 text-danger px-4 py-3 rounded-xl mb-6 text-sm flex items-center gap-2">
 						<WarningIcon className="w-4 h-4 shrink-0" />
 						{(fetcher.data as { error?: string }).error}
+					</div>
+				)}
+
+				{nutritionEngine && (
+					<div className="mb-6">
+						<NutritionPanel
+							mode="meal"
+							nutrition={meal.nutrition ?? null}
+							showAttribution
+						/>
 					</div>
 				)}
 

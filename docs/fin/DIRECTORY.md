@@ -25,6 +25,9 @@ Browse topics below, or open Ask Ration from the hub for the same answers with l
 - [Supply (shopping list)](./16-supply-shopping-list.md) — Sync, shop, snooze, share, and dock purchases into Cargo.
 - [Matching cookable meals](./17-matching-cookable-meals.md) — Strict vs partial pantry match for meals ready to cook.
 - [Hub dashboard and settings](./18-hub-dashboard-and-settings.md) — Widgets, preferences, developer tools, and account purge.
+- [Nutrition overview](./24-nutrition-overview.md) — USDA match, blank on miss, AI estimates, confidence, and where nutrition appears.
+- [Nutrition goals and tracking](./25-nutrition-goals-and-tracking.md) — Goals, Manifest Eat plate-up, calendar retention, and Flight Recorder.
+- [Editing nutrition](./26-editing-nutrition.md) — Edit on scan review or Cargo later; user overrides and verified labels.
 
 ## Billing and credits
 

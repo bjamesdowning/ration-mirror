@@ -10,6 +10,8 @@ interface WeekNavigatorProps {
 	currentRangeStart: string;
 	today: string;
 	weekStartPref: "sunday" | "monday";
+	/** When set, center date label opens the month calendar overlay. */
+	onOpenCalendar?: () => void;
 }
 
 export function formatWeekRange(start: string, end: string): string {
@@ -43,6 +45,7 @@ export function WeekNavigator({
 	currentRangeStart,
 	today,
 	weekStartPref,
+	onOpenCalendar,
 }: WeekNavigatorProps) {
 	const navigate = useNavigate();
 	const weekEnd =
@@ -58,6 +61,8 @@ export function WeekNavigator({
 		navigate(`?week=${date}`);
 	};
 
+	const rangeLabel = formatWeekRange(currentRangeStart, weekEnd);
+
 	return (
 		<div className="flex items-center gap-2">
 			<button
@@ -69,9 +74,21 @@ export function WeekNavigator({
 				<ChevronLeftIcon className="w-4 h-4" />
 			</button>
 
-			<span className="text-sm font-medium text-carbon min-w-[180px] text-center">
-				{formatWeekRange(currentRangeStart, weekEnd)}
-			</span>
+			{onOpenCalendar ? (
+				<button
+					type="button"
+					onClick={onOpenCalendar}
+					aria-label="Open calendar"
+					title="Jump to date"
+					className="text-sm font-medium text-carbon min-w-[180px] text-center px-2 py-1 rounded-lg hover:bg-platinum transition-colors"
+				>
+					{rangeLabel}
+				</button>
+			) : (
+				<span className="text-sm font-medium text-carbon min-w-[180px] text-center">
+					{rangeLabel}
+				</span>
+			)}
 
 			<button
 				type="button"

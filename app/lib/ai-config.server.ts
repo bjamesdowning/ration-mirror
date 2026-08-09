@@ -10,7 +10,8 @@ export type GatewayFeature =
 	| "scan"
 	| "meal_generate"
 	| "plan_week"
-	| "import_url";
+	| "import_url"
+	| "nutrition_estimate";
 
 export type GatewayBackoff = "constant" | "linear" | "exponential";
 
@@ -65,6 +66,14 @@ export const GATEWAY_FEATURE_CONFIG: Record<
 		retryDelayMs: 1_500,
 		backoff: "exponential",
 		cache: { ttlSeconds: 3600 },
+	},
+	nutrition_estimate: {
+		thinkingLevel: "LOW",
+		requestTimeoutMs: 30_000,
+		maxAttempts: 2,
+		retryDelayMs: 1_000,
+		backoff: "exponential",
+		cache: { ttlSeconds: 86_400 },
 	},
 };
 

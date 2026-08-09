@@ -74,6 +74,8 @@ declare namespace Cloudflare {
 		APP_REVIEW_DEMO_PASSWORD?: string;
 		/** Pre-seeded App Review user id in D1. */
 		APP_REVIEW_DEMO_USER_ID?: string;
+		/** Optional USDA-shaped nutrition composition DB (ration-nutrition). */
+		NUTRITION_DB?: D1Database;
 	}
 }
 

@@ -77,6 +77,14 @@ struct ClientFlags: Codable, Sendable, Equatable {
     var aiGenerateMeal: Bool?
     var aiPlanWeek: Bool?
     var appReviewLogin: Bool?
+    /// USDA resolve + cargo/meal nutrition panels (additive; ignored by older clients).
+    var nutritionEngine: Bool?
+    /// AI nutrient fill on AI ingest after USDA miss.
+    var nutritionAiEstimate: Bool?
+    /// Manifest day totals / plate-up intake.
+    var nutritionManifest: Bool?
+    /// Personal nutrition goals and summary charts.
+    var nutritionGoals: Bool?
 
     static let disabled = ClientFlags()
 
@@ -89,6 +97,10 @@ struct ClientFlags: Codable, Sendable, Equatable {
     var isAiGenerateMealEnabled: Bool { aiGenerateMeal == true }
     var isAiPlanWeekEnabled: Bool { aiPlanWeek == true }
     var isAppReviewLoginEnabled: Bool { appReviewLogin == true }
+    var isNutritionEngineEnabled: Bool { nutritionEngine == true }
+    var isNutritionAiEstimateEnabled: Bool { nutritionAiEstimate == true }
+    var isNutritionManifestEnabled: Bool { nutritionManifest == true }
+    var isNutritionGoalsEnabled: Bool { nutritionGoals == true }
 }
 
 /// `GET /api/mobile/v1/client-flags` (unsigned)

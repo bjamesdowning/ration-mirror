@@ -59,7 +59,7 @@ MCP tool calls are **deterministic and do not consume Ration credits**. Receipt 
 ## Why Ration MCP is different
 
 - **Closed-loop kitchen ops** — inventory, recipes, plan, and shop list in one system (not four apps).
-- **35+ MCP tools** — granular OAuth scopes (`mcp:read`, `mcp:inventory:write`, `mcp:galley:write`, `mcp:manifest:write`, `mcp:supply:write`).
+- **35+ MCP tools** — granular OAuth scopes (`mcp:read`, `mcp:inventory:write`, `mcp:galley:write`, `mcp:manifest:write`, `mcp:supply:write`, `mcp:preferences:write`), including optional nutrition summary/goals when flags are on.
 - **OAuth-first** — paste one URL; browser sign-in; revoke anytime in Hub → Settings → Connected Agents.
 - **Agent self-registration** — autonomous agents can provision a kitchen via [`auth.md`](https://ration.mayutic.com/auth.md) before a human signs up.
 - **Household-scoped** — one organization per grant; pick the correct household at consent.
@@ -111,8 +111,8 @@ All tools are scoped to the authorized household. **MCP calls do not consume Rat
 |------|-------|-------------|
 | `get_context` | `mcp:read` | Return org id, scopes, kitchen tier/usage/credits/lastActivityAt, capabilities, suggested next actions, and `temporal` (todayUtc, server time, expiry semantics). Safe to call first. |
 | `search_ingredients` | `mcp:read` | Semantic pantry search by meaning — find items without knowing the exact name. |
-| `list_inventory` | `mcp:read` | Cursor-paginated pantry list (default 100, max 200). Optional domain filter, UTC `expiresBefore` / `expiresAfter`, and `sortBy: expiresAt`. |
-| `get_cargo_item` | `mcp:read` | Fetch one pantry item by id (tags, expiry, custom fields). |
+| `list_inventory` | `mcp:read` | Cursor-paginated pantry list (default 100, max 200). Optional domain filter, UTC `expiresBefore` / `expiresAfter`, and `sortBy: expiresAt`. Includes `nutrition` when present. |
+| `get_cargo_item` | `mcp:read` | Fetch one pantry item by id (tags, expiry, custom fields, nutrition when present). |
 | `get_kitchen_summary` | `mcp:read` | Single-call operational snapshot (cargo, manifest, supply, tier/credits). Optional `manifestDays` (1–7). |
 | `get_kitchen_events` | `mcp:read` | Flight Recorder timeline of cooks, docks, expiries, and jettisons (filterable, paginated). |
 | `get_kitchen_stats` | `mcp:read` | Flight Recorder aggregates for a window (7d/30d/90d/365d). |
@@ -124,13 +124,16 @@ All tools are scoped to the authorized household. **MCP calls do not consume Rat
 | `get_supply_list` | `mcp:read` | Active shopping list with item ids for updates and purchase toggles. |
 | `get_user_preferences` | `mcp:read` | Allergens, expiration alert days, theme, manifest defaults, and other user settings. |
 | `update_user_preferences` | `mcp:preferences:write` | Patch user settings (allergens, alerts, theme). Only provided fields change. |
+| `get_nutrition_summary` | `mcp:read` | Daily intake totals for a UTC `from`/`to` range (requires `nutrition-goals` or `nutrition-manifest`). |
+| `set_nutrition_goal` | `mcp:preferences:write` | Upsert personal daily energy/macro goals (`consentAt` required; `nutrition-goals`). Not medical advice. |
+| `clear_nutrition_goal` | `mcp:preferences:write` | Close open-ended goals. **Requires `confirm: true`.** |
 
 ### Inventory (Cargo)
 
 | Tool | Scope | Description |
 |------|-------|-------------|
-| `add_cargo_item` | `mcp:inventory:write` | Add a single pantry item (qty > 0). No credits; vectors backfilled async. Prefer import tools for bulk. |
-| `update_cargo_item` | `mcp:inventory:write` | Set absolute fields. Quantity may be **0** (kept as a restock reminder). |
+| `add_cargo_item` | `mcp:inventory:write` | Add a single pantry item (qty > 0). Optional `nutrition` override; when omitted and `nutrition-engine` is on, USDA auto-resolves. No credits; vectors backfilled async. Prefer import tools for bulk. |
+| `update_cargo_item` | `mcp:inventory:write` | Set absolute fields (including optional `nutrition`). Quantity may be **0** (kept as a restock reminder). |
 | `adjust_cargo_item` | `mcp:inventory:write` | Relative `delta` change (e.g. `-2` when the user ate 2). Floors at 0; keeps the row. |
 | `remove_cargo_item` | `mcp:inventory:write` | Permanently delete a pantry line. **Requires `confirm: true`.** |
 | `preview_inventory_import` | `mcp:inventory:write` | Dry-run receipt/bulk import — returns `previewToken` and sample rows. Prefer `ration://schemas/inventory-import` for shape. |
@@ -158,7 +161,7 @@ All tools are scoped to the authorized household. **MCP calls do not consume Rat
 | `commit_manifest_plan` | `mcp:manifest:write` | Commit a confirmed multi-entry schedule (optionally sync supply). |
 | `update_meal_plan_entry` | `mcp:manifest:write` | Patch date, slot, servings, or notes. Cannot edit consumed entries. |
 | `remove_meal_plan_entry` | `mcp:manifest:write` | Remove a scheduled plan entry. |
-| `consume_manifest_entries` | `mcp:manifest:write` + `mcp:inventory:write` | Mark manifest entries consumed and deduct ingredients from pantry. Requires **both** scopes. |
+| `consume_manifest_entries` | `mcp:manifest:write` + `mcp:inventory:write` | Mark manifest entries consumed and deduct ingredients. Optional `portions[]` / `logNutrition` for intake when `nutrition-manifest` is on. Requires **both** scopes. |
 
 ### Supply (shopping list)
 

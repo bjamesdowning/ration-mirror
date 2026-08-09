@@ -69,6 +69,11 @@
 			"database_name": "ration-db",
 			"database_id": "41e98836-d752-4bbe-a14f-68e802c72c10",
 			"migrations_dir": "drizzle"
+		},
+		{
+			"binding": "NUTRITION_DB",
+			"database_name": "ration-nutrition",
+			"database_id": "e39b5516-e21b-4ced-9294-9890d2c222a1"
 		}
 	],
 	"r2_buckets": [
@@ -240,6 +245,12 @@
 					"database_name": "ration-db-dev",
 					"database_id": "eec9f2f0-5d34-4392-89dd-317f373bf1e9",
 					"migrations_dir": "drizzle",
+					"remote": true
+				},
+				{
+					"binding": "NUTRITION_DB",
+					"database_name": "ration-nutrition-dev",
+					"database_id": "8fa918c3-34af-4099-9637-8993579a8931",
 					"remote": true
 				}
 			],

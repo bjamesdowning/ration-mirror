@@ -7,6 +7,7 @@ import { registerKitchenEventTools } from "./tools/events";
 import { registerGalleyTools } from "./tools/galley";
 import { registerInventoryTools } from "./tools/inventory";
 import { registerManifestTools } from "./tools/manifest";
+import { registerNutritionTools } from "./tools/nutrition";
 import { registerPreferencesTools } from "./tools/preferences";
 import { registerReadTools } from "./tools/read";
 import { registerSupplyTools } from "./tools/supply";
@@ -31,4 +32,5 @@ export function registerTools(
 	registerManifestTools(server, toolsEnv);
 	registerSupplyTools(server, toolsEnv);
 	registerPreferencesTools(server, toolsEnv);
+	registerNutritionTools(server, toolsEnv);
 }

@@ -73,9 +73,16 @@ export function createReadToolDefs(env: McpToolsEnv) {
 					getAgentOnboardingState,
 					buildGetContextCapabilities,
 					buildSuggestedNextActions,
+					buildNutritionCapabilityNotes,
 				} = await import("../../agent/onboarding.server");
 				const { getAgentKitchenSnapshot } = await import(
 					"../../agent/kitchen-snapshot.server"
+				);
+				const { buildMinimalFlagContext } = await import(
+					"../../nutrition/persist.server"
+				);
+				const { isFeatureEnabled } = await import(
+					"../../feature-flags/flags.server"
 				);
 				const onboarding = await getAgentOnboardingState(
 					env,
@@ -95,7 +102,23 @@ export function createReadToolDefs(env: McpToolsEnv) {
 						meals: kitchenFull.capacity.meals,
 					},
 				};
-				const capabilities = buildGetContextCapabilities(ctx.scopes);
+				const flagContext = buildMinimalFlagContext(env, ctx.userId);
+				const [nutritionEngine, nutritionManifest, nutritionGoals] =
+					await Promise.all([
+						isFeatureEnabled(env, "nutrition-engine", flagContext),
+						isFeatureEnabled(env, "nutrition-manifest", flagContext),
+						isFeatureEnabled(env, "nutrition-goals", flagContext),
+					]);
+				const nutritionFlags = {
+					engine: nutritionEngine,
+					manifest: nutritionManifest,
+					goals: nutritionGoals,
+				};
+				const capabilities = buildGetContextCapabilities(
+					ctx.scopes,
+					nutritionFlags,
+				);
+				const nutritionNotes = buildNutritionCapabilityNotes(nutritionFlags);
 				const suggestedNextActions = buildSuggestedNextActions(
 					onboarding,
 					capabilities,
@@ -115,6 +138,7 @@ export function createReadToolDefs(env: McpToolsEnv) {
 					temporal: buildAgentTemporalContext(),
 					versions: { mcp: MCP_SERVER_VERSION },
 					note: "For detailed pantry/manifest/supply status call get_kitchen_summary.",
+					...(nutritionNotes.length > 0 ? { nutritionNotes } : {}),
 				});
 			},
 		}),
@@ -172,7 +196,7 @@ export function createReadToolDefs(env: McpToolsEnv) {
 		defineSharedTool({
 			name: "list_inventory",
 			description:
-				"Retrieve ingredients in the pantry. Cursor-paginated: pass `cursor` from a previous response to fetch the next page. Default limit 100, max 200. Optional UTC expiry filters and expiresAt sort.",
+				"Retrieve ingredients in the pantry. Cursor-paginated: pass `cursor` from a previous response to fetch the next page. Default limit 100, max 200. Optional UTC expiry filters and expiresAt sort. Includes nutrition snapshot when present on the cargo row.",
 			inputSchema: z.object({
 				domain: z
 					.enum(["food", "household", "alcohol"])
@@ -266,6 +290,7 @@ export function createReadToolDefs(env: McpToolsEnv) {
 					domain: c.domain,
 					tags: tagsToSlugs(tagMap.get(c.id) ?? []),
 					expiresAt: c.expiresAt,
+					...(c.nutrition ? { nutrition: c.nutrition } : {}),
 				}));
 				return ok("list_inventory", mapped, {
 					meta: {
@@ -291,7 +316,7 @@ export function createReadToolDefs(env: McpToolsEnv) {
 		defineSharedTool({
 			name: "get_cargo_item",
 			description:
-				"Fetch one pantry item by id with all fields (tags, expiresAt, customFields). Useful before update_cargo_item.",
+				"Fetch one pantry item by id with all fields (tags, expiresAt, customFields, nutrition when present). Useful before update_cargo_item.",
 			inputSchema: z.object({
 				itemId: z.string().uuid().describe("Cargo item id"),
 			}),
@@ -451,6 +476,7 @@ export function createReadToolDefs(env: McpToolsEnv) {
 						isOptional: i.isOptional ?? false,
 						orderIndex: i.orderIndex ?? 0,
 					})),
+					...(m.nutrition ? { nutrition: m.nutrition } : {}),
 				}));
 				return ok("list_meals", mapped, {
 					meta: {

@@ -62,6 +62,32 @@ export const FLAG_REGISTRY: Record<string, FlagRegistryEntry> = {
 		clientVisible: true,
 		clientKey: "appReviewLogin",
 	},
+	"nutrition-engine": {
+		defaultEnabled: false,
+		description:
+			"USDA nutrition resolve, recipe/cargo snapshots, and Galley panel",
+		clientVisible: true,
+		clientKey: "nutritionEngine",
+	},
+	"nutrition-ai-estimate": {
+		defaultEnabled: false,
+		description:
+			"AI nutrient estimates on AI ingest paths when USDA resolve misses",
+		clientVisible: true,
+		clientKey: "nutritionAiEstimate",
+	},
+	"nutrition-manifest": {
+		defaultEnabled: false,
+		description: "Manifest daily nutrition totals and intake logging",
+		clientVisible: true,
+		clientKey: "nutritionManifest",
+	},
+	"nutrition-goals": {
+		defaultEnabled: false,
+		description: "Personal nutrition goals and vs-goal views",
+		clientVisible: true,
+		clientKey: "nutritionGoals",
+	},
 };
 
 /** Registry keys — narrows as entries are added to FLAG_REGISTRY. */

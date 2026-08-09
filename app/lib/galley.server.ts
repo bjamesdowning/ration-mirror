@@ -141,6 +141,7 @@ export async function applyGalleyImport(
 	const writeOptions = {
 		tagIdsBySlug,
 		skipReturnRead: true as const,
+		env,
 	};
 
 	const toCreate = meals.filter((m) => !m.id || !existingIds.has(m.id));

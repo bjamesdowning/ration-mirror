@@ -9,6 +9,10 @@ import {
 	unique,
 } from "drizzle-orm/sqlite-core";
 import type {
+	CargoNutritionSnapshot,
+	MealNutritionSnapshot,
+} from "../lib/nutrition/types";
+import type {
 	MealCustomFields,
 	OrganizationMetadata,
 	UserSettings,
@@ -261,6 +265,9 @@ export const cargo = sqliteTable(
 		domain: text("domain").notNull().default("food"),
 		status: text("status").notNull().default("stable"),
 		expiresAt: integer("expires_at", { mode: "timestamp" }),
+		nutrition: text("nutrition", {
+			mode: "json",
+		}).$type<CargoNutritionSnapshot | null>(),
 		createdAt: integer("created_at", { mode: "timestamp" })
 			.notNull()
 			.default(sql`(unixepoch())`),
@@ -355,6 +362,9 @@ export const meal = sqliteTable(
 		customFields: text("custom_fields", { mode: "json" })
 			.$type<MealCustomFields>()
 			.default({}),
+		nutrition: text("nutrition", {
+			mode: "json",
+		}).$type<MealNutritionSnapshot | null>(),
 		createdAt: integer("created_at", { mode: "timestamp" })
 			.notNull()
 			.default(sql`(unixepoch())`),
@@ -972,6 +982,161 @@ export const interestSignup = sqliteTable(
 		index("interest_signup_created_idx").on(table.createdAt),
 		unique("interest_signup_email_unique").on(table.email),
 	],
+);
+
+/**
+ * Org-scoped cache of ingredient name → FDC match (nutrition engine).
+ */
+export const ingredientNutritionMatch = sqliteTable(
+	"ingredient_nutrition_match",
+	{
+		id: text("id")
+			.primaryKey()
+			.$defaultFn(() => crypto.randomUUID()),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id, { onDelete: "cascade" }),
+		normalizedName: text("normalized_name").notNull(),
+		fdcId: integer("fdc_id"),
+		description: text("description"),
+		source: text("source").notNull(),
+		confidence: real("confidence").notNull(),
+		createdAt: integer("created_at", { mode: "timestamp" })
+			.notNull()
+			.default(sql`(unixepoch())`),
+		updatedAt: integer("updated_at", { mode: "timestamp" })
+			.notNull()
+			.default(sql`(unixepoch())`),
+	},
+	(table) => [
+		unique("ingredient_nutrition_match_org_name_unique").on(
+			table.organizationId,
+			table.normalizedName,
+		),
+		index("ingredient_nutrition_match_org_idx").on(table.organizationId),
+	],
+);
+
+export const ingredientNutritionMatchRelations = relations(
+	ingredientNutritionMatch,
+	({ one }) => ({
+		organization: one(organization, {
+			fields: [ingredientNutritionMatch.organizationId],
+			references: [organization.id],
+		}),
+	}),
+);
+
+/**
+ * Versioned personal nutrition goals (effective date range).
+ * Close prior row via effective_to when upserting a new goal.
+ */
+export const nutritionGoal = sqliteTable(
+	"nutrition_goal",
+	{
+		id: text("id")
+			.primaryKey()
+			.$defaultFn(() => crypto.randomUUID()),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		dailyEnergyKcal: real("daily_energy_kcal").notNull(),
+		proteinG: real("protein_g").notNull(),
+		carbsG: real("carbs_g").notNull(),
+		fatG: real("fat_g").notNull(),
+		fiberG: real("fiber_g"),
+		/** Inclusive start date YYYY-MM-DD (UTC calendar). */
+		effectiveFrom: text("effective_from").notNull(),
+		/** Inclusive end date YYYY-MM-DD; null = open-ended. */
+		effectiveTo: text("effective_to"),
+		consentAt: integer("consent_at", { mode: "timestamp" }).notNull(),
+		createdAt: integer("created_at", { mode: "timestamp" })
+			.notNull()
+			.default(sql`(unixepoch())`),
+	},
+	(table) => [index("nutrition_goal_user_idx").on(table.userId)],
+);
+
+export const nutritionGoalRelations = relations(nutritionGoal, ({ one }) => ({
+	user: one(user, {
+		fields: [nutritionGoal.userId],
+		references: [user.id],
+	}),
+}));
+
+/**
+ * Logged nutrition intake from manifest consume / cook flows.
+ */
+export const nutritionIntake = sqliteTable(
+	"nutrition_intake",
+	{
+		id: text("id")
+			.primaryKey()
+			.$defaultFn(() => crypto.randomUUID()),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id, { onDelete: "cascade" }),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		planId: text("plan_id"),
+		entryId: text("entry_id"),
+		mealId: text("meal_id").references(() => meal.id, {
+			onDelete: "set null",
+		}),
+		/** UTC calendar date YYYY-MM-DD. */
+		manifestDate: text("manifest_date").notNull(),
+		slotType: text("slot_type"),
+		servings: real("servings").notNull(),
+		energyKcal: real("energy_kcal").notNull(),
+		proteinG: real("protein_g").notNull(),
+		carbsG: real("carbs_g").notNull(),
+		fatG: real("fat_g").notNull(),
+		coverage: real("coverage").notNull(),
+		source: text("source").notNull(),
+		confidence: real("confidence").notNull(),
+		/** 0 = unverified, 1 = verified (USDA / user-confirmed). */
+		verified: integer("verified").notNull().default(0),
+		occurredAt: integer("occurred_at", { mode: "timestamp" }).notNull(),
+		kitchenEventId: text("kitchen_event_id").references(() => kitchenEvent.id, {
+			onDelete: "set null",
+		}),
+		createdAt: integer("created_at", { mode: "timestamp" })
+			.notNull()
+			.default(sql`(unixepoch())`),
+	},
+	(table) => [
+		index("nutrition_intake_user_date_idx").on(
+			table.userId,
+			table.manifestDate,
+		),
+		index("nutrition_intake_org_date_idx").on(
+			table.organizationId,
+			table.manifestDate,
+		),
+	],
+);
+
+export const nutritionIntakeRelations = relations(
+	nutritionIntake,
+	({ one }) => ({
+		organization: one(organization, {
+			fields: [nutritionIntake.organizationId],
+			references: [organization.id],
+		}),
+		user: one(user, {
+			fields: [nutritionIntake.userId],
+			references: [user.id],
+		}),
+		meal: one(meal, {
+			fields: [nutritionIntake.mealId],
+			references: [meal.id],
+		}),
+		kitchenEvent: one(kitchenEvent, {
+			fields: [nutritionIntake.kitchenEventId],
+			references: [kitchenEvent.id],
+		}),
+	}),
 );
 
 export {

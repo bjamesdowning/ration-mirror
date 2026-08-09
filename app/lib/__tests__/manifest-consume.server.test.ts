@@ -32,6 +32,16 @@ vi.mock("../kitchen-events.server", () => ({
 	buildManifestConsumedEvent: (input: unknown) => input,
 }));
 
+vi.mock("../feature-flags/flags.server", () => ({
+	isFeatureEnabled: (...args: unknown[]) => isFeatureEnabled(...args),
+}));
+
+vi.mock("../nutrition/persist.server", () => ({
+	buildMinimalFlagContext: () => ({}),
+}));
+
+const isFeatureEnabled = vi.fn();
+
 const planId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const entryId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 const mealId = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
@@ -41,6 +51,7 @@ let selectCall = 0;
 
 const updateWhere = vi.fn().mockResolvedValue(undefined);
 const updateSet = vi.fn().mockReturnValue({ where: updateWhere });
+const insertValues = vi.fn().mockReturnValue({ kind: "nutrition-intake" });
 const batch = vi.fn().mockResolvedValue(undefined);
 const deductionStmt = { kind: "cargo-deduction" };
 
@@ -67,12 +78,31 @@ vi.mock("drizzle-orm/d1", () => ({
 						servingsOverride: null,
 						mealServings: 2,
 						mealName: "Pasta",
+						mealNutrition: {
+							perServing: {
+								energyKcal: 500,
+								proteinG: 20,
+								fatG: 10,
+								carbG: 60,
+								fiberG: 5,
+								sugarG: 2,
+								satFatG: 3,
+								sodiumMg: 400,
+								saltG: 1,
+							},
+							coverage: 1,
+							attributions: [],
+							computedAt: "2026-07-30T00:00:00.000Z",
+						},
 					},
 				]),
 			};
 		}),
 		update: vi.fn(() => ({
 			set: updateSet,
+		})),
+		insert: vi.fn(() => ({
+			values: insertValues,
 		})),
 		batch,
 	})),
@@ -89,8 +119,11 @@ describe("consumeManifestEntries", () => {
 		bumpReadinessCacheVersions.mockReset();
 		buildCargoDeductionStatements.mockResolvedValue([deductionStmt]);
 		bumpReadinessCacheVersions.mockResolvedValue(undefined);
+		isFeatureEnabled.mockReset();
+		isFeatureEnabled.mockResolvedValue(false);
 		updateSet.mockClear();
 		updateWhere.mockClear();
+		insertValues.mockClear();
 		batch.mockClear();
 		vi.resetModules();
 	});
@@ -159,5 +192,112 @@ describe("consumeManifestEntries", () => {
 			skipApply: true,
 		});
 		expect(batch).toHaveBeenCalledTimes(1);
+	});
+
+	it("logs nutrition intake when nutrition-manifest is on and portions set", async () => {
+		isFeatureEnabled.mockResolvedValue(true);
+		getMealMissingIngredients.mockResolvedValue([]);
+		cookMeal.mockResolvedValue({
+			deductions: [{ cargoId: "cargo-1", quantity: 1 }],
+		});
+
+		const { consumeManifestEntries } = await import("../manifest.server");
+		const result = await consumeManifestEntries(env, orgId, planId, [entryId], {
+			userId: "user-1",
+			portions: [{ entryId, servings: 1.5 }],
+		});
+
+		expect(result.consumed).toBe(1);
+		expect(isFeatureEnabled).toHaveBeenCalledWith(
+			env,
+			"nutrition-manifest",
+			expect.anything(),
+		);
+		expect(insertValues).toHaveBeenCalledWith(
+			expect.objectContaining({
+				entryId,
+				servings: 1.5,
+				energyKcal: 750,
+				proteinG: 30,
+				carbsG: 90,
+				fatG: 15,
+				userId: "user-1",
+				manifestDate: "2026-07-30",
+			}),
+		);
+	});
+
+	it("skips intake when logNutrition is false", async () => {
+		isFeatureEnabled.mockResolvedValue(true);
+		getMealMissingIngredients.mockResolvedValue([]);
+		cookMeal.mockResolvedValue({
+			deductions: [{ cargoId: "cargo-1", quantity: 1 }],
+		});
+
+		const { consumeManifestEntries } = await import("../manifest.server");
+		await consumeManifestEntries(env, orgId, planId, [entryId], {
+			userId: "user-1",
+			logNutrition: false,
+			portions: [{ entryId, servings: 1 }],
+		});
+
+		expect(insertValues).not.toHaveBeenCalled();
+	});
+
+	it("skips intake when nutrition-manifest flag is off (legacy consume)", async () => {
+		isFeatureEnabled.mockResolvedValue(false);
+		getMealMissingIngredients.mockResolvedValue([]);
+		cookMeal.mockResolvedValue({
+			deductions: [{ cargoId: "cargo-1", quantity: 1 }],
+		});
+
+		const { consumeManifestEntries } = await import("../manifest.server");
+		const result = await consumeManifestEntries(env, orgId, planId, [entryId], {
+			userId: "user-1",
+			portions: [{ entryId, servings: 1 }],
+		});
+
+		expect(result.consumed).toBe(1);
+		expect(insertValues).not.toHaveBeenCalled();
+	});
+
+	it("skips intake on mobile when portions and logNutrition omitted (iOS 1.3.17)", async () => {
+		isFeatureEnabled.mockResolvedValue(true);
+		getMealMissingIngredients.mockResolvedValue([]);
+		cookMeal.mockResolvedValue({
+			deductions: [{ cargoId: "cargo-1", quantity: 1 }],
+		});
+
+		const { consumeManifestEntries } = await import("../manifest.server");
+		const result = await consumeManifestEntries(env, orgId, planId, [entryId], {
+			userId: "user-1",
+			source: "mobile",
+		});
+
+		expect(result.consumed).toBe(1);
+		expect(insertValues).not.toHaveBeenCalled();
+	});
+
+	it("logs planned meal servings when portions omitted on web", async () => {
+		isFeatureEnabled.mockResolvedValue(true);
+		getMealMissingIngredients.mockResolvedValue([]);
+		cookMeal.mockResolvedValue({
+			deductions: [{ cargoId: "cargo-1", quantity: 1 }],
+		});
+
+		const { consumeManifestEntries } = await import("../manifest.server");
+		await consumeManifestEntries(env, orgId, planId, [entryId], {
+			userId: "user-1",
+			source: "web",
+		});
+
+		// mealServings = 2 → 500 kcal × 2
+		expect(insertValues).toHaveBeenCalledWith(
+			expect.objectContaining({
+				servings: 2,
+				energyKcal: 1000,
+				userId: "user-1",
+			}),
+		);
 	});
 });

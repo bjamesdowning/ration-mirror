@@ -32,6 +32,11 @@ export const manifestConsumedPayloadSchema = z.object({
 	deductions: z.array(deductedItemSchema).default([]),
 	partialCook: z.boolean().optional(),
 	source: kitchenEventSourceSchema.optional(),
+	/** Logged intake energy when nutrition-manifest plate-up ran. */
+	energyKcal: z.number().optional(),
+	portionServings: z.number().optional(),
+	manifestDate: z.string().optional(),
+	verified: z.boolean().optional(),
 });
 export type ManifestConsumedPayload = z.infer<
 	typeof manifestConsumedPayloadSchema

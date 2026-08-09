@@ -52,6 +52,13 @@ plan and adjust it around real life.
 Supply lists are auto-generated from planned meals and current Cargo so you only buy
 the delta. After shopping, items dock back into Cargo.
 
+### Nutrition (feature-flagged)
+Optional USDA-backed nutrition on cargo and recipes, Manifest day totals from Eat
+(plate-up), personal goals with explicit consent, and labelled AI estimates only on
+AI ingest after a USDA miss. Defaults off; not medical advice. Intake history is
+retained about 13 months. MCP tools: \`get_nutrition_summary\`, \`set_nutrition_goal\`,
+\`clear_nutrition_goal\`.
+
 ## Pricing
 
 - **Free:** ${opts.maxInventoryItems} inventory items, ${opts.maxMeals} recipes, ${opts.maxGroceryLists} supply lists, 1 owned group.

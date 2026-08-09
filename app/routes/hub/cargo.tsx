@@ -190,7 +190,10 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 
 // --- ACTION ---
 export async function action({ request, context }: Route.ActionArgs) {
-	const { groupId } = await requireActiveGroup(context, request);
+	const {
+		groupId,
+		session: { user },
+	} = await requireActiveGroup(context, request);
 
 	const formData = await request.formData();
 	const intent = formData.get("intent");
@@ -259,6 +262,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 					waitUntil: context.cloudflare.ctx.waitUntil.bind(
 						context.cloudflare.ctx,
 					),
+					userId: user.id,
 				},
 			);
 		} catch (error) {
@@ -340,7 +344,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 		const expiresAtValue = formData.get("expiresAt");
 
 		// Construct object for validation
-		const rawData = {
+		const rawData: Record<string, unknown> = {
 			name: formData.get("name"),
 			quantity: formData.get("quantity"),
 			unit: formData.get("unit"),
@@ -349,6 +353,15 @@ export async function action({ request, context }: Route.ActionArgs) {
 			expiresAt:
 				expiresAtValue === "" || expiresAtValue == null ? null : expiresAtValue,
 		};
+
+		const nutritionRaw = formData.get("nutrition");
+		if (typeof nutritionRaw === "string" && nutritionRaw.length > 0) {
+			try {
+				rawData.nutrition = JSON.parse(nutritionRaw);
+			} catch {
+				return { success: false, error: "Invalid nutrition payload" };
+			}
+		}
 
 		const result = CargoItemSchema.safeParse(rawData);
 
@@ -361,6 +374,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 			groupId,
 			itemId,
 			result.data,
+			{ userId: user.id },
 		);
 		if (!updated) {
 			return { success: false, error: "Item not found or unauthorized" };

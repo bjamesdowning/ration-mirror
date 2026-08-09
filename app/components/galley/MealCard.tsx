@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useFetcher } from "react-router";
+import { useFetcher, useRouteLoaderData } from "react-router";
 import { StandardCard } from "~/components/common/StandardCard";
 import { MealEditModal } from "~/components/galley/MealEditModal";
 import { CheckIcon, PlusIcon } from "~/components/icons/PageIcons";
@@ -7,6 +7,7 @@ import { AllergenWarningBadge } from "~/components/shared/AllergenWarningBadge";
 import { TagChip } from "~/components/shared/TagChip";
 import type { meal } from "~/db/schema";
 import { type AllergenSlug, detectAllergens } from "~/lib/allergens";
+import type { MealNutritionSnapshot } from "~/lib/nutrition/types";
 import type { TagRecord } from "~/lib/tags";
 import { toTagRecords } from "~/lib/tags";
 import type { MealCustomFields } from "~/lib/types";
@@ -32,6 +33,7 @@ interface MealCardProps {
 		}[];
 		equipment?: string[] | null;
 		customFields?: string | MealCustomFields | null;
+		nutrition?: MealNutritionSnapshot | null;
 	};
 	availableIngredients?: InventoryItem[];
 	isActive?: boolean;
@@ -91,6 +93,12 @@ export function MealCard({
 		setLocalActive(next);
 		// Note: Parent is already notified optimistically in handleToggleActive
 	}, [toggleFetcher.data, meal.id]);
+
+	const rootData = useRouteLoaderData("root") as
+		| { clientFlags?: { nutritionEngine?: boolean } }
+		| undefined;
+	const nutritionEngine = rootData?.clientFlags?.nutritionEngine === true;
+	const mealKcal = meal.nutrition?.perServing?.energyKcal;
 
 	const displayTags = toTagRecords(meal.tags);
 
@@ -230,6 +238,17 @@ export function MealCard({
 						<div className="text-sm text-muted">
 							<div>Servings: {meal.servings}</div>
 							<div>Ingredients: {meal.ingredients?.length || 0}</div>
+							{nutritionEngine && (
+								<div className="text-xs mt-1">
+									{mealKcal != null && Number.isFinite(mealKcal) ? (
+										<span className="text-carbon">
+											{Math.round(mealKcal)} kcal / serving
+										</span>
+									) : (
+										<span>No nutrition matched</span>
+									)}
+								</div>
+							)}
 						</div>
 					</div>
 				</StandardCard>

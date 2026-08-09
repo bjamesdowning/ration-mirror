@@ -477,8 +477,64 @@ export function buildMobileOpenApiDocument(baseUrl: string) {
 			"/api/mobile/v1/manifest/consume": {
 				post: {
 					summary: "Mark manifest entries as consumed",
+					description:
+						"Optional portions[] and logNutrition when nutrition-manifest is enabled (additive; omit for legacy clients).",
 					security: [{ bearerAuth: [] }],
 					responses: { "200": { description: "Consume result" } },
+				},
+			},
+			"/api/mobile/v1/nutrition/summary": {
+				get: {
+					summary: "Nutrition day totals and active goal",
+					description:
+						"Requires nutrition-goals or nutrition-manifest. Query: from, to (YYYY-MM-DD).",
+					security: [{ bearerAuth: [] }],
+					parameters: [
+						{
+							name: "from",
+							in: "query",
+							required: true,
+							schema: { type: "string", format: "date" },
+						},
+						{
+							name: "to",
+							in: "query",
+							required: true,
+							schema: { type: "string", format: "date" },
+						},
+					],
+					responses: {
+						"200": { description: "Summary with days[] and optional goal" },
+						"403": { description: "Feature disabled" },
+					},
+				},
+			},
+			"/api/mobile/v1/nutrition/goals": {
+				get: {
+					summary: "Active nutrition goal",
+					description: "Requires nutrition-goals.",
+					security: [{ bearerAuth: [] }],
+					responses: {
+						"200": { description: "Goal or null" },
+						"403": { description: "Feature disabled" },
+					},
+				},
+				post: {
+					summary: "Upsert versioned nutrition goal",
+					description: "Requires nutrition-goals and consentAt (GDPR Art. 9).",
+					security: [{ bearerAuth: [] }],
+					responses: {
+						"200": { description: "Created/updated goal version" },
+						"403": { description: "Feature disabled" },
+					},
+				},
+				delete: {
+					summary: "Clear open-ended nutrition goals",
+					security: [{ bearerAuth: [] }],
+					responses: {
+						"200": { description: "Cleared" },
+						"403": { description: "Feature disabled" },
+					},
 				},
 			},
 			"/api/mobile/v1/cargo/batch": {

@@ -42,4 +42,13 @@ describe("buildFlagContext", () => {
 		});
 		expect(context.plan).toBe("crew_member");
 	});
+
+	it("parses X-Ration-Client into clientPlatform and clientVersion", () => {
+		const request = new Request("https://ration.mayutic.com/", {
+			headers: { "X-Ration-Client": "ios/1.3.17" },
+		});
+		const context = buildFlagContext(request, { RATION_ENV: "production" });
+		expect(context.clientPlatform).toBe("ios");
+		expect(context.clientVersion).toBe("1.3.17");
+	});
 });

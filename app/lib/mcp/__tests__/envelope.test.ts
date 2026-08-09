@@ -84,6 +84,22 @@ describe("mapErrorToEnvelope", () => {
 		expect(envelope.error.recoveryHint).toBeTruthy();
 	});
 
+	it("maps FEATURE_DISABLED data() to feature_disabled", () => {
+		const envelope = mapErrorToEnvelope("get_nutrition_summary", {
+			type: "DataWithResponseInit",
+			data: {
+				error: "This feature is temporarily unavailable.",
+				code: "FEATURE_DISABLED",
+			},
+			init: { status: 403 },
+		});
+		expect(envelope.ok).toBe(false);
+		if (envelope.ok) return;
+		expect(envelope.error.code).toBe("feature_disabled");
+		expect(envelope.error.details).toEqual({ code: "FEATURE_DISABLED" });
+		expect(envelope.error.recoveryHint).toBeTruthy();
+	});
+
 	it("maps missing linked cargo to not_found with safe message", () => {
 		const envelope = mapErrorToEnvelope(
 			"consume_meal",

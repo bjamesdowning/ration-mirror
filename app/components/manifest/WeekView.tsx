@@ -1,6 +1,7 @@
 import type { AllergenSlug } from "~/lib/allergens";
 import type { MealPlanEntryWithMeal } from "~/lib/manifest.server";
 import { getDayName } from "~/lib/manifest-dates";
+import { formatConsumedVsGoalKcal } from "~/lib/nutrition/day-totals";
 import type { SlotType } from "~/lib/schemas/manifest";
 import { SLOT_TYPES } from "~/lib/schemas/manifest";
 import { ManifestDaySupplyToggle } from "./ManifestDaySupplyToggle";
@@ -25,6 +26,10 @@ interface WeekViewProps {
 	supplyDayInclusion?: Record<string, boolean>;
 	onToggleSupplyInclusion?: (date: string) => void;
 	togglingSupplyDate?: string | null;
+	/** Per-date consumed kcal when nutrition-manifest is on. */
+	dayConsumedKcal?: Record<string, number>;
+	/** Active daily energy goal when nutrition-goals is on. */
+	goalEnergyKcal?: number | null;
 }
 
 export function WeekView({
@@ -46,6 +51,8 @@ export function WeekView({
 	supplyDayInclusion = {},
 	onToggleSupplyInclusion,
 	togglingSupplyDate = null,
+	dayConsumedKcal,
+	goalEnergyKcal = null,
 }: WeekViewProps) {
 	const slots = showSnackSlot
 		? SLOT_TYPES
@@ -105,6 +112,14 @@ export function WeekView({
 								{totalCount > 0 && (
 									<p className="text-[9px] font-mono mt-0.5 leading-none">
 										{allConsumed ? "✓ done" : `${consumedCount}/${totalCount}`}
+									</p>
+								)}
+								{goalEnergyKcal != null && dayConsumedKcal?.[date] != null && (
+									<p className="text-[9px] font-mono mt-0.5 leading-none opacity-90">
+										{formatConsumedVsGoalKcal(
+											dayConsumedKcal[date] ?? 0,
+											goalEnergyKcal,
+										)}
 									</p>
 								)}
 							</button>

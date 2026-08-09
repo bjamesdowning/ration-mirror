@@ -12,10 +12,14 @@ Each generation run costs **2 AI credits** from the **organization** pool.
 
 Like scan and plan-week, generation may return **queued / processing** while the model runs. The UI polls until recipes are ready or the job fails.
 
+## Nutrition
+
+When nutrition is enabled, generated meals may carry nutrient snapshots: **USDA** first, then a labelled **Estimated** fill only if nutrition AI estimate is on for AI ingest and USDA misses. Edit before cooking if values look wrong—see *Nutrition overview* and *Editing nutrition*.
+
 ## What you should do
 
 - Review AI recipes before cooking—treat them as **suggestions**.
-- Edit names, amounts, or steps to match how you cook.
+- Edit names, amounts, steps, or nutrition to match how you cook.
 - If something looks unsafe given your allergies, **do not use it**—fix ingredients or discard the recipe.
 
 ## Not available via MCP

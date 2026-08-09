@@ -67,7 +67,8 @@ export type ToolErrorCode =
 	| "idempotency_replay"
 	| "internal_error"
 	| "insufficient_cargo"
-	| "timeout";
+	| "timeout"
+	| "feature_disabled";
 
 /** Wraps an envelope into the MCP `content` array shape that `server.tool` returns. */
 export function toolReply<T>(
@@ -125,6 +126,23 @@ export function invalidInput(
 	return err(tool, "invalid_input", message, extra);
 }
 
+/**
+ * Flag-gated feature is off (mirrors HTTP FEATURE_DISABLED).
+ * Prefer this over throwing React Router `data()` from MCP handlers.
+ */
+export function featureDisabled(
+	tool: string,
+	message: string,
+	recoveryHint?: string,
+): ToolEnvelope<never> {
+	return err(tool, "feature_disabled", message, {
+		details: { code: "FEATURE_DISABLED" },
+		recoveryHint:
+			recoveryHint ??
+			"This nutrition feature is temporarily unavailable. Retry later or use non-nutrition kitchen tools.",
+	});
+}
+
 /** Trim Zod failures to field keys and first message per field (no formErrors blob). */
 export function zodValidationDetails(
 	error: z.ZodError,
@@ -138,6 +156,19 @@ export function zodValidationDetails(
 		}
 	}
 	return details;
+}
+
+function isDataWithResponseInit(error: unknown): error is {
+	type: string;
+	data: unknown;
+	init?: { status?: number };
+} {
+	return (
+		error !== null &&
+		typeof error === "object" &&
+		"type" in error &&
+		(error as { type: string }).type === "DataWithResponseInit"
+	);
 }
 
 /**
@@ -164,6 +195,20 @@ export function mapErrorToEnvelope(
 				: "Validation failed.",
 			{ details },
 		);
+	}
+
+	if (isDataWithResponseInit(error)) {
+		const payload =
+			error.data !== null && typeof error.data === "object"
+				? (error.data as Record<string, unknown>)
+				: null;
+		if (payload?.code === "FEATURE_DISABLED") {
+			const message =
+				typeof payload.error === "string"
+					? payload.error
+					: "This feature is temporarily unavailable.";
+			return featureDisabled(tool, message);
+		}
 	}
 
 	if (error instanceof CapacityExceededError) {

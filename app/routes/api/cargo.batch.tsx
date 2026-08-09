@@ -40,7 +40,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 			);
 		}
 
-		const { items } = result.data;
+		const { items, allowAiNutritionEstimate } = result.data;
 		const ingestItems: IngestItem[] = items.map((it) => ({
 			name: it.name,
 			quantity: it.quantity,
@@ -49,6 +49,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 			tags: it.tags,
 			expiresAt: it.expiresAt,
 			mergeTargetId: it.mergeTargetId,
+			nutrition: it.nutrition ?? undefined,
 		}));
 
 		const ingestResults = await ingestCargoItems(
@@ -60,6 +61,8 @@ export async function action({ request, context }: Route.ActionArgs) {
 				waitUntil: context.cloudflare.ctx.waitUntil.bind(
 					context.cloudflare.ctx,
 				),
+				userId: session.user.id,
+				allowAiNutritionEstimate: allowAiNutritionEstimate === true,
 			},
 		);
 

@@ -135,6 +135,27 @@ export const HELP_ARTICLES: ReadonlyArray<HelpArticleMeta> = [
 		section: "kitchen",
 	},
 	{
+		slug: "24-nutrition-overview",
+		title: "Nutrition overview",
+		summary:
+			"USDA match, blank on miss, AI estimates, confidence, and where nutrition appears.",
+		section: "kitchen",
+	},
+	{
+		slug: "25-nutrition-goals-and-tracking",
+		title: "Nutrition goals and tracking",
+		summary:
+			"Goals, Manifest Eat plate-up, calendar retention, and Flight Recorder.",
+		section: "kitchen",
+	},
+	{
+		slug: "26-editing-nutrition",
+		title: "Editing nutrition",
+		summary:
+			"Edit on scan review or Cargo later; user overrides and verified labels.",
+		section: "kitchen",
+	},
+	{
 		slug: "20-credits-explained",
 		title: "AI credits explained",
 		summary: "What spends credits and what does not.",

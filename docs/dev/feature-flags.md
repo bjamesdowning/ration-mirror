@@ -54,8 +54,8 @@ Use the **`/add-feature-flag`** Cursor command for the full checklist. Summary:
 
 ### Deploy order
 
-1. Merge code with flag **disabled** in Flagship → no user impact.
-2. Create/configure dashboard flag if not done before merge.
+1. Push code with flag **disabled** in Flagship → no user impact (`/long-commit` enforces this for solo trunk ships).
+2. Create/configure dashboard flag if not done before push.
 3. Enable for the right context (`userId` for authenticated surfaces; environment/staging or percent rollout for signed-out surfaces) → percent rollout → 100%.
 4. When stable: remove code path → deploy → delete flag from dashboard.
 
@@ -70,6 +70,7 @@ Use the **`/add-feature-flag`** Cursor command for the full checklist. Summary:
 - `.gitlab-ci.yml` does **not** call Flagship. Flags are toggled in the Cloudflare dashboard.
 - Pushing to `main` deploys code via Workers Builds; Flagship controls exposure independently.
 - Ship flag-gated code with the dashboard flag **off** first.
+- Solo trunk workflow: `/long-commit` classifies the change, requires Flagship for user-visible work (via `/add-feature-flag` when missing), runs local quality gates, then commits/pushes. Dogfood by enabling your `userId` in Flagship after deploy — not via a full staging Worker or MR preview DB.
 
 ## Security
 
@@ -118,6 +119,30 @@ Permanent boolean kill switches for billed AI pipelines. Registry `defaultEnable
 | `ai-plan-week` | `aiPlanWeek` | `submitPlanWeek` |
 
 **Operator matrix:** `ai-scan-receipt` off kills Cargo and Dock AI spend; `ai-dock-from-receipt` off leaves Cargo scan available. Asserts throw **403** + `FEATURE_DISABLED` before credit debit. Mobile bootstrap: `GET /api/mobile/v1/session` returns `clientFlags`. Emergency bulk kill: `FEATURE_FLAG_OVERRIDES` JSON on the `ration` Worker, e.g. `{"ai-scan-receipt":false,"ai-import-url":false,...}`.
+
+## Nutrition flags (F0 spine — registry only)
+
+| Flag key | Client key | Purpose |
+|----------|------------|---------|
+| `nutrition-engine` | `nutritionEngine` | USDA resolve, recipe/cargo snapshots, Galley panel |
+| `nutrition-ai-estimate` | `nutritionAiEstimate` | AI nutrient fill on AI ingest paths after USDA miss |
+| `nutrition-manifest` | `nutritionManifest` | Manifest daily totals / intake |
+| `nutrition-goals` | `nutritionGoals` | Personal goals and vs-goal views |
+
+All default **off**. Create matching Flagship flags before enabling. Seed local nutrition D1 with `bun run db:nutrition:seed:local`.
+
+### Production dogfood (nutrition)
+
+For operator / dogfood rollout in **production**, enable nutrition flags only via Flagship **userId allowlist** targeting (your test accounts). Do **not** use `FEATURE_FLAG_OVERRIDES` to turn nutrition flags **on** in production—that secret is for emergency **kill** (`false`) or local/dev overrides, not production enablement. Keep registry `defaultEnabled: false` and Flagship default variation off until a deliberate wider rollout.
+
+**Rollout phases**
+
+1. **Dark ship** — Deploy with registry defaults `false`. Create Flagship flags `nutrition-engine`, `nutrition-ai-estimate`, `nutrition-manifest`, `nutrition-goals` with default variation **off**. Apply main D1 migration `0041_*`; seed remote `NUTRITION_DB` if not already. App Store users see zero nutrition behavior.
+2. **Operator dogfood** — For each nutrition flag: Flagship rule `userId` equals your Better Auth user id → variation `true`. Sign in on **web** → `clientFlags` true. Prefer Manifest Eat / plate-up on web until a nutrition-aware iOS build ships. MCP/Copilot use the same `userId` context.
+3. **iOS binary** — `ClientFlags` includes the four nutrition keys (fail-closed `== true`). Submit App Review with Flagship still userId-only (add the review account’s `userId` if reviewers must see gated UI). Optional: combine with `clientVersion` / `clientPlatform` from `X-Ration-Client` in Flagship rules so intake side effects skip old iOS.
+4. **Broaden** — Percent rollout on `userId` → 100%, or flip default variation on. Emergency: Flagship disable or `FEATURE_FLAG_OVERRIDES` kill (`false` only).
+
+Consent / Art. 9 notes: [nutrition-dpia-notes.md](nutrition-dpia-notes.md). After help article changes, sync Copilot AI Search.
 
 ## Example: `app-review-login` (shipped)
 

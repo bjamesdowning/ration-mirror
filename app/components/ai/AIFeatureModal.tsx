@@ -95,6 +95,11 @@ export function AIFeatureModal({
 export interface AIFeatureIntroViewProps {
 	/** Short description of what the feature does */
 	description: string;
+	/**
+	 * Optional extra line (e.g. nutrition USDA/estimate hint when nutritionEngine is on).
+	 * Omitted when the flag is off — keep intros graceful.
+	 */
+	hint?: string;
 	/** Credit cost per use (e.g. 2) */
 	cost: number;
 	/** Label for the cost line, e.g. "per scan", "per import", "per generation" */
@@ -110,6 +115,7 @@ export interface AIFeatureIntroViewProps {
 
 export function AIFeatureIntroView({
 	description,
+	hint,
 	cost,
 	costLabel,
 	credits,
@@ -125,6 +131,7 @@ export function AIFeatureIntroView({
 				<p className="text-carbon/80 dark:text-white/80 text-sm">
 					{description}
 				</p>
+				{hint ? <p className="text-xs text-muted">{hint}</p> : null}
 				<p className="text-xs text-muted">
 					Uses {cost} credit{cost !== 1 ? "s" : ""} {costLabel}.
 				</p>

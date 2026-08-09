@@ -31,7 +31,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 		}
 
 		const body = await request.json();
-		const { entryIds, confirmInsufficient } =
+		const { entryIds, confirmInsufficient, logNutrition, portions } =
 			ConsumeEntriesRequestSchema.parse(body);
 		const plan = await ensureMealPlan(
 			context.cloudflare.env.DB,
@@ -42,7 +42,13 @@ export async function action({ request, context }: Route.ActionArgs) {
 			organizationId,
 			plan.id,
 			entryIds,
-			{ confirmInsufficient, userId, source: "mobile" },
+			{
+				confirmInsufficient,
+				logNutrition,
+				portions,
+				userId,
+				source: "mobile",
+			},
 		);
 
 		if (result.requiresConfirmation) {

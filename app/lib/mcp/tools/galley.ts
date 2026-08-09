@@ -36,6 +36,7 @@ export function createGalleyToolDefs(env: McpToolsEnv) {
 					ctx.organizationId,
 					parsed,
 					env,
+					{ userId: ctx.userId },
 				);
 				return ok("create_meal", {
 					id: created?.id,
@@ -44,6 +45,7 @@ export function createGalleyToolDefs(env: McpToolsEnv) {
 					ingredientCount: created?.ingredients.length ?? 0,
 					tags: created?.tags ?? [],
 					directions: parseDirections(created?.directions ?? undefined),
+					...(created?.nutrition ? { nutrition: created.nutrition } : {}),
 				});
 			},
 		}),
@@ -65,6 +67,7 @@ export function createGalleyToolDefs(env: McpToolsEnv) {
 					ctx.organizationId,
 					id,
 					mealInput,
+					{ env, userId: ctx.userId },
 				);
 				if (!updated) {
 					return err("update_meal", "not_found", "Meal not found.");
@@ -82,6 +85,7 @@ export function createGalleyToolDefs(env: McpToolsEnv) {
 						unit: i.unit,
 					})),
 					tags: updated.tags,
+					...(updated.nutrition ? { nutrition: updated.nutrition } : {}),
 				});
 			},
 		}),

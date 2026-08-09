@@ -16,9 +16,14 @@ Scanning is **asynchronous**: the image is queued, analyzed, and matched to your
 
 If the operation fails after credits were reserved, Ration’s ledger is designed to **refund** the charge—see *Reliability and async jobs* for the general pattern. If your balance looks wrong after a failed scan, refresh the hub or open **Pricing / credits** and contact support if it persists.
 
+## Nutrition on review
+
+When nutrition is enabled for your account, scan **review** can show proposed energy and macros per line (USDA match first; labelled AI estimate only when that path is on and USDA misses). Edit nutrients on the review screen before adding to Cargo—see *Editing nutrition* and *Nutrition overview*.
+
 ## Tips
 
 - Use good lighting and a full receipt in frame.
 - If recognition is wrong, edit quantities or merge with existing Cargo after ingest.
+- Prefer correcting nutrition on review so pantry rows start accurate.
 
 If credit amounts change in the app or pricing page, **those values override** this article.

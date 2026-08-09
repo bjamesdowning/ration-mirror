@@ -15,13 +15,16 @@ import {
 	useRef,
 	useState,
 } from "react";
-import { useFetcher, useNavigate } from "react-router";
+import { useFetcher, useNavigate, useRouteLoaderData } from "react-router";
 import {
 	AIFeatureIntroView,
 	AIFeatureModal,
 } from "~/components/ai/AIFeatureModal";
 import { useQuantityFormatter } from "~/components/shared/DisplayQuantity";
 import { MAX_POLL_ATTEMPTS, startBackoffPollLoop } from "~/lib/polling";
+
+const NUTRITION_INGEST_HINT =
+	"Nutrition (when available): USDA match first; AI estimates are labelled—edit before saving.";
 
 interface GeneratedRecipe {
 	id?: string;
@@ -215,6 +218,10 @@ export const GenerateMealButton = forwardRef<
 	GenerateMealButtonHandle,
 	GenerateMealButtonProps
 >(({ className, credits, costPerGenerate = 2 }, ref) => {
+	const rootData = useRouteLoaderData("root") as
+		| { clientFlags?: { nutritionEngine?: boolean } }
+		| undefined;
+	const nutritionEngine = rootData?.clientFlags?.nutritionEngine === true;
 	const [showModal, setShowModal] = useState(false);
 	const [view, setView] = useState<"intro" | "form">("intro");
 	const [customization, setCustomization] = useState("");
@@ -451,6 +458,7 @@ export const GenerateMealButton = forwardRef<
 					{view === "intro" ? (
 						<AIFeatureIntroView
 							description="AI uses your current Cargo to suggest 3 recipes you can make with what you have—no guessing what's in stock."
+							hint={nutritionEngine ? NUTRITION_INGEST_HINT : undefined}
 							cost={costPerGenerate}
 							costLabel="per generation"
 							credits={typeof credits === "number" ? credits : 0}

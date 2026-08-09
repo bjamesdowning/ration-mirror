@@ -52,9 +52,22 @@ export const EntryIdParamSchema = z.object({
 	entryId: z.string().uuid(),
 });
 
+export const ConsumeEntryPortionSchema = z.object({
+	entryId: z.string().uuid(),
+	/** Portion of the meal logged as intake; 0 skips intake for that entry. */
+	servings: z.coerce.number().min(0).max(100),
+});
+
 export const ConsumeEntriesRequestSchema = z.object({
 	entryIds: z.array(z.string().uuid()).min(1).max(50),
 	confirmInsufficient: z.boolean().optional(),
+	/**
+	 * When nutrition-manifest is on, defaults to true. Set false to consume
+	 * without writing nutrition_intake ("Skip calorie log").
+	 */
+	logNutrition: z.boolean().optional(),
+	/** Per-entry plate-up portions (defaults to 1.0 when omitted). */
+	portions: z.array(ConsumeEntryPortionSchema).max(50).optional(),
 });
 
 /**

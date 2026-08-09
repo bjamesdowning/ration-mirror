@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { ITEM_DOMAINS } from "../domain";
+import { NutritionSnapshotSchema } from "./nutrition";
 import { UnitSchema } from "./units";
 
 /**
@@ -16,6 +17,8 @@ export const ScanResultItemSchema = z.object({
 	selected: z.boolean().default(true), // Default to selected for batch add
 	confidence: z.number().min(0).max(1).optional(), // AI confidence score 0-1
 	rawText: z.string().optional(), // Original text from receipt for debugging
+	/** Proposed / user-edited nutrition (nutrition-engine). */
+	nutrition: NutritionSnapshotSchema.nullable().optional(),
 });
 
 export type ScanResultItem = z.infer<typeof ScanResultItemSchema>;
@@ -49,8 +52,15 @@ export const BatchAddCargoSchema = z.object({
 			tags: z.array(z.string()).default([]),
 			expiresAt: z.coerce.date().optional(),
 			mergeTargetId: z.string().uuid().optional(),
+			/** Optional nutrition override / proposed snapshot from scan review. */
+			nutrition: NutritionSnapshotSchema.nullable().optional(),
 		}),
 	),
+	/**
+	 * AI ingest only (receipt image/pdf). When true and nutrition-ai-estimate
+	 * is on, USDA misses may be AI-estimated. Never set for CSV/JSON import.
+	 */
+	allowAiNutritionEstimate: z.boolean().optional(),
 });
 
 export type BatchAddCargoInput = z.infer<typeof BatchAddCargoSchema>;

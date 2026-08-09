@@ -241,6 +241,21 @@ export const COPILOT_TOOL_LABELS: Record<string, CopilotToolLabelSet> = {
 		done: "Updated preferences",
 		error: "Could not update preferences",
 	},
+	get_nutrition_summary: {
+		running: "Loading nutrition summary…",
+		done: "Loaded nutrition summary",
+		error: "Could not load nutrition summary",
+	},
+	set_nutrition_goal: {
+		running: "Saving nutrition goal…",
+		done: "Saved nutrition goal",
+		error: "Could not save nutrition goal",
+	},
+	clear_nutrition_goal: {
+		running: "Clearing nutrition goal…",
+		done: "Cleared nutrition goal",
+		error: "Could not clear nutrition goal",
+	},
 };
 
 export function copilotToolLabel(

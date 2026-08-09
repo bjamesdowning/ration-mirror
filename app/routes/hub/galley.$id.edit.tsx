@@ -73,7 +73,9 @@ export async function action({ request, params, context }: Route.ActionArgs) {
 		}
 
 		const input = MealSchema.parse(inputData);
-		await updateMeal(context.cloudflare.env.DB, groupId, id, input);
+		await updateMeal(context.cloudflare.env.DB, groupId, id, input, {
+			env: context.cloudflare.env,
+		});
 
 		return redirect(`/hub/galley/${id}`);
 	} catch (e) {

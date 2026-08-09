@@ -6,13 +6,16 @@ import {
 	useRef,
 	useState,
 } from "react";
-import { useFetcher, useNavigate } from "react-router";
+import { useFetcher, useNavigate, useRouteLoaderData } from "react-router";
 import {
 	AIFeatureIntroView,
 	AIFeatureModal,
 } from "~/components/ai/AIFeatureModal";
 import { Toast } from "~/components/shell/Toast";
 import { MAX_POLL_ATTEMPTS, startBackoffPollLoop } from "~/lib/polling";
+
+const NUTRITION_INGEST_HINT =
+	"Nutrition (when available): USDA match first; AI estimates are labelled—edit before saving.";
 
 export interface ImportRecipeButtonHandle {
 	open: () => void;
@@ -40,6 +43,10 @@ export const ImportRecipeButton = forwardRef<
 	ImportRecipeButtonHandle,
 	ImportRecipeButtonProps
 >(({ className, credits, costPerImport = 1 }, ref) => {
+	const rootData = useRouteLoaderData("root") as
+		| { clientFlags?: { nutritionEngine?: boolean } }
+		| undefined;
+	const nutritionEngine = rootData?.clientFlags?.nutritionEngine === true;
 	const [showModal, setShowModal] = useState(false);
 	const [url, setUrl] = useState("");
 	const [pageHtml, setPageHtml] = useState("");
@@ -417,6 +424,7 @@ export const ImportRecipeButton = forwardRef<
 					{showIntro ? (
 						<AIFeatureIntroView
 							description="Paste a recipe webpage URL. AI extracts ingredients and steps into your Galley. Use an HTTPS link to a recipe page — not a video. Some sites block automated bots; if that happens, you can paste the page HTML or add the meal manually."
+							hint={nutritionEngine ? NUTRITION_INGEST_HINT : undefined}
 							cost={costPerImport}
 							costLabel="per import"
 							credits={typeof credits === "number" ? credits : 0}

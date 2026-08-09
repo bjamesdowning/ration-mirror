@@ -20,6 +20,9 @@ Use this table for Copilot AI Search source configuration and **golden-question*
 | [17-matching-cookable-meals.md](./17-matching-cookable-meals.md) | Matching cookable meals | Support | What does “meals ready” mean? Strict vs partial match? |
 | [18-hub-dashboard-and-settings.md](./18-hub-dashboard-and-settings.md) | Hub dashboard and settings | Support | Where is pricing? Connected Agents? API keys? How do I delete my account? |
 | [19-kitchen-loop.md](./19-kitchen-loop.md) | The kitchen loop | Both | How do Cargo, Galley, Manifest, and Supply fit together? |
+| [24-nutrition-overview.md](./24-nutrition-overview.md) | Nutrition overview | Both | Where do nutrients come from? USDA vs AI estimate? What is verified? |
+| [25-nutrition-goals-and-tracking.md](./25-nutrition-goals-and-tracking.md) | Nutrition goals and tracking | Support | How do I set calorie goals? What is plate-up / Eat? How long is intake kept? |
+| [26-editing-nutrition.md](./26-editing-nutrition.md) | Editing nutrition | Support | Can I edit nutrition on scan review? How do I fix Cargo macros? |
 | [20-credits-explained.md](./20-credits-explained.md) | AI credits explained | Both | What uses credits? Do MCP calls use credits? Who shares the balance? |
 | [21-buying-credits-and-stripe.md](./21-buying-credits-and-stripe.md) | Buying credits and checkout | Support | Checkout failed; credits missing? Billing portal? How do I cancel? |
 | [22-subscription-tiers.md](./22-subscription-tiers.md) | Free vs Crew Member | Both | Why can’t I invite someone? Free tier limits? Who sets tier for a group? |

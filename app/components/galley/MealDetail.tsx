@@ -1,7 +1,8 @@
 import { ExternalLink, Minus, Plus } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Link, useFetcher } from "react-router";
+import { Link, useFetcher, useRouteLoaderData } from "react-router";
 import { CheckIcon, PlusIcon } from "~/components/icons/PageIcons";
+import { NutritionPanel } from "~/components/nutrition/NutritionPanel";
 import { AllergenWarningBadge } from "~/components/shared/AllergenWarningBadge";
 import { useQuantityFormatter } from "~/components/shared/DisplayQuantity";
 import { PrimitiveLink } from "~/components/shell/PrimitiveLink";
@@ -14,6 +15,7 @@ import { useConfirm } from "~/lib/confirm-context";
 import { galleyPartialCookDescription } from "~/lib/cook-feedback";
 import { log } from "~/lib/logging.client";
 import type { IngredientMatch, MissingIngredient } from "~/lib/matching.server";
+import type { MealNutritionSnapshot } from "~/lib/nutrition/types";
 import { scaleQuantity } from "~/lib/scale";
 import { parseDirections } from "~/lib/schemas/directions";
 import type { MealIngredientInput, MealInput } from "~/lib/schemas/meal";
@@ -28,6 +30,7 @@ interface MealDetailProps {
 	meal: Omit<MealInput, "ingredients"> & {
 		id: string;
 		ingredients: MealDetailIngredient[];
+		nutrition?: MealNutritionSnapshot | null;
 	};
 	isOwner: boolean;
 	/** User's declared allergen slugs — used to display warning banner. */
@@ -342,6 +345,10 @@ export function MealDetail({
 	const ingredientNames = meal.ingredients.map((i) => i.ingredientName);
 	const triggeredAllergens = detectAllergens(ingredientNames, userAllergens);
 	const sourceUrl = meal.customFields?.sourceUrl as string | undefined;
+	const rootData = useRouteLoaderData("root") as
+		| { clientFlags?: { nutritionEngine?: boolean } }
+		| undefined;
+	const nutritionEngine = rootData?.clientFlags?.nutritionEngine === true;
 
 	const mealDescriptionBlock = (
 		<>
@@ -471,6 +478,14 @@ export function MealDetail({
 					<div className="md:hidden space-y-2">{mealDescriptionBlock}</div>
 				</div>
 			</div>
+
+			{nutritionEngine && (
+				<NutritionPanel
+					mode="meal"
+					nutrition={meal.nutrition ?? null}
+					showAttribution
+				/>
+			)}
 
 			{/* Main Content Grid */}
 			<div className="grid grid-cols-1 lg:grid-cols-3 gap-8">

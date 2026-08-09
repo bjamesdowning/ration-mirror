@@ -147,6 +147,7 @@ export default [
 	route("api/cargo/export", "routes/api/cargo.export.ts"),
 	route("api/cargo/batch", "routes/api/cargo.batch.tsx"),
 	route("api/cargo/clear-selections", "routes/api/cargo.clear-selections.ts"),
+	route("api/nutrition/resolve", "routes/api/nutrition.resolve.ts"),
 
 	// API - Galley
 	route("api/galley/export", "routes/api/galley.export.ts"),
@@ -168,6 +169,10 @@ export default [
 	route("api/meal-plans", "routes/api/meal-plans.ts"),
 	route("api/meal-plans/:id", "routes/api/meal-plans.$id.ts"),
 	route("api/meal-plans/:id/entries", "routes/api/meal-plans.$id.entries.ts"),
+	route(
+		"api/meal-plans/:id/planned-dates",
+		"routes/api/meal-plans.$id.planned-dates.ts",
+	),
 	route(
 		"api/meal-plans/:id/entries/consume",
 		"routes/api/meal-plans.$id.entries.consume.ts",
@@ -193,6 +198,10 @@ export default [
 		"api/meal-plans/supply-days/:date",
 		"routes/api/meal-plans.supply-days.$date.ts",
 	),
+
+	// API - Nutrition
+	route("api/nutrition/summary", "routes/api/nutrition.summary.ts"),
+	route("api/nutrition/goals", "routes/api/nutrition.goals.ts"),
 
 	// API - Supply Lists
 	route("api/supply-lists", "routes/api/supply-lists.ts"),
@@ -460,6 +469,14 @@ export default [
 	route(
 		"api/mobile/v1/manifest/supply-days/:date",
 		"routes/api/mobile/v1.manifest.supply-days.$date.ts",
+	),
+	route(
+		"api/mobile/v1/nutrition/summary",
+		"routes/api/mobile/v1.nutrition.summary.ts",
+	),
+	route(
+		"api/mobile/v1/nutrition/goals",
+		"routes/api/mobile/v1.nutrition.goals.ts",
 	),
 	route(
 		"api/mobile/v1/meals/:id/cook",

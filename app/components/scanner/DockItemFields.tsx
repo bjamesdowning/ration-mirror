@@ -1,6 +1,8 @@
 import { useState } from "react";
+import { NutritionPanel } from "~/components/nutrition/NutritionPanel";
 import { TagChipEditor } from "~/components/shared/TagChipEditor";
 import { DOMAIN_LABELS, ITEM_DOMAINS } from "~/lib/domain";
+import type { NutritionSnapshot } from "~/lib/nutrition/types";
 import { SUPPORTED_UNITS, type SupportedUnit } from "~/lib/units";
 
 export type DockItemDraft = {
@@ -10,6 +12,7 @@ export type DockItemDraft = {
 	domain: string;
 	tags?: string[];
 	expiresAt?: string | null;
+	nutrition?: NutritionSnapshot | null;
 };
 
 const inputClassName =
@@ -20,6 +23,8 @@ type DockItemFieldsProps = {
 	onChange: (next: DockItemDraft) => void;
 	idPrefix?: string;
 	tagSuggestions?: string[];
+	/** When true, show editable NutritionPanel (nutrition-engine). */
+	showNutrition?: boolean;
 };
 
 /**
@@ -30,6 +35,7 @@ export function DockItemFields({
 	onChange,
 	idPrefix = "dock",
 	tagSuggestions = [],
+	showNutrition = false,
 }: DockItemFieldsProps) {
 	const [quantityText, setQuantityText] = useState(() =>
 		Number.isFinite(value.quantity) ? String(value.quantity) : "",
@@ -150,6 +156,15 @@ export function DockItemFields({
 					suggestions={tagSuggestions}
 				/>
 			</div>
+
+			{showNutrition && (
+				<NutritionPanel
+					mode="cargo"
+					nutrition={value.nutrition ?? null}
+					editable
+					onChange={(nutrition) => patch({ nutrition })}
+				/>
+			)}
 		</div>
 	);
 }

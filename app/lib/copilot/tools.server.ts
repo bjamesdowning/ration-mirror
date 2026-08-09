@@ -15,6 +15,7 @@ import { createKitchenEventToolDefs } from "../mcp/tools/events";
 import { createGalleyToolDefs } from "../mcp/tools/galley";
 import { createInventoryToolDefs } from "../mcp/tools/inventory";
 import { createManifestToolDefs } from "../mcp/tools/manifest";
+import { createNutritionToolDefs } from "../mcp/tools/nutrition";
 import { createPreferencesToolDefs } from "../mcp/tools/preferences";
 import { createReadToolDefs } from "../mcp/tools/read";
 import { createSupplyToolDefs } from "../mcp/tools/supply";
@@ -155,6 +156,7 @@ export function createCopilotToolDefs(
 		...createManifestToolDefs(env),
 		...createSupplyToolDefs(env),
 		...createPreferencesToolDefs(env),
+		...createNutritionToolDefs(env),
 		...createAiWorkflowToolDefs(env),
 	];
 }
@@ -200,7 +202,8 @@ export function toAiSdkTools(
 							def.name === "remove_cargo_item" ||
 							def.name === "delete_meal" ||
 							def.name === "clear_active_meals" ||
-							def.name === "complete_supply_list"
+							def.name === "complete_supply_list" ||
+							def.name === "clear_nutrition_goal"
 								? { ...args, confirm: true }
 								: args;
 						if (resolveNeedsApproval(args as Record<string, unknown>)) {

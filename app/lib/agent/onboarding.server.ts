@@ -143,16 +143,61 @@ export async function resolvePreClaimForOrg(
 	return registration.status === "pending_claim" && registration.preClaim;
 }
 
-export function buildGetContextCapabilities(scopes: string[]) {
+export type NutritionCapabilityFlags = {
+	engine: boolean;
+	manifest: boolean;
+	goals: boolean;
+};
+
+export function buildGetContextCapabilities(
+	scopes: string[],
+	nutrition?: NutritionCapabilityFlags,
+) {
 	const normalizedScopes = scopes as McpScope[];
 	const has = (needed: McpScope) =>
 		normalizedScopes.includes("mcp") || normalizedScopes.includes(needed);
+	const canRead = has("mcp:read");
+	const canWritePreferences = has("mcp:preferences:write");
+	const engine = nutrition?.engine ?? false;
+	const manifest = nutrition?.manifest ?? false;
+	const goals = nutrition?.goals ?? false;
 	return {
-		canRead: has("mcp:read"),
+		canRead,
 		canWriteInventory: has("mcp:inventory:write"),
 		canWriteGalley: has("mcp:galley:write"),
 		canWriteManifest: has("mcp:manifest:write"),
 		canWriteSupply: has("mcp:supply:write"),
-		canWritePreferences: has("mcp:preferences:write"),
+		canWritePreferences,
+		/** USDA resolve + cargo/meal nutrition snapshots (nutrition-engine). */
+		nutritionEngine: engine && canRead,
+		/** Manifest Eat → intake logging (nutrition-manifest). */
+		nutritionManifest: manifest && canRead,
+		/** Personal goals + summary vs goal (nutrition-goals). */
+		nutritionGoals: goals && canRead,
+		/** set/clear nutrition goal tools. */
+		canWriteNutritionGoals: goals && canWritePreferences,
 	};
+}
+
+/** Human-readable notes for get_context when nutrition flags are on. */
+export function buildNutritionCapabilityNotes(
+	flags: NutritionCapabilityFlags,
+): string[] {
+	const notes: string[] = [];
+	if (flags.engine) {
+		notes.push(
+			"nutrition-engine: Cargo/meal nutrition snapshots; USDA auto-resolve on add when override omitted.",
+		);
+	}
+	if (flags.manifest) {
+		notes.push(
+			"nutrition-manifest: consume_manifest_entries can log intake via portions[] / logNutrition.",
+		);
+	}
+	if (flags.goals) {
+		notes.push(
+			"nutrition-goals: get_nutrition_summary and set/clear_nutrition_goal are available (not medical advice).",
+		);
+	}
+	return notes;
 }

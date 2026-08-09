@@ -20,8 +20,10 @@ import { CopyEntryModal } from "~/components/manifest/CopyEntryModal";
 import { DayTab } from "~/components/manifest/DayTab";
 import { DayView } from "~/components/manifest/DayView";
 import { EmptyManifest } from "~/components/manifest/EmptyManifest";
+import { ManifestCalendarOverlay } from "~/components/manifest/ManifestCalendarOverlay";
 import { MealPicker } from "~/components/manifest/MealPicker";
 import { PlanWeekButton } from "~/components/manifest/PlanWeekButton";
+import { PlateUpDialog } from "~/components/manifest/PlateUpDialog";
 import { ShareManifestModal } from "~/components/manifest/ShareManifestModal";
 import {
 	formatWeekRange,
@@ -41,6 +43,10 @@ import {
 	writeUserSettings,
 } from "~/lib/auth.server";
 import { useConfirm } from "~/lib/confirm-context";
+import {
+	buildFlagContext,
+	isFeatureEnabled,
+} from "~/lib/feature-flags/flags.server";
 import { AI_COSTS, checkBalance } from "~/lib/ledger.server";
 import type {
 	MealForPicker,
@@ -56,6 +62,12 @@ import {
 import { addDays, getCalendarDates } from "~/lib/manifest-dates";
 import { getExcludedManifestDates } from "~/lib/manifest-supply.server";
 import { checkMealReadiness } from "~/lib/matching.server";
+import { aggregateManifestDayNutrition } from "~/lib/nutrition/day-totals";
+import {
+	getActiveNutritionGoal,
+	getNutritionSummary,
+	listNutritionIntakesForRange,
+} from "~/lib/nutrition/persist.server";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import { getManifestReadyCacheVersion } from "~/lib/readiness-cache.server";
 import type { SlotType } from "~/lib/schemas/manifest";
@@ -166,6 +178,74 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 			}),
 		]);
 
+	const env = context.cloudflare.env;
+	const flagContext = buildFlagContext(request, env, { user });
+	const [nutritionManifest, nutritionGoals] = await Promise.all([
+		isFeatureEnabled(env, "nutrition-manifest", flagContext),
+		isFeatureEnabled(env, "nutrition-goals", flagContext),
+	]);
+
+	const dayConsumedKcal: Record<string, number> = {};
+	const dayPlannedKcal: Record<string, number> = {};
+	let goalEnergyKcal: number | null = null;
+	let dayIntakeRows: Array<{
+		id: string;
+		manifestDate: string;
+		slotType: string | null;
+		servings: number;
+		energyKcal: number;
+		mealName: string | null;
+	}> = [];
+
+	if (nutritionManifest) {
+		const [summary, intakeRows] = await Promise.all([
+			getNutritionSummary(
+				db,
+				user.id,
+				groupId,
+				currentRangeStart,
+				currentRangeEnd,
+			),
+			listNutritionIntakesForRange(
+				db,
+				user.id,
+				groupId,
+				currentRangeStart,
+				currentRangeEnd,
+			),
+		]);
+		dayIntakeRows = intakeRows.map((r) => ({
+			id: r.id,
+			manifestDate: r.manifestDate,
+			slotType: r.slotType,
+			servings: r.servings,
+			energyKcal: r.energyKcal,
+			mealName: r.mealName,
+		}));
+		const intakes = summary.days.map((d) => ({
+			date: d.date,
+			energyKcal: d.energyKcal,
+		}));
+		const aggregated = aggregateManifestDayNutrition(
+			entries.map((e) => ({
+				date: e.date,
+				effectiveServings: e.servingsOverride ?? e.mealServings,
+				energyKcalPerServing: e.mealEnergyKcalPerServing ?? null,
+			})),
+			intakes,
+			weekDates,
+		);
+		for (const [date, totals] of Object.entries(aggregated)) {
+			dayConsumedKcal[date] = totals.consumedKcal;
+			dayPlannedKcal[date] = totals.plannedKcal;
+		}
+		if (nutritionGoals) {
+			const goal =
+				summary.goal ?? (await getActiveNutritionGoal(db, user.id, today));
+			goalEnergyKcal = goal?.dailyEnergyKcal ?? null;
+		}
+	}
+
 	return {
 		plan,
 		entries,
@@ -181,6 +261,11 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		triggeredAllergensByMealId,
 		readyMealIds,
 		supplyDayInclusion,
+		nutritionManifest,
+		dayConsumedKcal,
+		dayPlannedKcal,
+		goalEnergyKcal,
+		dayIntakeRows,
 	};
 }
 
@@ -255,6 +340,10 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 		triggeredAllergensByMealId,
 		readyMealIds,
 		supplyDayInclusion: initialSupplyDayInclusion,
+		nutritionManifest = false,
+		dayConsumedKcal = {},
+		goalEnergyKcal = null,
+		dayIntakeRows = [],
 	} = loaderData;
 
 	const supplyToggleFetcher = useFetcher<{
@@ -382,9 +471,12 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 	// Plan Week modal — controlled from FAB on mobile
 	const [showPlanWeekModal, setShowPlanWeekModal] = useState(false);
 	const rootData = useRouteLoaderData("root") as
-		| { clientFlags?: { aiPlanWeek?: boolean } }
+		| { clientFlags?: { aiPlanWeek?: boolean; nutritionManifest?: boolean } }
 		| undefined;
 	const aiPlanWeek = rootData?.clientFlags?.aiPlanWeek === true;
+	const nutritionManifestFlag =
+		nutritionManifest || rootData?.clientFlags?.nutritionManifest === true;
+	const [calendarOpen, setCalendarOpen] = useState(false);
 
 	// -------------------------------------------------------------------------
 	// Copy state
@@ -420,7 +512,16 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 		deductions?: unknown[];
 	}>();
 	const pendingConsumeEntryIds = useRef<string[]>([]);
+	const pendingConsumeOpts = useRef<
+		| {
+				logNutrition?: boolean;
+				portions?: Array<{ entryId: string; servings: number }>;
+		  }
+		| undefined
+	>(undefined);
 	const consumeConfirmationHandled = useRef(false);
+	const [plateUpEntry, setPlateUpEntry] =
+		useState<MealPlanEntryWithMeal | null>(null);
 	const revalidator = useRevalidator();
 	const { confirm } = useConfirm();
 	const consumeToast = useToast({ duration: 4000 });
@@ -432,25 +533,64 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 	const planWeekErrorToast = useToast({ duration: 6000 });
 
 	const submitConsume = useCallback(
-		(entryIds: string[], confirmInsufficient = false) => {
-			consumeFetcher.submit(JSON.stringify({ entryIds, confirmInsufficient }), {
-				method: "POST",
-				action: `/api/meal-plans/${plan.id}/entries/consume`,
-				encType: "application/json",
-			});
+		(
+			entryIds: string[],
+			confirmInsufficient = false,
+			opts?: {
+				logNutrition?: boolean;
+				portions?: Array<{ entryId: string; servings: number }>;
+			},
+		) => {
+			consumeFetcher.submit(
+				JSON.stringify({
+					entryIds,
+					confirmInsufficient,
+					...(opts?.logNutrition === false ? { logNutrition: false } : {}),
+					...(opts?.portions ? { portions: opts.portions } : {}),
+				}),
+				{
+					method: "POST",
+					action: `/api/meal-plans/${plan.id}/entries/consume`,
+					encType: "application/json",
+				},
+			);
 		},
 		[consumeFetcher.submit, plan.id],
 	);
 
-	const handleConsume = (entryIds: string[]) => {
+	const handleConsume = (
+		entryIds: string[],
+		opts?: {
+			logNutrition?: boolean;
+			portions?: Array<{ entryId: string; servings: number }>;
+		},
+	) => {
 		if (entryIds.length === 0) return;
 		pendingConsumeEntryIds.current = entryIds;
+		pendingConsumeOpts.current = opts;
 		consumeConfirmationHandled.current = false;
-		submitConsume(entryIds, false);
+		submitConsume(entryIds, false, opts);
 	};
 
 	const handleConsumeSingle = (entryId: string) => {
+		if (nutritionManifestFlag) {
+			const entry = entries.find((e) => e.id === entryId);
+			if (entry) {
+				setPlateUpEntry(entry);
+				return;
+			}
+		}
 		handleConsume([entryId]);
+	};
+
+	const handlePlateUpConfirm = (servings: number, logNutrition: boolean) => {
+		if (!plateUpEntry) return;
+		const entryId = plateUpEntry.id;
+		setPlateUpEntry(null);
+		handleConsume([entryId], {
+			logNutrition,
+			portions: [{ entryId, servings }],
+		});
 	};
 
 	const handleConsumeAll = async (date: string) => {
@@ -595,9 +735,14 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 					variant: "warning",
 				});
 				if (ok && pendingConsumeEntryIds.current.length > 0) {
-					submitConsume(pendingConsumeEntryIds.current, true);
+					submitConsume(
+						pendingConsumeEntryIds.current,
+						true,
+						pendingConsumeOpts.current,
+					);
 				} else {
 					pendingConsumeEntryIds.current = [];
+					pendingConsumeOpts.current = undefined;
 				}
 			})();
 			return;
@@ -606,6 +751,7 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 		if (typeof data.consumed === "number" && data.consumed > 0) {
 			revalidator.revalidate();
 			pendingConsumeEntryIds.current = [];
+			pendingConsumeOpts.current = undefined;
 			const hadDeductions =
 				Array.isArray(data.deductions) && data.deductions.length > 0;
 			if (hadDeductions || data.partialCook) {
@@ -615,6 +761,7 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 			}
 		} else if (data.error) {
 			pendingConsumeEntryIds.current = [];
+			pendingConsumeOpts.current = undefined;
 			consumeErrorToast.show();
 		}
 	}, [
@@ -689,6 +836,35 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 		revalidator.revalidate();
 	}, [revalidator.revalidate]);
 
+	const openCalendar = useCallback(() => {
+		if (!nutritionManifestFlag) return;
+		setCalendarOpen(true);
+	}, [nutritionManifestFlag]);
+
+	const handleCalendarSelect = useCallback(
+		(date: string) => {
+			setCalendarOpen(false);
+			setActiveDay(date);
+			setSelectedDay(date);
+			navigate(`?week=${date}&day=${date}`);
+		},
+		[navigate],
+	);
+
+	const activeDayIntakes = useMemo(
+		() =>
+			dayIntakeRows
+				.filter((r) => r.manifestDate === activeDay)
+				.map((r) => ({
+					id: r.id,
+					slotType: r.slotType,
+					servings: r.servings,
+					energyKcal: r.energyKcal,
+					mealName: r.mealName,
+				})),
+		[dayIntakeRows, activeDay],
+	);
+
 	// Mobile filter sheet — date range + share
 	const filterContent = (
 		<div className="space-y-6">
@@ -756,9 +932,21 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 				}
 				subtitle={
 					<div className="md:hidden flex items-center gap-2">
-						<span className="text-xs font-mono text-muted">
-							{weekRangeLabel}
-						</span>
+						{nutritionManifestFlag ? (
+							<button
+								type="button"
+								onClick={openCalendar}
+								aria-label="Open calendar"
+								title="Jump to date"
+								className="text-xs font-mono text-muted hover:text-carbon dark:hover:text-white transition-colors"
+							>
+								{weekRangeLabel}
+							</button>
+						) : (
+							<span className="text-xs font-mono text-muted">
+								{weekRangeLabel}
+							</span>
+						)}
 					</div>
 				}
 			/>
@@ -772,6 +960,7 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 							currentRangeStart={currentRangeStart}
 							today={today}
 							weekStartPref={weekStartPref}
+							onOpenCalendar={nutritionManifestFlag ? openCalendar : undefined}
 						/>
 						<CalendarSpanSelector
 							currentSpan={calendarSpan}
@@ -852,6 +1041,9 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 								includedInSupply={supplyDayInclusion[activeDay] !== false}
 								onToggleSupplyInclusion={handleToggleSupplyInclusion}
 								togglingSupplyDate={togglingSupplyDate}
+								consumedKcal={dayConsumedKcal[activeDay] ?? null}
+								goalEnergyKcal={goalEnergyKcal}
+								intakeRows={nutritionManifestFlag ? activeDayIntakes : []}
 							/>
 						)}
 					</div>
@@ -882,6 +1074,8 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 						supplyDayInclusion={supplyDayInclusion}
 						onToggleSupplyInclusion={handleToggleSupplyInclusion}
 						togglingSupplyDate={togglingSupplyDate}
+						dayConsumedKcal={dayConsumedKcal}
+						goalEnergyKcal={goalEnergyKcal}
 					/>
 				</div>
 			</div>
@@ -907,6 +1101,27 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 					onSubmit={handleCopyEntrySubmit}
 					onClose={() => setCopyEntry(null)}
 					isSubmitting={isCopying}
+				/>
+			)}
+
+			{plateUpEntry && (
+				<PlateUpDialog
+					mealName={plateUpEntry.mealName}
+					defaultServings={1}
+					onConfirm={handlePlateUpConfirm}
+					onClose={() => setPlateUpEntry(null)}
+				/>
+			)}
+
+			{calendarOpen && nutritionManifestFlag && (
+				<ManifestCalendarOverlay
+					planId={plan.id}
+					today={today}
+					selectedDate={selectedDay}
+					weekStartPref={weekStartPref}
+					showConsumedMarkers
+					onSelectDate={handleCalendarSelect}
+					onClose={() => setCalendarOpen(false)}
 				/>
 			)}
 

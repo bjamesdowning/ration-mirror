@@ -26,6 +26,7 @@ An AI-powered pantry and meal-planning application built as a Cloudflare Worker 
   - [4.4 Supply List](#44-supply-list)
   - [4.5 Hub Dashboard](#45-hub-dashboard)
   - [4.6 Settings & Identity](#46-settings--identity)
+  - [4.7 Nutrition (feature-flagged)](#47-nutrition-feature-flagged)
 - [5. AI & Vector Systems](#5-ai--vector-systems)
   - [5.1 Embedding Pipeline](#51-embedding-pipeline)
   - [5.2 Meal Matching Engine](#52-meal-matching-engine)
@@ -201,6 +202,7 @@ flowchart TB
 | Binding | Service | Purpose |
 |---------|---------|---------|
 | `DB` | D1 (SQLite) | All persistent data: users, orgs, inventory, meals, plans, ledger, kitchen_event (Flight Recorder), API keys |
+| `NUTRITION_DB` | D1 (SQLite) | USDA-shaped food composition (`ration-nutrition` / `ration-nutrition-dev`) — F0 nutrition spine; seed with `bun run db:nutrition:seed:local` |
 | `RATION_KV` | KV Namespace | Rate limiting counters, webhook idempotency keys, tier cache, vector embedding cache |
 | `STORAGE` | R2 Bucket | Object storage for scan images and data exports |
 | `ASSETS` | Static Assets | Built client-side bundle (`./build/client`) served at the edge |
@@ -685,7 +687,7 @@ Cargo is the core inventory primitive. Each item belongs to an organization and 
 
 **Key workflows:**
 - **Add / Merge** — When a new cargo item is submitted, the system checks Vectorize for a similar existing item (`CARGO_MERGE` threshold: 0.78). If a match is found, the user is offered a "merge" (increment quantity) or "add new" choice. This prevents duplicate pantry entries from OCR variations (e.g. "whole milk 2%" vs. "2% milk").
-- **Bulk ingest (scan)** — After a receipt scan, `POST /api/cargo/batch` runs `ingestCargoItems` which applies the same dedup logic for each item in the scan result.
+- **Bulk ingest (scan)** — After a receipt scan, `POST /api/cargo/batch` runs `ingestCargoItems` which applies the same dedup logic for each item in the scan result. When `nutrition-engine` is on, scan review can attach nutrition snapshots before batch add (see [§4.7](#47-nutrition-feature-flagged)).
 - **Ingredient detail view** — `GET /hub/cargo/:id` shows full cargo metadata and all linked Galley meals, including whether each link is direct (`cargoId`) or an unlinked name match. Connected meal names link to Galley detail.
 - **Cross-navigation** — Meal ingredient rows, supply list item names, hub expiring-cargo preview lines, and snoozed supply rows link to Cargo detail when a name match exists (`app/lib/cargo-links.ts`). Galley meal detail ingredient names link to Cargo the same way. iOS mirrors this via `CargoLinkResolver` and `resolvedCargoId` on meal ingredients from the API.
 - **Promote to Galley** — A cargo item can be promoted to a single-ingredient Provision (see §4.2) for use in meal planning.
@@ -734,7 +736,7 @@ The Manifest is a calendar-style meal plan. Each organization has a single activ
 - **Day supply inclusion** — Each manifest day can be included or excluded from Supply sync via toggles on day headers (`POST /api/meal-plans/supply-days/:date`). Default: all days included. Excluded days persist in `manifest_supply_day` and filter manifest entries by `meal_plan_entry.date` during sync.
 - **Readiness signal** — Each Manifest meal card shows a subtle availability dot (green = all required ingredients available, amber = missing ingredients) based on current cargo inventory. **Expired cargo** (past `expiresAt`) is excluded from availability; items expiring soon still count as available.
 - **Share** — Crew Member only. Generates a `shareToken` (URL-safe, unique). Public read-only at `/shared/manifest/:token`.
-- **Week navigation** — The `?week=` query param shifts the visible window. **Calendar span** (`user.settings.manifestSettings.calendarSpan`: 3, 5, or 7 days) controls how many days appear on the Manifest page only (editable on Manifest, not Hub Settings). The Hub **manifest-preview** widget has its own per-user `daySpan` filter (Today / 3 / 7 / 14 days) via Customize Hub.
+- **Week navigation** — The `?week=` query param shifts the visible window. **Calendar span** (`user.settings.manifestSettings.calendarSpan`: 3, 5, or 7 days) controls how many days appear on the Manifest page only (editable on Manifest, not Hub Settings). The Hub **manifest-preview** widget has its own per-user `daySpan` filter (Today / 3 / 7 / 14 days) via Customize Hub. When `nutrition-manifest` is on, tapping the center date range opens a **month calendar overlay** (green planned-meal dots; intake markers; dates older than ~13 months muted with “History kept for 13 months”). `GET /api/meal-plans/:id/planned-dates?from=&to=` returns `{ dates }` and optionally `{ consumedDates }`.
 
 ---
 
@@ -800,6 +802,17 @@ The Settings page (`/hub/settings`) supports profile identity management across 
 - **API Keys** (`#api`) — create/revoke org-scoped keys with scope presets; REST quick reference
 
 Avatars are served via `GET /api/user/avatar/:userId` and updated via `POST /api/user/avatar`.
+
+---
+
+### 4.7 Nutrition (feature-flagged)
+
+Nutrition is behind Flagship flags (registry default **off**): `nutrition-engine`, `nutrition-ai-estimate`, `nutrition-manifest`, `nutrition-goals`. See [Feature flags](docs/dev/feature-flags.md), [DPIA/consent notes](docs/dev/nutrition-dpia-notes.md), and help articles [`24`](docs/fin/24-nutrition-overview.md)–[`26`](docs/fin/26-editing-nutrition.md).
+
+- **Resolve** — USDA-shaped self-hosted `NUTRITION_DB` first; blank on miss for manual/CSV; labelled AI estimate only on AI ingest (scan resolve/batch) when `nutrition-ai-estimate` is on.
+- **UI** — Cargo/Galley panels, scan review (`POST /api/nutrition/resolve`), Manifest Eat plate-up + day totals + ~13-month calendar, Settings goals (consent), Flight Recorder kcal on logged events.
+- **APIs / MCP** — Summary and goals routes; tools `get_nutrition_summary`, `set_nutrition_goal`, `clear_nutrition_goal`. Intake retention ~396 days; erased on account purge.
+- **Dogfood** — Production enablement via Flagship `userId` allowlist only — never `FEATURE_FLAG_OVERRIDES` to turn nutrition **on**.
 
 ---
 
@@ -1163,7 +1176,7 @@ erDiagram
 | `api_key` | org + user | Programmatic API keys (SHA-256 hashed, prefix-indexed) | `key_prefix`, `org_id` |
 | `queue_job` | — | Scan and meal-generate job status for polling; D1-backed for strong consistency | `expires_at`, `(organization_id, status)` |
 
-**Flight Recorder:** Kitchen mutations emit typed events via [`app/lib/kitchen-events.server.ts`](app/lib/kitchen-events.server.ts) (`KITCHEN_EVENT_REGISTRY`). New metrics plug in by adding a registry entry + one emit at the call site. Query via MCP/Copilot (`get_kitchen_events`, `get_kitchen_stats`) or the Hub `flight-recorder` widget. Daily cron detects `cargo_expired` and purges rows older than 13 months (`KITCHEN_EVENT_RETENTION_DAYS`).
+**Flight Recorder:** Kitchen mutations emit typed events via [`app/lib/kitchen-events.server.ts`](app/lib/kitchen-events.server.ts) (`KITCHEN_EVENT_REGISTRY`). New metrics plug in by adding a registry entry + one emit at the call site. Query via MCP/Copilot (`get_kitchen_events`, `get_kitchen_stats`) or the Hub `flight-recorder` widget. The widget labels `manifest_consumed` as **Consumed** and shows kcal · servings from the payload when present (splitting Cooked vs Consumed chips when intake events exist). Daily cron detects `cargo_expired` and purges rows older than 13 months (`KITCHEN_EVENT_RETENTION_DAYS`).
 
 **D1 parameter limit:** D1 enforces a hard limit of 100 bound parameters per statement (vs. SQLite's 999). Dense multi-row writes (especially Supply sync materialize) also budget binds **across** a `db.batch()` call via `packByBindBudget`, because D1 may reject the batch script with `too many SQL variables`. Every bulk write is chunked using constants from [`app/lib/query-utils.server.ts`](app/lib/query-utils.server.ts):
 
@@ -2196,12 +2209,19 @@ wrangler secret put REVENUECAT_API_KEY --config wrangler.copilot.jsonc
 
 Gradual rollouts use [Cloudflare Flagship](https://developers.cloudflare.com/flagship/) via the `env.FLAGS` Worker binding. Flag keys live in [`app/lib/feature-flags/registry.ts`](app/lib/feature-flags/registry.ts); values are toggled in the Cloudflare dashboard.
 
+**Trunk-based solo ship:** push to `main` deploys via Workers Builds. Prefer **local-first** verification (Miniflare / Vitest / local D1); use `bun run dev:remote` only when AI, Vectorize, live Flagship, email, or Stripe test webhooks require it. Do not rely on per-MR Cloudflare preview environments for D1/billing — Preview URLs do not isolate bindings by default. Dogfood on production by enabling Flagship for your `userId` only after push.
+
 - **Developer guide:** [`docs/dev/feature-flags.md`](docs/dev/feature-flags.md)
 - **Add a flag to a feature:** `/add-feature-flag` Cursor command
+- **Full local review → flag gate → test → commit/push:** `/long-commit` Cursor command (requires Flagship for user-visible work; ships flags **off**)
 - **Validate registry:** `bun run flag:check`
 - **Setup:** Flagship apps `ration` (production) and `ration-dev` (local/remote dev) are wired in `wrangler.jsonc`, `wrangler.dev.jsonc`, `wrangler.local.jsonc`, and `wrangler.copilot.jsonc`; run `bun run cf-typegen` after changing `app_id`
 
 **AI ops kill switches** (permanent; registry default off / fail closed): `ai-import-url`, `ai-scan-receipt`, `ai-dock-from-receipt`, `ai-generate-meal`, `ai-plan-week`. Server asserts **403** `FEATURE_DISABLED` before credit debit. Web + iOS hide entry points via `clientFlags` (mobile: `GET /api/mobile/v1/session`). For already-live AI, create Flagship flags with default **ON** before deploy; emergency kill via dashboard or `FEATURE_FLAG_OVERRIDES`. See [`docs/dev/feature-flags.md`](docs/dev/feature-flags.md) § AI ops kill switches.
+
+**Nutrition flags** (F0 spine; registry default off): `nutrition-engine`, `nutrition-ai-estimate`, `nutrition-manifest`, `nutrition-goals`. Bind `NUTRITION_DB` to `ration-nutrition` / `ration-nutrition-dev`. Local seed: `bun run db:nutrition:seed:local` (`nutrition-db/schema.sql` + `nutrition-db/seed-minimal.sql`). Main D1 stores cargo/meal `nutrition` JSON snapshots plus `ingredient_nutrition_match`, `nutrition_goal`, and `nutrition_intake` (migration `0041_fast_wendell_vaughn`); helpers in `app/lib/nutrition/persist.server.ts`.
+
+**Nutrition APIs:** `GET /api/nutrition/summary?from=&to=` (goals or manifest flag); `GET|POST|PATCH|DELETE /api/nutrition/goals` (goals flag; consent required on upsert); `GET /api/meal-plans/:id/planned-dates?from=&to=` (planned dots + optional `consumedDates` when nutrition-manifest). Mobile mirrors under `/api/mobile/v1/nutrition/*`. MCP/Copilot parity: `get_nutrition_summary`, `set_nutrition_goal`, `clear_nutrition_goal`; cargo/meal tools surface `nutrition` when present; `consume_manifest_entries` accepts `portions` + `logNutrition`. Manifest consume accepts optional `portions` + `logNutrition` for plate-up intake logging when `nutrition-manifest` is on. DayView lists intake rows for the active day. Intake retention (~13 months) runs with the kitchen-event cron purge. When `nutritionEngine` is on, Galley meal detail/edit, Cargo detail/edit, and scan review show `NutritionPanel`; scan review calls `POST /api/nutrition/resolve` to propose snapshots before batch add.
 
 **App Review login** (`app-review-login` / `appReviewLogin`): Flagship-gated email+password for the pre-seeded `app-review@mayutic.com` account. Default **off**. Enable only during App Store / TestFlight review windows; disable afterward (no redeploy). iOS reveals Password only when the flag is on and that email is typed. Server: `POST /api/mobile/v1/auth/review-login`. Signed-out flag read: `GET /api/mobile/v1/client-flags`. Seed (local-only, gitignored): `bun scripts/seed-account/seed-app-review-demo.ts --remote`. Secrets: `APP_REVIEW_DEMO_EMAIL`, `APP_REVIEW_DEMO_PASSWORD`, `APP_REVIEW_DEMO_USER_ID`. Full checklist: [`plans/app-review-notes.md`](plans/app-review-notes.md).
 
@@ -2309,7 +2329,7 @@ Fast/Deep use the same gpt-oss model. Deep injects Workers AI `reasoning_effort:
 
 ### 14.5 Tools
 
-Copilot exposes **shared MCP tools** through the shared tool runtime (including purpose-built `propose_manifest_plan` / `commit_manifest_plan` / `set_active_meals` / `mark_supply_purchased_bulk` / `preview_inventory_remove` / `apply_inventory_remove`, plus credit-aware `start_plan_week` / `start_generate_meal`), and Copilot-only `search_docs`. Each turn uses **intent-scoped `activeTools`** ([`active-tools.server.ts`](app/lib/copilot/active-tools.server.ts)) so only relevant write domains are enabled (`create_meal` and `propose_manifest_plan` stay in the core set).
+Copilot exposes **shared MCP tools** through the shared tool runtime (including purpose-built `propose_manifest_plan` / `commit_manifest_plan` / `set_active_meals` / `mark_supply_purchased_bulk` / `preview_inventory_remove` / `apply_inventory_remove`, nutrition tools `get_nutrition_summary` / `set_nutrition_goal` / `clear_nutrition_goal`, plus credit-aware `start_plan_week` / `start_generate_meal`), and Copilot-only `search_docs`. Each turn uses **intent-scoped `activeTools`** ([`active-tools.server.ts`](app/lib/copilot/active-tools.server.ts)) so only relevant write domains are enabled (`create_meal` and `propose_manifest_plan` stay in the core set; calorie/kcal/macro/nutrition/goal/ate/consumed keywords unlock nutrition tools).
 
 | Tool | Source | Purpose |
 |------|--------|---------|

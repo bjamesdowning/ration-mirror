@@ -109,6 +109,14 @@ export const MCP_TOOL_GROUPS = [
 			"update_user_preferences",
 		],
 	},
+	{
+		name: "Nutrition",
+		tools: [
+			"get_nutrition_summary",
+			"set_nutrition_goal",
+			"clear_nutrition_goal",
+		],
+	},
 ] as const;
 
 export const AGENT_SKILLS = [

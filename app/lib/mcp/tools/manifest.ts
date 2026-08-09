@@ -314,10 +314,28 @@ export function createManifestToolDefs(env: McpToolsEnv) {
 		defineSharedTool({
 			name: "consume_manifest_entries",
 			description:
-				"Mark manifest entries as consumed. Deducts ingredients when available; returns requiresConfirmation when cargo is short.",
+				"Mark manifest entries as consumed. Deducts ingredients when available; returns requiresConfirmation when cargo is short. When nutrition-manifest is on, optional portions[] (entryId + servings eaten) and logNutrition control intake logging (defaults to logging when portions provided / flag on).",
 			inputSchema: z.object({
 				entryIds: z.array(z.string().uuid()).min(1).max(50),
 				confirmInsufficient: z.boolean().optional(),
+				portions: z
+					.array(
+						z.object({
+							entryId: z.string().uuid(),
+							servings: z.number().positive().max(100),
+						}),
+					)
+					.max(50)
+					.optional()
+					.describe(
+						"Plate-up portions per entry. When nutrition-manifest is on, used for intake energy/macros. Omit to log planned entry servings (servingsOverride ?? meal.servings).",
+					),
+				logNutrition: z
+					.boolean()
+					.optional()
+					.describe(
+						"When nutrition-manifest is on, defaults to true. Set false to consume without logging intake.",
+					),
 			}),
 			scopes: ["mcp:manifest:write", "mcp:inventory:write"],
 			rateLimitCategory: "mcp_write",
@@ -334,6 +352,8 @@ export function createManifestToolDefs(env: McpToolsEnv) {
 						confirmInsufficient: a.confirmInsufficient,
 						userId: ctx.userId,
 						source: "mcp",
+						logNutrition: a.logNutrition,
+						portions: a.portions,
 					},
 				);
 				if (result.requiresConfirmation) {

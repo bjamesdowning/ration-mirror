@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
-import { Link, useFetcher } from "react-router";
+import { Link, useFetcher, useRouteLoaderData } from "react-router";
 import { CargoEditModal } from "~/components/cargo/CargoEditModal";
 import { RestockQuantityModal } from "~/components/cargo/RestockQuantityModal";
 import { StatusGauge } from "~/components/cargo/StatusGauge";
 import { CheckIcon, PlusIcon } from "~/components/icons/PageIcons";
+import { NutritionPanel } from "~/components/nutrition/NutritionPanel";
 import { DisplayQuantity } from "~/components/shared/DisplayQuantity";
 import { TagChip } from "~/components/shared/TagChip";
 import type { cargo } from "~/db/schema";
@@ -77,6 +78,10 @@ export function CargoDetail({
 	const isUpdating = fetcher.state !== "idle" && currentIntent === "update";
 	const isMarkingEmpty =
 		fetcher.state !== "idle" && currentIntent === "mark-empty";
+	const rootData = useRouteLoaderData("root") as
+		| { clientFlags?: { nutritionEngine?: boolean } }
+		| undefined;
+	const nutritionEngine = rootData?.clientFlags?.nutritionEngine === true;
 
 	useEffect(() => {
 		if (fetcher.state === "idle") {
@@ -245,6 +250,10 @@ export function CargoDetail({
 					</div>
 				</div>
 			</div>
+
+			{nutritionEngine && (
+				<NutritionPanel mode="cargo" nutrition={item.nutrition ?? null} />
+			)}
 
 			<button
 				type="button"

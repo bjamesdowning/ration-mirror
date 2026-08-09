@@ -18,6 +18,8 @@ URL import costs **1 AI credit** per job. Credits come from your **organization*
 
 Import runs **asynchronously**. After you submit a URL, the app shows **processing** and **polls** until extraction finishes or an error is returned. You then **verify** the extracted recipe and confirm to add it to Galley.
 
+When nutrition is enabled, Ration prefers a **USDA** match for ingredients; AI nutrient estimates (labelled, not verified until you edit) apply only when nutrition AI estimate is also on for this AI ingest path. Review nutrition before relying on day totals—see *Nutrition overview*.
+
 ## Duplicate URLs
 
 If that recipe URL was already imported for your organization, Ration returns a **duplicate** error (you may see this immediately or when the job finishes). Use the existing meal or edit it instead of re-importing.

@@ -8,6 +8,7 @@ import {
 	purgeExpiredKitchenEvents,
 } from "../app/lib/kitchen-events.server";
 import { log } from "../app/lib/logging.server";
+import { purgeExpiredNutritionIntake } from "../app/lib/nutrition/persist.server";
 import { runWithOpsEnv } from "../app/lib/ops-context.server";
 import { retryFailedPurgeJobs } from "../app/lib/purge-retry-cron.server";
 import { sendReengagementEmails } from "../app/lib/reengagement-cron.server";
@@ -121,7 +122,8 @@ export default {
 	 *   - Queue job cleanup: deletes expired queue_job rows.
 	 *   - Orphan agent kitchen purge: 6-month idle pending_claim registrations.
 	 *   - Re-engagement emails: users inactive 30+ days (Hub, API, or MCP).
-	 *   - Flight Recorder: detect newly expired cargo + purge events past retention.
+	 *   - Flight Recorder: detect newly expired cargo + purge events past retention
+	 *     (also purges expired nutrition_intake in the same retention job family).
 	 *   - Cargo status hygiene: refresh write-time status from expiresAt.
 	 *
 	 * Cron: "0 3 * * *" (03:00 UTC daily — low-traffic window)
@@ -195,6 +197,17 @@ async function runKitchenEventRetentionPurge(env: Env): Promise<void> {
 		}
 	} catch (err) {
 		log.error("[CRON] Kitchen event retention purge failed", err);
+	}
+
+	try {
+		const deletedIntake = await purgeExpiredNutritionIntake(env.DB, new Date());
+		if (deletedIntake > 0) {
+			log.info("[CRON] Purged expired nutrition intake", {
+				deleted: deletedIntake,
+			});
+		}
+	} catch (err) {
+		log.error("[CRON] Nutrition intake retention purge failed", err);
 	}
 }
 

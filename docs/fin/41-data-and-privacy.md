@@ -14,7 +14,8 @@ Open these paths on the **same host** you use for Ration (for example your produ
 Typical categories include:
 
 - **Account**: email, name, optional avatar image, auth-related records.
-- **Organization data**: pantry items, recipes, meal plans, supply lists, credit balance, ledger entries.
+- **Organization data**: pantry items (including optional nutrition snapshots), recipes, meal plans, supply lists, credit balance, ledger entries.
+- **Nutrition (when enabled)**: personal daily goals (consent on save), logged intake from Manifest Eat / plate-up, and self-hosted USDA reference lookups (no third-party USDA API call for composition). Intake history is retained about **13 months (~396 days)** then purged; goals and intake are erased with account purge.
 - **AI features**: receipt images may be stored temporarily for processing; embeddings may be stored in a vector index scoped to your organization.
 - **Billing**: Stripe customer and subscription metadata as needed to fulfill purchases.
 

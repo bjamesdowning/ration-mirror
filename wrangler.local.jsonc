@@ -42,6 +42,11 @@
 			"database_name": "ration-db-dev",
 			"database_id": "eec9f2f0-5d34-4392-89dd-317f373bf1e9",
 			"migrations_dir": "drizzle"
+		},
+		{
+			"binding": "NUTRITION_DB",
+			"database_name": "ration-nutrition",
+			"database_id": "e39b5516-e21b-4ced-9294-9890d2c222a1"
 		}
 	],
 	"r2_buckets": [

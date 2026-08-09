@@ -177,7 +177,9 @@ export async function action({ request, context }: Route.ActionArgs) {
 			// Schema might be strict.
 
 			const input = MealSchema.parse(inputData);
-			await updateMeal(context.cloudflare.env.DB, groupId, mealId, input);
+			await updateMeal(context.cloudflare.env.DB, groupId, mealId, input, {
+				env: context.cloudflare.env,
+			});
 			return { success: true };
 		} catch (error) {
 			log.error("Update failed", error);

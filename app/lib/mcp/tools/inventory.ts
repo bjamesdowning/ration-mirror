@@ -16,6 +16,7 @@ import {
 	applyInventoryRemove,
 	previewInventoryRemove,
 } from "../../inventory-remove.server";
+import { CargoNutritionOverrideSchema } from "../../schemas/nutrition";
 import { coerceToolUnit } from "../../units";
 import { findSimilarCargoBatch } from "../../vector.server";
 import { err, ok, type ToolEnvelope } from "../envelope";
@@ -65,7 +66,7 @@ export function createInventoryToolDefs(env: McpToolsEnv) {
 		defineSharedTool({
 			name: "add_cargo_item",
 			description:
-				"Add a single pantry item. Skips fuzzy Vectorize merge (no Ration credits). Exact-name merge still applies. For 2+ items or a receipt/list, use preview_inventory_import → apply_inventory_import instead. Quantity must be greater than 0.",
+				"Add a single pantry item. Skips fuzzy Vectorize merge (no Ration credits). Exact-name merge still applies. For 2+ items or a receipt/list, use preview_inventory_import → apply_inventory_import instead. Quantity must be greater than 0. Optional nutrition override (user_override); when omitted and nutrition-engine is on, USDA is auto-resolved from the item name.",
 			inputSchema: z.object({
 				name: z.string().min(1),
 				quantity: z
@@ -78,6 +79,9 @@ export function createInventoryToolDefs(env: McpToolsEnv) {
 					.default("food"),
 				tags: z.array(z.string()).optional().default([]),
 				expiresAt: z.string().optional(),
+				nutrition: CargoNutritionOverrideSchema.optional().describe(
+					"Optional nutrition override. When omitted and nutrition-engine is enabled, USDA is auto-resolved from name.",
+				),
 			}),
 			scopes: ["mcp:inventory:write"],
 			rateLimitCategory: "mcp_write",
@@ -95,9 +99,24 @@ export function createInventoryToolDefs(env: McpToolsEnv) {
 							domain: a.domain ?? "food",
 							tags: a.tags ?? [],
 							expiresAt: a.expiresAt ? new Date(a.expiresAt) : undefined,
+							nutrition: a.nutrition
+								? {
+										source: "user_override" as const,
+										confidence: a.nutrition.confidence ?? 1,
+										verified: a.nutrition.verified ?? true,
+										per100g: a.nutrition.per100g ?? null,
+										perServing: a.nutrition.perServing ?? null,
+										fdcId: a.nutrition.fdcId ?? null,
+										description: a.nutrition.description ?? null,
+									}
+								: undefined,
 						},
 					],
-					{ skipVectorPhase: true, waitUntil: ctx.waitUntil },
+					{
+						skipVectorPhase: true,
+						waitUntil: ctx.waitUntil,
+						userId: ctx.userId,
+					},
 				);
 				const result = results[0];
 				if (!result || result.status === "error") {
@@ -132,6 +151,9 @@ export function createInventoryToolDefs(env: McpToolsEnv) {
 									name: result.item.name,
 									quantity: result.item.quantity,
 									unit: result.item.unit,
+									...(result.item.nutrition
+										? { nutrition: result.item.nutrition }
+										: {}),
 								}
 							: undefined,
 						mergedInto: result.mergedInto,
@@ -151,7 +173,7 @@ export function createInventoryToolDefs(env: McpToolsEnv) {
 		defineSharedTool({
 			name: "update_cargo_item",
 			description:
-				"Set absolute fields on a pantry item (name, quantity, unit, expiry, domain, tags). Quantity may be 0 (out of stock; item remains as a restock reminder). Pass expiresAt as null (or empty string) to clear expiry; omit expiresAt to leave it unchanged. Use remove_cargo_item only when the user wants the line deleted. For relative changes like 'ate 2', prefer adjust_cargo_item.",
+				"Set absolute fields on a pantry item (name, quantity, unit, expiry, domain, tags, optional nutrition override). Quantity may be 0 (out of stock; item remains as a restock reminder). Pass expiresAt as null (or empty string) to clear expiry; omit expiresAt to leave it unchanged. When nutrition is omitted and name changes, USDA may auto-resolve if nutrition-engine is on. Use remove_cargo_item only when the user wants the line deleted. For relative changes like 'ate 2', prefer adjust_cargo_item.",
 			inputSchema: z.object({
 				itemId: z.string().uuid(),
 				name: z.string().min(1).optional(),
@@ -160,6 +182,9 @@ export function createInventoryToolDefs(env: McpToolsEnv) {
 				domain: z.enum(["food", "household", "alcohol"]).optional(),
 				tags: z.array(z.string()).optional(),
 				expiresAt: z.string().nullable().optional(),
+				nutrition: CargoNutritionOverrideSchema.optional().describe(
+					"Optional nutrition override (user_override). Omit to leave unchanged (or trigger USDA re-resolve on rename when nutrition-engine is on).",
+				),
 			}),
 			scopes: ["mcp:inventory:write"],
 			rateLimitCategory: "mcp_write",
@@ -172,14 +197,31 @@ export function createInventoryToolDefs(env: McpToolsEnv) {
 						: a.expiresAt === null || a.expiresAt === ""
 							? null
 							: new Date(a.expiresAt);
-				const updated = await updateItem(env, ctx.organizationId, a.itemId, {
-					name: a.name,
-					quantity: a.quantity,
-					unit: coerced?.unit,
-					domain: a.domain,
-					tags: a.tags,
-					expiresAt,
-				});
+				const updated = await updateItem(
+					env,
+					ctx.organizationId,
+					a.itemId,
+					{
+						name: a.name,
+						quantity: a.quantity,
+						unit: coerced?.unit,
+						domain: a.domain,
+						tags: a.tags,
+						expiresAt,
+						nutrition: a.nutrition
+							? {
+									source: "user_override" as const,
+									confidence: a.nutrition.confidence ?? 1,
+									verified: a.nutrition.verified ?? true,
+									per100g: a.nutrition.per100g ?? null,
+									perServing: a.nutrition.perServing ?? null,
+									fdcId: a.nutrition.fdcId ?? null,
+									description: a.nutrition.description ?? null,
+								}
+							: undefined,
+					},
+					{ userId: ctx.userId },
+				);
 				if (!updated) {
 					return err(
 						"update_cargo_item",
@@ -201,6 +243,7 @@ export function createInventoryToolDefs(env: McpToolsEnv) {
 						unit: updated.unit,
 						domain: updated.domain,
 						expiresAt: updated.expiresAt,
+						...(updated.nutrition ? { nutrition: updated.nutrition } : {}),
 						...(coerced?.normalizedFrom
 							? { unitNormalizedFrom: coerced.normalizedFrom }
 							: {}),

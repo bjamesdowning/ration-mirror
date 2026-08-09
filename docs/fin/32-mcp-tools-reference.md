@@ -70,8 +70,18 @@ Prefer resource `ration://schemas/inventory-import` for the item shape.
 | `commit_manifest_plan` | `mcp:manifest:write` | Commit confirmed entries; optional supply sync. Approval required. |
 | `add_meal_plan_entry` | `mcp:manifest:write` | Schedule one meal. |
 | `update_meal_plan_entry` | `mcp:manifest:write` | Patch an unconsumed entry. |
-| `consume_manifest_entries` | `mcp:manifest:write` + `mcp:inventory:write` | Mark plan entries cooked. |
+| `consume_manifest_entries` | `mcp:manifest:write` + `mcp:inventory:write` | Mark plan entries cooked. Optional `portions[]` + `logNutrition` when nutrition-manifest is on (plate-up intake). |
 | `remove_meal_plan_entry` | `mcp:manifest:write` | Remove a scheduled entry. |
+
+## Nutrition
+
+Gated by nutrition feature flags. Not medical advice. Cargo/meal read and write tools may include a `nutrition` snapshot when present.
+
+| Tool | Scope | Purpose |
+|------|-------|---------|
+| `get_nutrition_summary` | `mcp:read` | Daily intake totals (energy + macros) for a UTC date range, plus active goal when set. Requires nutrition-goals or nutrition-manifest. |
+| `set_nutrition_goal` | `mcp:preferences:write` | Upsert personal daily goal (consent required). Requires nutrition-goals. |
+| `clear_nutrition_goal` | `mcp:preferences:write` | Clear the active goal as of a date. Requires nutrition-goals. |
 
 ## Supply (Shopping)
 

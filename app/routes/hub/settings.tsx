@@ -43,7 +43,13 @@ import {
 import { useConfirm } from "~/lib/confirm-context";
 import { toExpiryDate } from "~/lib/date-utils";
 import { getUserDisplayName } from "~/lib/display-name";
+import {
+	buildFlagContext,
+	isFeatureEnabled,
+} from "~/lib/feature-flags/flags.server";
 import { log } from "~/lib/logging.server";
+import { getTodayISO } from "~/lib/manifest-dates";
+import { getActiveNutritionGoal } from "~/lib/nutrition/persist.server";
 import { listConnectedAgentGrants } from "~/lib/oauth.server";
 import {
 	canManageGroupSupplySettings,
@@ -303,6 +309,28 @@ export async function loader(args: Route.LoaderArgs) {
 
 		const supplyContext = resolveSupplyContext(orgMetadata);
 
+		const flagContext = buildFlagContext(args.request, env, {
+			user: authUser,
+		});
+		const nutritionGoalsEnabled = await isFeatureEnabled(
+			env,
+			"nutrition-goals",
+			flagContext,
+		);
+		const nutritionGoalRow = nutritionGoalsEnabled
+			? await getActiveNutritionGoal(env.DB, userId, getTodayISO())
+			: null;
+		const nutritionGoal = nutritionGoalRow
+			? {
+					dailyEnergyKcal: nutritionGoalRow.dailyEnergyKcal,
+					proteinG: nutritionGoalRow.proteinG,
+					carbsG: nutritionGoalRow.carbsG,
+					fatG: nutritionGoalRow.fatG,
+					fiberG: nutritionGoalRow.fiberG,
+					effectiveFrom: nutritionGoalRow.effectiveFrom,
+				}
+			: null;
+
 		// Groups the user owns with no other members (will be deleted on account purge)
 		const ownedMemberships = userMemberships.filter((m) => m.role === "owner");
 		const ownedGroupsWithNoOtherMembers: string[] = [];
@@ -395,6 +423,8 @@ export async function loader(args: Route.LoaderArgs) {
 			unusedTags,
 			supplyWindow: supplyContext.window,
 			canManageSupplySettings: canManageGroupSupplySettings(currentUserRole),
+			nutritionGoalsEnabled,
+			nutritionGoal,
 		};
 	} catch (error) {
 		log.error("[Settings] Loader failed", error);
@@ -610,6 +640,8 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 		userOrganizations,
 		userMemberships = [],
 		isAdmin,
+		nutritionGoalsEnabled = false,
+		nutritionGoal = null,
 	} = loaderData;
 
 	// Determine initial section from URL hash
@@ -760,7 +792,11 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 						/>
 					)}
 					{activeSection === "preferences" && (
-						<PreferencesSection settings={settings} />
+						<PreferencesSection
+							settings={settings}
+							nutritionGoalsEnabled={nutritionGoalsEnabled}
+							nutritionGoal={nutritionGoal}
+						/>
 					)}
 					{activeSection === "developer" && (
 						<DeveloperSection
@@ -1472,7 +1508,197 @@ function AllergenSection({ settings }: { settings: UserSettings }) {
 	);
 }
 
-function PreferencesSection({ settings }: { settings: UserSettings }) {
+function NutritionGoalsSection({
+	initialGoal,
+}: {
+	initialGoal: {
+		dailyEnergyKcal: number;
+		proteinG: number;
+		carbsG: number;
+		fatG: number;
+		fiberG: number | null;
+		effectiveFrom: string;
+	} | null;
+}) {
+	const fetcher = useFetcher<{
+		goal?: unknown;
+		cleared?: number;
+		error?: string;
+	}>();
+	const revalidator = useRevalidator();
+	const [consent, setConsent] = useState(false);
+	const [dailyEnergyKcal, setDailyEnergyKcal] = useState(
+		String(initialGoal?.dailyEnergyKcal ?? 2000),
+	);
+	const [proteinG, setProteinG] = useState(String(initialGoal?.proteinG ?? 0));
+	const [carbsG, setCarbsG] = useState(String(initialGoal?.carbsG ?? 0));
+	const [fatG, setFatG] = useState(String(initialGoal?.fatG ?? 0));
+	const [fiberG, setFiberG] = useState(
+		initialGoal?.fiberG != null ? String(initialGoal.fiberG) : "",
+	);
+	const isSaving = fetcher.state !== "idle";
+
+	useEffect(() => {
+		if (fetcher.state === "idle" && fetcher.data && !fetcher.data.error) {
+			revalidator.revalidate();
+		}
+	}, [fetcher.state, fetcher.data, revalidator]);
+
+	const handleSave = () => {
+		if (!consent && !initialGoal) return;
+		fetcher.submit(
+			JSON.stringify({
+				dailyEnergyKcal: Number(dailyEnergyKcal),
+				proteinG: Number(proteinG) || 0,
+				carbsG: Number(carbsG) || 0,
+				fatG: Number(fatG) || 0,
+				fiberG: fiberG === "" ? null : Number(fiberG),
+				effectiveFrom: getTodayISO(),
+				consentAt: new Date().toISOString(),
+			}),
+			{
+				method: "POST",
+				action: "/api/nutrition/goals",
+				encType: "application/json",
+			},
+		);
+	};
+
+	const handleClear = () => {
+		fetcher.submit(null, {
+			method: "DELETE",
+			action: "/api/nutrition/goals",
+		});
+	};
+
+	return (
+		<div className="glass-panel rounded-xl p-6">
+			<h3 className="text-xs text-label text-muted mb-1">Nutrition goals</h3>
+			<p className="text-sm text-muted mb-4">
+				Optional daily energy and macro targets. Shown neutrally on Manifest day
+				totals (consumed / goal). Health-related data requires explicit consent.
+			</p>
+			<div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+				<label className="block space-y-1">
+					<span className="text-[10px] font-mono uppercase text-muted">
+						kcal / day
+					</span>
+					<input
+						type="number"
+						min={1}
+						max={20000}
+						value={dailyEnergyKcal}
+						onChange={(e) => setDailyEnergyKcal(e.target.value)}
+						className="w-full px-2 py-2 text-sm border border-platinum rounded-lg bg-transparent font-mono"
+					/>
+				</label>
+				<label className="block space-y-1">
+					<span className="text-[10px] font-mono uppercase text-muted">
+						Protein g
+					</span>
+					<input
+						type="number"
+						min={0}
+						value={proteinG}
+						onChange={(e) => setProteinG(e.target.value)}
+						className="w-full px-2 py-2 text-sm border border-platinum rounded-lg bg-transparent font-mono"
+					/>
+				</label>
+				<label className="block space-y-1">
+					<span className="text-[10px] font-mono uppercase text-muted">
+						Carbs g
+					</span>
+					<input
+						type="number"
+						min={0}
+						value={carbsG}
+						onChange={(e) => setCarbsG(e.target.value)}
+						className="w-full px-2 py-2 text-sm border border-platinum rounded-lg bg-transparent font-mono"
+					/>
+				</label>
+				<label className="block space-y-1">
+					<span className="text-[10px] font-mono uppercase text-muted">
+						Fat g
+					</span>
+					<input
+						type="number"
+						min={0}
+						value={fatG}
+						onChange={(e) => setFatG(e.target.value)}
+						className="w-full px-2 py-2 text-sm border border-platinum rounded-lg bg-transparent font-mono"
+					/>
+				</label>
+			</div>
+			<label className="block space-y-1 mt-3 max-w-[12rem]">
+				<span className="text-[10px] font-mono uppercase text-muted">
+					Fiber g (optional)
+				</span>
+				<input
+					type="number"
+					min={0}
+					value={fiberG}
+					onChange={(e) => setFiberG(e.target.value)}
+					className="w-full px-2 py-2 text-sm border border-platinum rounded-lg bg-transparent font-mono"
+				/>
+			</label>
+			<label className="flex items-start gap-2 mt-4 cursor-pointer">
+				<input
+					type="checkbox"
+					checked={consent}
+					onChange={(e) => setConsent(e.target.checked)}
+					className="mt-1 accent-hyper-green"
+				/>
+				<span className="text-xs text-muted">
+					I consent to storing this nutrition goal as health-related personal
+					data for personalising Manifest totals. I can clear it anytime.
+				</span>
+			</label>
+			<div className="flex flex-wrap gap-2 mt-4">
+				<button
+					type="button"
+					onClick={handleSave}
+					disabled={isSaving || (!consent && !initialGoal)}
+					className="px-4 py-2 text-sm font-semibold rounded-lg bg-hyper-green text-on-hyper-green disabled:opacity-40"
+				>
+					{isSaving ? "Saving…" : "Save goal"}
+				</button>
+				{initialGoal && (
+					<button
+						type="button"
+						onClick={handleClear}
+						disabled={isSaving}
+						className="px-4 py-2 text-sm font-medium rounded-lg border border-platinum text-muted hover:text-carbon"
+					>
+						Clear goal
+					</button>
+				)}
+			</div>
+			{initialGoal && (
+				<p className="text-xs text-muted mt-3 font-mono">
+					Active from {initialGoal.effectiveFrom}:{" "}
+					{Math.round(initialGoal.dailyEnergyKcal).toLocaleString()} kcal
+				</p>
+			)}
+		</div>
+	);
+}
+
+function PreferencesSection({
+	settings,
+	nutritionGoalsEnabled = false,
+	nutritionGoal = null,
+}: {
+	settings: UserSettings;
+	nutritionGoalsEnabled?: boolean;
+	nutritionGoal?: {
+		dailyEnergyKcal: number;
+		proteinG: number;
+		carbsG: number;
+		fatG: number;
+		fiberG: number | null;
+		effectiveFrom: string;
+	} | null;
+}) {
 	const navigation = useNavigation();
 	const isUpdatingTheme =
 		navigation.state === "submitting" &&
@@ -1487,6 +1713,10 @@ function PreferencesSection({ settings }: { settings: UserSettings }) {
 
 			{/* Dietary Restrictions */}
 			<AllergenSection settings={settings} />
+
+			{nutritionGoalsEnabled && (
+				<NutritionGoalsSection initialGoal={nutritionGoal} />
+			)}
 
 			{/* Appearance */}
 			<div className="glass-panel rounded-xl p-6">

@@ -79,7 +79,13 @@ import {
 	normalizeForCargoKey,
 	parseUtcDateISO,
 } from "./cargo-utils";
+import { isFeatureEnabled } from "./feature-flags/flags.server";
 import { normalizeCargoQuantity } from "./format-quantity";
+import {
+	buildMinimalFlagContext,
+	maybeResolveCargoNutrition,
+} from "./nutrition/persist.server";
+import type { NutritionSnapshot } from "./nutrition/types";
 import { bumpReadinessCacheVersions } from "./readiness-cache.server";
 import { dedupeTagSlugs, type TagRecord, uniqueTagSlugs } from "./tags";
 import { getTagsForCargoIds, resolveTagIds, setCargoTags } from "./tags.server";
@@ -96,6 +102,50 @@ const CargoItemBaseSchema = z.object({
 	// null = clear expiry; omit/undefined = leave unchanged on partial updates.
 	// null must come first — z.coerce.date() accepts null as epoch (1970-01-01).
 	expiresAt: z.union([z.null(), z.coerce.date()]).optional(),
+	/**
+	 * Optional nutrition override (nutrition-engine). `null` clears.
+	 * Ignored server-side when nutrition-engine is off.
+	 */
+	nutrition: z
+		.union([
+			z.null(),
+			z.object({
+				source: z.literal("user_override").default("user_override"),
+				confidence: z.number().min(0).max(1).default(1),
+				verified: z.boolean().default(true),
+				per100g: z
+					.object({
+						energyKcal: z.number(),
+						proteinG: z.number(),
+						fatG: z.number(),
+						carbG: z.number(),
+						fiberG: z.number().nullable(),
+						sugarG: z.number().nullable(),
+						satFatG: z.number().nullable(),
+						sodiumMg: z.number().nullable(),
+						saltG: z.number().nullable(),
+					})
+					.nullable()
+					.optional(),
+				perServing: z
+					.object({
+						energyKcal: z.number(),
+						proteinG: z.number(),
+						fatG: z.number(),
+						carbG: z.number(),
+						fiberG: z.number().nullable(),
+						sugarG: z.number().nullable(),
+						satFatG: z.number().nullable(),
+						sodiumMg: z.number().nullable(),
+						saltG: z.number().nullable(),
+					})
+					.nullable()
+					.optional(),
+				fdcId: z.number().int().nullable().optional(),
+				description: z.string().nullable().optional(),
+			}),
+		])
+		.optional(),
 });
 
 export const CargoItemSchema = CargoItemBaseSchema.transform((data) => ({
@@ -443,6 +493,8 @@ export interface AddOrMergeItemOptions {
 	mergeTargetId?: string;
 	/** ctx.waitUntil from the Worker execution context — ensures vector upserts survive response completion */
 	waitUntil?: (promise: Promise<unknown>) => void;
+	/** Optional user id for nutrition flag evaluation context */
+	userId?: string | null;
 }
 
 function isCompatibleUnit(
@@ -475,6 +527,8 @@ export interface IngestItem {
 	tags: string[];
 	expiresAt?: Date | null;
 	mergeTargetId?: string;
+	/** Optional user nutrition override; when absent, resolve via nutrition-engine if enabled. */
+	nutrition?: NutritionSnapshot | null;
 }
 
 export interface IngestItemResult {
@@ -501,6 +555,13 @@ export interface IngestCargoOptions {
 	strictMergeTarget?: boolean;
 	/** When true, always create new rows (skip all merge resolution) */
 	forceCreateNew?: boolean;
+	/** Optional user id for nutrition flag evaluation context */
+	userId?: string | null;
+	/**
+	 * When true, USDA misses may AI-estimate (requires nutrition-ai-estimate).
+	 * Only set from AI ingest confirm paths (receipt scan batch).
+	 */
+	allowAiNutritionEstimate?: boolean;
 }
 
 /**
@@ -740,6 +801,44 @@ export async function ingestCargoItems(
 		slugs: string[];
 	}> = [];
 
+	const nutritionFlagContext = buildMinimalFlagContext(env, options?.userId);
+	const nutritionEngineOn = await isFeatureEnabled(
+		env,
+		"nutrition-engine",
+		nutritionFlagContext,
+	);
+	const createIndexes = resolved
+		.map((r, i) => (r?.action === "create" ? i : -1))
+		.filter((i) => i >= 0);
+	const nutritionByIndex = new Map<number, NutritionSnapshot | null>();
+	if (nutritionEngineOn && createIndexes.length > 0) {
+		await Promise.all(
+			createIndexes.map(async (i) => {
+				const it = items[i];
+				if (it.nutrition) {
+					nutritionByIndex.set(i, {
+						...it.nutrition,
+						source: it.nutrition.source ?? "user_override",
+					});
+					return;
+				}
+				const snapshot = await maybeResolveCargoNutrition(
+					env,
+					it.name,
+					nutritionFlagContext,
+					{
+						quantity: it.quantity,
+						unit: it.unit,
+						allowAiEstimate: options?.allowAiNutritionEstimate === true,
+						organizationId,
+						userId: options?.userId ?? undefined,
+					},
+				);
+				nutritionByIndex.set(i, snapshot);
+			}),
+		);
+	}
+
 	for (let i = 0; i < items.length; i++) {
 		const it = items[i];
 		const r = resolved[i] ?? { action: "create" as const };
@@ -750,6 +849,13 @@ export async function ingestCargoItems(
 			if (!mergedTargetIds.has(r.targetId)) {
 				mergedTargetIds.add(r.targetId);
 				const mergedBase = computeBaseFields(newQty, target.unit, target.name);
+				const mergeNutrition =
+					nutritionEngineOn && it.nutrition
+						? {
+								...it.nutrition,
+								source: it.nutrition.source ?? "user_override",
+							}
+						: undefined;
 				batchOps.push(
 					d1
 						.update(cargo)
@@ -758,6 +864,7 @@ export async function ingestCargoItems(
 							baseQuantity: mergedBase.baseQuantity,
 							baseUnit: mergedBase.baseUnit,
 							updatedAt: now,
+							...(mergeNutrition ? { nutrition: mergeNutrition } : {}),
 						})
 						.where(
 							and(
@@ -783,6 +890,7 @@ export async function ingestCargoItems(
 		const normalizedQty = normalizeCargoQuantity(it.quantity, it.unit);
 		const base = computeBaseFields(normalizedQty, it.unit, it.name);
 		const tagSlugs = dedupeTagSlugs(it.tags);
+		const nutrition = nutritionByIndex.get(i) ?? null;
 		batchOps.push(
 			d1.insert(cargo).values({
 				id: newId,
@@ -795,6 +903,7 @@ export async function ingestCargoItems(
 				domain: it.domain,
 				status: calculateInventoryStatus(it.expiresAt),
 				expiresAt: it.expiresAt ?? null,
+				nutrition,
 				createdAt: now,
 				updatedAt: now,
 			}),
@@ -808,6 +917,7 @@ export async function ingestCargoItems(
 			domain: it.domain,
 			status: calculateInventoryStatus(it.expiresAt),
 			expiresAt: it.expiresAt ?? null,
+			nutrition,
 			createdAt: now,
 			updatedAt: now,
 		} as typeof cargo.$inferSelect;
@@ -937,6 +1047,17 @@ export async function addOrMergeItem(
 				tags: data.tags,
 				expiresAt: data.expiresAt,
 				mergeTargetId: options.mergeTargetId,
+				nutrition: data.nutrition
+					? {
+							source: data.nutrition.source ?? "user_override",
+							confidence: data.nutrition.confidence ?? 1,
+							verified: data.nutrition.verified ?? true,
+							per100g: data.nutrition.per100g ?? null,
+							perServing: data.nutrition.perServing ?? null,
+							fdcId: data.nutrition.fdcId ?? null,
+							description: data.nutrition.description ?? null,
+						}
+					: undefined,
 			},
 		],
 		{
@@ -944,6 +1065,7 @@ export async function addOrMergeItem(
 			returnMergeCandidateOnFuzzy: options.allowFuzzyCandidate,
 			strictMergeTarget: true,
 			waitUntil: options.waitUntil,
+			userId: options.userId,
 		},
 	);
 
@@ -991,6 +1113,7 @@ export async function updateItem(
 	organizationId: string,
 	itemId: string,
 	data: CargoItemUpdateInput,
+	options?: { userId?: string | null },
 ) {
 	const d1 = drizzle(env.DB);
 
@@ -1017,6 +1140,38 @@ export async function updateItem(
 		data.domain ?? (existing.domain as CargoItemInput["domain"]);
 	const base = computeBaseFields(nextQuantity, nextUnit, nextName);
 
+	const flagContext = buildMinimalFlagContext(env, options?.userId);
+	const nutritionEngineOn = await isFeatureEnabled(
+		env,
+		"nutrition-engine",
+		flagContext,
+	);
+
+	let nextNutrition = existing.nutrition ?? null;
+	if (!nutritionEngineOn) {
+		// Ignore client nutrition overrides and rename re-resolve when flag off.
+		nextNutrition = existing.nutrition ?? null;
+	} else if (data.nutrition === null) {
+		nextNutrition = null;
+	} else if (data.nutrition !== undefined) {
+		nextNutrition = {
+			source: data.nutrition.source ?? "user_override",
+			confidence: data.nutrition.confidence ?? 1,
+			verified: data.nutrition.verified ?? true,
+			per100g: data.nutrition.per100g ?? null,
+			perServing: data.nutrition.perServing ?? null,
+			fdcId: data.nutrition.fdcId ?? null,
+			description: data.nutrition.description ?? null,
+		};
+	} else if (data.name !== undefined && data.name !== existing.name) {
+		nextNutrition = await maybeResolveCargoNutrition(
+			env,
+			nextName,
+			flagContext,
+			{ quantity: nextQuantity, unit: nextUnit },
+		);
+	}
+
 	const [updatedItem] = await d1
 		.update(cargo)
 		.set({
@@ -1028,6 +1183,7 @@ export async function updateItem(
 			domain: nextDomain,
 			status: nextStatus,
 			expiresAt: nextExpiresAt,
+			nutrition: nextNutrition,
 			updatedAt: new Date(),
 		})
 		.where(and(eq(cargo.id, itemId), eq(cargo.organizationId, organizationId)))

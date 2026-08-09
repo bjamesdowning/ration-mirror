@@ -612,6 +612,10 @@ export function buildManifestConsumedEvent(input: {
 	source?: KitchenEventSource;
 	occurredAt?: Date;
 	id?: string;
+	energyKcal?: number;
+	portionServings?: number;
+	manifestDate?: string;
+	verified?: boolean;
 }): KitchenEventInput<"manifest_consumed"> {
 	return {
 		id: input.id,
@@ -629,6 +633,14 @@ export function buildManifestConsumedEvent(input: {
 			deductions: input.deductions,
 			partialCook: input.partialCook,
 			source: input.source,
+			...(input.energyKcal != null ? { energyKcal: input.energyKcal } : {}),
+			...(input.portionServings != null
+				? { portionServings: input.portionServings }
+				: {}),
+			...(input.manifestDate != null
+				? { manifestDate: input.manifestDate }
+				: {}),
+			...(input.verified != null ? { verified: input.verified } : {}),
 		},
 		occurredAt: input.occurredAt,
 	};

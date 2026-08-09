@@ -1,4 +1,5 @@
 import { Camera } from "lucide-react";
+import { useRouteLoaderData } from "react-router";
 import {
 	AIFeatureIntroView,
 	AIFeatureModal,
@@ -14,6 +15,10 @@ interface ScanIntroModalProps {
 	costPerScan: number;
 }
 
+/** One-liner when nutritionEngine is on — USDA first, labelled estimates, edit before save. */
+const NUTRITION_INGEST_HINT =
+	"Nutrition (when available): USDA match first; AI estimates are labelled—edit before saving.";
+
 /**
  * Intro modal shown before opening the camera for Scan. Uses shared AI feature modal and credit-gated intro view.
  */
@@ -24,6 +29,11 @@ export function ScanIntroModal({
 	credits,
 	costPerScan,
 }: ScanIntroModalProps) {
+	const rootData = useRouteLoaderData("root") as
+		| { clientFlags?: { nutritionEngine?: boolean } }
+		| undefined;
+	const nutritionEngine = rootData?.clientFlags?.nutritionEngine === true;
+
 	return (
 		<AIFeatureModal
 			open={open}
@@ -36,6 +46,7 @@ export function ScanIntroModal({
 		>
 			<AIFeatureIntroView
 				description="AI reads grocery receipts, product labels, or photos of your fridge, pantry, or shelves—and suggests items to add to Cargo. Review and edit before saving."
+				hint={nutritionEngine ? NUTRITION_INGEST_HINT : undefined}
 				cost={costPerScan}
 				costLabel="per scan"
 				credits={credits}

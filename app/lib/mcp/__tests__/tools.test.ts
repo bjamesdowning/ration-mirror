@@ -59,6 +59,21 @@ vi.mock("~/lib/manifest.server", () => ({
 	getMealPlan: vi.fn(),
 	getTodayISO: vi.fn(() => "2026-03-07"),
 	getWeekEntries: vi.fn(),
+	consumeManifestEntries: vi.fn(),
+}));
+
+vi.mock("~/lib/nutrition/persist.server", () => ({
+	buildMinimalFlagContext: vi.fn((_env: unknown, userId?: string | null) => ({
+		environment: "test",
+		...(userId ? { userId } : {}),
+	})),
+	getNutritionSummary: vi.fn(),
+	upsertNutritionGoal: vi.fn(),
+	clearNutritionGoal: vi.fn(),
+}));
+
+vi.mock("~/lib/feature-flags/flags.server", () => ({
+	isFeatureEnabled: vi.fn().mockResolvedValue(false),
 }));
 
 vi.mock("~/lib/matching.server", () => ({
@@ -1216,6 +1231,7 @@ describe("MCP tools", () => {
 				"org-test-123",
 				expect.objectContaining({ name: "toast", servings: 1 }),
 				expect.anything(),
+				expect.objectContaining({ userId: "user-test-123" }),
 			);
 		});
 	});
@@ -1511,6 +1527,7 @@ describe("MCP tools", () => {
 				"org-test-123",
 				"00000000-0000-0000-0000-000000000001",
 				expect.objectContaining({ quantity: 0.4 }),
+				expect.objectContaining({ userId: "user-test-123" }),
 			);
 		});
 
@@ -1582,6 +1599,7 @@ describe("MCP tools", () => {
 				"org-test-123",
 				itemId,
 				expect.objectContaining({ quantity: 0 }),
+				expect.objectContaining({ userId: "user-test-123" }),
 			);
 			expect(jettisonItem).not.toHaveBeenCalled();
 		});
@@ -1790,6 +1808,7 @@ describe("MCP tools", () => {
 					name: "pancakes",
 					ingredients: expect.any(Array),
 				}),
+				expect.objectContaining({ userId: "user-test-123" }),
 			);
 		});
 	});

@@ -2,7 +2,7 @@ import type { HubWidgetProps } from "~/lib/types";
 
 const EVENT_LABELS: Record<string, string> = {
 	galley_cooked: "Cooked",
-	manifest_consumed: "Manifest",
+	manifest_consumed: "Consumed",
 	supply_docked: "Docked",
 	cargo_expired: "Expired",
 	cargo_jettisoned: "Jettisoned",
@@ -18,6 +18,21 @@ function formatRelative(isoOrDate: Date | string): string {
 	if (hours < 24) return `${hours}h ago`;
 	const days = Math.floor(hours / 24);
 	return `${days}d ago`;
+}
+
+function formatConsumedDetail(payload: Record<string, unknown>): string | null {
+	const kcalRaw = payload.energyKcal;
+	const servingsRaw = payload.portionServings ?? payload.servings;
+	const parts: string[] = [];
+	if (typeof kcalRaw === "number" && Number.isFinite(kcalRaw)) {
+		parts.push(`${Math.round(kcalRaw).toLocaleString("en-US")} kcal`);
+	}
+	if (typeof servingsRaw === "number" && Number.isFinite(servingsRaw)) {
+		const s =
+			servingsRaw % 1 === 0 ? String(servingsRaw) : servingsRaw.toFixed(1);
+		parts.push(`${s} serving${servingsRaw === 1 ? "" : "s"}`);
+	}
+	return parts.length > 0 ? parts.join(" · ") : null;
 }
 
 function StatChip({
@@ -65,8 +80,39 @@ export function FlightRecorderWidget({ data, size = "md" }: HubWidgetProps) {
 	const { stats, recent } = activity;
 	const compact = size === "sm";
 	const recentLimit = compact ? 3 : 5;
-	// Four-up only on expanded cards — narrower widths wrap "Jettisoned".
+	const consumedCount = stats.countsByType.manifest_consumed ?? 0;
+	const cookedOnly = stats.countsByType.galley_cooked ?? 0;
+	const splitConsume = consumedCount > 0;
 	const statsGridClass = size === "lg" ? "grid-cols-4" : "grid-cols-2";
+
+	const chips: Array<{
+		label: string;
+		value: number;
+		highlight?: boolean;
+	}> = splitConsume
+		? [
+				{ label: "Cooked", value: cookedOnly },
+				{ label: "Consumed", value: consumedCount },
+				{ label: "Docked", value: stats.totals.docked },
+				{
+					label: "Expired",
+					value: stats.totals.expired,
+					highlight: stats.totals.expired > 0,
+				},
+				...(size === "lg"
+					? [{ label: "Jettison", value: stats.totals.jettisoned }]
+					: []),
+			]
+		: [
+				{ label: "Cooked", value: stats.totals.cooked },
+				{ label: "Docked", value: stats.totals.docked },
+				{
+					label: "Expired",
+					value: stats.totals.expired,
+					highlight: stats.totals.expired > 0,
+				},
+				{ label: "Jettison", value: stats.totals.jettisoned },
+			];
 
 	return (
 		<div className="glass-panel rounded-xl p-4 space-y-3">
@@ -78,37 +124,43 @@ export function FlightRecorderWidget({ data, size = "md" }: HubWidgetProps) {
 			</div>
 
 			<div className={`grid gap-2 ${statsGridClass}`}>
-				<StatChip label="Cooked" value={stats.totals.cooked} />
-				<StatChip label="Docked" value={stats.totals.docked} />
-				<StatChip
-					label="Expired"
-					value={stats.totals.expired}
-					highlight={stats.totals.expired > 0}
-				/>
-				{/* Short chip label; event rows keep full "Jettisoned". */}
-				<StatChip label="Jettison" value={stats.totals.jettisoned} />
+				{chips.map((chip) => (
+					<StatChip
+						key={chip.label}
+						label={chip.label}
+						value={chip.value}
+						highlight={chip.highlight}
+					/>
+				))}
 			</div>
 
 			{recent.length > 0 ? (
 				<ul className="divide-y divide-platinum dark:divide-white/10">
-					{recent.slice(0, recentLimit).map((event) => (
-						<li
-							key={event.id}
-							className="py-2 flex items-center justify-between gap-3 text-sm"
-						>
-							<div className="min-w-0">
-								<p className="font-medium text-carbon dark:text-white truncate">
-									{event.subjectName}
-								</p>
-								<p className="text-xs text-muted">
-									{EVENT_LABELS[event.eventType] ?? event.eventType}
-								</p>
-							</div>
-							<span className="text-xs text-muted whitespace-nowrap">
-								{formatRelative(event.occurredAt)}
-							</span>
-						</li>
-					))}
+					{recent.slice(0, recentLimit).map((event) => {
+						const detail =
+							event.eventType === "manifest_consumed"
+								? formatConsumedDetail(event.payload)
+								: null;
+						return (
+							<li
+								key={event.id}
+								className="py-2 flex items-center justify-between gap-3 text-sm"
+							>
+								<div className="min-w-0">
+									<p className="font-medium text-carbon dark:text-white truncate">
+										{event.subjectName}
+									</p>
+									<p className="text-xs text-muted">
+										{EVENT_LABELS[event.eventType] ?? event.eventType}
+										{detail ? ` · ${detail}` : ""}
+									</p>
+								</div>
+								<span className="text-xs text-muted whitespace-nowrap">
+									{formatRelative(event.occurredAt)}
+								</span>
+							</li>
+						);
+					})}
 				</ul>
 			) : (
 				<p className="text-xs text-muted">No events in the last 7 days.</p>

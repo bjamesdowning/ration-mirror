@@ -119,6 +119,7 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 				organizationId,
 				id,
 				merged,
+				{ env: context.cloudflare.env, userId },
 			);
 			return { meal };
 		}

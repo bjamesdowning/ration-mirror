@@ -340,7 +340,6 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 		triggeredAllergensByMealId,
 		readyMealIds,
 		supplyDayInclusion: initialSupplyDayInclusion,
-		nutritionManifest = false,
 		dayConsumedKcal = {},
 		goalEnergyKcal = null,
 		dayIntakeRows = [],
@@ -471,11 +470,20 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 	// Plan Week modal — controlled from FAB on mobile
 	const [showPlanWeekModal, setShowPlanWeekModal] = useState(false);
 	const rootData = useRouteLoaderData("root") as
-		| { clientFlags?: { aiPlanWeek?: boolean; nutritionManifest?: boolean } }
+		| {
+				clientFlags?: {
+					aiPlanWeek?: boolean;
+					nutritionManifest?: boolean;
+					nutritionGoals?: boolean;
+				};
+		  }
 		| undefined;
 	const aiPlanWeek = rootData?.clientFlags?.aiPlanWeek === true;
+	/** Match cargo/Galley: UI gates on root clientFlags only (not route loader OR). */
 	const nutritionManifestFlag =
-		nutritionManifest || rootData?.clientFlags?.nutritionManifest === true;
+		rootData?.clientFlags?.nutritionManifest === true;
+	const nutritionGoalsFlag = rootData?.clientFlags?.nutritionGoals === true;
+	const showDayNutritionTotals = nutritionManifestFlag && nutritionGoalsFlag;
 	const [calendarOpen, setCalendarOpen] = useState(false);
 
 	// -------------------------------------------------------------------------
@@ -1041,8 +1049,12 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 								includedInSupply={supplyDayInclusion[activeDay] !== false}
 								onToggleSupplyInclusion={handleToggleSupplyInclusion}
 								togglingSupplyDate={togglingSupplyDate}
-								consumedKcal={dayConsumedKcal[activeDay] ?? null}
-								goalEnergyKcal={goalEnergyKcal}
+								consumedKcal={
+									showDayNutritionTotals
+										? (dayConsumedKcal[activeDay] ?? null)
+										: null
+								}
+								goalEnergyKcal={showDayNutritionTotals ? goalEnergyKcal : null}
 								intakeRows={nutritionManifestFlag ? activeDayIntakes : []}
 							/>
 						)}
@@ -1074,8 +1086,10 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 						supplyDayInclusion={supplyDayInclusion}
 						onToggleSupplyInclusion={handleToggleSupplyInclusion}
 						togglingSupplyDate={togglingSupplyDate}
-						dayConsumedKcal={dayConsumedKcal}
-						goalEnergyKcal={goalEnergyKcal}
+						dayConsumedKcal={
+							showDayNutritionTotals ? dayConsumedKcal : undefined
+						}
+						goalEnergyKcal={showDayNutritionTotals ? goalEnergyKcal : null}
 					/>
 				</div>
 			</div>
@@ -1104,7 +1118,7 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 				/>
 			)}
 
-			{plateUpEntry && (
+			{plateUpEntry && nutritionManifestFlag && (
 				<PlateUpDialog
 					mealName={plateUpEntry.mealName}
 					defaultServings={1}

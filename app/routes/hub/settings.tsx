@@ -640,7 +640,6 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 		userOrganizations,
 		userMemberships = [],
 		isAdmin,
-		nutritionGoalsEnabled = false,
 		nutritionGoal = null,
 	} = loaderData;
 
@@ -794,7 +793,6 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 					{activeSection === "preferences" && (
 						<PreferencesSection
 							settings={settings}
-							nutritionGoalsEnabled={nutritionGoalsEnabled}
 							nutritionGoal={nutritionGoal}
 						/>
 					)}
@@ -1685,11 +1683,9 @@ function NutritionGoalsSection({
 
 function PreferencesSection({
 	settings,
-	nutritionGoalsEnabled = false,
 	nutritionGoal = null,
 }: {
 	settings: UserSettings;
-	nutritionGoalsEnabled?: boolean;
 	nutritionGoal?: {
 		dailyEnergyKcal: number;
 		proteinG: number;
@@ -1699,6 +1695,11 @@ function PreferencesSection({
 		effectiveFrom: string;
 	} | null;
 }) {
+	const rootData = useRouteLoaderData("root") as
+		| { clientFlags?: { nutritionGoals?: boolean } }
+		| undefined;
+	/** Match cargo/Galley: gate on root clientFlags, not route loader alone. */
+	const nutritionGoalsEnabled = rootData?.clientFlags?.nutritionGoals === true;
 	const navigation = useNavigation();
 	const isUpdatingTheme =
 		navigation.state === "submitting" &&

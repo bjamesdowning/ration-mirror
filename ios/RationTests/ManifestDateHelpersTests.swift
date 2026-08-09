@@ -150,4 +150,46 @@ final class ManifestDateHelpersTests: XCTestCase {
             ["2026-07-20", "2026-07-21", "2026-07-22", "2026-07-23"]
         )
     }
+
+    func testHistoryRetentionCutoffIs396DaysBeforeToday() {
+        let today = "2026-08-09"
+        XCTAssertEqual(
+            ManifestDateHelpers.historyRetentionCutoff(today: today),
+            "2025-07-09"
+        )
+    }
+
+    func testCalendarDaySelectableWithinRetention() {
+        let today = "2026-08-09"
+        XCTAssertTrue(ManifestDateHelpers.isCalendarDaySelectable(today, today: today))
+        XCTAssertTrue(ManifestDateHelpers.isCalendarDaySelectable("2026-08-10", today: today))
+        XCTAssertTrue(ManifestDateHelpers.isCalendarDaySelectable("2025-07-09", today: today))
+        XCTAssertFalse(ManifestDateHelpers.isCalendarDaySelectable("2025-07-08", today: today))
+    }
+
+    func testJumpCalendarBoundsSpanRetentionToNavigationBound() {
+        let today = "2026-08-09"
+        let bounds = ManifestDateHelpers.jumpCalendarBounds(today: today)
+        XCTAssertEqual(ManifestDateHelpers.isoString(from: bounds.lowerBound), "2025-07-09")
+        XCTAssertEqual(
+            ManifestDateHelpers.isoString(from: bounds.upperBound),
+            ManifestDateHelpers.addDays(today, days: ManifestDateHelpers.navigationWeekBound * 7)
+        )
+    }
+
+    func testNormalizedNavigationStartFromCalendarPickKeepsDayInWeekSpan() {
+        let picked = "2026-08-11"
+        let start = ManifestDateHelpers.normalizedNavigationStart(
+            picked,
+            calendarSpan: 7,
+            weekStartPref: "sunday"
+        )
+        XCTAssertEqual(start, "2026-08-09")
+        let visible = ManifestDateHelpers.calendarDates(
+            span: 7,
+            anchor: start,
+            weekStartPref: "sunday"
+        )
+        XCTAssertTrue(visible.contains(picked))
+    }
 }

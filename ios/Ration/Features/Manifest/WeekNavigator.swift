@@ -15,7 +15,7 @@ enum ManifestDateHelpers {
         return calendar.date(from: components)
     }
 
-    private static func isoString(from date: Date) -> String {
+    static func isoString(from date: Date) -> String {
         let y = calendar.component(.year, from: date)
         let m = calendar.component(.month, from: date)
         let d = calendar.component(.day, from: date)
@@ -178,6 +178,36 @@ enum ManifestDateHelpers {
         guard let date = localDate(from: iso) else { return nil }
         return cal.dateComponents([.calendar, .era, .year, .month, .day], from: date)
     }
+
+    /// Aligns with web `MANIFEST_HISTORY_RETENTION_DAYS` (~13 months).
+    static let historyRetentionDays = 396
+
+    /// Convert ISO YYYY-MM-DD to a local `Date` at start of day.
+    static func date(fromISO iso: String) -> Date? {
+        localDate(from: iso).map { calendar.startOfDay(for: $0) }
+    }
+
+    /// Oldest selectable history day (inclusive), matching web `historyRetentionCutoffDate`.
+    static func historyRetentionCutoff(today: String? = nil) -> String {
+        addDays(today ?? todayISO(), days: -historyRetentionDays)
+    }
+
+    /// Past dates older than the retention window are disabled; today and future stay selectable.
+    static func isCalendarDaySelectable(_ date: String, today: String? = nil) -> Bool {
+        let anchor = today ?? todayISO()
+        if date >= anchor { return true }
+        return date >= historyRetentionCutoff(today: anchor)
+    }
+
+    /// Inclusive closed range for graphical DatePicker (retention past → navigationWeekBound future).
+    static func jumpCalendarBounds(today: String? = nil) -> ClosedRange<Date> {
+        let anchor = today ?? todayISO()
+        let minISO = historyRetentionCutoff(today: anchor)
+        let maxISO = addDays(anchor, days: navigationWeekBound * 7)
+        let minDate = date(fromISO: minISO) ?? Date()
+        let maxDate = date(fromISO: maxISO) ?? Date()
+        return minDate ... maxDate
+    }
 }
 
 struct WeekNavigator: View {
@@ -189,8 +219,14 @@ struct WeekNavigator: View {
     var isLoading: Bool = false
     /// Optional day-keyed nutrient totals (nutrition-goals / nutrition-manifest). Empty hides the line.
     var nutritionByDate: [String: NutritionDayTotals] = [:]
+    /// Active goal from nutrition summary — drives progress chrome when goals are enabled.
+    var nutritionGoal: NutritionSummary.Goal?
+    /// When true, show goal progress / empty-goals affordance (nutrition-goals flag).
+    var showNutritionGoals: Bool = false
     /// Tapping the nutrient line opens Nutrition Goals — `nil` renders it as static text.
     var onTapNutrientLine: (() -> Void)?
+    /// Tapping the range label opens the jump calendar — `nil` keeps the label non-interactive.
+    var onOpenCalendar: (() -> Void)?
     var onNavigate: (String) -> Void
     @ScaledMetric(relativeTo: .body) private var chevronPoints: CGFloat = 17
 
@@ -228,6 +264,19 @@ struct WeekNavigator: View {
         )
     }
 
+    private var dayTotalsForStrip: NutritionDayTotals {
+        selectedDayNutrition ?? .empty(date: selectedDay)
+    }
+
+    private var shouldShowNutrientStrip: Bool {
+        if showNutritionGoals {
+            if let goal = nutritionGoal, goal.hasAnyManifestTarget { return true }
+            // Empty-goals affordance when flags on.
+            return onTapNutrientLine != nil
+        }
+        return (selectedDayNutrition?.entryCount ?? 0) > 0
+    }
+
     var body: some View {
         VStack(spacing: 8) {
             HStack(spacing: 0) {
@@ -245,19 +294,7 @@ struct WeekNavigator: View {
 
                 Spacer(minLength: 8)
 
-                HStack(spacing: 8) {
-                    if isLoading {
-                        ProgressView()
-                            .controlSize(.small)
-                    }
-                    Text(ManifestDateHelpers.formatRange(start: rangeStart, end: rangeEnd))
-                        .font(Typography.headline())
-                        .foregroundStyle(Theme.carbon)
-                        .multilineTextAlignment(.center)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                }
-                .allowsHitTesting(false)
+                rangeLabel
 
                 Spacer(minLength: 8)
 
@@ -286,14 +323,104 @@ struct WeekNavigator: View {
                 .buttonStyle(.borderless)
             }
 
-            if let totals = selectedDayNutrition, totals.entryCount > 0 {
-                dayNutrientLine(totals)
+            if shouldShowNutrientStrip {
+                dayNutrientStrip(dayTotalsForStrip)
             }
         }
     }
 
     @ViewBuilder
-    private func dayNutrientLine(_ totals: NutritionDayTotals) -> some View {
+    private var rangeLabel: some View {
+        let label = HStack(spacing: 8) {
+            if isLoading {
+                ProgressView()
+                    .controlSize(.small)
+            }
+            Text(ManifestDateHelpers.formatRange(start: rangeStart, end: rangeEnd))
+                .font(Typography.headline())
+                .foregroundStyle(Theme.carbon)
+                .multilineTextAlignment(.center)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
+
+        if let onOpenCalendar {
+            Button(action: onOpenCalendar) { label }
+                .buttonStyle(.borderless)
+                .accessibilityLabel(ManifestDateHelpers.formatRange(start: rangeStart, end: rangeEnd))
+                .accessibilityHint("Opens calendar to jump to a date")
+        } else {
+            label
+                .allowsHitTesting(false)
+        }
+    }
+
+    @ViewBuilder
+    private func dayNutrientStrip(_ totals: NutritionDayTotals) -> some View {
+        if showNutritionGoals {
+            if let goal = nutritionGoal, goal.hasAnyManifestTarget {
+                goalProgressStrip(day: totals, goal: goal)
+            } else if let onTapNutrientLine {
+                Button(action: onTapNutrientLine) {
+                    Text("No goals · Set targets")
+                        .font(Typography.dataCaption())
+                        .foregroundStyle(Theme.muted)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .buttonStyle(.borderless)
+                .accessibilityHint("Opens Nutrition Goals")
+            }
+        } else {
+            absoluteNutrientLine(totals)
+        }
+    }
+
+    @ViewBuilder
+    private func goalProgressStrip(day: NutritionDayTotals, goal: NutritionSummary.Goal) -> some View {
+        let lines = NutritionGoalProgress.manifestStripLines(day: day, goal: goal)
+        let energy = lines.first { $0.key == "energy" }
+        let macros = lines.filter { $0.key != "energy" }
+
+        let content = VStack(alignment: .leading, spacing: 6) {
+            if let energy {
+                HStack(spacing: 8) {
+                    Label(energy.displayText, systemImage: "bolt.fill")
+                        .font(Typography.dataCaption())
+                        .foregroundStyle(Theme.muted)
+                    Spacer(minLength: 0)
+                }
+                ThinProgressBar(progress: NutritionGoalProgress.clamped(energy.ratio), height: 3)
+            }
+            if !macros.isEmpty {
+                HStack(spacing: 10) {
+                    ForEach(macros, id: \.key) { line in
+                        Text("\(line.label) \(Int(line.actual.rounded()))/\(Int(line.target.rounded()))")
+                            .font(Typography.dataCaption())
+                            .foregroundStyle(Theme.muted)
+                    }
+                    Spacer(minLength: 0)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+
+        let a11y = lines.map(\.displayText).joined(separator: ", ")
+
+        if let onTapNutrientLine {
+            Button(action: onTapNutrientLine) { content }
+                .buttonStyle(.borderless)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(a11y)
+                .accessibilityHint("Opens Nutrition Goals")
+        } else {
+            content
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(a11y)
+        }
+    }
+
+    @ViewBuilder
+    private func absoluteNutrientLine(_ totals: NutritionDayTotals) -> some View {
         let content = HStack(spacing: 10) {
             Label("\(Int(totals.energyKcal.rounded())) kcal", systemImage: "bolt.fill")
             Text("P \(Int(totals.proteinG.rounded()))g")

@@ -2,8 +2,14 @@ import Foundation
 
 extension RationAPI {
     // Nutrition goals — gated by `nutrition-goals` (fail-closed server-side).
-    func nutritionGoal() async throws -> NutritionGoalResponse {
-        try await client.get("nutrition/goals")
+    /// - Parameter asOf: Client local YYYY-MM-DD so GET matches the device calendar
+    ///   used when saving `effectiveFrom` (avoids UTC midnight skew).
+    func nutritionGoal(asOf: String? = nil) async throws -> NutritionGoalResponse {
+        var query: [URLQueryItem] = []
+        if let asOf {
+            query.append(URLQueryItem(name: "asOf", value: asOf))
+        }
+        return try await client.get("nutrition/goals", query: query)
     }
 
     func upsertNutritionGoal(_ body: NutritionGoalUpsertRequest) async throws -> NutritionGoalResponse {

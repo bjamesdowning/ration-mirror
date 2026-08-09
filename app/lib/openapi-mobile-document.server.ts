@@ -569,8 +569,17 @@ export function buildMobileOpenApiDocument(baseUrl: string) {
 			"/api/mobile/v1/nutrition/goals": {
 				get: {
 					summary: "Active nutrition goal",
-					description: "Requires nutrition-goals.",
+					description:
+						"Requires nutrition-goals. Optional `asOf` (YYYY-MM-DD) uses the client calendar day.",
 					security: [{ bearerAuth: [] }],
+					parameters: [
+						{
+							name: "asOf",
+							in: "query",
+							required: false,
+							schema: { type: "string", format: "date" },
+						},
+					],
 					responses: {
 						"200": { description: "Goal or null" },
 						"403": { description: "Feature disabled" },

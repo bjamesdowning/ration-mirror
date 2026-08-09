@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
 	AnyNutritionSnapshotSchema,
 	ConsumePortionsSchema,
+	NutritionGoalAsOfQuerySchema,
 	NutritionGoalSchema,
 	NutritionGoalUpsertSchema,
 	NutritionRecomputeJobSchema,
@@ -218,6 +219,21 @@ describe("NutritionSummaryQuerySchema", () => {
 				from: "2026-01-01",
 				to: "2026-05-01",
 			}),
+		).toThrow();
+	});
+});
+
+describe("NutritionGoalAsOfQuerySchema", () => {
+	it("accepts optional asOf", () => {
+		expect(NutritionGoalAsOfQuerySchema.parse({}).asOf).toBeUndefined();
+		expect(
+			NutritionGoalAsOfQuerySchema.parse({ asOf: "2026-08-09" }).asOf,
+		).toBe("2026-08-09");
+	});
+
+	it("rejects invalid asOf", () => {
+		expect(() =>
+			NutritionGoalAsOfQuerySchema.parse({ asOf: "08/09/2026" }),
 		).toThrow();
 	});
 });

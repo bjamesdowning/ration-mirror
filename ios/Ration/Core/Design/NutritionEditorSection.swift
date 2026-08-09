@@ -1,13 +1,21 @@
 import SwiftUI
 
 /// Editable cargo macros (kcal / protein / carbs / fat) — mirrors web `NutritionPanel` edit mode.
+///
+/// Does **not** promote USDA/AI snapshots to `user_override` unless the user actually
+/// changes a macro field (web `nutritionEdited` parity). Programmatic `syncFromModel`
+/// fills are ignored via format round-trip equality.
 struct NutritionEditorSection: View {
     @Binding var nutrition: NutritionSnapshot?
+    /// Set to `true` only when the user edits a macro field. Parents must omit nutrition
+    /// on save when this remains `false` so qty/unit changes can density-scale server-side.
+    @Binding var nutritionEdited: Bool
 
     @State private var energyText = ""
     @State private var proteinText = ""
     @State private var carbsText = ""
     @State private var fatText = ""
+    @State private var isSyncing = false
     @FocusState private var focusedField: Field?
 
     private enum Field: Hashable {
@@ -53,14 +61,30 @@ struct NutritionEditorSection: View {
     }
 
     private func syncFromModel() {
+        isSyncing = true
         let values = nutrition?.displayNutrients
         energyText = Self.format(values?.energyKcal)
         proteinText = Self.format(values?.proteinG)
         carbsText = Self.format(values?.carbG)
         fatText = Self.format(values?.fatG)
+        // Clear after SwiftUI processes text onChange from this write.
+        DispatchQueue.main.async {
+            isSyncing = false
+        }
     }
 
     private func commitEdits() {
+        guard !isSyncing else { return }
+
+        let values = nutrition?.displayNutrients
+        // Round-trip equality: programmatic sync wrote format(display) — ignore those fires.
+        if energyText == Self.format(values?.energyKcal),
+           proteinText == Self.format(values?.proteinG),
+           carbsText == Self.format(values?.carbG),
+           fatText == Self.format(values?.fatG) {
+            return
+        }
+
         let energy = Self.parse(energyText)
         let protein = Self.parse(proteinText)
         let carbs = Self.parse(carbsText)
@@ -68,10 +92,12 @@ struct NutritionEditorSection: View {
         if energy == nil, protein == nil, carbs == nil, fat == nil {
             // Keep resolved snapshot until the user types a value; don't wipe USDA/AI on appear.
             if nutrition?.source == "user_override", !(nutrition?.displayNutrients?.hasAnyMacro ?? false) {
+                nutritionEdited = true
                 nutrition = nil
             }
             return
         }
+        nutritionEdited = true
         let base = nutrition ?? .blankUserOverride()
         nutrition = base.applyingMacros(
             energyKcal: energy,
@@ -93,5 +119,25 @@ struct NutritionEditorSection: View {
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
         return Double(trimmed)
+    }
+}
+
+/// Pure helper for cargo update payloads — send nutrition only when the user edited macros.
+enum CargoNutritionPayload {
+    static func forEdit(
+        current: NutritionSnapshot?,
+        nutritionEdited: Bool,
+        engineEnabled: Bool
+    ) -> NutritionSnapshot? {
+        guard engineEnabled, nutritionEdited else { return nil }
+        return current
+    }
+
+    static func forCreate(
+        current: NutritionSnapshot?,
+        engineEnabled: Bool
+    ) -> NutritionSnapshot? {
+        guard engineEnabled else { return nil }
+        return current
     }
 }

@@ -222,7 +222,9 @@ struct MainTabView: View {
         .sheet(isPresented: $showingScan) {
             ScanView()
         }
-        .sheet(isPresented: $showingNutritionGoals) {
+        .sheet(isPresented: $showingNutritionGoals, onDismiss: {
+            env.lifecycle.bumpRefresh(forTab: .manifest)
+        }) {
             NutritionGoalsView()
         }
         .sheet(isPresented: Binding(

@@ -216,6 +216,15 @@ export type NutritionGoalUpsertInput = z.infer<
 	typeof NutritionGoalUpsertSchema
 >;
 
+/** Optional client calendar day for “active goal as of” (YYYY-MM-DD). */
+export const NutritionGoalAsOfQuerySchema = z.object({
+	asOf: z.string().regex(ISO_DATE_REGEX, "asOf must be YYYY-MM-DD").optional(),
+});
+
+export type NutritionGoalAsOfQuery = z.infer<
+	typeof NutritionGoalAsOfQuerySchema
+>;
+
 /** Max inclusive span for nutrition summary queries (calendar days). */
 export const NUTRITION_SUMMARY_MAX_SPAN_DAYS = 93;
 

@@ -40,6 +40,67 @@ enum NutritionGoalProgress {
         guard let ratio, ratio.isFinite else { return 0 }
         return min(max(ratio, 0), 1)
     }
+
+    /// Compact Manifest day-strip lines for nutrients that have a positive target.
+    /// Fiber is omitted (goal-only; not on day totals).
+    struct ManifestStripLine: Equatable {
+        let key: String
+        let label: String
+        let actual: Double
+        let target: Double
+        let unit: String
+
+        var ratio: Double { actual / target }
+
+        var displayText: String {
+            "\(Int(actual.rounded())) / \(Int(target.rounded())) \(unit)"
+        }
+    }
+
+    static func manifestStripLines(
+        day: NutritionDayTotals,
+        goal: NutritionSummary.Goal?
+    ) -> [ManifestStripLine] {
+        guard let goal else { return [] }
+        var lines: [ManifestStripLine] = []
+        if let target = goal.dailyEnergyKcal, target > 0 {
+            lines.append(ManifestStripLine(
+                key: "energy",
+                label: "Calories",
+                actual: day.energyKcal,
+                target: target,
+                unit: "kcal"
+            ))
+        }
+        if let target = goal.proteinG, target > 0 {
+            lines.append(ManifestStripLine(
+                key: "protein",
+                label: "P",
+                actual: day.proteinG,
+                target: target,
+                unit: "g"
+            ))
+        }
+        if let target = goal.carbsG, target > 0 {
+            lines.append(ManifestStripLine(
+                key: "carbs",
+                label: "C",
+                actual: day.carbsG,
+                target: target,
+                unit: "g"
+            ))
+        }
+        if let target = goal.fatG, target > 0 {
+            lines.append(ManifestStripLine(
+                key: "fat",
+                label: "F",
+                actual: day.fatG,
+                target: target,
+                unit: "g"
+            ))
+        }
+        return lines
+    }
 }
 
 /// Fills gaps in server-returned sparse day totals so charts render a contiguous X-axis.

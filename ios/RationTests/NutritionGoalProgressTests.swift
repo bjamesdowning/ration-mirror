@@ -73,4 +73,35 @@ final class NutritionGoalProgressTests: XCTestCase {
         let filled = NutritionDayFill.fillSparseDays(from: "not-a-date", to: "also-not-a-date", days: days)
         XCTAssertEqual(filled, days)
     }
+
+    func testManifestStripLinesOnlyIncludesSetTargets() {
+        let day = NutritionDayTotals(
+            date: "2026-08-09",
+            energyKcal: 1240,
+            proteinG: 95,
+            carbsG: 110,
+            fatG: 40,
+            coverageAvg: 1,
+            entryCount: 2
+        )
+        let goal = NutritionSummary.Goal(
+            dailyEnergyKcal: 2000,
+            proteinG: 150,
+            carbsG: nil,
+            fatG: 70,
+            fiberG: 30,
+            effectiveFrom: "2026-01-01",
+            effectiveTo: nil
+        )
+        let lines = NutritionGoalProgress.manifestStripLines(day: day, goal: goal)
+        XCTAssertEqual(lines.map(\.key), ["energy", "protein", "fat"])
+        XCTAssertEqual(lines[0].displayText, "1240 / 2000 kcal")
+        XCTAssertEqual(lines[1].displayText, "95 / 150 g")
+        XCTAssertNil(lines.first { $0.key == "carbs" })
+    }
+
+    func testManifestStripLinesEmptyWithoutGoal() {
+        let day = NutritionDayTotals.empty(date: "2026-08-09")
+        XCTAssertTrue(NutritionGoalProgress.manifestStripLines(day: day, goal: nil).isEmpty)
+    }
 }

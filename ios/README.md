@@ -255,7 +255,7 @@ handler also opens the picker when access is lost remotely.
 | `/manifest`, `/manifest/consume` | GET/POST | Meal plan (legacy Eat/consume) |
 | `/manifest/cook` | POST | Shared Cook → Prepared (`nutrition-cook-log-split`) |
 | `/manifest/entries/:entryId/intake` | POST/DELETE | Private Eat log / clear (explicit first-use intake consent) |
-| `/nutrition/summary`, `/nutrition/goals` | GET/… | Nutrition summary + goals (flag-gated) |
+| `/nutrition/summary`, `/nutrition/goals` | GET/… | Nutrition summary + goals (flag-gated; goals GET accepts `asOf`) |
 | `/scan`, `/scan/:requestId` | POST/GET | Visual scan AI |
 | `/settings` | GET/PATCH | User preferences |
 | `/orgs` | GET | List groups for org picker / recovery |
@@ -292,16 +292,22 @@ Settings PATCH accepts `hubProfile` and `hubLayout` for customizable Hub widgets
 
 **Copilot Textual markdown (iOS 1.2.16):** Assistant replies (Ask + onboarding briefing) render with Textual `StructuredText` — structured lists/headings/code, Hyper-Green links, native text selection. Requires iOS 18. MarkdownUI removed.
 
-**Manifest date chrome (iOS 1.2.12):** Week navigator uses edge chevrons (≥44pt) with a
-display-only range label and day pills. **Today** lives in the Manifest navigation toolbar
-(only when away from today’s window). The calendar “Go to date” sheet was removed to prevent
-misclicks next to Next.
+**Manifest date chrome (iOS 1.3.23+):** Week navigator uses edge chevrons (≥44pt), a
+tappable range label that opens a native graphical **Go to date** calendar (gated by
+`nutrition-manifest`, ~13-month history retention), day pills, and toolbar **Today**
+(only when away from today’s window). When `nutrition-goals` is on, the day strip shows
+kcal progress (`ThinProgressBar` + `consumed / target`) instead of absolute macros only.
 
 **Nutrition Cook/Eat split (iOS 1.3.23, flag-gated):** When `nutrition-cook-log-split` is on,
 Manifest **Cook** deducts Cargo and marks *Prepared* (no personal nutrition). **Log my serving**
 opens `ManifestPlateUpSheet` for private intake; first use requires an **explicit** intake-consent
 checkbox (`consent: true` on POST) — not implied by Cook or goals. Settings → Nutrition goals
 remain a separate explicit consent path. Flags off → legacy Consume/Eat only.
+
+**Nutrition goals + cargo override (iOS 1.3.23):** Nutrition Goals toolbar is Cancel/Save
+(Save dismisses on success) with `MutationRetry` and `asOf` on GET. Cargo/Scan nutrition
+editors only send `user_override` when macros are explicitly edited — qty/unit-only saves
+omit nutrition so the server can density-scale USDA/AI snapshots.
 
 **Manifest week rocker races (iOS 1.2.33):** Quiet revalidate / foreground refresh no longer
 resets the viewed week to today (anchor reset is org-change only). Rocker taps apply the target

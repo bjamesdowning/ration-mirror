@@ -32,7 +32,11 @@ struct SettingsView: View {
                 PaywallView(context: .settings())
             }
             .sheet(isPresented: $showingPrivacy) { PrivacySettingsView() }
-            .sheet(isPresented: $showingNutritionGoals) { NutritionGoalsView() }
+            .sheet(isPresented: $showingNutritionGoals, onDismiss: {
+                env.lifecycle.bumpRefresh(forTab: .manifest)
+            }) {
+                NutritionGoalsView()
+            }
         }
         .task { await model.load(api: env.api) }
     }

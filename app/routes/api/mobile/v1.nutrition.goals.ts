@@ -11,7 +11,10 @@ import {
 } from "~/lib/nutrition/persist.server";
 import { resolveNutritionGoalConsentAt } from "~/lib/nutrition/resolve-goal-consent.server";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
-import { NutritionGoalUpsertSchema } from "~/lib/schemas/nutrition";
+import {
+	NutritionGoalAsOfQuerySchema,
+	NutritionGoalUpsertSchema,
+} from "~/lib/schemas/nutrition";
 import type { Route } from "./+types/v1.nutrition.goals";
 
 function serializeGoal(
@@ -38,7 +41,9 @@ function serializeGoal(
 }
 
 /**
- * GET /api/mobile/v1/nutrition/goals
+ * GET /api/mobile/v1/nutrition/goals?asOf=YYYY-MM-DD
+ * `asOf` uses the client's local calendar day so midnight UTC skew does not
+ * hide a goal saved with the device's today.
  */
 export async function loader({ request, context }: Route.LoaderArgs) {
 	try {
@@ -50,7 +55,19 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 			buildFlagContext(request, env, { user: { id: userId } }),
 		);
 
-		const goal = await getActiveNutritionGoal(env.DB, userId, getTodayISO());
+		const url = new URL(request.url);
+		const asOfParsed = NutritionGoalAsOfQuerySchema.safeParse({
+			asOf: url.searchParams.get("asOf") ?? undefined,
+		});
+		if (!asOfParsed.success) {
+			throw data(
+				{ error: "Invalid request", details: asOfParsed.error.flatten() },
+				{ status: 400 },
+			);
+		}
+		const asOf = asOfParsed.data.asOf ?? getTodayISO();
+
+		const goal = await getActiveNutritionGoal(env.DB, userId, asOf);
 		return { goal: goal ? serializeGoal(goal) : null };
 	} catch (e) {
 		return handleApiError(e);

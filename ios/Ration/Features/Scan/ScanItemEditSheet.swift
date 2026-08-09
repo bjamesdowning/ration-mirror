@@ -15,6 +15,8 @@ struct ScanItemEditSheet: View {
     @State private var hasExpiry: Bool
     @State private var expiresAt: Date
     @State private var nutrition: NutritionSnapshot?
+    /// True only after the user edits a macro field — preserve original snapshot otherwise.
+    @State private var nutritionEdited = false
     @State private var tagSuggestions: [String] = []
     @State private var validationError: String?
     @FocusState private var focusedField: Field?
@@ -65,7 +67,7 @@ struct ScanItemEditSheet: View {
                 }
 
                 if env.session.clientFlags.isNutritionEngineEnabled {
-                    NutritionEditorSection(nutrition: $nutrition)
+                    NutritionEditorSection(nutrition: $nutrition, nutritionEdited: $nutritionEdited)
                 }
 
                 if let validationError {
@@ -98,6 +100,9 @@ struct ScanItemEditSheet: View {
     }
 
     private func save() {
+        // Only pass a nutrition snapshot when macros were edited; otherwise keep original
+        // (including USDA/AI density) so qty/unit changes can still scale later.
+        let nutritionToSave = nutritionEdited ? nutrition : item.nutrition
         switch item.applyingEdit(
             name: name,
             quantityText: quantity,
@@ -106,7 +111,7 @@ struct ScanItemEditSheet: View {
             tags: tags,
             hasExpiry: hasExpiry,
             expiresAt: expiresAt,
-            nutrition: nutrition
+            nutrition: nutritionToSave
         ) {
         case let .saved(updated):
             if let error = onSave(updated) {

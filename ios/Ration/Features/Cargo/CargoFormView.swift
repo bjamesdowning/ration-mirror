@@ -20,6 +20,9 @@ struct CargoFormView: View {
     @State private var hasExpiry: Bool
     @State private var expiresAt: Date
     @State private var nutrition: NutritionSnapshot?
+    /// True only after the user edits a macro field — omit nutrition on save otherwise
+    /// so qty/unit changes density-scale server-side (web `nutritionEdited` parity).
+    @State private var nutritionEdited = false
     @State private var tagSuggestions: [String] = []
     @State private var isSaving = false
     @State private var errorMessage: String?
@@ -65,12 +68,16 @@ struct CargoFormView: View {
     }
 
     private var nutritionPayload: NutritionSnapshot? {
-        guard env.session.clientFlags.isNutritionEngineEnabled else { return nil }
+        let engineEnabled = env.session.clientFlags.isNutritionEngineEnabled
         switch mode {
         case .create:
-            return nutrition
-        case let .edit(item):
-            return nutrition == item.nutrition ? nil : nutrition
+            return CargoNutritionPayload.forCreate(current: nutrition, engineEnabled: engineEnabled)
+        case .edit:
+            return CargoNutritionPayload.forEdit(
+                current: nutrition,
+                nutritionEdited: nutritionEdited,
+                engineEnabled: engineEnabled
+            )
         }
     }
 
@@ -108,7 +115,7 @@ struct CargoFormView: View {
                 }
 
                 if env.session.clientFlags.isNutritionEngineEnabled {
-                    NutritionEditorSection(nutrition: $nutrition)
+                    NutritionEditorSection(nutrition: $nutrition, nutritionEdited: $nutritionEdited)
                 }
 
                 if let errorMessage {

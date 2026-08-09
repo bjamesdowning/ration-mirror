@@ -13,6 +13,7 @@ struct ManifestView: View {
     @State private var showingAddEntry = false
     @State private var showingPlanWeek = false
     @State private var showingOptions = false
+    @State private var showingJumpCalendar = false
     @State private var paywallContext: PaywallContext?
     @State private var pendingUndo: ManifestUndoToast?
     /// Shared by legacy Consume and split Cook — both deduct Cargo and need the same
@@ -233,7 +234,29 @@ struct ManifestView: View {
                     await reload()
                 }
             }
+            .sheet(isPresented: $showingJumpCalendar) {
+                ManifestJumpCalendarSheet(initialDay: model.selectedDay) { isoDay in
+                    jumpToCalendarDay(isoDay)
+                }
+            }
         }
+    }
+
+    private func jumpToCalendarDay(_ isoDay: String) {
+        guard let organizationId else { return }
+        let start = ManifestDateHelpers.normalizedNavigationStart(
+            isoDay,
+            calendarSpan: model.calendarSpan,
+            weekStartPref: model.weekStartPref
+        )
+        model.selectedDay = isoDay
+        model.requestNavigateWeek(
+            to: start,
+            api: env.api,
+            snapshots: env.snapshots,
+            online: env.network.isOnline,
+            organizationId: organizationId
+        )
     }
 
     private func reload(organizationId: String? = nil) async {
@@ -294,7 +317,12 @@ struct ManifestView: View {
                 entryDates: entryDates,
                 isLoading: model.isWeekNavigationBusy,
                 nutritionByDate: nutritionByDate,
-                onTapNutrientLine: env.session.clientFlags.isNutritionGoalsEnabled ? onOpenNutritionGoals : nil
+                nutritionGoal: model.nutritionSummary?.goal,
+                showNutritionGoals: env.session.clientFlags.isNutritionGoalsEnabled,
+                onTapNutrientLine: env.session.clientFlags.isNutritionGoalsEnabled ? onOpenNutritionGoals : nil,
+                onOpenCalendar: env.session.clientFlags.isNutritionManifestEnabled
+                    ? { showingJumpCalendar = true }
+                    : nil
             ) { start in
                 model.requestNavigateWeek(
                     to: start,

@@ -108,6 +108,11 @@ struct NutritionSummary: Codable, Sendable, Equatable {
         let fiberG: Double?
         let effectiveFrom: String
         let effectiveTo: String?
+
+        /// True when at least one Manifest-relevant target is set (kcal / P / C / F; fiber is goal-only).
+        var hasAnyManifestTarget: Bool {
+            dailyEnergyKcal != nil || proteinG != nil || carbsG != nil || fatG != nil
+        }
     }
 
     let from: String

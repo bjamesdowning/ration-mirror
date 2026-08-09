@@ -38,7 +38,7 @@ final class NutritionGoalsViewModel {
         isUnavailable = false
         defer { isLoading = false }
         do {
-            let response = try await api.nutritionGoal()
+            let response = try await api.nutritionGoal(asOf: ManifestDateHelpers.todayISO())
             applyGoal(response.goal)
         } catch let apiError as APIError where apiError.isFeatureDisabled {
             isUnavailable = true
@@ -97,7 +97,9 @@ final class NutritionGoalsViewModel {
                 // Server records first-use goals consent; idempotent to re-send on every edit.
                 consent: true
             )
-            let response = try await api.upsertNutritionGoal(body)
+            let response = try await MutationRetry.once {
+                try await api.upsertNutritionGoal(body)
+            }
             applyGoal(response.goal)
             await loadSummary(api: api)
             return true
@@ -112,7 +114,9 @@ final class NutritionGoalsViewModel {
         errorMessage = nil
         defer { isSaving = false }
         do {
-            let response = try await api.clearNutritionGoal()
+            let response = try await MutationRetry.once {
+                try await api.clearNutritionGoal()
+            }
             applyGoal(response.goal)
         } catch {
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
@@ -120,7 +124,7 @@ final class NutritionGoalsViewModel {
     }
 }
 
-/// Personal nutrition targets — Settings-only. Fiber lives here, not on Manifest strips
+/// Personal nutrition targets — Settings + Manifest. Fiber lives here, not on Manifest strips
 /// (`ration-master` directive), since it's a goal input rather than a per-meal actual.
 struct NutritionGoalsView: View {
     @Environment(AppEnvironment.self) private var env
@@ -151,7 +155,19 @@ struct NutritionGoalsView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Done") { dismiss() }
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        Task {
+                            focusedField = nil
+                            if await model.save(api: env.api) {
+                                Haptics.light()
+                                dismiss()
+                            }
+                        }
+                    }
+                    .disabled(model.isSaving || !model.hasAnyValue || model.isUnavailable)
                 }
             }
             .background(Theme.ceramic)
@@ -179,35 +195,15 @@ struct NutritionGoalsView: View {
                 }
             }
 
-            Section {
-                Button {
-                    Task {
-                        focusedField = nil
-                        _ = await model.save(api: env.api)
-                    }
-                } label: {
-                    HStack {
-                        Spacer()
-                        if model.isSaving {
-                            ProgressView().tint(Theme.onHyperGreen)
-                        } else {
-                            Text("Save goals")
-                        }
-                        Spacer()
-                    }
-                }
-                .buttonStyle(PrimaryButtonStyle())
-                .listRowBackground(Color.clear)
-                .disabled(model.isSaving || !model.hasAnyValue)
-
-                if model.goal != nil {
+            if model.goal != nil {
+                Section {
                     Button("Clear goals", role: .destructive) {
                         Task { await model.clear(api: env.api) }
                     }
                     .disabled(model.isSaving)
                 }
+                .listRowBackground(Color.clear)
             }
-            .listRowBackground(Color.clear)
 
             if let summary = model.summary {
                 weeklySummarySection(summary)

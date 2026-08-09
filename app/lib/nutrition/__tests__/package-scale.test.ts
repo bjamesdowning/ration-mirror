@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
 	cargoPackageSizeChanged,
+	gramsForNutritionPackage,
 	scaleCargoNutritionToPackage,
 } from "../package-scale";
 import type { NutritionSnapshot } from "../types";
@@ -34,6 +35,41 @@ describe("scaleCargoNutritionToPackage", () => {
 		expect(next.perServing?.energyKcal).toBeGreaterThan(400);
 		expect(next.perServing?.energyKcal).toBeLessThan(650);
 		expect(next.per100g?.energyKcal).toBe(42);
+	});
+
+	it("scales OCR-style milk names from unit to liter", () => {
+		const next = scaleCargoNutritionToPackage(
+			usdaMilk,
+			1,
+			"l",
+			"organic whole milk",
+			{ previousQuantity: 1, previousUnit: "unit" },
+		);
+		expect(next.perServing?.energyKcal).toBeGreaterThan(400);
+		expect(next.perServing?.energyKcal).toBeLessThan(650);
+	});
+
+	it("scales USDA FDC-style descriptions using leading milk token", () => {
+		const next = scaleCargoNutritionToPackage(
+			usdaMilk,
+			1,
+			"l",
+			"Milk, whole, 3.25% milkfat",
+			{ previousQuantity: 1, previousUnit: "unit" },
+		);
+		expect(next.perServing?.energyKcal).toBeGreaterThan(400);
+	});
+
+	it("uses 1 g/ml fallback for unknown volume names", () => {
+		const next = scaleCargoNutritionToPackage(
+			usdaMilk,
+			1,
+			"l",
+			"exotic nebula tonic",
+			{ previousQuantity: 1, previousUnit: "unit" },
+		);
+		// 1000 ml × 1 g/ml → 1000 g → 42 kcal/100g × 10 = 420
+		expect(next.perServing?.energyKcal).toBeCloseTo(420, 5);
 	});
 
 	it("updates package totals when qty changes and per100g exists", () => {
@@ -97,6 +133,23 @@ describe("scaleCargoNutritionToPackage", () => {
 			previousUnit: "l",
 		});
 		expect(next.perServing?.energyKcal).toBeCloseTo(250, 0);
+	});
+});
+
+describe("gramsForNutritionPackage", () => {
+	it("uses density for known liquids", () => {
+		expect(gramsForNutritionPackage(1, "l", "organic whole milk")).toBeCloseTo(
+			1030,
+			0,
+		);
+	});
+
+	it("falls back to 1 g/ml for unknown volume names", () => {
+		expect(gramsForNutritionPackage(1, "l", "exotic nebula tonic")).toBe(1000);
+	});
+
+	it("returns null for count units without mass", () => {
+		expect(gramsForNutritionPackage(1, "unit", "milk")).toBeNull();
 	});
 });
 

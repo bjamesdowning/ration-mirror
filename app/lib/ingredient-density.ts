@@ -305,9 +305,15 @@ const DENSITY_ALIASES: Record<string, string> = {
 	"salted butter": "butter",
 	"rapeseed oil": "canola oil",
 
-	// Dairy
+	// Dairy (keys must already match normalizeForMatch — no punctuation)
 	"skim milk": "milk",
+	"skimmed milk": "milk",
+	"semi skimmed milk": "milk",
 	"whole milk": "milk",
+	"organic milk": "milk",
+	"organic whole milk": "milk",
+	"2 percent milk": "milk",
+	"2 milk": "milk", // from "2% milk" after % stripped
 	"heavy cream": "cream",
 	"double cream": "cream",
 	"single cream": "cream",
@@ -379,6 +385,27 @@ const LIQUID_HINTS = new Set<string>([
 	"extract",
 ]);
 
+/** Keys for longest-phrase density match (canonical + aliases), longest first. */
+let densityPhraseKeysDesc: string[] | null = null;
+
+function getDensityPhraseKeysDesc(): string[] {
+	if (!densityPhraseKeysDesc) {
+		const keys = new Set<string>([
+			...Object.keys(DENSITY_CANONICAL),
+			...Object.keys(DENSITY_ALIASES),
+		]);
+		densityPhraseKeysDesc = [...keys].sort((a, b) => b.length - a.length);
+	}
+	return densityPhraseKeysDesc;
+}
+
+function densityForCanonicalKey(canonical: string): DensityGPerMl | null {
+	const density = DENSITY_CANONICAL[canonical];
+	if (density == null || typeof density !== "number") return null;
+	if (density < DENSITY_MIN || density > DENSITY_MAX) return null;
+	return density;
+}
+
 /**
  * Normalizes a name for density lookup.
  * Matches matching.server.ts normalizeIngredientName: lowercase, trim, remove punctuation, strip trailing 's'.
@@ -389,8 +416,27 @@ function normalizeForDensityLookup(name: string): string {
 	return base.replace(/\s*s$/, "").trim() || base;
 }
 
+function densityFromExactAndPhrase(normalized: string): DensityGPerMl | null {
+	const exactCanonical = DENSITY_ALIASES[normalized] ?? normalized;
+	const exact = densityForCanonicalKey(exactCanonical);
+	if (exact != null) return exact;
+
+	// Longest phrase contained as whole words (e.g. "organic whole milk" → whole milk).
+	const padded = ` ${normalized} `;
+	for (const key of getDensityPhraseKeysDesc()) {
+		if (key.length === 0) continue;
+		if (!padded.includes(` ${key} `)) continue;
+		const canonical = DENSITY_ALIASES[key] ?? key;
+		const density = densityForCanonicalKey(canonical);
+		if (density != null) return density;
+	}
+	return null;
+}
+
 /**
  * Looks up ingredient density in g/ml by name.
+ * Exact key → longest contained phrase (canonical/alias) → leading FDC-style token.
+ * Tries the unstripped form first so "milk chocolate chips" is not reduced to bare milk.
  * Returns null if not found or density is invalid.
  */
 export function lookupDensity(
@@ -398,16 +444,27 @@ export function lookupDensity(
 ): DensityGPerMl | null {
 	if (name == null || String(name).trim() === "") return null;
 
-	const normalized = normalizeForDensityLookup(String(name));
-	if (!normalized) return null;
+	const base = normalizeForMatch(String(name));
+	if (!base) return null;
 
-	const canonical = DENSITY_ALIASES[normalized] ?? normalized;
-	const density = DENSITY_CANONICAL[canonical];
-	if (density == null || typeof density !== "number") return null;
+	const depluralized = base.replace(/\s*s$/, "").trim() || base;
+	const candidates = depluralized === base ? [base] : [base, depluralized];
 
-	// Bounds check
-	if (density < DENSITY_MIN || density > DENSITY_MAX) return null;
-	return density;
+	for (const normalized of candidates) {
+		const hit = densityFromExactAndPhrase(normalized);
+		if (hit != null) return hit;
+	}
+
+	// USDA / FDC labels are "Head, modifiers…" → leading token after normalize.
+	for (const normalized of candidates) {
+		const leading = normalized.split(/\s+/).find((t) => t.length > 1);
+		if (!leading) continue;
+		const canonical = DENSITY_ALIASES[leading] ?? leading;
+		const density = densityForCanonicalKey(canonical);
+		if (density != null) return density;
+	}
+
+	return null;
 }
 
 /**

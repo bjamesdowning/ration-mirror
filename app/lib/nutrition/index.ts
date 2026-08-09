@@ -36,6 +36,7 @@ export {
 } from "./override-scale";
 export {
 	cargoPackageSizeChanged,
+	gramsForNutritionPackage,
 	type ScaleCargoNutritionOptions,
 	scaleCargoNutritionToPackage,
 } from "./package-scale";

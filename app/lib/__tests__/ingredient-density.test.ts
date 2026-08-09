@@ -23,6 +23,25 @@ describe("lookupDensity", () => {
 		expect(lookupDensity("chickpea flour")).not.toBeNull();
 	});
 
+	it("matches OCR / modified dairy names via phrase or leading token", () => {
+		expect(lookupDensity("organic whole milk")).toBeCloseTo(1.03);
+		expect(lookupDensity("semi skimmed milk")).toBeCloseTo(1.03);
+		expect(lookupDensity("semi-skimmed milk")).toBeCloseTo(1.03); // hyphen stripped
+		expect(lookupDensity("2% milk")).toBeCloseTo(1.03); // % stripped → alias "2 milk"
+		expect(lookupDensity("Milk, whole, 3.25% milkfat")).toBeCloseTo(1.03);
+	});
+
+	it("prefers longer chocolate-chip phrase over bare milk", () => {
+		expect(lookupDensity("milk chocolate chips")).toBeCloseTo(0.6);
+		expect(lookupDensity("dark chocolate chips")).toBeCloseTo(0.6);
+	});
+
+	it("does not invent milk density for non-food or unrelated phrases", () => {
+		expect(lookupDensity("shipping label")).toBeNull();
+		expect(lookupDensity("invoice line item")).toBeNull();
+		expect(lookupDensity("exotic nebula tonic")).toBeNull();
+	});
+
 	it("strips trailing plural 's' for lookup", () => {
 		// "flours" -> "flour" (handled by normalizeForDensityLookup stripping trailing 's')
 		// This is approximate — depends on what the lookup chain resolves

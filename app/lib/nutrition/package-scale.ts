@@ -1,4 +1,8 @@
-import type { SupportedUnit } from "~/lib/units";
+import {
+	convertQuantity,
+	getUnitFamily,
+	type SupportedUnit,
+} from "~/lib/units";
 import {
 	nutrientsPer100gFromPackageTotals,
 	withDerivedPer100g,
@@ -14,6 +18,36 @@ export type ScaleCargoNutritionOptions = {
 	previousQuantity?: number | null;
 	previousUnit?: SupportedUnit | null;
 };
+
+/**
+ * Package mass for nutrition scaling. Prefers density-aware conversion; for
+ * volume units with unknown density (common OCR/USDA names), assumes 1 g/ml
+ * so liter/ml edits still rescale package totals.
+ *
+ * Compatibility only: this fallback is unlabelled. A later quality-aware mass
+ * resolver will return method/confidence (`assumed_1g_ml` / estimated) so UI
+ * and snapshots can show estimated weight instead of treating it as exact.
+ */
+export function gramsForNutritionPackage(
+	quantity: number | null | undefined,
+	unit: SupportedUnit | null | undefined,
+	name: string,
+): number | null {
+	if (quantity == null || unit == null) return null;
+	if (!Number.isFinite(quantity) || quantity <= 0) return null;
+
+	const dense = convertIngredientAmountToGrams(quantity, unit, name);
+	if (dense != null && dense > 0) return dense;
+
+	if (getUnitFamily(unit) === "volume") {
+		const ml = convertQuantity(quantity, unit, "ml");
+		if (ml != null && Number.isFinite(ml) && ml > 0) {
+			return ml; // temporary unlabelled 1 g/ml fallback
+		}
+	}
+
+	return null;
+}
 
 /**
  * Align cargo nutrition package totals (`perServing`) with the current qty/unit.
@@ -32,17 +66,15 @@ export function scaleCargoNutritionToPackage(
 	name: string,
 	opts?: ScaleCargoNutritionOptions,
 ): NutritionSnapshot {
-	const newGrams =
-		quantity != null && unit
-			? convertIngredientAmountToGrams(quantity, unit, name)
-			: null;
+	const newGrams = gramsForNutritionPackage(quantity, unit, name);
 
 	const previousQuantity = opts?.previousQuantity;
 	const previousUnit = opts?.previousUnit;
-	const oldGrams =
-		previousQuantity != null && previousUnit
-			? convertIngredientAmountToGrams(previousQuantity, previousUnit, name)
-			: null;
+	const oldGrams = gramsForNutritionPackage(
+		previousQuantity,
+		previousUnit ?? null,
+		name,
+	);
 
 	const isOverride = snapshot.source === "user_override";
 

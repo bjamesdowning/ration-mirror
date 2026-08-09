@@ -14,7 +14,7 @@ On **Cargo → item detail → Edit**, the nutrition panel lets you set or clear
 
 When package mass is known, Ration also stores a derived **per 100 g** density so meal scaling stays stable if you later change the cargo quantity.
 
-Changing **quantity or unit** on Cargo (or in scan review) rescales package totals from that density — e.g. fixing `1 unit` → `1 L` of milk updates calories to the liter package. Manual overrides keep your package totals when correcting a unit without a prior mass, then re-derive density for the new size.
+Changing **quantity or unit** on Cargo (or in scan review) rescales package totals from that density — e.g. fixing `1 unit` → `1 L` of milk updates calories to the liter package. Scanned or USDA-style names (e.g. “organic whole milk”, “Milk, whole…”) still match density via longest phrase or leading token. If volume density is unknown, Ration temporarily assumes ~1 g/ml so liter/ml edits still rescale (compatibility behaviour; a later update will label that path as estimated). Manual overrides keep your package totals when correcting a unit without a prior mass, then re-derive density for the new size.
 
 ## Galley meals
 

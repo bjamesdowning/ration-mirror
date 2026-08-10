@@ -8,6 +8,7 @@ import { purgeCopilotConversationsForUser } from "~/lib/copilot/purge.server";
 import { retryOnD1Contention } from "~/lib/error-handler";
 import { redactAllNutritionPayloadsForUser } from "~/lib/kitchen-event-purge.server";
 import { log, redactId } from "~/lib/logging.server";
+import { eraseNutritionData } from "~/lib/nutrition/consent.server";
 import { deleteOrganization } from "~/lib/organizations.server";
 import { notifyPurgeFailure } from "~/lib/purge-failure-notify.server";
 import {
@@ -249,6 +250,19 @@ export async function purgeUserAccount(
 		await redactAllNutritionPayloadsForUser(db, userId);
 	} catch (error) {
 		throw wrapUserPurgeStep("user_wipe:kitchen_event_redact", error);
+	}
+
+	try {
+		await eraseNutritionData(env.DB, {
+			userId,
+			dataset: "all",
+			requestId: crypto.randomUUID(),
+		});
+		await db
+			.delete(schema.nutritionConsent)
+			.where(eq(schema.nutritionConsent.userId, userId));
+	} catch (error) {
+		throw wrapUserPurgeStep("user_wipe:nutrition", error);
 	}
 
 	try {

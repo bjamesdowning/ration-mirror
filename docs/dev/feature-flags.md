@@ -137,14 +137,17 @@ HTTP routes pass `buildFlagContext` (includes `X-Ration-Client` → `clientPlatf
 
 ### Production dogfood (nutrition)
 
-For operator / dogfood rollout in **production**, enable nutrition flags only via Flagship **userId allowlist** targeting (your test accounts). Do **not** use `FEATURE_FLAG_OVERRIDES` to turn nutrition flags **on** in production—that secret is for emergency **kill** (`false`) or local/dev overrides, not production enablement. Keep registry `defaultEnabled: false` and Flagship default variation off until a deliberate wider rollout.
+For operator / dogfood rollout in **production**, keep registry `defaultEnabled: false` and Flagship default variation **off**. Target by **platform** (and iOS version) — a `userId` allowlist is **not** required. Do **not** use `FEATURE_FLAG_OVERRIDES` to turn nutrition flags **on** in production—that secret is for emergency **kill** (`false`) or local/dev overrides, not production enablement.
 
 **Rollout phases**
 
 1. **Dark ship** — Deploy with registry defaults `false`. Create Flagship flags for all nutrition keys with default variation **off**. Apply main D1 migrations through `0044_*`; seed remote `NUTRITION_DB` if not already. App Store users see zero nutrition behavior.
-2. **Operator dogfood** — For each nutrition flag: Flagship rule `userId` equals your Better Auth user id → variation `true`. Sign in on **web** / TestFlight **iOS ≥ 1.3.25** with compound `clientPlatform` + `clientVersion` rules as in [nutrition-rollout.md](nutrition-rollout.md). MCP/Copilot: same `userId` **+** `clientPlatform` `mcp`|`copilot` (optional web `APP_VERSION` gate).
-3. **iOS binary** — `ClientFlags` includes nutrition keys (fail-closed `== true`). Submit App Review with Flagship still userId-only (add the review account’s `userId` if reviewers must see gated UI). Compound `clientVersion` / `clientPlatform` from `X-Ration-Client` so intake side effects skip old iOS.
-4. **Broaden** — Percent rollout on `userId` → 100%, or flip default variation on. Emergency: Flagship disable or `FEATURE_FLAG_OVERRIDES` kill (`false` only).
+2. **Operator dogfood** — For each nutrition flag, Flagship default stays off; enable with platform rules as in [nutrition-rollout.md](nutrition-rollout.md):
+   - **iOS:** `clientPlatform` equals `ios` **and** `clientVersion` ≥ `1.4.x`
+   - **Web:** `clientPlatform` equals `web` on
+   - **MCP / Copilot:** `clientPlatform` equals `mcp` or `copilot` (platform on; optional web `APP_VERSION` gate)
+3. **iOS binary** — `ClientFlags` includes nutrition keys (fail-closed `== true`). Submit App Review on **iOS ≥ 1.4.x**; nutrition may be visible to reviewers on that binary when platform/version rules are on. Compound `clientVersion` / `clientPlatform` from `X-Ration-Client` so intake side effects skip old iOS.
+4. **Broaden** — Flip default variation on, or expand percent rollout if you still use percent targeting. Emergency: Flagship disable or `FEATURE_FLAG_OVERRIDES` kill (`false` only).
 
 Consent / Art. 9 notes: [nutrition-dpia-notes.md](nutrition-dpia-notes.md). After help article changes, sync Copilot AI Search.
 

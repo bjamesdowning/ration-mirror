@@ -4,6 +4,7 @@ import { getCargoTagIndex } from "~/lib/cargo.server";
 import { enrichIngredientsWithCargoLinks } from "~/lib/cargo-links";
 import type { ItemDomain } from "~/lib/domain";
 import { handleApiError } from "~/lib/error-handler";
+import { buildMobileFlagContext } from "~/lib/feature-flags/context.server";
 import { getActiveMealSelections } from "~/lib/meal-selection.server";
 import { deleteMeal, getMeal, updateMeal } from "~/lib/meals.server";
 import { requireMobileActiveGroup } from "~/lib/mobile/auth.server";
@@ -119,7 +120,13 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 				organizationId,
 				id,
 				merged,
-				{ env: context.cloudflare.env, userId },
+				{
+					env: context.cloudflare.env,
+					userId,
+					flagContext: buildMobileFlagContext(request, context.cloudflare.env, {
+						user: { id: userId },
+					}),
+				},
 			);
 			return { meal };
 		}

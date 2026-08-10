@@ -132,9 +132,7 @@ struct MainTabView: View {
                 onOpenGalley: { selectedTab = .galley },
                 onOpenManifest: { selectedTab = .manifest },
                 onOpenNutritionGoals: {
-                    guard env.session.clientFlags.isNutritionGoalsEnabled
-                        || env.session.clientFlags.isNutritionManifestEnabled
-                    else { return }
+                    guard env.session.clientFlags.isNutritionGoalsEnabled else { return }
                     showingNutritionGoals = true
                 }
             )

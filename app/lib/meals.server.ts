@@ -27,6 +27,8 @@ import { buildCargoDeductionStatements } from "./cargo-deduction.server";
 import { type CargoIndexRow, fetchOrgCargoIndex } from "./cargo-index.server";
 import { isCargoUsableForMatching } from "./cargo-utils";
 import { ITEM_DOMAINS } from "./domain";
+import type { FlagshipEvaluationContext } from "./feature-flags/context.server";
+import { buildSystemFlagContext } from "./feature-flags/context.server";
 import {
 	buildGalleyCookedEvent,
 	buildKitchenEventInserts,
@@ -43,8 +45,10 @@ import {
 } from "./matching.server";
 import { NUTRITION_MEAL_RECOMPUTE_CONCURRENCY } from "./nutrition/constants";
 import { mapWithConcurrency } from "./nutrition/map-concurrency";
-import { buildMinimalFlagContext } from "./nutrition/persist.server";
-import { scheduleMealNutritionRecompute } from "./nutrition/recompute-outbox.server";
+import {
+	type OriginatingFlagDims,
+	scheduleMealNutritionRecompute,
+} from "./nutrition/recompute-outbox.server";
 import {
 	chunkArray,
 	chunkedQuery,
@@ -97,11 +101,47 @@ export type MealWriteOptions = {
 	/** Flagship context when a session/user exists. */
 	userId?: string | null;
 	/**
+	 * Request-scoped Flagship context (web / ios / mcp / copilot).
+	 * When omitted, falls back to `system` + userId.
+	 */
+	flagContext?: FlagshipEvaluationContext;
+	/**
 	 * Routes that already called checkCapacity should set this so passing env
 	 * for nutrition does not double-run capacity.
 	 */
 	skipCapacityCheck?: boolean;
 };
+
+function resolveMealNutritionFlagContext(
+	env: { RATION_ENV?: string },
+	options?: MealWriteOptions,
+): FlagshipEvaluationContext {
+	if (options?.flagContext) return options.flagContext;
+	return buildSystemFlagContext(env, options?.userId);
+}
+
+function mealOriginFromFlagContext(
+	flagContext: FlagshipEvaluationContext,
+	userId?: string | null,
+): OriginatingFlagDims {
+	return {
+		surface: String(flagContext.clientPlatform ?? "system"),
+		userId:
+			(typeof flagContext.userId === "string" ? flagContext.userId : userId) ??
+			null,
+		clientVersion:
+			typeof flagContext.clientVersion === "string"
+				? flagContext.clientVersion
+				: null,
+		country:
+			typeof flagContext.country === "string" ? flagContext.country : null,
+		environment:
+			typeof flagContext.environment === "string"
+				? flagContext.environment
+				: null,
+		plan: typeof flagContext.plan === "string" ? flagContext.plan : null,
+	};
+}
 
 async function resolveMealTagIds(
 	db: D1Database,
@@ -781,15 +821,16 @@ export async function createMeal(
 	);
 
 	if (env) {
+		const flagContext = resolveMealNutritionFlagContext(env, options);
 		await scheduleMealNutritionRecompute(
 			env,
 			db,
 			mealId,
 			organizationId,
-			buildMinimalFlagContext(env, options?.userId),
+			flagContext,
 			{
 				trigger: "meal_write",
-				origin: { surface: "system", userId: options?.userId },
+				origin: mealOriginFromFlagContext(flagContext, options?.userId),
 			},
 		);
 	}
@@ -898,6 +939,7 @@ export async function createMeals(
 			() => d1.batch(batch as [any, ...any[]]),
 			{ organizationRef: organizationId },
 		);
+		const flagContext = resolveMealNutritionFlagContext(env, options);
 		await mapWithConcurrency(
 			mealIds,
 			NUTRITION_MEAL_RECOMPUTE_CONCURRENCY,
@@ -907,10 +949,10 @@ export async function createMeals(
 					db,
 					id,
 					organizationId,
-					buildMinimalFlagContext(env, options?.userId),
+					flagContext,
 					{
 						trigger: "meal_write",
-						origin: { surface: "system", userId: options?.userId },
+						origin: mealOriginFromFlagContext(flagContext, options?.userId),
 					},
 				),
 		);
@@ -1010,15 +1052,16 @@ export async function updateMeal(
 
 	const nutritionEnv = options?.env;
 	if (nutritionEnv) {
+		const flagContext = resolveMealNutritionFlagContext(nutritionEnv, options);
 		await scheduleMealNutritionRecompute(
 			nutritionEnv,
 			db,
 			mealId,
 			organizationId,
-			buildMinimalFlagContext(nutritionEnv, options?.userId),
+			flagContext,
 			{
 				trigger: "meal_write",
-				origin: { surface: "system", userId: options?.userId },
+				origin: mealOriginFromFlagContext(flagContext, options?.userId),
 			},
 		);
 	}

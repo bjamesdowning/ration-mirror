@@ -2,6 +2,7 @@ import { data } from "react-router";
 import { checkCapacity } from "~/lib/capacity.server";
 import { type IngestItem, ingestCargoItems } from "~/lib/cargo.server";
 import { handleApiError } from "~/lib/error-handler";
+import { buildMobileFlagContext } from "~/lib/feature-flags/context.server";
 import { requireMobileActiveGroup } from "~/lib/mobile/auth.server";
 import { projectNutritionSnapshotToLegacy } from "~/lib/nutrition/adapters";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
@@ -57,6 +58,9 @@ export async function action({ request, context }: Route.ActionArgs) {
 					context.cloudflare.ctx,
 				),
 				userId,
+				flagContext: buildMobileFlagContext(request, context.cloudflare.env, {
+					user: { id: userId },
+				}),
 				// Ignore client allowAiNutritionEstimate — scan_review only.
 				allowAiNutritionEstimate: ingestSource === "scan_review",
 			},

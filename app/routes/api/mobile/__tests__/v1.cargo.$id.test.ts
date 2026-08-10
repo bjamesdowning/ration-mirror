@@ -223,7 +223,13 @@ describe("PATCH /api/mobile/v1/cargo/:id", () => {
 			expect.objectContaining({
 				nutrition: expect.objectContaining({ source: "user_override" }),
 			}),
-			{ userId: "user_1" },
+			expect.objectContaining({
+				userId: "user_1",
+				flagContext: expect.objectContaining({
+					clientPlatform: "ios",
+					userId: "user_1",
+				}),
+			}),
 		);
 	});
 });

@@ -44,6 +44,7 @@ import { usePageFilters } from "~/hooks/usePageFilters";
 import { parseAllergens } from "~/lib/allergens";
 import { requireActiveGroup } from "~/lib/auth.server";
 import type { ITEM_DOMAINS } from "~/lib/domain";
+import { buildWebFlagContext } from "~/lib/feature-flags/context.server";
 import { log } from "~/lib/logging.server";
 import { getActiveMealSelections } from "~/lib/meal-selection.server";
 import { getMeals, getMealsCount } from "~/lib/meals.server";
@@ -183,6 +184,9 @@ export async function action({ request, context }: Route.ActionArgs) {
 			await updateMeal(context.cloudflare.env.DB, groupId, mealId, input, {
 				env: context.cloudflare.env,
 				userId: user.id,
+				flagContext: buildWebFlagContext(request, context.cloudflare.env, {
+					user,
+				}),
 			});
 			return { success: true };
 		} catch (error) {

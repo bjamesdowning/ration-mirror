@@ -77,6 +77,10 @@ Before each App Review window, confirm `app-review@mayutic.com` (`d773eefb-e112-
 
 Declare **Health** (allergens / dietary preferences): linked to the user, used for App Functionality, **not** used for tracking. Align ASC answers with the binary PrivacyInfo Health entry.
 
+### Nutrition (version-gated)
+
+Nutrition goals / Manifest Eat / Hub fuel widgets are Flagship-gated with default **off**, and on iOS are version-gated to **`≥ 1.4.x`**. Reviewers on that binary may see nutrition UI when platform/version Flagship rules are enabled — no separate `userId` allowlist is required. Older App Store builds remain off.
+
 ## Support
 
 - Email: support@mayutic.com

@@ -4,10 +4,12 @@ import { useFetcher, useRouteLoaderData } from "react-router";
 import { DOMAIN_LABELS, type ITEM_DOMAINS } from "~/lib/domain";
 import { normalizeForMatch, tokenMatchScore } from "~/lib/matching";
 import { projectNutritionSnapshotToLegacy } from "~/lib/nutrition/adapters";
+import { provenanceLabel } from "~/lib/nutrition/panel-helpers";
 import {
 	fetchNutritionResolveChunk,
 	type NutritionLookupStatus,
 	resolveNutritionInChunks,
+	shouldReresolveNutritionAfterNameChange,
 } from "~/lib/nutrition/scan-review-resolve";
 import type { AnyNutritionSnapshot } from "~/lib/nutrition/types";
 import {
@@ -105,6 +107,56 @@ export function ScanResultsModal({
 			prev.map((item) => (item.id === id ? { ...item, ...updates } : item)),
 		);
 	};
+
+	/** Clear + re-resolve nutrition for one row after a rename (by id). */
+	const reresolveItemNutrition = useCallback(
+		async (itemId: string, name: string) => {
+			if (!nutritionEngine) return;
+			const trimmed = name.trim();
+			if (!trimmed) return;
+
+			setNutritionLookupStatus("loading");
+			try {
+				const result = await fetchNutritionResolveChunk([trimmed], {
+					ingestSource: allowAiNutritionEstimate ? "scan_review" : undefined,
+				});
+				if (!result.ok) {
+					setNutritionLookupStatus("failed");
+					setItems((prev) =>
+						prev.map((item) =>
+							item.id === itemId ? { ...item, nutrition: null } : item,
+						),
+					);
+					return;
+				}
+				const snap = result.snapshots[trimmed] as
+					| AnyNutritionSnapshot
+					| null
+					| undefined;
+				setItems((prev) =>
+					prev.map((item) => {
+						if (item.id !== itemId) return item;
+						if (snap === undefined) {
+							return { ...item, nutrition: null };
+						}
+						return {
+							...item,
+							nutrition: snap ? projectNutritionSnapshotToLegacy(snap) : null,
+						};
+					}),
+				);
+				setNutritionLookupStatus("done");
+			} catch {
+				setNutritionLookupStatus("failed");
+				setItems((prev) =>
+					prev.map((item) =>
+						item.id === itemId ? { ...item, nutrition: null } : item,
+					),
+				);
+			}
+		},
+		[nutritionEngine, allowAiNutritionEstimate],
+	);
 
 	// Apply bulk expiry date
 	const applyBulkExpiry = () => {
@@ -423,8 +475,26 @@ export function ScanResultsModal({
 								onStartEdit={(id) => setEditingId(id)}
 								onCancelEdit={() => setEditingId(null)}
 								onUpdate={(updates) => {
-									updateItem(item.id, updates);
-									setEditingId(null);
+									const nextName = updates.name ?? item.name;
+									const shouldReresolve =
+										nutritionEngine &&
+										shouldReresolveNutritionAfterNameChange({
+											previousName: item.name,
+											nextName,
+											nutritionSource:
+												updates.nutrition?.source ?? item.nutrition?.source,
+										});
+									if (shouldReresolve) {
+										updateItem(item.id, {
+											...updates,
+											nutrition: undefined,
+										});
+										setEditingId(null);
+										void reresolveItemNutrition(item.id, nextName);
+									} else {
+										updateItem(item.id, updates);
+										setEditingId(null);
+									}
 								}}
 								onDismissMerge={dismissMerge}
 							/>
@@ -605,6 +675,10 @@ function ScanResultItemRow({
 										kcal={kcal}
 										lookupStatus={nutritionLookupStatus}
 										nutritionField={item.nutrition}
+										provenanceLabel={provenanceLabel(
+											item.nutrition?.source,
+											kcal != null && Number.isFinite(kcal),
+										)}
 									/>
 								)}
 							</p>

@@ -2,6 +2,7 @@ import { data } from "react-router";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { PartialCargoItemSchema, updateItem } from "~/lib/cargo.server";
 import { handleApiError } from "~/lib/error-handler";
+import { buildWebFlagContext } from "~/lib/feature-flags/context.server";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import type { Route } from "./+types/cargo.$id";
 
@@ -38,7 +39,12 @@ export async function action({ request, params, context }: Route.ActionArgs) {
 			groupId,
 			id,
 			input,
-			{ userId: user.id },
+			{
+				userId: user.id,
+				flagContext: buildWebFlagContext(request, context.cloudflare.env, {
+					user,
+				}),
+			},
 		);
 
 		if (!updated) {

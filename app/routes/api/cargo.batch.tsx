@@ -3,6 +3,7 @@ import { requireActiveGroup } from "~/lib/auth.server";
 import { checkCapacity } from "~/lib/capacity.server";
 import { type IngestItem, ingestCargoItems } from "~/lib/cargo.server";
 import { handleApiError } from "~/lib/error-handler";
+import { buildWebFlagContext } from "~/lib/feature-flags/context.server";
 import { projectNutritionSnapshotToLegacy } from "~/lib/nutrition/adapters";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import { BatchAddCargoSchema } from "~/lib/schemas/scan";
@@ -65,6 +66,9 @@ export async function action({ request, context }: Route.ActionArgs) {
 					context.cloudflare.ctx,
 				),
 				userId: session.user.id,
+				flagContext: buildWebFlagContext(request, context.cloudflare.env, {
+					user: session.user,
+				}),
 				// Ignore client allowAiNutritionEstimate — scan_review only.
 				allowAiNutritionEstimate: ingestSource === "scan_review",
 			},

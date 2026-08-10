@@ -3,7 +3,7 @@ import { getUserSettings, requireActiveGroup } from "~/lib/auth.server";
 import { CapacityExceededError } from "~/lib/capacity.server";
 import { handleApiError } from "~/lib/error-handler";
 import { assertFeatureEnabled } from "~/lib/feature-flags/assert-enabled.server";
-import { buildFlagContext } from "~/lib/feature-flags/flags.server";
+import { buildWebFlagContext } from "~/lib/feature-flags/context.server";
 import { log } from "~/lib/logging.server";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import {
@@ -38,7 +38,7 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 	await assertFeatureEnabled(
 		env,
 		"ai-dock-from-receipt",
-		buildFlagContext(request, env, { user }),
+		buildWebFlagContext(request, env, { user }),
 	);
 
 	const rateLimitResult = await checkRateLimit(
@@ -77,6 +77,7 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 		return await completeSupplyScan(env, groupId, listId, parsed.data, {
 			unitMode: unitDisplayMode,
 			userId: user.id,
+			flagContext: buildWebFlagContext(request, env, { user }),
 		});
 	} catch (e) {
 		if (e instanceof SupplyScanError) {

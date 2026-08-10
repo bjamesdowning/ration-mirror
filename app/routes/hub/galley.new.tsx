@@ -7,6 +7,7 @@ import { requireActiveGroup } from "~/lib/auth.server";
 import { checkCapacity } from "~/lib/capacity.server";
 import { getCargo } from "~/lib/cargo.server";
 import { handleApiError } from "~/lib/error-handler";
+import { buildWebFlagContext } from "~/lib/feature-flags/context.server";
 import { parseFormData } from "~/lib/form-utils";
 import { createMeal, createMeals, MAX_BATCH_MEALS } from "~/lib/meals.server";
 import { MealSchema } from "~/lib/schemas/meal";
@@ -71,6 +72,9 @@ export async function action({ request, context }: Route.ActionArgs) {
 					env: context.cloudflare.env,
 					userId: user.id,
 					skipCapacityCheck: true,
+					flagContext: buildWebFlagContext(request, context.cloudflare.env, {
+						user,
+					}),
 				},
 			);
 			if (meals.length === 0) throw new Error("Failed to create meals");
@@ -101,6 +105,9 @@ export async function action({ request, context }: Route.ActionArgs) {
 			env: context.cloudflare.env,
 			userId: user.id,
 			skipCapacityCheck: true,
+			flagContext: buildWebFlagContext(request, context.cloudflare.env, {
+				user,
+			}),
 		});
 		if (!meal) throw new Error("Failed to create meal");
 		return redirect(`/hub/galley/${meal.id}`);

@@ -3,6 +3,7 @@ import {
 	chunkNamesForResolve,
 	NUTRITION_RESOLVE_API_MAX_NAMES,
 	resolveNutritionInChunks,
+	shouldReresolveNutritionAfterNameChange,
 	uniqueTrimmedNames,
 } from "~/lib/nutrition/scan-review-resolve";
 
@@ -22,6 +23,69 @@ describe("uniqueTrimmedNames / chunkNamesForResolve", () => {
 		expect(chunkNamesForResolve(names, 100)[0]?.length).toBeLessThanOrEqual(
 			NUTRITION_RESOLVE_API_MAX_NAMES,
 		);
+	});
+});
+
+describe("shouldReresolveNutritionAfterNameChange", () => {
+	it("returns true when trimmed name changes and source is not override", () => {
+		expect(
+			shouldReresolveNutritionAfterNameChange({
+				previousName: "Milk",
+				nextName: "Almond milk",
+				nutritionSource: "usda",
+			}),
+		).toBe(true);
+		expect(
+			shouldReresolveNutritionAfterNameChange({
+				previousName: " Milk ",
+				nextName: "Eggs",
+				nutritionSource: "ai_estimate",
+			}),
+		).toBe(true);
+		expect(
+			shouldReresolveNutritionAfterNameChange({
+				previousName: "Milk",
+				nextName: "Eggs",
+				nutritionSource: null,
+			}),
+		).toBe(true);
+	});
+
+	it("returns false when name is unchanged (including trim-only)", () => {
+		expect(
+			shouldReresolveNutritionAfterNameChange({
+				previousName: "Milk",
+				nextName: "Milk",
+				nutritionSource: "usda",
+			}),
+		).toBe(false);
+		expect(
+			shouldReresolveNutritionAfterNameChange({
+				previousName: " Milk ",
+				nextName: "Milk",
+				nutritionSource: "usda",
+			}),
+		).toBe(false);
+	});
+
+	it("returns false when next name is empty", () => {
+		expect(
+			shouldReresolveNutritionAfterNameChange({
+				previousName: "Milk",
+				nextName: "   ",
+				nutritionSource: "usda",
+			}),
+		).toBe(false);
+	});
+
+	it("returns false for user_override even when name changes", () => {
+		expect(
+			shouldReresolveNutritionAfterNameChange({
+				previousName: "Milk",
+				nextName: "Almond milk",
+				nutritionSource: "user_override",
+			}),
+		).toBe(false);
 	});
 });
 

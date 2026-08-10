@@ -1,6 +1,7 @@
 import { data } from "react-router";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { handleApiError } from "~/lib/error-handler";
+import { buildWebFlagContext } from "~/lib/feature-flags/context.server";
 import { deleteMeal, getMeal, updateMeal } from "~/lib/meals.server";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import { MealSchema } from "~/lib/schemas/meal";
@@ -46,7 +47,13 @@ export async function action({ request, params, context }: Route.ActionArgs) {
 				groupId,
 				id,
 				input,
-				{ env: context.cloudflare.env, userId: user.id },
+				{
+					env: context.cloudflare.env,
+					userId: user.id,
+					flagContext: buildWebFlagContext(request, context.cloudflare.env, {
+						user,
+					}),
+				},
 			);
 			return { meal };
 		}

@@ -2,10 +2,12 @@ import { AlertTriangle, Check, Edit2, Link2, Unlink, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useFetcher, useRouteLoaderData } from "react-router";
 import { projectNutritionSnapshotToLegacy } from "~/lib/nutrition/adapters";
+import { provenanceLabel } from "~/lib/nutrition/panel-helpers";
 import {
 	fetchNutritionResolveChunk,
 	type NutritionLookupStatus,
 	resolveNutritionInChunks,
+	shouldReresolveNutritionAfterNameChange,
 } from "~/lib/nutrition/scan-review-resolve";
 import type { AnyNutritionSnapshot } from "~/lib/nutrition/types";
 import type { ScanResultItem } from "~/lib/schemas/scan";
@@ -144,6 +146,52 @@ export function SupplyScanReviewModal({
 		);
 	}, []);
 
+	/** Clear + re-resolve nutrition for one dock row after a rename (by pair id). */
+	const reresolvePairNutrition = useCallback(
+		async (pairId: string, name: string) => {
+			if (!nutritionEngine) return;
+			const trimmed = name.trim();
+			if (!trimmed) return;
+
+			setNutritionLookupStatus("loading");
+			try {
+				const result = await fetchNutritionResolveChunk([trimmed], {
+					ingestSource: allowAiNutritionEstimate ? "scan_review" : undefined,
+				});
+				if (!result.ok) {
+					setNutritionLookupStatus("failed");
+					setPairs((prev) =>
+						prev.map((p) => (p.id === pairId ? { ...p, nutrition: null } : p)),
+					);
+					return;
+				}
+				const snap = result.snapshots[trimmed] as
+					| AnyNutritionSnapshot
+					| null
+					| undefined;
+				setPairs((prev) =>
+					prev.map((p) => {
+						if (p.id !== pairId) return p;
+						if (snap === undefined) {
+							return { ...p, nutrition: null };
+						}
+						return {
+							...p,
+							nutrition: snap ? projectNutritionSnapshotToLegacy(snap) : null,
+						};
+					}),
+				);
+				setNutritionLookupStatus("done");
+			} catch {
+				setNutritionLookupStatus("failed");
+				setPairs((prev) =>
+					prev.map((p) => (p.id === pairId ? { ...p, nutrition: null } : p)),
+				);
+			}
+		},
+		[nutritionEngine, allowAiNutritionEstimate],
+	);
+
 	// Propose nutrition snapshots after review opens (parity with cargo scan).
 	// Chunked so large receipts paint kcal progressively while the user reviews.
 	useEffect(() => {
@@ -213,6 +261,21 @@ export function SupplyScanReviewModal({
 	};
 
 	const finishEdit = () => {
+		if (editingId && editSnapshot) {
+			const current = pairs.find((p) => p.id === editingId);
+			if (
+				current &&
+				nutritionEngine &&
+				shouldReresolveNutritionAfterNameChange({
+					previousName: editSnapshot.dockName,
+					nextName: current.dockName,
+					nutritionSource: current.nutrition?.source,
+				})
+			) {
+				updatePair(editingId, { nutrition: undefined });
+				void reresolvePairNutrition(editingId, current.dockName);
+			}
+		}
 		setEditSnapshot(null);
 		setEditingId(null);
 	};
@@ -332,6 +395,9 @@ export function SupplyScanReviewModal({
 					{pairs.map((pair) => {
 						const lowConfidence = (pair.scanItem.confidence ?? 1) < 0.7;
 						const isEditing = editingId === pair.id;
+						const kcal =
+							pair.nutrition?.per100g?.energyKcal ??
+							pair.nutrition?.perServing?.energyKcal;
 						return (
 							<div
 								key={pair.id}
@@ -431,12 +497,13 @@ export function SupplyScanReviewModal({
 												{pair.dockDomain ? ` · ${pair.dockDomain}` : ""}
 												{nutritionEngine && (
 													<NutritionKcalHint
-														kcal={
-															pair.nutrition?.per100g?.energyKcal ??
-															pair.nutrition?.perServing?.energyKcal
-														}
+														kcal={kcal}
 														lookupStatus={nutritionLookupStatus}
 														nutritionField={pair.nutrition}
+														provenanceLabel={provenanceLabel(
+															pair.nutrition?.source,
+															kcal != null && Number.isFinite(kcal),
+														)}
 													/>
 												)}
 											</p>

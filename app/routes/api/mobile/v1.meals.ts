@@ -1,6 +1,7 @@
 import { data } from "react-router";
 import { checkCapacity } from "~/lib/capacity.server";
 import { handleApiError } from "~/lib/error-handler";
+import { buildMobileFlagContext } from "~/lib/feature-flags/context.server";
 import { getActiveMealIds } from "~/lib/meal-selection.server";
 import { createMeal, getMeals, getMealsCount } from "~/lib/meals.server";
 import { requireMobileActiveGroup } from "~/lib/mobile/auth.server";
@@ -115,6 +116,9 @@ export async function action({ request, context }: Route.ActionArgs) {
 				env: context.cloudflare.env,
 				userId,
 				skipCapacityCheck: true,
+				flagContext: buildMobileFlagContext(request, context.cloudflare.env, {
+					user: { id: userId },
+				}),
 			},
 		);
 		return { meal };

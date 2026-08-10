@@ -171,7 +171,12 @@ struct SupplyScanReviewView: View {
             }
             .sheet(item: $model.editingItem) { item in
                 ScanItemEditSheet(item: item) { updated in
-                    model.saveEdit(updated)
+                    model.saveEdit(
+                        updated,
+                        api: env.api,
+                        nutritionEngine: env.session.clientFlags.isNutritionEngineEnabled,
+                        nutritionAiEstimate: env.session.clientFlags.isNutritionAiEstimateEnabled
+                    )
                 }
             }
             .sheet(item: $model.linkingContext, onDismiss: {
@@ -224,11 +229,12 @@ struct SupplyScanReviewView: View {
 
                 if env.session.clientFlags.isNutritionEngineEnabled,
                    let kcal = row.estimatedEnergyKcal {
-                    Text("\(Int(kcal.rounded())) kcal")
+                    Text("\(Int(kcal.rounded())) kcal · \(row.nutrition?.provenanceLabel ?? "Nutrition")")
                         .rationCaption()
                         .foregroundStyle(Theme.muted)
                 } else if env.session.clientFlags.isNutritionEngineEnabled,
-                          model.isResolvingNutrition {
+                          model.isResolvingNutrition,
+                          row.nutrition == nil {
                     RoundedRectangle(cornerRadius: 3)
                         .fill(Theme.platinum.opacity(0.55))
                         .frame(width: 72, height: 10)

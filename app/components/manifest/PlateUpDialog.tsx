@@ -158,6 +158,11 @@ export function PlateUpDialog({
 							"How many servings should we deduct from Cargo? Personal calorie logging uses Log my serving after Cook."
 						)}
 					</p>
+					{isEat ? (
+						<p className="text-[10px] text-muted mt-2">
+							Not medical advice. Goals and totals are planning aids only.
+						</p>
+					) : null}
 				</div>
 
 				<label className="block space-y-2">

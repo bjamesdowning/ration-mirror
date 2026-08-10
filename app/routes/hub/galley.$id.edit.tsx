@@ -5,6 +5,7 @@ import { requireActiveGroup } from "~/lib/auth.server";
 import { getCargo } from "~/lib/cargo.server";
 import { ITEM_DOMAINS, type ItemDomain } from "~/lib/domain";
 import { handleApiError } from "~/lib/error-handler";
+import { buildWebFlagContext } from "~/lib/feature-flags/context.server";
 import { parseFormData } from "~/lib/form-utils";
 import { getMeal, updateMeal } from "~/lib/meals.server";
 import { MealSchema } from "~/lib/schemas/meal";
@@ -79,6 +80,9 @@ export async function action({ request, params, context }: Route.ActionArgs) {
 		await updateMeal(context.cloudflare.env.DB, groupId, id, input, {
 			env: context.cloudflare.env,
 			userId: user.id,
+			flagContext: buildWebFlagContext(request, context.cloudflare.env, {
+				user,
+			}),
 		});
 
 		return redirect(`/hub/galley/${id}`);

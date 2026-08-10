@@ -1795,10 +1795,13 @@ function NutritionGoalsSection({
 			className="glass-panel rounded-xl p-6 scroll-mt-24"
 		>
 			<h3 className="text-xs text-label text-muted mb-1">Nutrition goals</h3>
-			<p className="text-sm text-muted mb-4">
+			<p className="text-sm text-muted mb-2">
 				Set only the nutrients you care about. Manifest shows those targets as
 				consumed / goal (adherence-neutral). Leave a field empty to hide it.
 				Health-related data requires explicit consent.
+			</p>
+			<p className="text-xs text-muted mb-4">
+				Not medical advice. Goals and totals are planning aids only.
 			</p>
 			<div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
 				<label className="block space-y-1">

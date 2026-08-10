@@ -86,8 +86,20 @@ final class SupplyScanReviewViewModel {
             nutritionLookupFailed = false
             return
         }
-        let names = NutritionResolveChunking.uniqueTrimmedNames(rows.map(\.dockName))
-        guard !names.isEmpty else {
+        await resolveNutritionNames(
+            rows.map(\.dockName),
+            api: api,
+            nutritionAiEstimate: nutritionAiEstimate
+        )
+    }
+
+    private func resolveNutritionNames(
+        _ names: [String],
+        api: RationAPI,
+        nutritionAiEstimate: Bool
+    ) async {
+        let unique = NutritionResolveChunking.uniqueTrimmedNames(names)
+        guard !unique.isEmpty else {
             isResolvingNutrition = false
             nutritionLookupFailed = false
             return
@@ -98,7 +110,7 @@ final class SupplyScanReviewViewModel {
         defer { isResolvingNutrition = false }
 
         var anyOk = false
-        for chunk in NutritionResolveChunking.chunks(names) {
+        for chunk in NutritionResolveChunking.chunks(unique) {
             do {
                 let response = try await api.resolveNutrition(
                     names: chunk,
@@ -147,12 +159,34 @@ final class SupplyScanReviewViewModel {
         editingItem = row.toEditableScanItem()
     }
 
-    func saveEdit(_ updated: EditableScanResultItem) -> String? {
+    func saveEdit(
+        _ updated: EditableScanResultItem,
+        api: RationAPI? = nil,
+        nutritionEngine: Bool = false,
+        nutritionAiEstimate: Bool = false
+    ) -> String? {
         guard let index = rows.firstIndex(where: { $0.id == updated.id }) else {
             return "Could not save this item."
         }
-        rows[index].applyDockEdit(updated)
+        let previousName = rows[index].dockName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let nextName = updated.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let nameChanged = !nextName.isEmpty && previousName != nextName
+        let isOverride = updated.nutrition?.source == "user_override"
+        var toSave = updated
+        if nameChanged, !isOverride {
+            toSave.nutrition = nil
+        }
+        rows[index].applyDockEdit(toSave)
         editingItem = nil
+        if nameChanged, !isOverride, nutritionEngine, let api {
+            Task {
+                await resolveNutritionNames(
+                    [nextName],
+                    api: api,
+                    nutritionAiEstimate: nutritionAiEstimate
+                )
+            }
+        }
         return nil
     }
 

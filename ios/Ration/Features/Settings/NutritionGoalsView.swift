@@ -200,6 +200,11 @@ struct NutritionGoalsView: View {
     private var form: some View {
         Form {
             Section {
+                Text("Not medical advice. Goals and totals are planning aids only.")
+                    .rationCaption()
+            }
+
+            Section {
                 targetField("Daily calories", text: $model.dailyEnergyKcal, suffix: "kcal", field: .energy)
                 targetField("Protein", text: $model.proteinG, suffix: "g", field: .protein)
                 targetField("Carbs", text: $model.carbsG, suffix: "g", field: .carbs)

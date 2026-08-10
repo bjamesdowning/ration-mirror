@@ -48,6 +48,7 @@ import {
 } from "~/lib/cargo.server";
 import { getActiveCargoIds } from "~/lib/cargo-selection.server";
 import type { ITEM_DOMAINS } from "~/lib/domain";
+import { buildWebFlagContext } from "~/lib/feature-flags/context.server";
 import { log } from "~/lib/logging.server";
 import {
 	createProvisionFromCargo,
@@ -374,7 +375,12 @@ export async function action({ request, context }: Route.ActionArgs) {
 			groupId,
 			itemId,
 			result.data,
-			{ userId: user.id },
+			{
+				userId: user.id,
+				flagContext: buildWebFlagContext(request, context.cloudflare.env, {
+					user,
+				}),
+			},
 		);
 		if (!updated) {
 			return { success: false, error: "Item not found or unauthorized" };

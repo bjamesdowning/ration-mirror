@@ -2,7 +2,7 @@ import { data } from "react-router";
 import { getUserSettings } from "~/lib/auth.server";
 import { handleApiError } from "~/lib/error-handler";
 import { assertFeatureEnabled } from "~/lib/feature-flags/assert-enabled.server";
-import { buildFlagContext } from "~/lib/feature-flags/flags.server";
+import { buildMobileFlagContext } from "~/lib/feature-flags/context.server";
 import { log } from "~/lib/logging.server";
 import { requireMobileActiveGroup } from "~/lib/mobile/auth.server";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
@@ -30,7 +30,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 	await assertFeatureEnabled(
 		env,
 		"ai-dock-from-receipt",
-		buildFlagContext(request, env, { user: { id: userId } }),
+		buildMobileFlagContext(request, env, { user: { id: userId } }),
 	);
 
 	const rateLimitResult = await checkRateLimit(
@@ -90,7 +90,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 		await assertFeatureEnabled(
 			env,
 			"ai-dock-from-receipt",
-			buildFlagContext(request, env, { user: { id: userId } }),
+			buildMobileFlagContext(request, env, { user: { id: userId } }),
 		);
 
 		const rateLimitResult = await checkRateLimit(
@@ -134,6 +134,9 @@ export async function action({ request, context }: Route.ActionArgs) {
 		return await completeSupplyScan(env, organizationId, listId, parsed.data, {
 			unitMode: unitDisplayMode,
 			userId,
+			flagContext: buildMobileFlagContext(request, env, {
+				user: { id: userId },
+			}),
 		});
 	} catch (e) {
 		if (e instanceof SupplyScanError) {

@@ -148,10 +148,22 @@ final class ScanViewModel {
             nutritionLookupFailed = false
             return
         }
-        let names = NutritionResolveChunking.uniqueTrimmedNames(
-            reviewItems.map(\.name)
+        await resolveNutritionNames(
+            reviewItems.map(\.name),
+            api: api,
+            generation: generation,
+            nutritionAiEstimate: nutritionAiEstimate
         )
-        guard !names.isEmpty else {
+    }
+
+    private func resolveNutritionNames(
+        _ names: [String],
+        api: RationAPI,
+        generation: Int,
+        nutritionAiEstimate: Bool
+    ) async {
+        let unique = NutritionResolveChunking.uniqueTrimmedNames(names)
+        guard !unique.isEmpty else {
             isResolvingNutrition = false
             nutritionLookupFailed = false
             return
@@ -166,7 +178,7 @@ final class ScanViewModel {
         }
 
         var anyOk = false
-        for chunk in NutritionResolveChunking.chunks(names) {
+        for chunk in NutritionResolveChunking.chunks(unique) {
             guard isCurrent(generation) else { return }
             do {
                 let response = try await api.resolveNutrition(
@@ -205,11 +217,35 @@ final class ScanViewModel {
         editingItemId = nil
     }
 
-    func saveEdit(_ updated: EditableScanResultItem) -> String? {
+    func saveEdit(
+        _ updated: EditableScanResultItem,
+        api: RationAPI? = nil,
+        nutritionEngine: Bool = false,
+        nutritionAiEstimate: Bool = false
+    ) -> String? {
         guard let index = reviewItems.firstIndex(where: { $0.id == updated.id }) else { return nil }
-        reviewItems[index] = updated
+        let previousName = reviewItems[index].name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let nextName = updated.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let nameChanged = !nextName.isEmpty && previousName != nextName
+        let isOverride = updated.nutrition?.source == "user_override"
+        var toSave = updated
+        if nameChanged, !isOverride {
+            toSave.nutrition = nil
+        }
+        reviewItems[index] = toSave
         editingItemId = nil
         Haptics.light()
+        if nameChanged, !isOverride, nutritionEngine, let api {
+            let generation = submissionGeneration
+            Task {
+                await resolveNutritionNames(
+                    [nextName],
+                    api: api,
+                    generation: generation,
+                    nutritionAiEstimate: nutritionAiEstimate
+                )
+            }
+        }
         return nil
     }
 
@@ -217,10 +253,7 @@ final class ScanViewModel {
         guard let index = reviewItems.firstIndex(where: { $0.id == id }) else { return nil }
         switch reviewItems[index].applyingEdit(name: name, quantityText: quantityText, unit: unit) {
         case let .saved(updated):
-            reviewItems[index] = updated
-            editingItemId = nil
-            Haptics.light()
-            return nil
+            return saveEdit(updated)
         case let .invalidName(message), let .invalidQuantity(message):
             return message
         }

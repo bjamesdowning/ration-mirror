@@ -61,7 +61,12 @@ struct ScanView: View {
             }
             .sheet(item: $editingItem) { item in
                 ScanItemEditSheet(item: item) { updated in
-                    model.saveEdit(updated)
+                    model.saveEdit(
+                        updated,
+                        api: env.api,
+                        nutritionEngine: env.session.clientFlags.isNutritionEngineEnabled,
+                        nutritionAiEstimate: env.session.clientFlags.isNutritionAiEstimateEnabled
+                    )
                 }
             }
             .fullScreenCover(isPresented: $showingCamera) {

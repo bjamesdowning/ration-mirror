@@ -6,6 +6,7 @@ import {
 	updateItem,
 } from "~/lib/cargo.server";
 import { handleApiError } from "~/lib/error-handler";
+import { buildMobileFlagContext } from "~/lib/feature-flags/context.server";
 import { getMealsForCargo } from "~/lib/meals.server";
 import { requireMobileActiveGroup } from "~/lib/mobile/auth.server";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
@@ -82,7 +83,12 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 				organizationId,
 				id,
 				input,
-				{ userId },
+				{
+					userId,
+					flagContext: buildMobileFlagContext(request, context.cloudflare.env, {
+						user: { id: userId },
+					}),
+				},
 			);
 			if (!updated) throw data({ error: "Not Found" }, { status: 404 });
 			const [withTags] = await attachTagsToCargo(context.cloudflare.env.DB, [

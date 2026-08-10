@@ -9,6 +9,21 @@ export const NUTRITION_RESOLVE_CLIENT_CHUNK = 10;
 
 export type NutritionLookupStatus = "idle" | "loading" | "done" | "failed";
 
+/**
+ * After a scan/dock review rename, re-resolve unless the user already set an override.
+ */
+export function shouldReresolveNutritionAfterNameChange(options: {
+	previousName: string;
+	nextName: string;
+	nutritionSource?: string | null;
+}): boolean {
+	const previous = options.previousName.trim();
+	const next = options.nextName.trim();
+	if (!next || previous === next) return false;
+	if (options.nutritionSource === "user_override") return false;
+	return true;
+}
+
 export function uniqueTrimmedNames(names: Iterable<string>): string[] {
 	const seen = new Set<string>();
 	const out: string[] = [];

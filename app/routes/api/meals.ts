@@ -2,6 +2,7 @@ import { data } from "react-router";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { checkCapacity } from "~/lib/capacity.server";
 import { handleApiError } from "~/lib/error-handler";
+import { buildWebFlagContext } from "~/lib/feature-flags/context.server";
 import { createMeal, getMeals } from "~/lib/meals.server";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import { MealSchema } from "~/lib/schemas/meal";
@@ -76,6 +77,9 @@ export async function action({ request, context }: Route.ActionArgs) {
 			env: context.cloudflare.env,
 			userId: user.id,
 			skipCapacityCheck: true,
+			flagContext: buildWebFlagContext(request, context.cloudflare.env, {
+				user,
+			}),
 		});
 		return { meal };
 	} catch (e) {

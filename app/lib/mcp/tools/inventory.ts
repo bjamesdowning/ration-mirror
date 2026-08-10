@@ -19,6 +19,7 @@ import {
 import { CargoNutritionOverrideSchema } from "../../schemas/nutrition";
 import { coerceToolUnit } from "../../units";
 import { findSimilarCargoBatch } from "../../vector.server";
+import { resolveAgentFlagContext } from "../agent-flag-context";
 import { err, ok, type ToolEnvelope } from "../envelope";
 import {
 	defineSharedTool,
@@ -116,6 +117,7 @@ export function createInventoryToolDefs(env: McpToolsEnv) {
 						skipVectorPhase: true,
 						waitUntil: ctx.waitUntil,
 						userId: ctx.userId,
+						flagContext: resolveAgentFlagContext(env, ctx),
 					},
 				);
 				const result = results[0];
@@ -220,7 +222,10 @@ export function createInventoryToolDefs(env: McpToolsEnv) {
 								}
 							: undefined,
 					},
-					{ userId: ctx.userId },
+					{
+						userId: ctx.userId,
+						flagContext: resolveAgentFlagContext(env, ctx),
+					},
 				);
 				if (!updated) {
 					return err(
@@ -386,10 +391,16 @@ export function createInventoryToolDefs(env: McpToolsEnv) {
 
 				const coerced = a.unit ? coerceToolUnit(a.unit) : undefined;
 				if (coerced?.warning) warnings.push(coerced.warning);
-				const updated = await updateItem(env, ctx.organizationId, itemId, {
-					quantity: nextQuantity,
-					unit: coerced?.unit,
-				});
+				const updated = await updateItem(
+					env,
+					ctx.organizationId,
+					itemId,
+					{
+						quantity: nextQuantity,
+						unit: coerced?.unit,
+					},
+					{ flagContext: resolveAgentFlagContext(env, ctx) },
+				);
 				if (!updated) {
 					return err(
 						"adjust_cargo_item",

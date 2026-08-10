@@ -32,14 +32,26 @@ export function NutritionKcalHint({
 	kcal,
 	lookupStatus,
 	nutritionField,
+	provenanceLabel,
 }: {
 	kcal: number | null | undefined;
 	lookupStatus: NutritionLookupStatus;
 	/** `undefined` = not yet looked up; `null` = looked up, no match. */
 	nutritionField: unknown | null | undefined;
+	/** Optional USDA / AI Estimate / Override label when kcal is shown. */
+	provenanceLabel?: string | null;
 }) {
 	if (kcal != null && Number.isFinite(kcal)) {
-		return <> • {Math.round(kcal)} kcal</>;
+		const suffix =
+			provenanceLabel && provenanceLabel.trim().length > 0
+				? ` · ${provenanceLabel.trim()}`
+				: "";
+		return (
+			<>
+				{" "}
+				• {Math.round(kcal)} kcal{suffix}
+			</>
+		);
 	}
 	const pending =
 		lookupStatus === "loading" &&

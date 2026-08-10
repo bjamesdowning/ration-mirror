@@ -14,6 +14,7 @@ import {
 import { getActiveCargoIds } from "~/lib/cargo-selection.server";
 import { ITEM_DOMAINS } from "~/lib/domain";
 import { handleApiError } from "~/lib/error-handler";
+import { buildWebFlagContext } from "~/lib/feature-flags/context.server";
 import { getMealsForCargo } from "~/lib/meals.server";
 import { tagsFromSearchParam, tagsToSearchParam } from "~/lib/tags";
 import { getOrganizationTags } from "~/lib/tags.server";
@@ -136,7 +137,12 @@ export async function action({ request, params, context }: Route.ActionArgs) {
 				groupId,
 				id,
 				parsed.data,
-				{ userId: user.id },
+				{
+					userId: user.id,
+					flagContext: buildWebFlagContext(request, context.cloudflare.env, {
+						user,
+					}),
+				},
 			);
 			if (!updated) {
 				return { success: false, error: "Item not found or unauthorized" };

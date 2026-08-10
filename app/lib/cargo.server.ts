@@ -79,6 +79,8 @@ import {
 	normalizeForCargoKey,
 	parseUtcDateISO,
 } from "./cargo-utils";
+import type { FlagshipEvaluationContext } from "./feature-flags/context.server";
+import { buildSystemFlagContext } from "./feature-flags/context.server";
 import { isFeatureEnabled } from "./feature-flags/flags.server";
 import { normalizeCargoQuantity } from "./format-quantity";
 import {
@@ -91,7 +93,6 @@ import {
 	scaleCargoNutritionToPackage,
 } from "./nutrition/package-scale";
 import {
-	buildMinimalFlagContext,
 	maybeResolveCargoNutrition,
 	recomputeMealsAffectedByCargoNutrition,
 } from "./nutrition/persist.server";
@@ -505,6 +506,8 @@ export interface AddOrMergeItemOptions {
 	waitUntil?: (promise: Promise<unknown>) => void;
 	/** Optional user id for nutrition flag evaluation context */
 	userId?: string | null;
+	/** Prefer request-scoped Flagship context (web/ios/mcp) over system fallback. */
+	flagContext?: FlagshipEvaluationContext;
 }
 
 function isCompatibleUnit(
@@ -568,10 +571,27 @@ export interface IngestCargoOptions {
 	/** Optional user id for nutrition flag evaluation context */
 	userId?: string | null;
 	/**
+	 * Request-scoped Flagship context (web / ios / mcp / copilot).
+	 * When omitted, falls back to `system` + userId (background / legacy callers).
+	 */
+	flagContext?: FlagshipEvaluationContext;
+	/**
 	 * When true, USDA misses may AI-estimate (requires nutrition-ai-estimate).
 	 * Only set from AI ingest confirm paths (receipt scan batch).
 	 */
 	allowAiNutritionEstimate?: boolean;
+}
+
+/** Prefer request context so platform/version Flagship rules match resolve. */
+export function resolveCargoNutritionFlagContext(
+	env: { RATION_ENV?: string },
+	options?: {
+		userId?: string | null;
+		flagContext?: FlagshipEvaluationContext;
+	},
+): FlagshipEvaluationContext {
+	if (options?.flagContext) return options.flagContext;
+	return buildSystemFlagContext(env, options?.userId);
 }
 
 /**
@@ -811,7 +831,7 @@ export async function ingestCargoItems(
 		slugs: string[];
 	}> = [];
 
-	const nutritionFlagContext = buildMinimalFlagContext(env, options?.userId);
+	const nutritionFlagContext = resolveCargoNutritionFlagContext(env, options);
 	const nutritionEngineOn = await isFeatureEnabled(
 		env,
 		"nutrition-engine",
@@ -1179,6 +1199,7 @@ export async function addOrMergeItem(
 			strictMergeTarget: true,
 			waitUntil: options.waitUntil,
 			userId: options.userId,
+			flagContext: options.flagContext,
 		},
 	);
 
@@ -1226,7 +1247,10 @@ export async function updateItem(
 	organizationId: string,
 	itemId: string,
 	data: CargoItemUpdateInput,
-	options?: { userId?: string | null },
+	options?: {
+		userId?: string | null;
+		flagContext?: FlagshipEvaluationContext;
+	},
 ) {
 	const d1 = drizzle(env.DB);
 
@@ -1253,7 +1277,7 @@ export async function updateItem(
 		data.domain ?? (existing.domain as CargoItemInput["domain"]);
 	const base = computeBaseFields(nextQuantity, nextUnit, nextName);
 
-	const flagContext = buildMinimalFlagContext(env, options?.userId);
+	const flagContext = resolveCargoNutritionFlagContext(env, options);
 	const nutritionEngineOn = await isFeatureEnabled(
 		env,
 		"nutrition-engine",
@@ -2032,7 +2056,11 @@ export async function dockSupplyItems(
 	env: Env,
 	organizationId: string,
 	items: (typeof supplyItem.$inferSelect)[],
-	options?: { userId?: string | null; source?: KitchenEventSource },
+	options?: {
+		userId?: string | null;
+		source?: KitchenEventSource;
+		flagContext?: FlagshipEvaluationContext;
+	},
 ) {
 	const d1 = drizzle(env.DB);
 	const results = { updated: 0, created: 0 };
@@ -2053,6 +2081,8 @@ export async function dockSupplyItems(
 		ingestItems,
 		{
 			strictMergeTarget: false,
+			userId: options?.userId,
+			flagContext: options?.flagContext,
 		},
 	);
 

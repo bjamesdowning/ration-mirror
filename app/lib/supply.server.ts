@@ -22,6 +22,7 @@ import {
 import { parseDockExpiresAt, toExpiryDate } from "./date-utils";
 import type { ITEM_DOMAINS } from "./domain";
 import { retryOnD1Contention } from "./error-handler";
+import type { FlagshipEvaluationContext } from "./feature-flags/context.server";
 import {
 	buildKitchenEventInserts,
 	buildSupplyDockedEvent,
@@ -2345,6 +2346,8 @@ function supplyRowToDockedReconcile(
 export type SupplyListOperationOptions = {
 	unitMode?: UnitDisplayMode;
 	userId?: string;
+	/** Request-scoped Flagship context for nutrition on dock/ingest. */
+	flagContext?: FlagshipEvaluationContext;
 };
 
 /** Re-sync supply and reconcile cargo restock toggles after docking to Cargo. */
@@ -2543,6 +2546,7 @@ export async function completeSupplyFromScan(
 		{
 			strictMergeTarget: false,
 			userId: options.userId,
+			flagContext: options.flagContext,
 			// Same server policy as cargo photo scan_review confirm.
 			allowAiNutritionEstimate: true,
 		},

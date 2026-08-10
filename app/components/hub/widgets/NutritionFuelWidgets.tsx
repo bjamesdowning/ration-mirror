@@ -189,6 +189,9 @@ function WidgetShell({
 				</span>
 			</div>
 			{children}
+			<p className="mt-4 text-[10px] text-muted">
+				Not medical advice. Goals and totals are planning aids only.
+			</p>
 		</Link>
 	);
 }

@@ -71,12 +71,15 @@ export {
 export {
 	applyUserOverrideToSnapshot,
 	blankCargoNutritionSnapshot,
+	type CargoNutritionBasisLabel,
+	cargoNutritionBasisLabel,
 	formatCoveragePercent,
 	getDisplayNutrients,
 	isMealNutritionSnapshot,
 	KJ_PER_KCAL,
 	kcalToKj,
 	type MacroPatch,
+	nutritionPanelBasisSuffix,
 	type ProvenanceLabel,
 	provenanceLabel,
 } from "./panel-helpers";

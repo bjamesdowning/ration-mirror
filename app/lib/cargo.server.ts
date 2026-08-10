@@ -821,12 +821,34 @@ export async function ingestCargoItems(
 		.map((r, i) => (r?.action === "create" ? i : -1))
 		.filter((i) => i >= 0);
 	const nutritionByIndex = new Map<number, NutritionSnapshot | null>();
-	if (nutritionEngineOn && createIndexes.length > 0) {
+	const mergeNutritionByTargetId = new Map<string, NutritionSnapshot | null>();
+
+	const mergeBackfillIndexes: number[] = [];
+	if (nutritionEngineOn) {
+		const seenMergeTargets = new Set<string>();
+		for (let i = 0; i < items.length; i++) {
+			const r = resolved[i];
+			if (r?.action !== "merge") continue;
+			const it = items[i];
+			if (it.nutrition) continue;
+			const target = cargoById.get(r.targetId);
+			if (!target || target.nutrition != null) continue;
+			if (seenMergeTargets.has(r.targetId)) continue;
+			seenMergeTargets.add(r.targetId);
+			mergeBackfillIndexes.push(i);
+		}
+	}
+
+	if (
+		nutritionEngineOn &&
+		(createIndexes.length > 0 || mergeBackfillIndexes.length > 0)
+	) {
 		await mapWithConcurrency(
-			createIndexes,
+			[...createIndexes, ...mergeBackfillIndexes],
 			NUTRITION_RESOLVE_CONCURRENCY,
 			async (i) => {
 				const it = items[i];
+				const r = resolved[i];
 				if (it.nutrition) {
 					const raw: NutritionSnapshot = {
 						...it.nutrition,
@@ -851,6 +873,9 @@ export async function ingestCargoItems(
 					},
 				);
 				nutritionByIndex.set(i, snapshot);
+				if (r?.action === "merge") {
+					mergeNutritionByTargetId.set(r.targetId, snapshot);
+				}
 			},
 		);
 	}
@@ -866,18 +891,25 @@ export async function ingestCargoItems(
 				mergedTargetIds.add(r.targetId);
 				const mergedBase = computeBaseFields(newQty, target.unit, target.name);
 				// Derive density from the incoming package qty/unit, not merged total.
-				const mergeNutrition =
-					nutritionEngineOn && it.nutrition
-						? scaleCargoNutritionToPackage(
-								{
-									...it.nutrition,
-									source: it.nutrition.source ?? "user_override",
-								},
-								it.quantity,
-								it.unit,
-								it.name,
-							)
-						: undefined;
+				let mergeNutrition: NutritionSnapshot | undefined;
+				if (nutritionEngineOn && it.nutrition) {
+					mergeNutrition = scaleCargoNutritionToPackage(
+						{
+							...it.nutrition,
+							source: it.nutrition.source ?? "user_override",
+						},
+						it.quantity,
+						it.unit,
+						it.name,
+					);
+				} else if (
+					nutritionEngineOn &&
+					target.nutrition == null &&
+					mergeNutritionByTargetId.has(r.targetId)
+				) {
+					const snap = mergeNutritionByTargetId.get(r.targetId);
+					if (snap) mergeNutrition = snap;
+				}
 				batchOps.push(
 					d1
 						.update(cargo)

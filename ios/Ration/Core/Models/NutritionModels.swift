@@ -338,10 +338,22 @@ struct NutritionSnapshot: Codable, Sendable, Equatable, Hashable {
     var provenanceLabel: String {
         switch source {
         case "usda": return "USDA"
-        case "ai_estimate": return "Estimated"
+        case "ai_estimate": return "AI Estimate"
         case "user_override": return "Override"
         default: return displayNutrients == nil ? "Blank" : "Nutrition"
         }
+    }
+
+    /// Cargo display basis: package totals preferred over per-100g density.
+    var basisLabel: String? {
+        if let perServing, perServing.hasAnyMacro { return "Package" }
+        if let per100g, per100g.hasAnyMacro { return "Per 100 g" }
+        return nil
+    }
+
+    var nutritionSectionTitle: String {
+        if let basisLabel { return "Nutrition · \(basisLabel)" }
+        return "Nutrition"
     }
 
     /// Empty override shell used when the user starts typing macros from a blank state.

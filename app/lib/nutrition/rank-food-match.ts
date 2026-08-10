@@ -19,8 +19,8 @@ export const FOOD_MATCH_AUTO_ACCEPT_SCORE = 0.92;
 /** Auto-attach gate (plan): margin vs runner-up (non-peer). */
 export const FOOD_MATCH_AUTO_ACCEPT_MARGIN = 0.12;
 
-/** Tokens that make bare "milk"/"butter"/… mean a different food when in primary label. */
-const FRAGILE_EMBED_BLOCKERS = new Set([
+/** Tokens that make bare "milk"/"butter"/… mean a different food when in primary or modifiers. */
+export const FRAGILE_EMBED_BLOCKERS = new Set([
 	"chocolate",
 	"peanut",
 	"almond",
@@ -58,13 +58,52 @@ const FRAGILE_EMBED_BLOCKERS = new Set([
 	"chips",
 ]);
 
-const FRAGILE_QUERY_HEADS = new Set([
+export const FRAGILE_QUERY_HEADS = new Set([
 	"milk",
 	"butter",
 	"cream",
 	"yogurt",
 	"yoghurt",
 ]);
+
+/**
+ * Fragile commodity head for primary-prefix retrieve (e.g. milk → Milk,%).
+ * Uses any fragile token in the query ("whole milk" → milk).
+ */
+export function fragileHeadForPrimaryPrefix(
+	normalizedQuery: string,
+): string | null {
+	const q = normalizeForMatch(normalizedQuery);
+	if (!q) return null;
+	const tokens = q.split(/\s+/).filter(Boolean);
+	for (const t of tokens) {
+		if (FRAGILE_QUERY_HEADS.has(t)) return t;
+	}
+	return null;
+}
+
+/** Title-case USDA primary LIKE pattern(s) for a fragile head. */
+export function primaryPrefixLikePatterns(fragileHead: string): string[] {
+	const head = fragileHead.toLowerCase();
+	if (head === "yoghurt" || head === "yogurt") {
+		return ["Yogurt,%", "Yoghurt,%"];
+	}
+	const titled = head.charAt(0).toUpperCase() + head.slice(1);
+	return [`${titled},%`];
+}
+
+/** Dedupe candidate banks by fdcId (FTS first, then prefix bank). */
+export function mergeFoodMatchCandidates(
+	primary: FoodMatchCandidate[],
+	extra: FoodMatchCandidate[],
+): FoodMatchCandidate[] {
+	const byId = new Map<number, FoodMatchCandidate>();
+	for (const c of primary) byId.set(c.fdcId, c);
+	for (const c of extra) {
+		if (!byId.has(c.fdcId)) byId.set(c.fdcId, c);
+	}
+	return [...byId.values()];
+}
 
 /** USDA often uses a category primary ("Nuts", "Fish") with the food in modifiers. */
 const CATEGORY_PRIMARY_LABELS = new Set([
@@ -241,7 +280,8 @@ export function scoreFoodMatch(
 	const modifierTokens = tokenize(modifiers);
 	const descTokens = tokenize(descNorm);
 
-	// Hard reject: single-token fragile head embedded only as a modifier/phrase.
+	// Hard reject: single-token fragile head embedded only as a modifier/phrase,
+	// or dairy primary with blocked style modifiers (imitation, dry, chocolate…).
 	if (qTokens.size === 1 && FRAGILE_QUERY_HEADS.has(q)) {
 		const primaryIsHead =
 			tokensRoughlyEqual(primary, q) || primary.startsWith(`${q} `);
@@ -250,6 +290,11 @@ export function scoreFoodMatch(
 		}
 		for (const t of primaryTokens) {
 			if (!tokensRoughlyEqual(t, q) && FRAGILE_EMBED_BLOCKERS.has(t)) {
+				return Number.NEGATIVE_INFINITY;
+			}
+		}
+		for (const t of modifierTokens) {
+			if (FRAGILE_EMBED_BLOCKERS.has(t)) {
 				return Number.NEGATIVE_INFINITY;
 			}
 		}

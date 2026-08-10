@@ -347,8 +347,28 @@ final class NutritionModelsDecodingTests: XCTestCase {
         let snap = try decoder.decode(NutritionSnapshot.self, from: json)
         XCTAssertEqual(snap.source, "usda")
         XCTAssertEqual(snap.provenanceLabel, "USDA")
+        XCTAssertEqual(snap.basisLabel, "Package")
+        XCTAssertEqual(snap.nutritionSectionTitle, "Nutrition · Package")
         XCTAssertEqual(snap.displayNutrients?.energyKcal, 95)
         XCTAssertEqual(snap.displayNutrients?.carbG, 25)
+    }
+
+    func testAiEstimateProvenanceAndPer100gBasis() throws {
+        let json = """
+        {
+          "source": "ai_estimate",
+          "confidence": 0.5,
+          "verified": false,
+          "per100g": { "energyKcal": 61, "proteinG": 3.2, "fatG": 3.3, "carbG": 4.8 },
+          "perServing": null,
+          "fdcId": null,
+          "description": null
+        }
+        """.data(using: .utf8)!
+        let snap = try decoder.decode(NutritionSnapshot.self, from: json)
+        XCTAssertEqual(snap.provenanceLabel, "AI Estimate")
+        XCTAssertEqual(snap.basisLabel, "Per 100 g")
+        XCTAssertEqual(snap.nutritionSectionTitle, "Nutrition · Per 100 g")
     }
 
     func testDecodesMealNutritionSnapshot() throws {

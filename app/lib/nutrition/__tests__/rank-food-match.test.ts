@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
 	fdcPrimaryLabel,
 	foodMatchPeerKey,
+	fragileHeadForPrimaryPrefix,
+	mergeFoodMatchCandidates,
 	pickBestFoodMatch,
+	primaryPrefixLikePatterns,
 	scoreFoodMatch,
 } from "../rank-food-match";
 
@@ -136,5 +139,73 @@ describe("pickBestFoodMatch", () => {
 			},
 		]);
 		expect(best).toBeNull();
+	});
+
+	it("rejects Milk imitation for bare milk", () => {
+		expect(
+			scoreFoodMatch("milk", "Milk, imitation, fluid with hydrogenated oil"),
+		).toBe(Number.NEGATIVE_INFINITY);
+		const best = pickBestFoodMatch("milk", [
+			{
+				fdcId: 1,
+				description: "Milk, imitation, fluid with hydrogenated vegetable oils",
+			},
+			{
+				fdcId: 2,
+				description: "Milk, whole, 3.25% milkfat, with added vitamin D",
+				dataType: "foundation_food",
+			},
+		]);
+		expect(best?.fdcId).toBe(2);
+	});
+
+	it("prefers Milk whole over prepared foods mentioning whole milk", () => {
+		const best = pickBestFoodMatch("whole milk", [
+			{
+				fdcId: 168554,
+				description:
+					"Potatoes, mashed, prepared from granules, without milk, whole milk and margarine",
+			},
+			{
+				fdcId: 168785,
+				description:
+					"Puddings, vanilla, dry mix, instant, prepared with whole milk",
+			},
+			{
+				fdcId: 171270,
+				description: "Milk, whole, 3.25% milkfat, with added vitamin D",
+				dataType: "foundation_food",
+			},
+		]);
+		expect(best?.fdcId).toBe(171270);
+		expect(best?.autoAccept).toBe(true);
+	});
+});
+
+describe("fragileHeadForPrimaryPrefix", () => {
+	it("finds milk in whole milk", () => {
+		expect(fragileHeadForPrimaryPrefix("whole milk")).toBe("milk");
+		expect(fragileHeadForPrimaryPrefix("milk")).toBe("milk");
+		expect(fragileHeadForPrimaryPrefix("olive oil")).toBeNull();
+	});
+
+	it("builds USDA primary LIKE patterns", () => {
+		expect(primaryPrefixLikePatterns("milk")).toEqual(["Milk,%"]);
+		expect(primaryPrefixLikePatterns("yogurt")).toEqual([
+			"Yogurt,%",
+			"Yoghurt,%",
+		]);
+	});
+
+	it("merges candidate banks by fdcId", () => {
+		const merged = mergeFoodMatchCandidates(
+			[{ fdcId: 1, description: "A" }],
+			[
+				{ fdcId: 1, description: "A-dup" },
+				{ fdcId: 2, description: "B" },
+			],
+		);
+		expect(merged).toHaveLength(2);
+		expect(merged.find((c) => c.fdcId === 1)?.description).toBe("A");
 	});
 });

@@ -120,7 +120,7 @@ Detailed FDC pin, queue/DLQ, undo replay, and alert checklist: [nutrition-ops-ru
 - Pin Foundation + SR Legacy via `nutrition-db/releases/current.json` (official URL, publication date, `archiveSha256`).
 - Generate SQL with `bun run db:nutrition:import:generate` (streams CSVs; writes `nutrition-db/generated/` + snapshot hash). Remote apply refuses missing archive checksums.
 - Promote by binding a verified staging D1 — never clear/refill the active production nutrition database.
-- Matcher `1.2.0`: FTS + bm25 only (no `%LIKE%`); inverted OCR↔USDA label scoring (`whole milk` ↔ `Milk, whole…`); peer-dedupe margin for Foundation/SR duplicates; auto-attach requires score ≥ 0.92 and margin ≥ 0.12 vs a non-peer runner-up. Medium-quality matches attach in scan review / propose (clerical band); automated hits are `high`, never `verified`. Org ledger never treats `review`+null `fdcId` as a hard miss.
+- Matcher `1.3.0`: FTS + bm25 (limit 80) plus fragile-head primary-prefix bank (`Milk,%`); no miss poison on FTS throw; inverted OCR↔USDA label scoring (`whole milk` ↔ `Milk, whole…`); peer-dedupe margin for Foundation/SR duplicates; fragile modifiers (imitation/dry/…) blocked for bare commodity heads; auto-attach requires score ≥ 0.92 and margin ≥ 0.12 vs a non-peer runner-up. Medium-quality matches attach in scan review / propose (clerical band); automated hits are `high`, never `verified`. Org ledger never treats `review`+null `fdcId` as a hard miss.
 - After a verified import, set `NUTRITION_DATASET_SNAPSHOT_ID` in `app/lib/nutrition/constants.ts` to the emitted snapshot id before dogfood.
 
 ## Rollback

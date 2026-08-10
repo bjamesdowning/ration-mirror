@@ -6,6 +6,7 @@ struct NutritionDetailSection: View {
     let nutrients: NutrientValues?
     let provenance: String
     var coverage: Double? = nil
+    var matchedDescription: String? = nil
     var emptyMessage: String = "No nutrition data yet for this item."
 
     var body: some View {
@@ -20,6 +21,13 @@ struct NutritionDetailSection: View {
                         .padding(.vertical, 4)
                         .background(Theme.platinum.opacity(0.35))
                         .clipShape(RoundedRectangle(cornerRadius: 6))
+                }
+
+                if let matchedDescription, !matchedDescription.isEmpty {
+                    Text(matchedDescription)
+                        .rationCaption()
+                        .foregroundStyle(Theme.muted)
+                        .lineLimit(2)
                 }
 
                 if let nutrients, nutrients.hasAnyMacro {

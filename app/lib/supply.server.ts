@@ -2536,6 +2536,9 @@ export async function completeSupplyFromScan(
 		dockInputs,
 		{
 			strictMergeTarget: false,
+			userId: options.userId,
+			// Same server policy as cargo photo scan_review confirm.
+			allowAiNutritionEstimate: true,
 		},
 	);
 

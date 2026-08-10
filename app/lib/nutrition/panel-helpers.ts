@@ -9,7 +9,10 @@ import type {
 /** Conversion factor: 1 kcal = 4.184 kJ. */
 export const KJ_PER_KCAL = 4.184;
 
-export type ProvenanceLabel = "USDA" | "Estimated" | "Override" | "Blank";
+export type ProvenanceLabel = "USDA" | "AI Estimate" | "Override" | "Blank";
+
+/** Which nutrient block Cargo is displaying. */
+export type CargoNutritionBasisLabel = "Package" | "Per 100 g";
 
 export function kcalToKj(kcal: number): number {
 	return kcal * KJ_PER_KCAL;
@@ -34,12 +37,39 @@ export function provenanceLabel(
 		case "usda":
 			return "USDA";
 		case "ai_estimate":
-			return "Estimated";
+			return "AI Estimate";
 		case "user_override":
 			return "Override";
 		default:
 			return "Blank";
 	}
+}
+
+/**
+ * Cargo display basis: package/line totals (`perServing`) preferred over density.
+ * Matches {@link getDisplayNutrients} for mode `"cargo"`.
+ */
+export function cargoNutritionBasisLabel(
+	nutrition: NutritionSnapshot | null | undefined,
+): CargoNutritionBasisLabel | null {
+	if (!nutrition) return null;
+	if (nutrition.perServing != null) return "Package";
+	if (nutrition.per100g != null) return "Per 100 g";
+	return null;
+}
+
+/** Panel subtitle for meal vs cargo. */
+export function nutritionPanelBasisSuffix(
+	nutrition: MealNutritionSnapshot | NutritionSnapshot | null,
+	mode: "meal" | "cargo",
+): string | null {
+	if (mode === "meal") return "Per recipe serving";
+	if (nutrition && isMealNutritionSnapshot(nutrition)) {
+		return "Per recipe serving";
+	}
+	return cargoNutritionBasisLabel(
+		nutrition && !isMealNutritionSnapshot(nutrition) ? nutrition : null,
+	);
 }
 
 export function formatCoveragePercent(coverage: number): string {

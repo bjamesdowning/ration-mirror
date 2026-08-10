@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
 	applyUserOverrideToSnapshot,
+	cargoNutritionBasisLabel,
 	formatCoveragePercent,
 	getDisplayNutrients,
 	isMealNutritionSnapshot,
 	kcalToKj,
+	nutritionPanelBasisSuffix,
 	provenanceLabel,
 } from "../panel-helpers";
 import type { MealNutritionSnapshot, NutritionSnapshot } from "../types";
@@ -65,10 +67,32 @@ describe("kcalToKj", () => {
 describe("provenanceLabel", () => {
 	it("maps sources and blank", () => {
 		expect(provenanceLabel("usda", true)).toBe("USDA");
-		expect(provenanceLabel("ai_estimate", true)).toBe("Estimated");
+		expect(provenanceLabel("ai_estimate", true)).toBe("AI Estimate");
 		expect(provenanceLabel("user_override", true)).toBe("Override");
 		expect(provenanceLabel("usda", false)).toBe("Blank");
 		expect(provenanceLabel(null, true)).toBe("Blank");
+	});
+});
+
+describe("cargoNutritionBasisLabel", () => {
+	it("prefers Package when perServing present", () => {
+		expect(cargoNutritionBasisLabel(cargoSnap)).toBe("Package");
+		expect(cargoNutritionBasisLabel({ ...cargoSnap, perServing: null })).toBe(
+			"Per 100 g",
+		);
+		expect(cargoNutritionBasisLabel(null)).toBeNull();
+	});
+});
+
+describe("nutritionPanelBasisSuffix", () => {
+	it("labels meal vs cargo basis", () => {
+		expect(nutritionPanelBasisSuffix(mealSnap, "meal")).toBe(
+			"Per recipe serving",
+		);
+		expect(nutritionPanelBasisSuffix(cargoSnap, "cargo")).toBe("Package");
+		expect(
+			nutritionPanelBasisSuffix({ ...cargoSnap, perServing: null }, "cargo"),
+		).toBe("Per 100 g");
 	});
 });
 

@@ -11,7 +11,7 @@ describe("nutritionMatchCacheKey", () => {
 		const key = nutritionMatchCacheKey("abc123hash");
 		expect(key).toContain(NUTRITION_DATASET_SNAPSHOT_ID);
 		expect(key).toContain(NUTRITION_MATCHER_VERSION);
-		expect(NUTRITION_MATCHER_VERSION).toBe("1.2.0");
+		expect(NUTRITION_MATCHER_VERSION).toBe("1.3.0");
 		expect(key).toContain("abc123hash");
 		expect(key.startsWith("nutrition:match:")).toBe(true);
 	});

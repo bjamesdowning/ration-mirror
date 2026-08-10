@@ -8,7 +8,7 @@ export const NUTRITION_COVERAGE_THRESHOLD = 0.9;
 export const NUTRITION_DATASET_SNAPSHOT_ID = "dev-unpinned";
 
 /** Bump when ranker / abstention rules change to bust stale KV hits. */
-export const NUTRITION_MATCHER_VERSION = "1.2.0";
+export const NUTRITION_MATCHER_VERSION = "1.3.0";
 
 /** Bump when portion matcher heuristics change. */
 export const NUTRITION_PORTION_MATCHER_VERSION = "1.0.0";

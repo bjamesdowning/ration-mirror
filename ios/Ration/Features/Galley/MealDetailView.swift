@@ -58,7 +58,7 @@ struct MealDetailView: View {
                 servingsStepper(baseServings: max(displayMeal.servings ?? 1, 1))
                 if env.session.clientFlags.isNutritionEngineEnabled {
                     NutritionDetailSection(
-                        title: "Nutrition (per serving)",
+                        title: "Nutrition · Per recipe serving",
                         nutrients: displayMeal.nutrition?.displayNutrients,
                         provenance: "Meal",
                         coverage: displayMeal.nutrition?.coverage,

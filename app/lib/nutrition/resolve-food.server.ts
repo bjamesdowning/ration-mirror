@@ -13,7 +13,13 @@ import {
 	upsertOrgMatchDecision,
 } from "./match-ledger.server";
 import { classifyOrgLedgerDecision } from "./org-ledger-gate";
-import { type FoodMatchCandidate, pickBestFoodMatch } from "./rank-food-match";
+import {
+	type FoodMatchCandidate,
+	fragileHeadForPrimaryPrefix,
+	mergeFoodMatchCandidates,
+	pickBestFoodMatch,
+	primaryPrefixLikePatterns,
+} from "./rank-food-match";
 import type {
 	NullableNutrientValues,
 	NutritionMatchMeta,
@@ -41,7 +47,12 @@ type FoodNutrientRow = {
 type CachedResolvedFood = ResolvedFood & { miss?: never };
 type CachedMiss = { miss: true };
 
-const CANDIDATE_LIMIT = 40;
+const CANDIDATE_LIMIT = 80;
+const PRIMARY_PREFIX_LIMIT = 20;
+
+type FtsCandidateFetch =
+	| { ok: true; candidates: FoodMatchCandidate[] }
+	| { ok: false };
 
 export type ResolveFoodNameOptions = {
 	organizationId?: string;
@@ -152,7 +163,13 @@ export async function resolveFoodName(
 		}
 	}
 
-	const candidates = await fetchFtsCandidates(env.NUTRITION_DB, normalized);
+	const fetchResult = await fetchFtsCandidates(env.NUTRITION_DB, normalized);
+	if (!fetchResult.ok) {
+		// Soft-fail: do not poison KV / org miss cache on FTS errors.
+		emitNutritionResolve("miss");
+		return null;
+	}
+	const candidates = fetchResult.candidates;
 	const best = pickBestFoodMatch(normalized, candidates);
 	if (!best) {
 		await cacheMiss(kv, cacheKey);
@@ -246,14 +263,16 @@ export async function resolveFoodName(
 async function fetchFtsCandidates(
 	db: D1Database,
 	normalized: string,
-): Promise<FoodMatchCandidate[]> {
+): Promise<FtsCandidateFetch> {
 	const ftsQuery = buildFtsQuery(normalized);
-	if (!ftsQuery) return [];
+	let ftsCandidates: FoodMatchCandidate[] = [];
+	let ftsOk = true;
 
-	try {
-		const ftsRows = await db
-			.prepare(
-				`SELECT f.fdc_id AS fdc_id, f.description AS description, f.data_type AS data_type,
+	if (ftsQuery) {
+		try {
+			const ftsRows = await db
+				.prepare(
+					`SELECT f.fdc_id AS fdc_id, f.description AS description, f.data_type AS data_type,
             bm25(food_fts) AS rank
            FROM food_fts
            JOIN food f ON f.fdc_id = food_fts.rowid
@@ -262,23 +281,85 @@ async function fetchFtsCandidates(
              CASE WHEN f.data_type IN ('foundation_food', 'foundation') THEN 0 ELSE 1 END ASC,
              f.fdc_id ASC
            LIMIT ?`,
-			)
-			.bind(ftsQuery, CANDIDATE_LIMIT)
-			.all<{
-				fdc_id: number;
-				description: string;
-				data_type: string | null;
-				rank: number;
-			}>();
+				)
+				.bind(ftsQuery, CANDIDATE_LIMIT)
+				.all<{
+					fdc_id: number;
+					description: string;
+					data_type: string | null;
+					rank: number;
+				}>();
 
-		return (ftsRows.results ?? []).map((r) => ({
-			fdcId: r.fdc_id,
-			description: r.description,
-			dataType: r.data_type ?? undefined,
-		}));
-	} catch {
-		return [];
+			ftsCandidates = (ftsRows.results ?? []).map((r) => ({
+				fdcId: r.fdc_id,
+				description: r.description,
+				dataType: r.data_type ?? undefined,
+			}));
+		} catch {
+			ftsOk = false;
+		}
 	}
+
+	const prefixCandidates = await fetchPrimaryPrefixCandidates(db, normalized);
+	if (!ftsOk && ftsCandidates.length === 0 && prefixCandidates.length === 0) {
+		return { ok: false };
+	}
+
+	return {
+		ok: true,
+		candidates: mergeFoodMatchCandidates(ftsCandidates, prefixCandidates),
+	};
+}
+
+/**
+ * Pull commodity primaries (e.g. Milk,%) so FTS phrase noise cannot crowd
+ * dairy out of the ranker window.
+ */
+async function fetchPrimaryPrefixCandidates(
+	db: D1Database,
+	normalized: string,
+): Promise<FoodMatchCandidate[]> {
+	const head = fragileHeadForPrimaryPrefix(normalized);
+	if (!head) return [];
+
+	const patterns = primaryPrefixLikePatterns(head);
+	const merged: FoodMatchCandidate[] = [];
+	const seen = new Set<number>();
+
+	for (const pattern of patterns) {
+		try {
+			const rows = await db
+				.prepare(
+					`SELECT f.fdc_id AS fdc_id, f.description AS description, f.data_type AS data_type
+           FROM food f
+           WHERE f.description LIKE ? ESCAPE '\\'
+           ORDER BY
+             CASE WHEN f.data_type IN ('foundation_food', 'foundation') THEN 0 ELSE 1 END ASC,
+             f.fdc_id ASC
+           LIMIT ?`,
+				)
+				.bind(pattern, PRIMARY_PREFIX_LIMIT)
+				.all<{
+					fdc_id: number;
+					description: string;
+					data_type: string | null;
+				}>();
+
+			for (const r of rows.results ?? []) {
+				if (seen.has(r.fdc_id)) continue;
+				seen.add(r.fdc_id);
+				merged.push({
+					fdcId: r.fdc_id,
+					description: r.description,
+					dataType: r.data_type ?? undefined,
+				});
+			}
+		} catch {
+			// Prefix bank is best-effort; FTS bank still ranks.
+		}
+	}
+
+	return merged;
 }
 
 async function hydrateFdcId(

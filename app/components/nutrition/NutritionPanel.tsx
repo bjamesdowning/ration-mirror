@@ -6,6 +6,7 @@ import {
 	getDisplayNutrients,
 	isMealNutritionSnapshot,
 	kcalToKj,
+	nutritionPanelBasisSuffix,
 	provenanceLabel,
 } from "~/lib/nutrition/panel-helpers";
 import type {
@@ -33,7 +34,7 @@ function ProvenanceChip({
 }) {
 	const styles: Record<typeof label, string> = {
 		USDA: "bg-hyper-green/15 text-hyper-green border-hyper-green/40",
-		Estimated: "bg-platinum text-carbon border-platinum",
+		"AI Estimate": "bg-platinum text-carbon border-platinum",
 		Override: "bg-carbon/10 text-carbon border-carbon/20",
 		Blank: "bg-platinum/50 text-muted border-platinum",
 	};
@@ -64,6 +65,9 @@ export function NutritionPanel({
 	const label = provenanceLabel(source, values != null);
 	const mealSnap =
 		nutrition && isMealNutritionSnapshot(nutrition) ? nutrition : null;
+	const cargoSnap =
+		nutrition && !isMealNutritionSnapshot(nutrition) ? nutrition : null;
+	const basisSuffix = nutritionPanelBasisSuffix(nutrition, mode);
 	const energyKcal = values?.energyKcal ?? null;
 	const energyKj =
 		energyKcal != null && Number.isFinite(energyKcal)
@@ -100,7 +104,7 @@ export function NutritionPanel({
 				<h3 className="text-label text-muted text-xs uppercase tracking-wide flex items-center gap-2">
 					<span className="w-2 h-2 rounded-full bg-hyper-green" />
 					Nutrition
-					{mode === "meal" ? " · per serving" : ""}
+					{basisSuffix ? ` · ${basisSuffix}` : ""}
 				</h3>
 				<div className="flex items-center gap-2">
 					{mealSnap != null && (
@@ -114,6 +118,15 @@ export function NutritionPanel({
 					<ProvenanceChip label={label} />
 				</div>
 			</div>
+
+			{mode === "cargo" && cargoSnap?.description ? (
+				<p
+					className="text-xs text-muted truncate"
+					title={cargoSnap.description}
+				>
+					{cargoSnap.description}
+				</p>
+			) : null}
 
 			{!displayValues ? (
 				<p className="text-sm text-muted">No nutrition matched</p>

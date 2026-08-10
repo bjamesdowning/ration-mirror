@@ -29,9 +29,10 @@ struct CargoDetailView: View {
                         }
                         if env.session.clientFlags.isNutritionEngineEnabled {
                             NutritionDetailSection(
-                                title: "Nutrition",
+                                title: item.nutrition?.nutritionSectionTitle ?? "Nutrition",
                                 nutrients: item.nutrition?.displayNutrients,
                                 provenance: item.nutrition?.provenanceLabel ?? "Blank",
+                                matchedDescription: item.nutrition?.description,
                                 emptyMessage: "No nutrition data yet. Resolve from scan review or edit macros on this item."
                             )
                         }

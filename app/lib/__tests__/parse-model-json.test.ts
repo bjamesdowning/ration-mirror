@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+	describeUnparseableModelText,
 	extractFirstJsonValue,
+	normalizeJsonQuotes,
 	parseModelJson,
+	repairGlitchedArrayObjects,
 	repairTrailingCommas,
 	stripMarkdownJsonFences,
 } from "~/lib/parse-model-json";
@@ -35,6 +38,43 @@ describe("repairTrailingCommas", () => {
 	});
 });
 
+describe("normalizeJsonQuotes", () => {
+	it("replaces curly quotes with ASCII", () => {
+		expect(normalizeJsonQuotes("{\u201Citems\u201D:[]}")).toBe('{"items":[]}');
+	});
+});
+
+describe("describeUnparseableModelText", () => {
+	it("reports shape signals without needing full body", () => {
+		const sample = '```json\n{"items":[';
+		expect(describeUnparseableModelText(sample)).toEqual({
+			textLength: sample.length,
+			startsWithBrace: false,
+			startsWithFence: true,
+			hasItemsKey: true,
+			looksTruncated: true,
+			hasGlitchedArrayObject: false,
+		});
+	});
+
+	it("detects glitched mid-array objects", () => {
+		expect(
+			describeUnparseableModelText('{"items":[{"name":"a"},{"},{"name":"b"}]}')
+				.hasGlitchedArrayObject,
+		).toBe(true);
+	});
+});
+
+describe("repairGlitchedArrayObjects", () => {
+	it('removes orphan {"} fragments between items', () => {
+		const broken =
+			'{"items":[{"name":"beef","confidence":0.9},{"},{"name":"chickpeas","confidence":0.98}]}';
+		expect(repairGlitchedArrayObjects(broken)).toBe(
+			'{"items":[{"name":"beef","confidence":0.9},{"name":"chickpeas","confidence":0.98}]}',
+		);
+	});
+});
+
 describe("parseModelJson", () => {
 	it("parses clean JSON", () => {
 		expect(parseModelJson('{"items":[]}')).toEqual({ items: [] });
@@ -58,6 +98,35 @@ describe("parseModelJson", () => {
 				'Sure.\n{"items":[{"name":"butter","quantity":1}]}\nDone.',
 			),
 		).toEqual({ items: [{ name: "butter", quantity: 1 }] });
+	});
+
+	it("parses smart-quoted JSON keys", () => {
+		expect(parseModelJson("{\u201Citems\u201D:[]}")).toEqual({ items: [] });
+	});
+
+	it('recovers from Gemini mid-array glitch {"}', () => {
+		const broken =
+			'{"items":[{"name":"beef chunks in gravy","quantity":1200,"unit":"g","tags":["pantry"],"expiresAt":null,"confidence":0.9},{"},{"name":"chickpeas in water","quantity":800,"unit":"g","tags":["pantry"],"expiresAt":null,"confidence":0.98}]}';
+		expect(parseModelJson(broken)).toEqual({
+			items: [
+				{
+					name: "beef chunks in gravy",
+					quantity: 1200,
+					unit: "g",
+					tags: ["pantry"],
+					expiresAt: null,
+					confidence: 0.9,
+				},
+				{
+					name: "chickpeas in water",
+					quantity: 800,
+					unit: "g",
+					tags: ["pantry"],
+					expiresAt: null,
+					confidence: 0.98,
+				},
+			],
+		});
 	});
 
 	it("returns null for malformed JSON like missing colon", () => {

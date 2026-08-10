@@ -5,8 +5,11 @@
 import { gatewayFailureMessage } from "~/lib/ai-gateway.server";
 import { fetchOrgCargoIndex } from "~/lib/cargo-index.server";
 import { failAiJobWithRefund } from "~/lib/ledger.server";
-import { log } from "~/lib/logging.server";
-import { parseModelJson } from "~/lib/parse-model-json";
+import { log, redactId } from "~/lib/logging.server";
+import {
+	describeUnparseableModelText,
+	parseModelJson,
+} from "~/lib/parse-model-json";
 import {
 	callGeminiWithArtifact,
 	runIdempotentAiJob,
@@ -136,6 +139,7 @@ const SCAN_GATEWAY_MESSAGES = {
 	blocked: SCAN_USER_ERROR.blocked,
 	configMissing: SCAN_USER_ERROR.config,
 	error: SCAN_USER_ERROR.generic,
+	emptyResponse: SCAN_USER_ERROR.parse,
 } as const;
 
 export async function runScanConsumerJob(
@@ -239,15 +243,52 @@ async function executeScanConsumerJob(
 			return;
 		}
 
-		const modelText = gatewayResult.text;
+		let modelText = gatewayResult.text;
+		let parsedJson = parseModelJson(modelText);
 
-		const parsedJson = parseModelJson(modelText);
+		// One forced re-call when the first (or cached artifact) text is not JSON.
 		if (parsedJson === null) {
-			log.error("Scan model returned unparseable JSON", {
-				requestId,
-				organizationId,
+			log.error("Scan model returned unparseable JSON", undefined, {
+				requestId: redactId(requestId),
+				organizationId: redactId(organizationId),
 				isPdf,
-				textLength: modelText.length,
+				...describeUnparseableModelText(modelText),
+			});
+			const retry = await callGeminiWithArtifact(
+				env,
+				requestId,
+				{
+					feature: "scan",
+					parts: [
+						{
+							inlineData: {
+								mimeType,
+								data: base64Image,
+							},
+						},
+						{ text: prompt },
+					],
+					metadata: { organizationId, userId },
+				},
+				{},
+				{ forceRefresh: true },
+			);
+			if (!retry.ok) {
+				await failJob(
+					gatewayFailureMessage(retry.reason, SCAN_GATEWAY_MESSAGES),
+				);
+				return;
+			}
+			modelText = retry.text;
+			parsedJson = parseModelJson(modelText);
+		}
+
+		if (parsedJson === null) {
+			log.error("Scan model returned unparseable JSON after retry", undefined, {
+				requestId: redactId(requestId),
+				organizationId: redactId(organizationId),
+				isPdf,
+				...describeUnparseableModelText(modelText),
 			});
 			await failJob(SCAN_USER_ERROR.parse);
 			return;
@@ -255,9 +296,9 @@ async function executeScanConsumerJob(
 
 		const parsedResult = ScanAIResponseSchema.safeParse(parsedJson);
 		if (!parsedResult.success) {
-			log.error("Scan model JSON failed schema validation", {
-				requestId,
-				organizationId,
+			log.error("Scan model JSON failed schema validation", undefined, {
+				requestId: redactId(requestId),
+				organizationId: redactId(organizationId),
 				issues: parsedResult.error.issues.slice(0, 5),
 			});
 			await failJob(SCAN_USER_ERROR.schema);
@@ -313,9 +354,9 @@ async function executeScanConsumerJob(
 
 		const validatedScan = ScanResultSchema.safeParse(scanResultCandidate);
 		if (!validatedScan.success) {
-			log.error("Scan result failed final schema validation", {
-				requestId,
-				organizationId,
+			log.error("Scan result failed final schema validation", undefined, {
+				requestId: redactId(requestId),
+				organizationId: redactId(organizationId),
 				issues: validatedScan.error.issues.slice(0, 5),
 			});
 			await failJob(SCAN_USER_ERROR.schema);

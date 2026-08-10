@@ -2,7 +2,7 @@
  * Centralized Cloudflare AI Gateway client for Gemini generateContent calls.
  * Applies cf-aig-* control-plane headers (retries, timeouts, caching, metadata).
  */
-import { extractModelText } from "~/lib/ai.server";
+import { extractFinishReason, extractModelText } from "~/lib/ai.server";
 import {
 	AI_MODEL,
 	GATEWAY_FEATURE_CONFIG,
@@ -17,10 +17,11 @@ export type GatewayFailureReason =
 	| "rate_limited"
 	| "blocked"
 	| "empty_response"
+	| "truncated"
 	| "error";
 
 export type GatewayResult =
-	| { ok: true; text: string }
+	| { ok: true; text: string; finishReason?: string | null }
 	| { ok: false; reason: GatewayFailureReason; status?: number };
 
 export interface GatewayRequestMetadata {
@@ -135,6 +136,8 @@ export function gatewayFailureMessage(
 			return messages.configMissing;
 		case "empty_response":
 			return messages.emptyResponse ?? messages.error;
+		case "truncated":
+			return messages.emptyResponse ?? messages.error;
 		default:
 			return messages.error;
 	}
@@ -167,11 +170,22 @@ export async function callGemini(
 
 	const payload = (await response.json()) as unknown;
 	const text = extractModelText(payload);
+	const finishReason = extractFinishReason(payload);
 	if (!text) {
 		emitGeminiInvoke(options.feature, false);
 		return { ok: false, reason: "empty_response" };
 	}
 
+	// Output hit the token ceiling — JSON is usually truncated mid-object.
+	if (
+		finishReason === "MAX_TOKENS" ||
+		finishReason === "LENGTH" ||
+		finishReason === "length"
+	) {
+		emitGeminiInvoke(options.feature, false);
+		return { ok: false, reason: "truncated" };
+	}
+
 	emitGeminiInvoke(options.feature, true);
-	return { ok: true, text };
+	return { ok: true, text, finishReason };
 }

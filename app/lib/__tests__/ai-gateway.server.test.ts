@@ -159,7 +159,36 @@ describe("callGemini", () => {
 			metadata,
 		});
 
-		expect(result).toEqual({ ok: true, text: '{"items":[]}' });
+		expect(result).toEqual({
+			ok: true,
+			text: '{"items":[]}',
+			finishReason: null,
+		});
+	});
+
+	it("returns truncated when finishReason is MAX_TOKENS", async () => {
+		vi.stubGlobal(
+			"fetch",
+			vi.fn().mockResolvedValue({
+				ok: true,
+				json: async () => ({
+					candidates: [
+						{
+							finishReason: "MAX_TOKENS",
+							content: { parts: [{ text: '{"items":[{"name":"m' }] },
+						},
+					],
+				}),
+			}),
+		);
+
+		const result = await callGemini(baseEnv, {
+			feature: "scan",
+			parts: [{ text: "prompt" }],
+			metadata,
+		});
+
+		expect(result).toEqual({ ok: false, reason: "truncated" });
 	});
 
 	it("returns timeout reason for slow provider responses", async () => {

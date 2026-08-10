@@ -1,6 +1,6 @@
 /**
  * Pure FDC description ranking for pantry ingredient names.
- * USDA labels are typically "Head, modifiers…" — score the primary label (before comma).
+ * USDA labels are typically "Head, modifiers…" — score primary + inverted OCR phrases.
  */
 import { normalizeForMatch, tokenize, tokenMatchScore } from "~/lib/matching";
 
@@ -16,7 +16,7 @@ export const FOOD_MATCH_SCORE_REFERENCE = 1000;
 /** Auto-attach gate (plan): normalized score. */
 export const FOOD_MATCH_AUTO_ACCEPT_SCORE = 0.92;
 
-/** Auto-attach gate (plan): margin vs runner-up. */
+/** Auto-attach gate (plan): margin vs runner-up (non-peer). */
 export const FOOD_MATCH_AUTO_ACCEPT_MARGIN = 0.12;
 
 /** Tokens that make bare "milk"/"butter"/… mean a different food when in primary label. */
@@ -86,6 +86,49 @@ const CATEGORY_PRIMARY_LABELS = new Set([
 	"alcoholic beverage",
 ]);
 
+/**
+ * Distinguishing modifiers used for peer-dedupe (same food, different FDC rows).
+ * Near-duplicate Foundation vs SR Legacy rows share primary + these tokens.
+ */
+const PEER_MODIFIER_TOKENS = new Set([
+	"whole",
+	"skim",
+	"nonfat",
+	"fatfree",
+	"lowfat",
+	"reduced",
+	"light",
+	"lite",
+	"2",
+	"1",
+	"salted",
+	"unsalted",
+	"raw",
+	"cooked",
+	"roasted",
+	"fried",
+	"breast",
+	"thigh",
+	"drumstick",
+	"ground",
+	"almond",
+	"oat",
+	"soy",
+	"soya",
+	"coconut",
+	"rice",
+	"goat",
+	"sheep",
+	"chocolate",
+	"peanut",
+	"sweetened",
+	"unsweetened",
+	"condensed",
+	"evaporated",
+	"powdered",
+	"dry",
+]);
+
 export type FoodMatchCandidate = {
 	fdcId: number;
 	description: string;
@@ -109,6 +152,13 @@ export function fdcPrimaryLabel(description: string): string {
 	const comma = description.indexOf(",");
 	const head = comma >= 0 ? description.slice(0, comma) : description;
 	return normalizeForMatch(head);
+}
+
+/** Modifier segment after the first comma (normalized). */
+export function fdcModifierSegment(description: string): string {
+	const comma = description.indexOf(",");
+	if (comma < 0) return "";
+	return normalizeForMatch(description.slice(comma + 1));
 }
 
 /** Light English plural / singular equivalence for pantry ↔ USDA labels. */
@@ -136,6 +186,43 @@ export function normalizeFoodMatchScore(rawScore: number): number {
 }
 
 /**
+ * Peer key so Foundation vs SR Legacy duplicates do not collapse auto-accept margin.
+ */
+export function foodMatchPeerKey(description: string): string {
+	const primary = fdcPrimaryLabel(description);
+	const descTokens = tokenize(normalizeForMatch(description));
+	const mods = new Set<string>();
+	for (const t of descTokens) {
+		if (PEER_MODIFIER_TOKENS.has(t)) mods.add(t);
+	}
+	return `${primary}|${[...mods].sort().join(",")}`;
+}
+
+/**
+ * Prefer the last query token as the commodity head ("whole milk" → milk),
+ * falling back to any token that matches the FDC primary label.
+ */
+function resolveQueryHead(
+	qTokens: Set<string>,
+	primary: string,
+): string | null {
+	const ordered = [...qTokens];
+	const last = ordered[ordered.length - 1];
+	if (
+		last &&
+		(tokensRoughlyEqual(last, primary) || tokenSetHas(tokenize(primary), last))
+	) {
+		return last;
+	}
+	for (const t of qTokens) {
+		if (tokensRoughlyEqual(t, primary) || tokenSetHas(tokenize(primary), t)) {
+			return t;
+		}
+	}
+	return null;
+}
+
+/**
  * Score how well an FDC description matches a normalized pantry query.
  * Higher is better. Returns -Infinity for hard rejects.
  */
@@ -148,8 +235,11 @@ export function scoreFoodMatch(
 
 	const descNorm = normalizeForMatch(description);
 	const primary = fdcPrimaryLabel(description);
+	const modifiers = fdcModifierSegment(description);
 	const qTokens = tokenize(q);
 	const primaryTokens = tokenize(primary);
+	const modifierTokens = tokenize(modifiers);
+	const descTokens = tokenize(descNorm);
 
 	// Hard reject: single-token fragile head embedded only as a modifier/phrase.
 	if (qTokens.size === 1 && FRAGILE_QUERY_HEADS.has(q)) {
@@ -179,6 +269,66 @@ export function scoreFoodMatch(
 		score += 350;
 	}
 
+	// Strong identity: single-token query matches primary (incl. plurals).
+	if (
+		qTokens.size === 1 &&
+		(tokensRoughlyEqual(primary, q) ||
+			tokenSetHas(primaryTokens, q) ||
+			primary.startsWith(`${q} `))
+	) {
+		score += 450;
+	}
+
+	// Inverted USDA labels: OCR "whole milk" ↔ "Milk, whole, …"
+	const head = resolveQueryHead(qTokens, primary);
+	if (head && qTokens.size >= 2) {
+		const primaryIsHead =
+			tokensRoughlyEqual(primary, head) ||
+			tokenSetHas(primaryTokens, head) ||
+			primary.startsWith(`${head} `);
+		if (primaryIsHead) {
+			const remaining: string[] = [];
+			for (const t of qTokens) {
+				if (!tokensRoughlyEqual(t, head)) remaining.push(t);
+			}
+			let modHits = 0;
+			for (const t of remaining) {
+				if (
+					tokenSetHas(modifierTokens, t) ||
+					tokenSetHas(descTokens, t) ||
+					tokenSetHas(primaryTokens, t)
+				) {
+					modHits += 1;
+				}
+			}
+			if (remaining.length === 0) {
+				score += 450;
+			} else if (modHits === remaining.length) {
+				// Full inverted match: "whole milk" ↔ "Milk, whole, …"
+				score += 450 + 500;
+			} else if (modHits > 0) {
+				score += 450 + Math.round(200 * (modHits / remaining.length));
+			} else {
+				// Multi-token query with only primary overlap ("chef special sauce")
+				// — keep below accept unless other strong signals fire.
+				score += 80;
+			}
+		} else if (CATEGORY_PRIMARY_LABELS.has(primary)) {
+			// Category primaries keep the food name in modifiers ("Oil, olive…").
+			let catHits = 0;
+			for (const t of qTokens) {
+				if (tokenSetHas(modifierTokens, t) || tokenSetHas(descTokens, t)) {
+					catHits += 1;
+				}
+			}
+			if (catHits === qTokens.size) {
+				score += 700;
+			} else if (catHits > 0) {
+				score += Math.round(250 * (catHits / qTokens.size));
+			}
+		}
+	}
+
 	let primaryCoverage = 0;
 	for (const t of qTokens) {
 		if (tokenSetHas(primaryTokens, t)) primaryCoverage += 1;
@@ -187,14 +337,12 @@ export function scoreFoodMatch(
 		score += 200;
 	}
 
-	const descTokens = tokenize(descNorm);
 	let descCoverage = 0;
 	for (const t of qTokens) {
 		if (tokenSetHas(descTokens, t)) descCoverage += 1;
 	}
 	if (qTokens.size > 0 && descCoverage === qTokens.size) {
 		score += 180;
-		// Category primaries (Nuts, Fish, …) keep the real food name in modifiers.
 		if (CATEGORY_PRIMARY_LABELS.has(primary)) {
 			score += 250;
 		}
@@ -216,7 +364,7 @@ function qualityFromNormalized(
 
 /**
  * Pick best candidate above {@link FOOD_MATCH_ACCEPT_THRESHOLD}, or null.
- * Auto-attach requires score ≥ 0.92 and margin ≥ 0.12 with no hard conflict.
+ * Auto-attach requires score ≥ 0.92 and margin ≥ 0.12 vs a non-peer runner-up.
  */
 export function pickBestFoodMatch(
 	normalizedQuery: string,
@@ -234,7 +382,9 @@ export function pickBestFoodMatch(
 	if (ranked.length === 0) return null;
 
 	ranked.sort((a, b) => {
-		if (b.score !== a.score) return b.score - a.score;
+		// Length penalty creates sub-point noise; treat near-ties as equal so
+		// Foundation preference and stable fdcId order can decide.
+		if (Math.abs(b.score - a.score) >= 1) return b.score - a.score;
 		const aFoundation = isFoundationDataType(a.dataType) ? 0 : 1;
 		const bFoundation = isFoundationDataType(b.dataType) ? 0 : 1;
 		if (aFoundation !== bFoundation) return aFoundation - bFoundation;
@@ -242,10 +392,20 @@ export function pickBestFoodMatch(
 	});
 
 	const best = ranked[0];
-	const second = ranked[1];
+	const bestPeer = foodMatchPeerKey(best.description);
+	const second = ranked.find(
+		(c) =>
+			c.fdcId !== best.fdcId && foodMatchPeerKey(c.description) !== bestPeer,
+	);
 	const normalizedScore = normalizeFoodMatchScore(best.score);
+	// Peer-deduped margin: near-tie semantic siblings (e.g. whole vs lowfat for
+	// bare "milk") should not block attach when Foundation already won ranking.
 	const secondNorm = second ? normalizeFoodMatchScore(second.score) : 0;
-	const margin = normalizedScore - secondNorm;
+	const rawMargin = normalizedScore - secondNorm;
+	const margin =
+		second && Math.abs(best.score - second.score) < 1
+			? FOOD_MATCH_AUTO_ACCEPT_MARGIN
+			: rawMargin;
 	const quality = qualityFromNormalized(normalizedScore);
 	const autoAccept =
 		normalizedScore >= FOOD_MATCH_AUTO_ACCEPT_SCORE &&

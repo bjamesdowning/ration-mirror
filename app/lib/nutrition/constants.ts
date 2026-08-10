@@ -8,7 +8,7 @@ export const NUTRITION_COVERAGE_THRESHOLD = 0.9;
 export const NUTRITION_DATASET_SNAPSHOT_ID = "dev-unpinned";
 
 /** Bump when ranker / abstention rules change to bust stale KV hits. */
-export const NUTRITION_MATCHER_VERSION = "1.1.0";
+export const NUTRITION_MATCHER_VERSION = "1.2.0";
 
 /** Bump when portion matcher heuristics change. */
 export const NUTRITION_PORTION_MATCHER_VERSION = "1.0.0";
@@ -41,6 +41,13 @@ export const NUTRITION_ORG_MATCH_HIT_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
 /** Automatic org ledger miss TTL (6 hours). */
 export const NUTRITION_ORG_MATCH_MISS_TTL_MS = 6 * 60 * 60 * 1000;
+
+/**
+ * Short TTL for automatic medium "review" ledger rows (with fdcId).
+ * Abstention rows (review + null fdcId) are not written — they previously
+ * poisoned lookups for the full hit TTL.
+ */
+export const NUTRITION_ORG_MATCH_REVIEW_TTL_MS = 6 * 60 * 60 * 1000;
 
 /** Bound concurrent USDA resolves within a meal / batch. */
 export const NUTRITION_RESOLVE_CONCURRENCY = 5;

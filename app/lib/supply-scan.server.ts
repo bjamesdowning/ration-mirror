@@ -3,6 +3,10 @@ import { drizzle } from "drizzle-orm/d1";
 import { supplyItem } from "../db/schema";
 import { CapacityExceededError } from "./capacity.server";
 import { ITEM_DOMAINS } from "./domain";
+import {
+	areIngredientUnitsCompatible,
+	convertForIngredient,
+} from "./present-quantity";
 import { getQueueJob } from "./queue-job.server";
 import { parseJobResultJson } from "./queue-status-loader.server";
 import type { ScanResultItem } from "./schemas/scan";
@@ -20,12 +24,41 @@ import {
 	scoreScanToSupplyItem,
 } from "./supply-scan-match.server";
 import { dedupeTagSlugs } from "./tags";
-import { getUnitMultiplier, toSupportedUnit } from "./units";
+import {
+	getUnitFamily,
+	getUnitMultiplier,
+	type SupportedUnit,
+	toSupportedUnit,
+} from "./units";
 
 const SCAN_COMPLETE_IDEMPOTENCY_TTL = 86_400;
 /** Max dock qty multiplier vs receipt line (after unit conversion). */
 const MAX_QTY_MULTIPLIER = 10;
 const MAX_ABSOLUTE_QTY = 10_000;
+
+const PACKAGING_COUNT_FAMILIES = new Set([
+	"count_unit",
+	"count_can",
+	"count_pack",
+]);
+
+function isPackagingCountUnit(unit: SupportedUnit): boolean {
+	return PACKAGING_COUNT_FAMILIES.has(getUnitFamily(unit));
+}
+
+/** Dock unit may differ from OCR when density-compatible or packaging remap. */
+function isDockUnitCompatibleWithReceipt(
+	clientUnit: SupportedUnit,
+	scanUnit: SupportedUnit,
+	ingredientName: string,
+): boolean {
+	if (clientUnit === scanUnit) return true;
+	if (getUnitMultiplier(clientUnit, scanUnit) !== null) return true;
+	if (areIngredientUnitsCompatible(clientUnit, scanUnit, ingredientName)) {
+		return true;
+	}
+	return isPackagingCountUnit(clientUnit) && isPackagingCountUnit(scanUnit);
+}
 
 type ScanJobResult = {
 	status?: string;
@@ -99,27 +132,45 @@ export async function getSupplyScanMatch(
 }
 
 /**
- * Constrains client dock quantity/unit to the parsed receipt line.
- * Name, domain, tags, and expiry may be edited by the user (validated client payload).
+ * Constrains client dock quantity to the parsed receipt line.
+ * Unit may be corrected within density-compatible families or packaging-count
+ * remaps (can/pack/unit). Name, domain, tags, and expiry are user-editable.
  */
 export function sanitizeDockFromScanItem(
 	scanItem: ScanResultItem,
 	clientDock: SupplyScanCompleteRequest["pairs"][number]["dock"],
 ): SupplyScanCompleteInput["dock"] {
+	const name = (clientDock.name ?? scanItem.name).trim().slice(0, 200);
+	if (!name) {
+		throw new SupplyScanError("Dock item name is required", "invalid_pair");
+	}
+
 	const scanUnit = toSupportedUnit(scanItem.unit);
 	const clientUnit = toSupportedUnit(clientDock.unit);
-	const toScanMultiplier = getUnitMultiplier(clientUnit, scanUnit);
-	if (toScanMultiplier === null && clientUnit !== scanUnit) {
+	if (!isDockUnitCompatibleWithReceipt(clientUnit, scanUnit, name)) {
 		throw new SupplyScanError(
 			"Dock unit incompatible with receipt line",
 			"invalid_pair",
 		);
 	}
 
-	const scanQtyInClientUnit =
-		toScanMultiplier != null
-			? scanItem.quantity / toScanMultiplier
-			: scanItem.quantity;
+	const toScanMultiplier = getUnitMultiplier(clientUnit, scanUnit);
+	const densityConverted =
+		toScanMultiplier == null
+			? convertForIngredient(scanItem.quantity, scanUnit, clientUnit, name)
+			: null;
+
+	let scanQtyInClientUnit: number;
+	if (toScanMultiplier != null) {
+		scanQtyInClientUnit = scanItem.quantity / toScanMultiplier;
+	} else if (densityConverted != null) {
+		scanQtyInClientUnit = densityConverted;
+	} else {
+		// Same-family packaging remap (can/pack/unit) or identical unit fallback:
+		// bound qty against the raw receipt quantity.
+		scanQtyInClientUnit = scanItem.quantity;
+	}
+
 	const maxQty = Math.min(
 		MAX_ABSOLUTE_QTY,
 		Math.max(scanQtyInClientUnit * MAX_QTY_MULTIPLIER, scanQtyInClientUnit + 1),
@@ -138,11 +189,6 @@ export function sanitizeDockFromScanItem(
 		);
 	}
 	const quantity = quantityRaw;
-
-	const name = (clientDock.name ?? scanItem.name).trim().slice(0, 200);
-	if (!name) {
-		throw new SupplyScanError("Dock item name is required", "invalid_pair");
-	}
 
 	const domain = (ITEM_DOMAINS as readonly string[]).includes(clientDock.domain)
 		? (clientDock.domain as (typeof ITEM_DOMAINS)[number])
@@ -204,7 +250,8 @@ export function buildSanitizedScanCompleteInputs(
 		let updateSupply: SupplyScanCompleteInput["updateSupply"];
 		if (pair.updateSupply && supplyItem) {
 			const unit = toSupportedUnit(pair.updateSupply.unit);
-			if (getUnitMultiplier(unit, toSupportedUnit(supplyItem.unit)) === null) {
+			const supplyUnit = toSupportedUnit(supplyItem.unit);
+			if (!isDockUnitCompatibleWithReceipt(unit, supplyUnit, supplyItem.name)) {
 				throw new SupplyScanError(
 					"Supply update unit incompatible with list row",
 					"invalid_pair",

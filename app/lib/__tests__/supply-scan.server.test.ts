@@ -92,6 +92,63 @@ describe("sanitizeDockFromScanItem", () => {
 			}),
 		).toThrow(SupplyScanError);
 	});
+
+	it("allows density-compatible unit remap for flour g → cup", () => {
+		const result = sanitizeDockFromScanItem(
+			scanItem({ name: "all purpose flour", quantity: 500, unit: "g" }),
+			{
+				name: "all purpose flour",
+				quantity: 4,
+				unit: "cup",
+				domain: "food",
+				tags: [],
+			},
+		);
+		expect(result.unit).toBe("cup");
+		expect(result.quantity).toBe(4);
+	});
+
+	it("allows packaging-count remaps can → unit and pack → unit", () => {
+		expect(
+			sanitizeDockFromScanItem(
+				scanItem({ name: "energy drink", quantity: 1, unit: "can" }),
+				{
+					name: "energy drink",
+					quantity: 1,
+					unit: "unit",
+					domain: "food",
+					tags: [],
+				},
+			).unit,
+		).toBe("unit");
+		expect(
+			sanitizeDockFromScanItem(
+				scanItem({ name: "string cheese", quantity: 2, unit: "pack" }),
+				{
+					name: "string cheese",
+					quantity: 2,
+					unit: "unit",
+					domain: "food",
+					tags: [],
+				},
+			).unit,
+		).toBe("unit");
+	});
+
+	it("allows volume family corrections for milk l → ml", () => {
+		const result = sanitizeDockFromScanItem(
+			scanItem({ name: "whole milk", quantity: 2, unit: "l" }),
+			{
+				name: "whole milk",
+				quantity: 2000,
+				unit: "ml",
+				domain: "food",
+				tags: [],
+			},
+		);
+		expect(result.unit).toBe("ml");
+		expect(result.quantity).toBe(2000);
+	});
 });
 
 describe("buildSanitizedScanCompleteInputs", () => {

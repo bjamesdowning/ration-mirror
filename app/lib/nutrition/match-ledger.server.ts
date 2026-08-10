@@ -9,6 +9,7 @@ import {
 	NUTRITION_MATCHER_VERSION,
 	NUTRITION_ORG_MATCH_HIT_TTL_MS,
 	NUTRITION_ORG_MATCH_MISS_TTL_MS,
+	NUTRITION_ORG_MATCH_REVIEW_TTL_MS,
 } from "./constants";
 import type { NutritionMatchQuality } from "./types";
 
@@ -110,7 +111,9 @@ export async function upsertOrgMatchDecision(
 		const ttl =
 			input.resolutionKind === "miss"
 				? NUTRITION_ORG_MATCH_MISS_TTL_MS
-				: NUTRITION_ORG_MATCH_HIT_TTL_MS;
+				: input.resolutionKind === "review"
+					? NUTRITION_ORG_MATCH_REVIEW_TTL_MS
+					: NUTRITION_ORG_MATCH_HIT_TTL_MS;
 		expiresAt = new Date(now.getTime() + ttl);
 	}
 

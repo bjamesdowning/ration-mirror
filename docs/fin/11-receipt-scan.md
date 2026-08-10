@@ -18,7 +18,7 @@ If the operation fails after credits were reserved, Ration’s ledger is designe
 
 ## Nutrition on review
 
-When nutrition is enabled for your account, scan **review** can show proposed energy and macros per line (USDA match first; labelled AI estimate only when that path is on and USDA misses). Edit nutrients on the review screen before adding to Cargo—see *Editing nutrition* and *Nutrition overview*.
+When nutrition is enabled for your account, scan **review** proposes energy and macros per line from a USDA match when the matcher attaches (including medium-confidence matches you can edit). Labelled AI estimates are **not** filled on the resolve call — they may appear only after you confirm add to Cargo when `scan_review` ingest and `nutrition-ai-estimate` are on and USDA still missed. Edit nutrients on the review screen before adding — see *Editing nutrition* and *Nutrition overview*.
 
 ## Tips
 

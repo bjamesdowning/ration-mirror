@@ -20,6 +20,11 @@ describe("NUTRITION_MATCH_GOLDEN_CASES", () => {
 			}
 			expect(best?.fdcId).toBe(testCase.expectedFdcId);
 			expect(best?.quality).not.toBe("verified");
+			if (testCase.expectAutoAccept === true) {
+				expect(best?.autoAccept).toBe(true);
+			} else if (testCase.expectAutoAccept === false) {
+				expect(best?.autoAccept).toBe(false);
+			}
 		});
 	}
 });

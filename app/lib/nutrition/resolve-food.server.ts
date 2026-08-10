@@ -12,6 +12,7 @@ import {
 	readOrgMatchDecision,
 	upsertOrgMatchDecision,
 } from "./match-ledger.server";
+import { classifyOrgLedgerDecision } from "./org-ledger-gate";
 import { type FoodMatchCandidate, pickBestFoodMatch } from "./rank-food-match";
 import type {
 	NullableNutrientValues,
@@ -48,8 +49,9 @@ export type ResolveFoodNameOptions = {
 	/** Persist automatic hit/miss to org ledger (default true when org provided). */
 	writeLedger?: boolean;
 	/**
-	 * When true (default), only auto-accept matches are returned as attached
-	 * resolutions. Medium candidates abstain (null) for fail-closed attach.
+	 * When true, only auto-accept matches are returned as attached resolutions.
+	 * Default false: medium-quality USDA matches attach for scan review / propose
+	 * (clerical band). Callers that need strict auto-attach pass true.
 	 */
 	requireAutoAccept?: boolean;
 };
@@ -83,7 +85,7 @@ export async function resolveFoodName(
 		return null;
 	}
 
-	const requireAutoAccept = opts?.requireAutoAccept !== false;
+	const requireAutoAccept = opts?.requireAutoAccept === true;
 	const writeLedger = opts?.writeLedger !== false && !!opts?.organizationId;
 
 	if (opts?.organizationId) {
@@ -93,21 +95,25 @@ export async function resolveFoodName(
 			normalized,
 		);
 		if (decision) {
-			if (decision.resolutionKind === "miss" || decision.fdcId == null) {
+			const gate = classifyOrgLedgerDecision(decision, requireAutoAccept);
+			if (gate === "miss") {
 				emitNutritionResolve("miss");
 				return null;
 			}
-			if (
-				decision.decisionSource === "user" ||
-				decision.decisionSource === "barcode" ||
-				decision.matchQuality === "verified" ||
-				decision.matchQuality === "high"
-			) {
+			if (gate === "abstain") {
+				emitNutritionResolve("abstain");
+				return null;
+			}
+			if (gate === "attach" && decision.fdcId != null) {
 				const hydrated = await hydrateFdcId(env, decision.fdcId, {
 					matchScore: decision.matchScore ?? undefined,
 					scoreMargin: decision.scoreMargin ?? undefined,
 					matchQuality: decision.matchQuality ?? "high",
-					autoAccept: true,
+					autoAccept:
+						decision.matchQuality === "high" ||
+						decision.matchQuality === "verified" ||
+						decision.decisionSource === "user" ||
+						decision.decisionSource === "barcode",
 					method: decision.decisionSource === "user" ? "user" : "org_ledger",
 				});
 				if (hydrated) {
@@ -115,11 +121,7 @@ export async function resolveFoodName(
 					return hydrated;
 				}
 			}
-			// Medium org decisions do not auto-attach.
-			if (requireAutoAccept) {
-				emitNutritionResolve("abstain");
-				return null;
-			}
+			// gate === "ignore" (or attach hydrate failed) → FTS below
 		}
 	}
 
@@ -197,20 +199,42 @@ export async function resolveFoodName(
 	}
 
 	if (writeLedger && opts?.organizationId) {
-		await upsertOrgMatchDecision(env, {
-			organizationId: opts.organizationId,
-			normalizedName: normalized,
-			fdcId: best.autoAccept ? best.fdcId : null,
-			description: best.autoAccept ? best.description : null,
-			resolutionKind: best.autoAccept ? "hit" : "review",
-			decisionSource: "automatic",
-			matchQuality: best.quality,
-			matchScore: best.score,
-			scoreMargin: best.margin,
-		});
+		if (best.autoAccept) {
+			await upsertOrgMatchDecision(env, {
+				organizationId: opts.organizationId,
+				normalizedName: normalized,
+				fdcId: best.fdcId,
+				description: best.description,
+				resolutionKind: "hit",
+				decisionSource: "automatic",
+				matchQuality: best.quality,
+				matchScore: best.score,
+				scoreMargin: best.margin,
+			});
+		} else if (best.quality === "medium") {
+			// Persist medium with fdcId (short TTL). Never write review+null —
+			// that poisoned lookups for 30 days under the old matcher.
+			await upsertOrgMatchDecision(env, {
+				organizationId: opts.organizationId,
+				normalizedName: normalized,
+				fdcId: best.fdcId,
+				description: best.description,
+				resolutionKind: "review",
+				decisionSource: "automatic",
+				matchQuality: best.quality,
+				matchScore: best.score,
+				scoreMargin: best.margin,
+			});
+		}
 	}
 
 	if (requireAutoAccept && !best.autoAccept) {
+		emitNutritionResolve("abstain");
+		return null;
+	}
+
+	// Low-quality winners still fail closed even when medium attach is allowed.
+	if (!best.autoAccept && best.quality === "low") {
 		emitNutritionResolve("abstain");
 		return null;
 	}

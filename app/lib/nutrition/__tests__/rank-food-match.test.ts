@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
 	fdcPrimaryLabel,
+	foodMatchPeerKey,
 	pickBestFoodMatch,
 	scoreFoodMatch,
 } from "../rank-food-match";
@@ -60,6 +61,51 @@ describe("pickBestFoodMatch", () => {
 		expect(best?.highConfidence).toBe(true);
 	});
 
+	it("auto-accepts OCR whole milk against inverted USDA label", () => {
+		const best = pickBestFoodMatch("whole milk", [
+			{
+				fdcId: 1,
+				description: "Milk, whole, 3.25% milkfat, with added vitamin D",
+				dataType: "foundation_food",
+			},
+			{
+				fdcId: 2,
+				description:
+					"Milk, lowfat, 1% milkfat, with added vitamin A and vitamin D",
+			},
+			{
+				fdcId: 3,
+				description: "Beverages, almond milk, unsweetened, shelf stable",
+			},
+		]);
+		expect(best?.fdcId).toBe(1);
+		expect(best?.autoAccept).toBe(true);
+		expect(best?.normalizedScore).toBeGreaterThanOrEqual(0.92);
+	});
+
+	it("peer-dedupes Foundation vs SR whole milk for bare milk margin", () => {
+		const best = pickBestFoodMatch("milk", [
+			{
+				fdcId: 1,
+				description: "Milk, whole, 3.25% milkfat",
+				dataType: "foundation_food",
+			},
+			{
+				fdcId: 2,
+				description: "Milk, whole, 3.25% milkfat, with added vitamin D",
+			},
+			{ fdcId: 3, description: "Milk, lowfat, 1% milkfat" },
+		]);
+		expect(best?.fdcId).toBe(1);
+		expect(best?.autoAccept).toBe(true);
+	});
+
+	it("dedupes repeated peer modifier tokens in the peer key", () => {
+		expect(foodMatchPeerKey("Milk, whole, whole milkfat")).toBe(
+			foodMatchPeerKey("Milk, whole, 3.25% milkfat"),
+		);
+	});
+
 	it("does not confuse peanut butter with butter", () => {
 		const best = pickBestFoodMatch("butter", [
 			{ fdcId: 1, description: "Peanut butter, smooth style" },
@@ -77,6 +123,7 @@ describe("pickBestFoodMatch", () => {
 			{ fdcId: 2, description: "Soup, chicken noodle, canned, condensed" },
 		]);
 		expect(best?.fdcId).toBe(1);
+		expect(best?.autoAccept).toBe(true);
 	});
 
 	it("returns null when all candidates are rejected", () => {

@@ -9,6 +9,8 @@ export type NutritionMatchGoldenCase = {
 	query: string;
 	candidates: FoodMatchCandidate[];
 	expectedFdcId: number | null;
+	/** When set, assert autoAccept on the winner (positive cases only). */
+	expectAutoAccept?: boolean;
 	note?: string;
 };
 
@@ -57,9 +59,32 @@ const CURATED: NutritionMatchGoldenCase[] = [
 		expectedFdcId: 8002,
 	},
 	{
-		id: "ocr-organic-whole-milk-abstain",
+		id: "ocr-whole-milk-auto",
+		query: "whole milk",
+		note: "OCR inverted label must auto-accept Foundation whole milk",
+		candidates: [
+			{
+				fdcId: 1097510,
+				description: "Milk, whole, 3.25% milkfat, with added vitamin D",
+				dataType: "foundation_food",
+			},
+			{
+				fdcId: 9002,
+				description:
+					"Milk, lowfat, 1% milkfat, with added vitamin A and vitamin D",
+			},
+			{
+				fdcId: 9001,
+				description: "Beverages, almond milk, unsweetened, shelf stable",
+			},
+		],
+		expectedFdcId: 1097510,
+		expectAutoAccept: true,
+	},
+	{
+		id: "ocr-organic-whole-milk-medium",
 		query: "organic whole milk",
-		note: "OCR multi-token line abstains below threshold — safe fail-closed",
+		note: "Organic qualifier → medium USDA attach to whole milk (not abstain)",
 		candidates: [
 			{
 				fdcId: 1097510,
@@ -70,7 +95,8 @@ const CURATED: NutritionMatchGoldenCase[] = [
 				description: "Beverages, almond milk, unsweetened, shelf stable",
 			},
 		],
-		expectedFdcId: null,
+		expectedFdcId: 1097510,
+		expectAutoAccept: false,
 	},
 	{
 		id: "olive-oil-primary",

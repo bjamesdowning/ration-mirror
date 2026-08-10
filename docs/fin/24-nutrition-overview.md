@@ -6,9 +6,9 @@ Ration can attach **energy and macro nutrients** to Cargo items and Galley meals
 
 ## Where nutrients come from
 
-1. **USDA match (primary)** — Ration looks up the food name in a self-hosted USDA-shaped reference database. A successful match is labelled **USDA**, typically high confidence, and marked **verified**.
-2. **Blank on miss** — Manual add, CSV import, and other non-AI paths leave nutrition **blank** when no USDA match is found. You can fill values later.
-3. **AI estimate (AI ingest only)** — On receipt scan, URL import, and AI meal generation—when both the nutrition engine and **nutrition AI estimate** (plus the relevant AI feature) flags are on—Ration may fill a labelled **Estimated** snapshot after a USDA miss. Estimates carry a **confidence** score and are **not** verified until you edit them.
+1. **USDA match (primary)** — Ration looks up the food name in a self-hosted USDA-shaped reference database. A successful match is labelled **USDA**, typically high confidence. For Cargo ingest (scan / dock review), the match must also pass a **nutrient-profile gate**: missing energy, empty core macros with 0 kcal, or 0 kcal that disagrees with protein/fat/carbs (Atwater check) counts as a miss—not a USDA hit.
+2. **Blank on miss** — Manual add, CSV import, and other non-AI paths leave nutrition **blank** when no usable USDA match is found. You can fill values later.
+3. **AI estimate (AI ingest only)** — On receipt scan, URL import, and AI meal generation—when both the nutrition engine and **nutrition AI estimate** (plus the relevant AI feature) flags are on—Ration may fill a labelled **Estimated** snapshot after a USDA miss (including profile-gate rejects). Estimates carry a **confidence** score and are **not** verified until you edit them.
 
 ## Verified vs estimated
 

@@ -8,6 +8,7 @@ import {
 	scaleNullableNutrientValues,
 } from "./scale-nutrients";
 import type { NutritionSnapshot, NutritionSnapshotV2 } from "./types";
+import { isUsdaNutrientProfileUsable } from "./usda-profile-quality";
 
 export type ResolveCargoNutritionOptions = {
 	quantity?: number | null;
@@ -26,6 +27,9 @@ export type ResolveCargoNutritionOptions = {
  * Cargo stores **density** (`per100g`) as authoritative; `perServing` is an
  * optional household portion (cup/serving), never the cargo package total.
  * Automated USDA name matches are never marked `verified` (user/barcode only).
+ *
+ * Incomplete or Atwater-inconsistent USDA energy profiles are treated as misses
+ * so scan review can fall through to AI estimate when allowed.
  */
 export async function resolveAndBuildCargoNutrition(
 	env: Env,
@@ -36,7 +40,7 @@ export async function resolveAndBuildCargoNutrition(
 		organizationId: opts?.organizationId,
 		userId: opts?.userId,
 	});
-	if (resolved) {
+	if (resolved && isUsdaNutrientProfileUsable(resolved.nutrientsPer100g)) {
 		let householdPerServing = null;
 		if (resolved.fdcId != null) {
 			const household = await resolveHouseholdServingGrams(env, resolved.fdcId);
@@ -83,7 +87,7 @@ export async function resolveAndBuildCargoNutritionV2(
 		organizationId: opts?.organizationId,
 		userId: opts?.userId,
 	});
-	if (!resolved) {
+	if (!resolved || !isUsdaNutrientProfileUsable(resolved.nutrientsPer100g)) {
 		const legacy = opts?.allowAiEstimate
 			? await estimateNutritionWithAi(env, name, {
 					quantity: opts.quantity,

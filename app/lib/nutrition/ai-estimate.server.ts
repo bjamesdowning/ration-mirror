@@ -6,6 +6,7 @@ import {
 	scaleNutrientsPer100g,
 } from "./scale-nutrients";
 import type { NutrientValues, NutritionSnapshot } from "./types";
+import { atwaterKcalFromMacros } from "./usda-profile-quality";
 
 export type AiEstimateOptions = {
 	quantity?: number | null;
@@ -56,7 +57,7 @@ export function macroEnergyConsistency(values: {
 	fatG: number;
 	carbG: number;
 }): number {
-	const expected = values.proteinG * 4 + values.carbG * 4 + values.fatG * 9;
+	const expected = atwaterKcalFromMacros(values);
 	if (!Number.isFinite(expected) || expected <= 0) {
 		return values.energyKcal > 0 ? 0.4 : 0.5;
 	}

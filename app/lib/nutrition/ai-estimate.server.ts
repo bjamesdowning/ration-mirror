@@ -10,6 +10,8 @@ import type { NutrientValues, NutritionSnapshot } from "./types";
 export type AiEstimateOptions = {
 	quantity?: number | null;
 	unit?: SupportedUnit | null;
+	/** Ingredient name for density-aware volume→grams (e.g. milk liters). */
+	ingredientName?: string | null;
 	/** Required for AI Gateway metadata when calling Gemini. */
 	organizationId?: string;
 	userId?: string;
@@ -91,7 +93,11 @@ export function buildAiEstimateSnapshot(
 
 	const grams =
 		opts?.quantity != null && opts.unit
-			? convertIngredientAmountToGrams(opts.quantity, opts.unit)
+			? convertIngredientAmountToGrams(
+					opts.quantity,
+					opts.unit,
+					opts.ingredientName,
+				)
 			: null;
 	const perServing =
 		grams != null ? scaleNutrientsPer100g(per100g, grams) : null;
@@ -151,5 +157,8 @@ export async function estimateNutritionWithAi(
 	const parsed = AiNutrientEstimateSchema.safeParse(raw);
 	if (!parsed.success) return null;
 
-	return buildAiEstimateSnapshot(parsed.data, opts);
+	return buildAiEstimateSnapshot(parsed.data, {
+		...opts,
+		ingredientName: opts?.ingredientName ?? trimmed,
+	});
 }

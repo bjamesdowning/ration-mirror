@@ -3,10 +3,7 @@ import { drizzle } from "drizzle-orm/d1";
 import { supplyItem } from "../db/schema";
 import { CapacityExceededError } from "./capacity.server";
 import { ITEM_DOMAINS } from "./domain";
-import {
-	areIngredientUnitsCompatible,
-	convertForIngredient,
-} from "./present-quantity";
+import { convertForIngredient } from "./present-quantity";
 import { getQueueJob } from "./queue-job.server";
 import { parseJobResultJson } from "./queue-status-loader.server";
 import type { ScanResultItem } from "./schemas/scan";
@@ -56,20 +53,6 @@ function packagingPieceCount(quantity: number, unit: SupportedUnit): number {
 		return quantity * (asUnit ?? 1);
 	}
 	return quantity;
-}
-
-/** Dock unit may differ from OCR when density-compatible or packaging remap. */
-function isDockUnitCompatibleWithReceipt(
-	clientUnit: SupportedUnit,
-	scanUnit: SupportedUnit,
-	ingredientName: string,
-): boolean {
-	if (clientUnit === scanUnit) return true;
-	if (getUnitMultiplier(clientUnit, scanUnit) !== null) return true;
-	if (areIngredientUnitsCompatible(clientUnit, scanUnit, ingredientName)) {
-		return true;
-	}
-	return isPackagingCountUnit(clientUnit) && isPackagingCountUnit(scanUnit);
 }
 
 type ScanJobResult = {
@@ -144,9 +127,10 @@ export async function getSupplyScanMatch(
 }
 
 /**
- * Constrains client dock quantity to the parsed receipt line.
- * Unit may be corrected within density-compatible families or packaging-count
- * remaps (can/pack/unit). Name, domain, tags, and expiry are user-editable.
+ * Constrains client dock quantity to anti-abuse caps.
+ * Any unit may be corrected (OCR often emits "unit" for milk that should be "l").
+ * Same-family / density conversions keep a 10× receipt bound; packaging-count
+ * remaps use piece-equivalent caps; other free remaps use raw-qty 10× + absolute.
  */
 export function sanitizeDockFromScanItem(
 	scanItem: ScanResultItem,
@@ -159,12 +143,6 @@ export function sanitizeDockFromScanItem(
 
 	const scanUnit = toSupportedUnit(scanItem.unit);
 	const clientUnit = toSupportedUnit(clientDock.unit);
-	if (!isDockUnitCompatibleWithReceipt(clientUnit, scanUnit, name)) {
-		throw new SupplyScanError(
-			"Dock unit incompatible with receipt line",
-			"invalid_pair",
-		);
-	}
 
 	const toScanMultiplier = getUnitMultiplier(clientUnit, scanUnit);
 	const densityConverted =
@@ -205,6 +183,7 @@ export function sanitizeDockFromScanItem(
 			maxPieces / Math.max(clientPieceFactor, 1),
 		);
 	} else {
+		// Free OCR remap (e.g. unit → l): bound by receipt count, not family.
 		maxQty = Math.min(
 			MAX_ABSOLUTE_QTY,
 			Math.max(scanItem.quantity * MAX_QTY_MULTIPLIER, scanItem.quantity + 1),
@@ -285,20 +264,13 @@ export function buildSanitizedScanCompleteInputs(
 
 		let updateSupply: SupplyScanCompleteInput["updateSupply"];
 		if (pair.updateSupply && supplyItem) {
-			const unit = toSupportedUnit(pair.updateSupply.unit);
-			const supplyUnit = toSupportedUnit(supplyItem.unit);
-			if (!isDockUnitCompatibleWithReceipt(unit, supplyUnit, supplyItem.name)) {
-				throw new SupplyScanError(
-					"Supply update unit incompatible with list row",
-					"invalid_pair",
-				);
-			}
+			// Allow OCR unit corrections on the linked supply row (same as dock).
 			updateSupply = {
 				quantity: Math.min(
 					Math.max(0, pair.updateSupply.quantity),
 					MAX_ABSOLUTE_QTY,
 				),
-				unit,
+				unit: toSupportedUnit(pair.updateSupply.unit),
 			};
 		}
 

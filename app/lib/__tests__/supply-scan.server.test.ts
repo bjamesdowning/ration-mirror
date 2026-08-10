@@ -4,7 +4,6 @@ import type { ScanResultItem } from "../schemas/scan";
 import type { SupplyItemWithSource } from "../supply.server";
 import {
 	buildSanitizedScanCompleteInputs,
-	SupplyScanError,
 	sanitizeDockFromScanItem,
 } from "../supply-scan.server";
 
@@ -81,16 +80,45 @@ describe("sanitizeDockFromScanItem", () => {
 		).toThrow(/too high/i);
 	});
 
-	it("rejects incompatible dock units", () => {
-		expect(() =>
-			sanitizeDockFromScanItem(scanItem({ unit: "lb" }), {
-				name: "chicken breast",
-				quantity: 1,
-				unit: "ml",
+	it("allows OCR correction from unit to liters for milk", () => {
+		const result = sanitizeDockFromScanItem(
+			scanItem({ name: "whole milk", quantity: 3, unit: "unit" }),
+			{
+				name: "whole milk",
+				quantity: 3,
+				unit: "l",
 				domain: "food",
 				tags: [],
-			}),
-		).toThrow(SupplyScanError);
+			},
+		);
+		expect(result.unit).toBe("l");
+		expect(result.quantity).toBe(3);
+	});
+
+	it("still rejects absurd free-remap quantities", () => {
+		expect(() =>
+			sanitizeDockFromScanItem(
+				scanItem({ name: "whole milk", quantity: 3, unit: "unit" }),
+				{
+					name: "whole milk",
+					quantity: 999,
+					unit: "l",
+					domain: "food",
+					tags: [],
+				},
+			),
+		).toThrow(/too high/i);
+	});
+
+	it("allows cross-family weight↔volume when no density (OCR free remap)", () => {
+		const result = sanitizeDockFromScanItem(scanItem({ unit: "lb" }), {
+			name: "chicken breast",
+			quantity: 1,
+			unit: "ml",
+			domain: "food",
+			tags: [],
+		});
+		expect(result.unit).toBe("ml");
 	});
 
 	it("allows density-compatible unit remap for flour g → cup", () => {

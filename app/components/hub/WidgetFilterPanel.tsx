@@ -24,7 +24,28 @@ export const DAY_SPAN_FILTER_WIDGETS: HubWidgetId[] = ["manifest-preview"];
 
 export const SUPPLY_TAG_FILTER_WIDGETS: HubWidgetId[] = ["supply-preview"];
 
+export const NUTRIENT_FILTER_WIDGETS: HubWidgetId[] = [
+	"nutrition-today",
+	"nutrition-trends",
+];
+
+export const NUTRITION_DISPLAY_FILTER_WIDGETS: HubWidgetId[] = [
+	"nutrition-today",
+];
+
+export const NUTRITION_RANGE_FILTER_WIDGETS: HubWidgetId[] = [
+	"nutrition-trends",
+];
+
 const DAY_SPAN_OPTIONS = [1, 3, 7, 14] as const;
+const NUTRITION_RANGE_OPTIONS = [7, 14, 30] as const;
+const NUTRITION_NUTRIENTS = [
+	"energy",
+	"protein",
+	"carbs",
+	"fat",
+	"fiber",
+] as const;
 const SLOT_TYPES = ["breakfast", "lunch", "dinner", "snack"] as const;
 const CARGO_DOMAINS = ["food", "household", "alcohol"] as const;
 
@@ -46,7 +67,10 @@ export function supportsWidgetFilters(widgetId: HubWidgetId): boolean {
 		DOMAIN_FILTER_WIDGETS.includes(widgetId) ||
 		LIMIT_FILTER_WIDGETS.includes(widgetId) ||
 		DAY_SPAN_FILTER_WIDGETS.includes(widgetId) ||
-		SUPPLY_TAG_FILTER_WIDGETS.includes(widgetId)
+		SUPPLY_TAG_FILTER_WIDGETS.includes(widgetId) ||
+		NUTRIENT_FILTER_WIDGETS.includes(widgetId) ||
+		NUTRITION_DISPLAY_FILTER_WIDGETS.includes(widgetId) ||
+		NUTRITION_RANGE_FILTER_WIDGETS.includes(widgetId)
 	);
 }
 
@@ -66,13 +90,21 @@ export function WidgetFilterPanel({
 	const supportsLimit = LIMIT_FILTER_WIDGETS.includes(widgetId);
 	const supportsDaySpan = DAY_SPAN_FILTER_WIDGETS.includes(widgetId);
 	const supportsSupplyTags = SUPPLY_TAG_FILTER_WIDGETS.includes(widgetId);
+	const supportsNutrients = NUTRIENT_FILTER_WIDGETS.includes(widgetId);
+	const supportsNutritionDisplay =
+		NUTRITION_DISPLAY_FILTER_WIDGETS.includes(widgetId);
+	const supportsNutritionRange =
+		NUTRITION_RANGE_FILTER_WIDGETS.includes(widgetId);
 	const hasAnyFilter =
 		supportsTags ||
 		supportsSlot ||
 		supportsDomain ||
 		supportsLimit ||
 		supportsDaySpan ||
-		supportsSupplyTags;
+		supportsSupplyTags ||
+		supportsNutrients ||
+		supportsNutritionDisplay ||
+		supportsNutritionRange;
 
 	if (!hasAnyFilter) return null;
 
@@ -82,6 +114,14 @@ export function WidgetFilterPanel({
 	const currentLimit = filters?.limit;
 	const currentDaySpan = filters?.daySpan;
 	const currentSupplyTags = filters?.supplyTags ?? [];
+	const currentNutrients = filters?.nutrients ?? [
+		"energy",
+		"protein",
+		"carbs",
+		"fat",
+	];
+	const currentNutritionDisplay = filters?.nutritionDisplay ?? "remaining";
+	const currentNutritionRange = filters?.nutritionRange ?? 7;
 
 	const containerClass =
 		theme === "dark"
@@ -262,6 +302,85 @@ export function WidgetFilterPanel({
 								}`}
 							>
 								{days === 1 ? "Today" : `${days} days`}
+							</button>
+						))}
+					</div>
+				</div>
+			)}
+
+			{supportsNutrients && (
+				<div>
+					<p className={labelClass}>Nutrients</p>
+					<div className="flex gap-1.5 flex-wrap">
+						{NUTRITION_NUTRIENTS.map((nutrient) => {
+							const active = currentNutrients.includes(nutrient);
+							return (
+								<button
+									key={nutrient}
+									type="button"
+									disabled={isSaving}
+									onClick={() => {
+										const next = active
+											? currentNutrients.filter((n) => n !== nutrient)
+											: [...currentNutrients, nutrient].slice(0, 5);
+										update({
+											nutrients: next.length ? [...next] : undefined,
+										});
+									}}
+									className={`${chipSizeClass} rounded-full font-medium capitalize transition-colors ${
+										active
+											? "bg-hyper-green text-on-hyper-green"
+											: inactiveChipClass
+									}`}
+								>
+									{nutrient === "energy" ? "Calories" : nutrient}
+								</button>
+							);
+						})}
+					</div>
+				</div>
+			)}
+
+			{supportsNutritionDisplay && (
+				<div>
+					<p className={labelClass}>Display</p>
+					<div className="flex gap-1.5 flex-wrap">
+						{(["remaining", "consumed"] as const).map((mode) => (
+							<button
+								key={mode}
+								type="button"
+								disabled={isSaving}
+								onClick={() => update({ nutritionDisplay: mode })}
+								className={`${chipSizeClass} rounded-full font-medium capitalize transition-colors ${
+									currentNutritionDisplay === mode
+										? "bg-hyper-green text-on-hyper-green"
+										: inactiveChipClass
+								}`}
+							>
+								{mode}
+							</button>
+						))}
+					</div>
+				</div>
+			)}
+
+			{supportsNutritionRange && (
+				<div>
+					<p className={labelClass}>Range</p>
+					<div className="flex gap-1.5 flex-wrap">
+						{NUTRITION_RANGE_OPTIONS.map((days) => (
+							<button
+								key={days}
+								type="button"
+								disabled={isSaving}
+								onClick={() => update({ nutritionRange: days })}
+								className={`${chipSizeClass} rounded-full font-medium transition-colors ${
+									currentNutritionRange === days
+										? "bg-hyper-green text-on-hyper-green"
+										: inactiveChipClass
+								}`}
+							>
+								{days}d
 							</button>
 						))}
 					</div>

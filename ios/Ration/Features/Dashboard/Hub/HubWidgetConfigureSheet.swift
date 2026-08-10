@@ -87,6 +87,36 @@ struct HubWidgetConfigureSheet: View {
                         }
                     }
                 }
+
+                if supportsNutritionFilters {
+                    Section("Nutrients") {
+                        ForEach(HubWidgetFilters.allowedNutrients, id: \.self) { nutrient in
+                            Toggle(nutrient == "energy" ? "Calories" : nutrient.capitalized, isOn: nutrientBinding(nutrient))
+                                .tint(Theme.hyperGreen)
+                        }
+                    }
+                }
+
+                if widget.id == HubWidgetID.nutritionToday.rawValue {
+                    Section("Display") {
+                        Picker("Display", selection: nutritionDisplayBinding) {
+                            Text("Remaining").tag("remaining")
+                            Text("Consumed").tag("consumed")
+                        }
+                        .pickerStyle(.segmented)
+                    }
+                }
+
+                if widget.id == HubWidgetID.nutritionTrends.rawValue {
+                    Section("Range") {
+                        Picker("Range", selection: nutritionRangeBinding) {
+                            Text("7 days").tag(7)
+                            Text("14 days").tag(14)
+                            Text("30 days").tag(30)
+                        }
+                        .pickerStyle(.segmented)
+                    }
+                }
             }
             .navigationTitle(HubWidgetRegistry.definitions[HubWidgetID(rawValue: widget.id) ?? .hubStats]?.title ?? "Configure")
             .navigationBarTitleDisplayMode(.inline)
@@ -124,6 +154,17 @@ struct HubWidgetConfigureSheet: View {
                 }
                 .pickerStyle(.segmented)
             }
+        } else if widget.id == HubWidgetID.nutritionToday.rawValue
+            || widget.id == HubWidgetID.nutritionTrends.rawValue
+        {
+            Section("Layout") {
+                Picker("Density", selection: $size) {
+                    Text("Compact").tag("sm")
+                    Text("Standard").tag("md")
+                    Text("Expanded").tag("lg")
+                }
+                .pickerStyle(.segmented)
+            }
         } else if supportsItemLimit {
             Section("Items to show") {
                 Stepper(
@@ -145,13 +186,18 @@ struct HubWidgetConfigureSheet: View {
         ["meals-ready", "meals-partial", "snacks-ready", "cargo-expiring", "supply-preview"].contains(widget.id)
     }
 
+    private var supportsNutritionFilters: Bool {
+        widget.id == HubWidgetID.nutritionToday.rawValue
+            || widget.id == HubWidgetID.nutritionTrends.rawValue
+    }
+
     private var builtWidget: HubWidgetLayout {
         var copy = widget
         let cleaned = cleanedFilters
         copy.filters = cleaned
 
         switch HubWidgetID(rawValue: widget.id) {
-        case .hubStats, .flightRecorder:
+        case .hubStats, .flightRecorder, .nutritionToday, .nutritionTrends:
             copy.size = size
         case .manifestPreview:
             let span = HubLayoutEngine.resolvedDaySpan(filters: cleaned)
@@ -179,8 +225,11 @@ struct HubWidgetConfigureSheet: View {
         var copy = source
         if copy.tags?.isEmpty == true { copy.tags = nil }
         if copy.supplyTags?.isEmpty == true { copy.supplyTags = nil }
+        if copy.nutrients?.isEmpty == true { copy.nutrients = nil }
         let hasAny = copy.tags != nil || copy.slotType != nil || copy.domain != nil
             || copy.limit != nil || copy.daySpan != nil || copy.supplyTags != nil
+            || copy.nutrients != nil || copy.nutritionDisplay != nil
+            || copy.nutritionRange != nil || copy.adherenceNutrient != nil
         return hasAny ? copy : nil
     }
 
@@ -225,6 +274,42 @@ struct HubWidgetConfigureSheet: View {
                 HubLayoutEngine.displayLimit(filters: filters, size: widget.size)
             },
             set: { filters.limit = $0 }
+        )
+    }
+
+    private var nutritionDisplayBinding: Binding<String> {
+        Binding(
+            get: { filters.nutritionDisplay ?? "remaining" },
+            set: { filters.nutritionDisplay = $0 }
+        )
+    }
+
+    private var nutritionRangeBinding: Binding<Int> {
+        Binding(
+            get: { filters.nutritionRange ?? 7 },
+            set: {
+                filters.nutritionRange = HubWidgetFilters.allowedNutritionRanges.contains($0) ? $0 : 7
+            }
+        )
+    }
+
+    private func nutrientBinding(_ nutrient: String) -> Binding<Bool> {
+        Binding(
+            get: {
+                let current = filters.nutrients ?? ["energy", "protein", "carbs", "fat"]
+                return current.contains(nutrient)
+            },
+            set: { enabled in
+                var current = filters.nutrients ?? ["energy", "protein", "carbs", "fat"]
+                if enabled {
+                    if !current.contains(nutrient) {
+                        current.append(nutrient)
+                    }
+                } else {
+                    current.removeAll { $0 == nutrient }
+                }
+                filters.nutrients = current.isEmpty ? nil : Array(current.prefix(5))
+            }
         )
     }
 }

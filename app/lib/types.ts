@@ -74,7 +74,9 @@ export type HubWidgetId =
 	| "cargo-expiring"
 	| "supply-preview"
 	| "manifest-preview"
-	| "flight-recorder";
+	| "flight-recorder"
+	| "nutrition-today"
+	| "nutrition-trends";
 
 export type HubProfile = "cook" | "shop" | "minimal" | "full" | "custom";
 
@@ -83,6 +85,13 @@ export type SlotType = "breakfast" | "lunch" | "dinner" | "snack";
 
 /** Cargo domains available for filtering */
 export type CargoDomain = "food" | "household" | "alcohol";
+
+export type NutritionHubNutrientKey =
+	| "energy"
+	| "protein"
+	| "carbs"
+	| "fat"
+	| "fiber";
 
 /**
  * Per-widget filter configuration stored alongside layout in user.settings.
@@ -103,6 +112,14 @@ export interface HubWidgetFilters {
 	supplyTags?: string[];
 	/** Multi-tag filter mode for hub widgets (default OR). */
 	tagFilterMode?: "or" | "and";
+	/** Nutrients to show on nutrition hub widgets. */
+	nutrients?: NutritionHubNutrientKey[];
+	/** Daily Fuel: consumed vs remaining. */
+	nutritionDisplay?: "consumed" | "remaining";
+	/** Fuel Trends lookback (days). */
+	nutritionRange?: 7 | 14 | 30;
+	/** Trends adherence chip nutrient. */
+	adherenceNutrient?: NutritionHubNutrientKey;
 }
 
 export interface HubWidgetLayout {
@@ -180,12 +197,17 @@ export interface HubLoaderData {
 			payload: Record<string, unknown>;
 		}>;
 	} | null;
+	/** Daily Fuel — today intake + optional goal (null when flags/consent block). */
+	nutritionToday?: import("~/lib/schemas/nutrition").NutritionSummary | null;
+	/** Fuel Trends — range summary (null when flags/consent block). */
+	nutritionTrends?: import("~/lib/schemas/nutrition").NutritionSummary | null;
 }
 
 /** Props passed to each Hub widget component. */
 export interface HubWidgetProps {
 	data: HubLoaderData;
 	size: "sm" | "md" | "lg";
+	filters?: HubWidgetFilters;
 }
 
 export interface OrganizationSupplySettings {

@@ -30,6 +30,7 @@ interface HubEditModeMobileProps {
 	data: HubLoaderData;
 	availableMealTags: string[];
 	availableCargoTags?: string[];
+	nutritionWidgetsEnabled?: boolean;
 	onExit: () => void;
 }
 
@@ -38,10 +39,11 @@ export function HubEditModeMobile({
 	hubLayout,
 	availableMealTags,
 	availableCargoTags = [],
+	nutritionWidgetsEnabled = false,
 	onExit,
 }: HubEditModeMobileProps) {
 	const [widgets, setWidgets] = useState(() =>
-		initEditableWidgets(hubProfile, hubLayout),
+		initEditableWidgets(hubProfile, hubLayout, { nutritionWidgetsEnabled }),
 	);
 	const [activeWidgetId, setActiveWidgetId] = useState<string | null>(null);
 	const sheetRef = useRef<HTMLDivElement>(null);

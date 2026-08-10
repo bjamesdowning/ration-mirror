@@ -9,6 +9,8 @@ enum HubWidgetID: String, CaseIterable, Sendable {
     case supplyPreview = "supply-preview"
     case manifestPreview = "manifest-preview"
     case flightRecorder = "flight-recorder"
+    case nutritionToday = "nutrition-today"
+    case nutritionTrends = "nutrition-trends"
 }
 
 struct HubWidgetDefinition: Sendable {
@@ -69,25 +71,40 @@ enum HubWidgetRegistry {
             description: "This week's cooks, docks, expiries, and recent activity",
             defaultSize: "md"
         ),
+        .nutritionToday: HubWidgetDefinition(
+            id: .nutritionToday,
+            title: "Daily Fuel",
+            description: "Today's intake progress toward nutrition goals",
+            defaultSize: "md"
+        ),
+        .nutritionTrends: HubWidgetDefinition(
+            id: .nutritionTrends,
+            title: "Fuel Trends",
+            description: "Average intake vs goals over a selectable range",
+            defaultSize: "md"
+        ),
     ]
 
     static let fullLayout: [HubWidgetLayout] = [
         HubWidgetLayout(id: HubWidgetID.hubStats.rawValue, order: 0, size: "lg", visible: true),
-        HubWidgetLayout(id: HubWidgetID.mealsReady.rawValue, order: 1, size: "lg", visible: true),
-        HubWidgetLayout(id: HubWidgetID.mealsPartial.rawValue, order: 2, size: "lg", visible: true),
-        HubWidgetLayout(id: HubWidgetID.snacksReady.rawValue, order: 3, size: "lg", visible: true),
-        HubWidgetLayout(id: HubWidgetID.cargoExpiring.rawValue, order: 4, size: "md", visible: true),
-        HubWidgetLayout(id: HubWidgetID.supplyPreview.rawValue, order: 5, size: "md", visible: true),
-        HubWidgetLayout(id: HubWidgetID.manifestPreview.rawValue, order: 6, size: "md", visible: true),
-        HubWidgetLayout(id: HubWidgetID.flightRecorder.rawValue, order: 7, size: "md", visible: true),
+        HubWidgetLayout(id: HubWidgetID.nutritionToday.rawValue, order: 1, size: "md", visible: true),
+        HubWidgetLayout(id: HubWidgetID.mealsReady.rawValue, order: 2, size: "lg", visible: true),
+        HubWidgetLayout(id: HubWidgetID.mealsPartial.rawValue, order: 3, size: "lg", visible: true),
+        HubWidgetLayout(id: HubWidgetID.snacksReady.rawValue, order: 4, size: "lg", visible: true),
+        HubWidgetLayout(id: HubWidgetID.cargoExpiring.rawValue, order: 5, size: "md", visible: true),
+        HubWidgetLayout(id: HubWidgetID.supplyPreview.rawValue, order: 6, size: "md", visible: true),
+        HubWidgetLayout(id: HubWidgetID.manifestPreview.rawValue, order: 7, size: "md", visible: true),
+        HubWidgetLayout(id: HubWidgetID.nutritionTrends.rawValue, order: 8, size: "md", visible: true),
+        HubWidgetLayout(id: HubWidgetID.flightRecorder.rawValue, order: 9, size: "md", visible: true),
     ]
 
     static let cookLayout: [HubWidgetLayout] = [
         HubWidgetLayout(id: HubWidgetID.hubStats.rawValue, order: 0, size: "lg", visible: true),
-        HubWidgetLayout(id: HubWidgetID.mealsReady.rawValue, order: 1, size: "lg", visible: true),
-        HubWidgetLayout(id: HubWidgetID.snacksReady.rawValue, order: 2, size: "lg", visible: true),
-        HubWidgetLayout(id: HubWidgetID.cargoExpiring.rawValue, order: 3, size: "md", visible: true),
-        HubWidgetLayout(id: HubWidgetID.manifestPreview.rawValue, order: 4, size: "sm", visible: true),
+        HubWidgetLayout(id: HubWidgetID.nutritionToday.rawValue, order: 1, size: "md", visible: true),
+        HubWidgetLayout(id: HubWidgetID.mealsReady.rawValue, order: 2, size: "lg", visible: true),
+        HubWidgetLayout(id: HubWidgetID.snacksReady.rawValue, order: 3, size: "lg", visible: true),
+        HubWidgetLayout(id: HubWidgetID.cargoExpiring.rawValue, order: 4, size: "md", visible: true),
+        HubWidgetLayout(id: HubWidgetID.manifestPreview.rawValue, order: 5, size: "sm", visible: true),
     ]
 
     static let shopLayout: [HubWidgetLayout] = [

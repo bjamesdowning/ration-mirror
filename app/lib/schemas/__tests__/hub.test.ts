@@ -94,8 +94,34 @@ describe("HubWidgetFiltersSchema", () => {
 			limit: 8,
 			daySpan: 3,
 			supplyTags: ["costco"],
+			nutrients: ["energy", "protein"],
+			nutritionDisplay: "remaining",
+			nutritionRange: 14,
+			adherenceNutrient: "protein",
 		});
 		expect(result.success).toBe(true);
+	});
+
+	it("accepts nutrition hub filter fields", () => {
+		expect(
+			HubWidgetFiltersSchema.safeParse({
+				nutrients: ["energy", "fiber"],
+				nutritionDisplay: "consumed",
+				nutritionRange: 30,
+			}).success,
+		).toBe(true);
+	});
+
+	it("rejects invalid nutritionRange", () => {
+		expect(
+			HubWidgetFiltersSchema.safeParse({ nutritionRange: 10 }).success,
+		).toBe(false);
+	});
+
+	it("rejects invalid nutrient keys", () => {
+		expect(
+			HubWidgetFiltersSchema.safeParse({ nutrients: ["sugar"] }).success,
+		).toBe(false);
 	});
 
 	it("accepts daySpan values 1, 3, 7, 14", () => {
@@ -156,6 +182,20 @@ describe("HubWidgetLayoutSchema — filters field", () => {
 			id: "unknown-widget",
 		});
 		expect(result.success).toBe(false);
+	});
+
+	it("accepts nutrition hub widget ids", () => {
+		for (const id of ["nutrition-today", "nutrition-trends"] as const) {
+			expect(
+				HubWidgetLayoutSchema.safeParse({
+					id,
+					order: 0,
+					size: "md",
+					visible: true,
+					filters: { nutrients: ["protein"], nutritionRange: 7 },
+				}).success,
+			).toBe(true);
+		}
 	});
 });
 

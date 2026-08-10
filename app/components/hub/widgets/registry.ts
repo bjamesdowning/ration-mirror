@@ -12,6 +12,10 @@ import { HubStatsWidget } from "./HubStatsWidget";
 import { ManifestWidget } from "./ManifestWidget";
 import { MealsPartialWidget } from "./MealsPartialWidget";
 import { MealsReadyWidget } from "./MealsReadyWidget";
+import {
+	NutritionTodayWidget,
+	NutritionTrendsWidget,
+} from "./NutritionFuelWidgets";
 import { SnacksReadyWidget } from "./SnacksReadyWidget";
 import { SupplyPreviewWidget } from "./SupplyPreviewWidget";
 
@@ -126,25 +130,50 @@ export const WIDGET_REGISTRY = new Map<HubWidgetId, HubWidgetDefinition>([
 			defaultSize: "md",
 		},
 	],
+	[
+		"nutrition-today",
+		{
+			id: "nutrition-today",
+			title: "Daily Fuel",
+			description: "Today's intake progress toward nutrition goals",
+			dataKeys: ["nutritionToday"],
+			component: NutritionTodayWidget,
+			defaultSize: "md",
+		},
+	],
+	[
+		"nutrition-trends",
+		{
+			id: "nutrition-trends",
+			title: "Fuel Trends",
+			description: "Average intake vs goals over a selectable range",
+			dataKeys: ["nutritionTrends"],
+			component: NutritionTrendsWidget,
+			defaultSize: "md",
+		},
+	],
 ]);
 
 const FULL_LAYOUT: HubWidgetLayout[] = [
 	{ id: "hub-stats", order: 0, size: "lg", visible: true },
-	{ id: "meals-ready", order: 1, size: "lg", visible: true },
-	{ id: "meals-partial", order: 2, size: "lg", visible: true },
-	{ id: "snacks-ready", order: 3, size: "lg", visible: true },
-	{ id: "cargo-expiring", order: 4, size: "md", visible: true },
-	{ id: "supply-preview", order: 5, size: "md", visible: true },
-	{ id: "manifest-preview", order: 6, size: "md", visible: true },
-	{ id: "flight-recorder", order: 7, size: "md", visible: true },
+	{ id: "nutrition-today", order: 1, size: "md", visible: true },
+	{ id: "meals-ready", order: 2, size: "lg", visible: true },
+	{ id: "meals-partial", order: 3, size: "lg", visible: true },
+	{ id: "snacks-ready", order: 4, size: "lg", visible: true },
+	{ id: "cargo-expiring", order: 5, size: "md", visible: true },
+	{ id: "supply-preview", order: 6, size: "md", visible: true },
+	{ id: "manifest-preview", order: 7, size: "md", visible: true },
+	{ id: "nutrition-trends", order: 8, size: "md", visible: true },
+	{ id: "flight-recorder", order: 9, size: "md", visible: true },
 ];
 
 const COOK_LAYOUT: HubWidgetLayout[] = [
 	{ id: "hub-stats", order: 0, size: "lg", visible: true },
-	{ id: "meals-ready", order: 1, size: "lg", visible: true },
-	{ id: "snacks-ready", order: 2, size: "lg", visible: true },
-	{ id: "cargo-expiring", order: 3, size: "md", visible: true },
-	{ id: "manifest-preview", order: 4, size: "sm", visible: true },
+	{ id: "nutrition-today", order: 1, size: "md", visible: true },
+	{ id: "meals-ready", order: 2, size: "lg", visible: true },
+	{ id: "snacks-ready", order: 3, size: "lg", visible: true },
+	{ id: "cargo-expiring", order: 4, size: "md", visible: true },
+	{ id: "manifest-preview", order: 5, size: "sm", visible: true },
 ];
 
 const SHOP_LAYOUT: HubWidgetLayout[] = [

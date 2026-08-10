@@ -547,3 +547,319 @@ struct FlightRecorderWidget: View {
         return "\(hours / 24)d ago"
     }
 }
+
+// MARK: - Nutrition Hub widgets
+
+private enum HubFuelNutrient: String, CaseIterable {
+    case energy, protein, carbs, fat, fiber
+
+    var label: String {
+        switch self {
+        case .energy: return "Calories"
+        case .protein: return "Protein"
+        case .carbs: return "Carbs"
+        case .fat: return "Fat"
+        case .fiber: return "Fiber"
+        }
+    }
+
+    var shortLabel: String {
+        switch self {
+        case .energy: return "kcal"
+        case .protein: return "P"
+        case .carbs: return "C"
+        case .fat: return "F"
+        case .fiber: return "Fiber"
+        }
+    }
+
+    var unit: String { self == .energy ? "kcal" : "g" }
+}
+
+private enum HubFuelMath {
+    static func nutrients(from filters: HubWidgetFilters?) -> [HubFuelNutrient] {
+        let raw = filters?.nutrients ?? ["energy", "protein", "carbs", "fat"]
+        let parsed = raw.compactMap(HubFuelNutrient.init(rawValue:))
+        return parsed.isEmpty ? [.energy, .protein, .carbs, .fat] : Array(parsed.prefix(5))
+    }
+
+    static func displayMode(from filters: HubWidgetFilters?) -> String {
+        filters?.nutritionDisplay == "consumed" ? "consumed" : "remaining"
+    }
+
+    static func range(from filters: HubWidgetFilters?) -> Int {
+        let value = filters?.nutritionRange ?? 7
+        return HubWidgetFilters.allowedNutritionRanges.contains(value) ? value : 7
+    }
+
+    static func actual(day: NutritionDayTotals, nutrient: HubFuelNutrient) -> Double? {
+        switch nutrient {
+        case .energy: return day.energyKcal
+        case .protein: return day.proteinG
+        case .carbs: return day.carbsG
+        case .fat: return day.fatG
+        case .fiber: return day.fiberG
+        }
+    }
+
+    static func actual(totals: NutritionSummary.Totals, nutrient: HubFuelNutrient) -> Double? {
+        switch nutrient {
+        case .energy: return totals.energyKcal
+        case .protein: return totals.proteinG
+        case .carbs: return totals.carbsG
+        case .fat: return totals.fatG
+        case .fiber: return totals.fiberG
+        }
+    }
+
+    static func target(goal: NutritionSummary.Goal?, nutrient: HubFuelNutrient) -> Double? {
+        guard let goal else { return nil }
+        let value: Double?
+        switch nutrient {
+        case .energy: value = goal.dailyEnergyKcal
+        case .protein: value = goal.proteinG
+        case .carbs: value = goal.carbsG
+        case .fat: value = goal.fatG
+        case .fiber: value = goal.fiberG
+        }
+        guard let value, value > 0 else { return nil }
+        return value
+    }
+
+    static func ratio(actual: Double?, target: Double?) -> Double? {
+        guard let actual, let target, target > 0 else { return nil }
+        return actual / target
+    }
+
+    static func remaining(actual: Double?, target: Double?) -> Double? {
+        guard let actual, let target, target > 0 else { return nil }
+        return max(target - actual, 0)
+    }
+
+    static func overage(actual: Double?, target: Double?) -> Double? {
+        guard let actual, let target, target > 0 else { return nil }
+        let over = actual - target
+        return over > 0 ? over : nil
+    }
+
+    static func averages(days: [NutritionDayTotals]) -> NutritionSummary.Totals? {
+        guard !days.isEmpty else { return nil }
+        let n = Double(days.count)
+        var fiberSum = 0.0
+        var fiberKnown = 0
+        let energy = days.reduce(0.0) { $0 + $1.energyKcal } / n
+        let protein = days.reduce(0.0) { $0 + $1.proteinG } / n
+        let carbs = days.reduce(0.0) { $0 + $1.carbsG } / n
+        let fat = days.reduce(0.0) { $0 + $1.fatG } / n
+        for day in days {
+            if let fiber = day.fiberG {
+                fiberSum += fiber
+                fiberKnown += 1
+            }
+        }
+        return NutritionSummary.Totals(
+            energyKcal: energy,
+            proteinG: protein,
+            carbsG: carbs,
+            fatG: fat,
+            fiberG: fiberKnown > 0 ? fiberSum / Double(fiberKnown) : nil
+        )
+    }
+
+    static func adherence(days: [NutritionDayTotals], goal: NutritionSummary.Goal?, nutrient: HubFuelNutrient) -> (hit: Int, total: Int) {
+        let total = days.count
+        guard let target = target(goal: goal, nutrient: nutrient), total > 0 else {
+            return (0, total)
+        }
+        let hit = days.reduce(0) { count, day in
+            guard let actual = actual(day: day, nutrient: nutrient), actual >= target else { return count }
+            return count + 1
+        }
+        return (hit, total)
+    }
+
+    static func valueText(
+        actual: Double?,
+        target: Double?,
+        nutrient: HubFuelNutrient,
+        mode: String
+    ) -> (text: String, over: Bool, progress: Double) {
+        let ratio = ratio(actual: actual, target: target) ?? 0
+        let over = overage(actual: actual, target: target)
+        if mode == "remaining", target != nil {
+            if let over {
+                return ("+\(Int(over.rounded()))\(nutrient.unit)", true, ratio)
+            }
+            let rem = remaining(actual: actual, target: target) ?? 0
+            return ("\(Int(rem.rounded()))\(nutrient.unit)", false, ratio)
+        }
+        let base = "\(Int((actual ?? 0).rounded()))\(nutrient.unit)"
+        if let target {
+            return ("\(base) / \(Int(target.rounded()))", over != nil, ratio)
+        }
+        return (base, false, ratio)
+    }
+}
+
+struct DailyFuelWidget: View {
+    let summary: NutritionSummary?
+    var size: String = "md"
+    var filters: HubWidgetFilters?
+    var onOpenGoals: (() -> Void)?
+
+    var body: some View {
+        Button {
+            onOpenGoals?()
+        } label: {
+            GlassCard {
+                VStack(alignment: .leading, spacing: 12) {
+                    HubWidgetHeader(title: "Daily Fuel", systemImage: "flame.fill", trailing: "Goals")
+                    content
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Daily Fuel, open nutrition goals")
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        let nutrients = HubFuelMath.nutrients(from: filters)
+        let mode = HubFuelMath.displayMode(from: filters)
+        let day = summary?.days.first
+        let goal = summary?.goal
+
+        if let day {
+            let primary = nutrients.first ?? .energy
+            let primaryActual = HubFuelMath.actual(day: day, nutrient: primary)
+            let primaryTarget = HubFuelMath.target(goal: goal, nutrient: primary)
+            let primaryDisplay = HubFuelMath.valueText(
+                actual: primaryActual,
+                target: primaryTarget,
+                nutrient: primary,
+                mode: mode
+            )
+            let macros = nutrients.filter { $0 != primary }.prefix(3)
+
+            HStack(alignment: .top, spacing: 16) {
+                VStack(spacing: 6) {
+                    HubFuelRing(
+                        progress: primaryDisplay.progress,
+                        valueText: primaryDisplay.text,
+                        overTarget: primaryDisplay.over,
+                        diameter: size == "lg" ? 96 : 72
+                    )
+                    Text(primary.label)
+                        .rationCaption()
+                }
+                if size != "sm" {
+                    VStack(spacing: 10) {
+                        ForEach(Array(macros), id: \.rawValue) { nutrient in
+                            let actual = HubFuelMath.actual(day: day, nutrient: nutrient)
+                            let target = HubFuelMath.target(goal: goal, nutrient: nutrient)
+                            let display = HubFuelMath.valueText(
+                                actual: actual,
+                                target: target,
+                                nutrient: nutrient,
+                                mode: mode
+                            )
+                            HubMacroBar(
+                                label: nutrient.shortLabel,
+                                valueText: display.text,
+                                progress: display.progress,
+                                overTarget: display.over
+                            )
+                        }
+                    }
+                }
+            }
+
+            if day.entryCount == 0 {
+                Text("No intakes logged today")
+                    .rationCaption()
+            } else if goal == nil, size == "lg" {
+                Text("Set goals to track remaining fuel")
+                    .rationCaption()
+            }
+        } else {
+            Text("No intakes logged today. Tap to set or review your goals.")
+                .rationCaption()
+        }
+    }
+}
+
+struct FuelTrendsWidget: View {
+    let summary: NutritionSummary?
+    var size: String = "md"
+    var filters: HubWidgetFilters?
+    var onOpenGoals: (() -> Void)?
+
+    var body: some View {
+        Button {
+            onOpenGoals?()
+        } label: {
+            GlassCard {
+                VStack(alignment: .leading, spacing: 12) {
+                    HubWidgetHeader(
+                        title: "Fuel Trends",
+                        systemImage: "chart.bar.fill",
+                        trailing: "\(HubFuelMath.range(from: filters))d"
+                    )
+                    content
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Fuel Trends, open nutrition goals")
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        let nutrients = HubFuelMath.nutrients(from: filters)
+        let days = summary.map {
+            NutritionDayFill.fillSparseDays(from: $0.from, to: $0.to, days: $0.days)
+        } ?? []
+        let averages = HubFuelMath.averages(days: days)
+        let goal = summary?.goal
+        let primary = nutrients.first ?? .energy
+        let adherenceNutrient = HubFuelNutrient(rawValue: filters?.adherenceNutrient ?? "")
+            ?? (nutrients.contains(.protein) ? .protein : primary)
+        let adherence = HubFuelMath.adherence(days: days, goal: goal, nutrient: adherenceNutrient)
+
+        if let averages, !days.isEmpty {
+            if size != "sm" {
+                HubNutrientSparkline(
+                    values: days.map { HubFuelMath.actual(day: $0, nutrient: primary) ?? 0 }
+                )
+                Text(primary.label)
+                    .rationCaption()
+            }
+            let rows = size == "sm" ? Array(nutrients.prefix(1)) : Array(nutrients.prefix(4))
+            VStack(spacing: 10) {
+                ForEach(rows, id: \.rawValue) { nutrient in
+                    let actual = HubFuelMath.actual(totals: averages, nutrient: nutrient)
+                    let target = HubFuelMath.target(goal: goal, nutrient: nutrient)
+                    let display = HubFuelMath.valueText(
+                        actual: actual,
+                        target: target,
+                        nutrient: nutrient,
+                        mode: "consumed"
+                    )
+                    HubMacroBar(
+                        label: nutrient.shortLabel,
+                        valueText: display.text,
+                        progress: display.progress,
+                        overTarget: display.over
+                    )
+                }
+            }
+            if size == "lg", goal != nil {
+                Text("\(adherence.hit) of \(adherence.total) days hit \(adherenceNutrient.label.lowercased()) goal")
+                    .rationCaption()
+            }
+        } else {
+            Text("Log intakes from Manifest to see averages. Tap to manage goals.")
+                .rationCaption()
+        }
+    }
+}

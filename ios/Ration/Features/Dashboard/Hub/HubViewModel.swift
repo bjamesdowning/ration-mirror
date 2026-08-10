@@ -91,9 +91,13 @@ final class HubViewModel {
         }
     }
 
-    var resolvedLayout: [HubWidgetLayout] {
+    func resolvedLayout(nutritionWidgetsEnabled: Bool = false) -> [HubWidgetLayout] {
         guard case let .loaded(data) = state else { return [] }
-        return HubLayoutEngine.resolveLayout(profile: data.hubProfile, layout: data.hubLayout)
+        return HubLayoutEngine.resolveLayout(
+            profile: data.hubProfile,
+            layout: data.hubLayout,
+            nutritionWidgetsEnabled: nutritionWidgetsEnabled
+        )
     }
 
     func nextAction(for data: HubResponse) -> (key: String, title: String, detail: String, icon: String)? {
@@ -161,7 +165,9 @@ private extension HubResponse {
             mealMatches: mealMatches,
             partialMealMatches: partialMealMatches,
             snackMatches: snackMatches,
-            flightRecorderActivity: flightRecorderActivity
+            flightRecorderActivity: flightRecorderActivity,
+            nutritionToday: nutritionToday,
+            nutritionTrends: nutritionTrends
         )
     }
 }

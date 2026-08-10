@@ -150,3 +150,85 @@ struct HubUrgencyLabel: View {
             .foregroundStyle(color)
     }
 }
+
+// MARK: - Nutrition Hub primitives
+
+struct HubFuelRing: View {
+    let progress: Double
+    let valueText: String
+    var overTarget: Bool = false
+    var diameter: CGFloat = 88
+
+    private var clamped: Double { min(max(progress, 0), 1) }
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .stroke(Theme.platinum, lineWidth: 8)
+            Circle()
+                .trim(from: 0, to: clamped)
+                .stroke(
+                    overTarget ? Theme.warning : Theme.hyperGreen,
+                    style: StrokeStyle(lineWidth: 8, lineCap: .round)
+                )
+                .rotationEffect(.degrees(-90))
+                .animation(MotionPolicy.shortFade, value: clamped)
+            Text(valueText)
+                .font(Typography.mono(13, weight: .bold))
+                .foregroundStyle(Theme.carbon)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 8)
+        }
+        .frame(width: diameter, height: diameter)
+    }
+}
+
+struct HubMacroBar: View {
+    let label: String
+    let valueText: String
+    let progress: Double
+    var overTarget: Bool = false
+
+    private var clamped: Double { min(max(progress, 0), 1) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(label)
+                    .font(Typography.caption())
+                    .foregroundStyle(Theme.muted)
+                Spacer()
+                Text(valueText)
+                    .font(Typography.mono(11, weight: .semibold))
+                    .foregroundStyle(Theme.carbon)
+            }
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Theme.platinum)
+                    Capsule()
+                        .fill(overTarget ? Theme.warning : Theme.hyperGreen)
+                        .frame(width: max(0, geo.size.width * clamped))
+                }
+            }
+            .frame(height: 4)
+            .animation(MotionPolicy.shortFade, value: clamped)
+        }
+    }
+}
+
+struct HubNutrientSparkline: View {
+    let values: [Double]
+
+    var body: some View {
+        let maxValue = max(values.max() ?? 1, 1)
+        HStack(alignment: .bottom, spacing: 2) {
+            ForEach(Array(values.enumerated()), id: \.offset) { _, value in
+                Capsule()
+                    .fill(Theme.hyperGreen.opacity(0.85))
+                    .frame(maxWidth: .infinity)
+                    .frame(height: max(6, CGFloat(value / maxValue) * 32))
+            }
+        }
+        .frame(height: 32)
+    }
+}

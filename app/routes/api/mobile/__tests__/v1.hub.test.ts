@@ -54,6 +54,7 @@ describe("GET /api/mobile/v1/hub", () => {
 			{ DB: {}, RATION_KV: {} },
 			"org_1",
 			"user_1",
+			expect.any(Request),
 		);
 	});
 

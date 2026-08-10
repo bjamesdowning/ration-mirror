@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { HubLayoutSchema } from "~/lib/schemas/hub";
 import { kitchenEventTypeSchema } from "~/lib/schemas/kitchen-events";
+import { NutritionSummarySchema } from "~/lib/schemas/nutrition";
 
 const HubProfileSchema = z.enum(["cook", "shop", "minimal", "full", "custom"]);
 
@@ -106,6 +107,8 @@ export const MobileHubResponseSchema = z.object({
 	partialMealMatches: z.array(MealMatchResultSchema),
 	snackMatches: z.array(MealMatchResultSchema),
 	flightRecorderActivity: FlightRecorderActivitySchema.nullable().optional(),
+	nutritionToday: NutritionSummarySchema.nullable().optional(),
+	nutritionTrends: NutritionSummarySchema.nullable().optional(),
 });
 
 export type MobileHubResponse = z.infer<typeof MobileHubResponseSchema>;

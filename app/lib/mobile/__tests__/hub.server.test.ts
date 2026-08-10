@@ -47,9 +47,39 @@ vi.mock("~/lib/matching.server", () => ({
 	MEAL_MATCH_CANDIDATE_CAP: 200,
 }));
 
+vi.mock("~/lib/hub-match.server", () => ({
+	getHubMealMatchWidgets: async () => ({
+		mealMatches: [],
+		partialMealMatches: [],
+		snackMatches: [],
+	}),
+}));
+
 vi.mock("~/lib/kitchen-events.server", () => ({
 	getKitchenStats: () => getKitchenStats(),
 	getKitchenEvents: () => getKitchenEvents(),
+}));
+
+vi.mock("~/lib/feature-flags/flags.server", () => ({
+	buildMobileFlagContext: () => ({}),
+}));
+
+vi.mock("~/lib/nutrition/feature-policy.server", () => ({
+	resolveNutritionCapabilities: async () => ({
+		engine: false,
+		manifest: false,
+		cookLogSplit: false,
+		goals: false,
+		aiEstimate: false,
+		asyncRecompute: false,
+	}),
+}));
+
+vi.mock("~/lib/nutrition/hub-data.server", () => ({
+	loadHubNutritionData: async () => ({
+		nutritionToday: null,
+		nutritionTrends: null,
+	}),
 }));
 
 vi.mock("~/lib/logging.server", () => ({

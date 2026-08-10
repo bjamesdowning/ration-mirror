@@ -1,3 +1,4 @@
+import { filterNutritionHubWidgetsByFlags } from "~/lib/nutrition/hub-widgets";
 import type { HubLoaderData, HubWidgetId } from "~/lib/types";
 import {
 	PROFILE_PRESETS,
@@ -8,6 +9,8 @@ import {
 interface LayoutEngineProps {
 	layout: ResolvedWidgetLayout[];
 	data: HubLoaderData;
+	/** Fail-closed: omit nutrition widgets when false. */
+	nutritionWidgetsEnabled?: boolean;
 }
 
 function getColSpanClass(size: "sm" | "md" | "lg"): string {
@@ -23,10 +26,15 @@ function getColSpanClass(size: "sm" | "md" | "lg"): string {
 	}
 }
 
-export function LayoutEngine({ layout, data }: LayoutEngineProps) {
-	const visibleLayout = layout
-		.filter((w) => w.visible)
-		.sort((a, b) => a.order - b.order);
+export function LayoutEngine({
+	layout,
+	data,
+	nutritionWidgetsEnabled = false,
+}: LayoutEngineProps) {
+	const visibleLayout = filterNutritionHubWidgetsByFlags(
+		layout.filter((w) => w.visible).sort((a, b) => a.order - b.order),
+		nutritionWidgetsEnabled,
+	);
 
 	const widgetsToRender = visibleLayout.filter((w) =>
 		WIDGET_REGISTRY.has(w.id as HubWidgetId),
@@ -35,7 +43,10 @@ export function LayoutEngine({ layout, data }: LayoutEngineProps) {
 	const resolvedLayout =
 		widgetsToRender.length > 0
 			? widgetsToRender
-			: (PROFILE_PRESETS.full as ResolvedWidgetLayout[]);
+			: (filterNutritionHubWidgetsByFlags(
+					PROFILE_PRESETS.full as ResolvedWidgetLayout[],
+					nutritionWidgetsEnabled,
+				) as ResolvedWidgetLayout[]);
 
 	return (
 		<div className="grid grid-cols-1 md:grid-cols-12 gap-6">
@@ -46,7 +57,7 @@ export function LayoutEngine({ layout, data }: LayoutEngineProps) {
 				const size = item.size ?? def.defaultSize;
 				return (
 					<div key={item.id} className={getColSpanClass(size)}>
-						<WidgetComponent data={data} size={size} />
+						<WidgetComponent data={data} size={size} filters={item.filters} />
 					</div>
 				);
 			})}

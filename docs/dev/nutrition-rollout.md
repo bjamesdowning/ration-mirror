@@ -41,7 +41,10 @@ One production API serves everyone. Safety comes from **flags default off** + **
    3. `nutrition-manifest`
    4. `nutrition-cook-log-split`
    5. `nutrition-goals`
-   6. `nutrition-ai-estimate` (last)
+   6. `nutrition-ai-estimate` (last; scan-review AI only)
+
+**Hub widgets:** Once `nutrition-manifest` and/or `nutrition-goals` are on, Hub exposes **Daily Fuel** (`nutrition-today`) and **Fuel Trends** (`nutrition-trends`) on `full`/`cook` presets (flag-gated out of layout when both flags are off). Tapping either opens Nutrition Goals in Preferences.
+
 5. Iterate fixes on TestFlight; bump iOS patch + web as needed. Keep App Store binary on the **same** API with flags evaluating off for `1.3.17`.
 
 ### Phase C — App Review

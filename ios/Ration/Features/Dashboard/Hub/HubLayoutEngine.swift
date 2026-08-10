@@ -2,9 +2,17 @@ import Foundation
 
 /// Resolves visible Hub widgets from profile + custom layout — mirrors web `resolveLayout`.
 enum HubLayoutEngine {
+    static func isNutritionWidget(_ id: String) -> Bool {
+        id == HubWidgetID.nutritionToday.rawValue || id == HubWidgetID.nutritionTrends.rawValue
+    }
+
     /// All registered widgets ordered for editing — custom layout (or preset) with any
     /// missing widgets appended as hidden, so the editor always lists every widget.
-    static func initEditableWidgets(profile: HubProfile?, layout: HubLayoutPayload?) -> [HubWidgetLayout] {
+    static func initEditableWidgets(
+        profile: HubProfile?,
+        layout: HubLayoutPayload?,
+        nutritionWidgetsEnabled: Bool = false
+    ) -> [HubWidgetLayout] {
         let registered = Set(HubWidgetID.allCases.map(\.rawValue))
         var base: [HubWidgetLayout]
 
@@ -24,12 +32,22 @@ enum HubLayoutEngine {
             ))
         }
 
-        return base.sorted { $0.order < $1.order }
+        let sorted = base.sorted { $0.order < $1.order }
+        if nutritionWidgetsEnabled { return sorted }
+        return sorted.filter { !isNutritionWidget($0.id) }
     }
 
     /// Visible widgets in render order.
-    static func resolveLayout(profile: HubProfile?, layout: HubLayoutPayload?) -> [HubWidgetLayout] {
-        initEditableWidgets(profile: profile, layout: layout).filter(\.visible)
+    static func resolveLayout(
+        profile: HubProfile?,
+        layout: HubLayoutPayload?,
+        nutritionWidgetsEnabled: Bool = false
+    ) -> [HubWidgetLayout] {
+        initEditableWidgets(
+            profile: profile,
+            layout: layout,
+            nutritionWidgetsEnabled: nutritionWidgetsEnabled
+        ).filter(\.visible)
     }
 
     static func moveWidget(_ widgets: [HubWidgetLayout], id: String, direction: MoveDirection) -> [HubWidgetLayout] {
@@ -152,6 +170,14 @@ enum HubLayoutEngine {
             return parts.joined(separator: " · ")
         case .flightRecorder:
             return "This week"
+        case .nutritionToday:
+            let nutrients = widget.filters?.nutrients ?? ["energy", "protein", "carbs", "fat"]
+            let mode = widget.filters?.nutritionDisplay ?? "remaining"
+            return "\(nutrients.count) nutrients · \(mode.capitalized)"
+        case .nutritionTrends:
+            let range = widget.filters?.nutritionRange ?? 7
+            let allowed = HubWidgetFilters.allowedNutritionRanges.contains(range) ? range : 7
+            return "Last \(allowed) days"
         case .none:
             return ""
         }

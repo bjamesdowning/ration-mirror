@@ -14,6 +14,7 @@ struct DashboardView: View {
     var onOpenCargo: () -> Void = {}
     var onOpenGalley: () -> Void = {}
     var onOpenManifest: () -> Void = {}
+    var onOpenNutritionGoals: () -> Void = {}
     @State private var model = HubViewModel()
     @State private var selectedCargoRoute: HubCargoRoute?
     @State private var selectedMealRoute: HubMealRoute?
@@ -48,6 +49,8 @@ struct DashboardView: View {
                             hubLayout: data.hubLayout,
                             availableMealTags: data.availableMealTags,
                             availableCargoTags: data.availableCargoTags ?? [],
+                            nutritionWidgetsEnabled: env.session.clientFlags.isNutritionManifestEnabled
+                                || env.session.clientFlags.isNutritionGoalsEnabled,
                             onSave: { widgets in
                                 try await model.saveLayout(widgets, api: env.api)
                                 await reload()
@@ -198,7 +201,10 @@ struct DashboardView: View {
                         }
                     }
 
-                    ForEach(model.resolvedLayout) { widget in
+                    ForEach(model.resolvedLayout(
+                        nutritionWidgetsEnabled: env.session.clientFlags.isNutritionManifestEnabled
+                            || env.session.clientFlags.isNutritionGoalsEnabled
+                    )) { widget in
                         widgetView(widget, data: data)
                     }
                 }
@@ -300,6 +306,20 @@ struct DashboardView: View {
             )
         case .flightRecorder:
             FlightRecorderWidget(activity: data.flightRecorderActivity, size: size)
+        case .nutritionToday:
+            DailyFuelWidget(
+                summary: data.nutritionToday,
+                size: size,
+                filters: widget.filters,
+                onOpenGoals: onOpenNutritionGoals
+            )
+        case .nutritionTrends:
+            FuelTrendsWidget(
+                summary: data.nutritionTrends,
+                size: size,
+                filters: widget.filters,
+                onOpenGoals: onOpenNutritionGoals
+            )
         }
     }
 

@@ -3,6 +3,7 @@ import {
 	PROFILE_PRESETS,
 	WIDGET_REGISTRY,
 } from "~/components/hub/widgets/registry";
+import { filterNutritionHubWidgetsByFlags } from "~/lib/nutrition/hub-widgets";
 import type {
 	HubProfile,
 	HubWidgetFilters,
@@ -12,6 +13,7 @@ import type {
 export function initEditableWidgets(
 	hubProfile: HubProfile | undefined,
 	hubLayout: { widgets: HubWidgetLayout[] } | undefined,
+	options?: { nutritionWidgetsEnabled?: boolean },
 ): HubWidgetLayout[] {
 	let base: HubWidgetLayout[];
 
@@ -38,7 +40,11 @@ export function initEditableWidgets(
 		}
 	}
 
-	return base.sort((a, b) => a.order - b.order);
+	const sorted = base.sort((a, b) => a.order - b.order);
+	return filterNutritionHubWidgetsByFlags(
+		sorted,
+		options?.nutritionWidgetsEnabled ?? false,
+	);
 }
 
 export function moveWidget(

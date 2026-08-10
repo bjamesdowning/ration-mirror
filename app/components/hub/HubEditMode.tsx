@@ -30,6 +30,7 @@ interface HubEditModeProps {
 	data: HubLoaderData;
 	availableMealTags: string[];
 	availableCargoTags?: string[];
+	nutritionWidgetsEnabled?: boolean;
 	onExit: () => void;
 }
 
@@ -56,10 +57,11 @@ export function HubEditMode({
 	data,
 	availableMealTags,
 	availableCargoTags = [],
+	nutritionWidgetsEnabled = false,
 	onExit,
 }: HubEditModeProps) {
 	const [widgets, setWidgets] = useState(() =>
-		initEditableWidgets(hubProfile, hubLayout),
+		initEditableWidgets(hubProfile, hubLayout, { nutritionWidgetsEnabled }),
 	);
 	const [expandedFilterId, setExpandedFilterId] = useState<string | null>(null);
 	const fetcher = useFetcher<{ success?: boolean }>();
@@ -258,7 +260,11 @@ export function HubEditMode({
 
 								{/* The actual widget rendered live */}
 								<div className={filterOpen ? "mt-2" : ""}>
-									<WidgetComponent data={data} size={size} />
+									<WidgetComponent
+										data={data}
+										size={size}
+										filters={w.filters}
+									/>
 								</div>
 							</div>
 						</div>

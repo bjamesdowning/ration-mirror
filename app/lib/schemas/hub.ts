@@ -9,11 +9,21 @@ const HUB_WIDGET_IDS = [
 	"supply-preview",
 	"manifest-preview",
 	"flight-recorder",
+	"nutrition-today",
+	"nutrition-trends",
 ] as const;
 
 export const SLOT_TYPES = ["breakfast", "lunch", "dinner", "snack"] as const;
 
 export const CARGO_DOMAINS = ["food", "household", "alcohol"] as const;
+
+export const NUTRITION_HUB_NUTRIENT_KEYS = [
+	"energy",
+	"protein",
+	"carbs",
+	"fat",
+	"fiber",
+] as const;
 
 export const HubWidgetFiltersSchema = z.object({
 	/** Meal tag slugs to include (OR logic). Max 5 tags. Applies to meals-ready, meals-partial, snacks-ready, manifest-preview. */
@@ -32,6 +42,16 @@ export const HubWidgetFiltersSchema = z.object({
 	supplyTags: z.array(z.string().min(1).max(50)).max(5).optional(),
 	/** Tag filter combination mode for multi-tag widget filters. Default OR. */
 	tagFilterMode: z.enum(["or", "and"]).optional(),
+	/** Nutrients to show on nutrition-today / nutrition-trends. */
+	nutrients: z.array(z.enum(NUTRITION_HUB_NUTRIENT_KEYS)).max(5).optional(),
+	/** Daily Fuel display mode: consumed totals vs remaining to goal. */
+	nutritionDisplay: z.enum(["consumed", "remaining"]).optional(),
+	/** Fuel Trends lookback window (days). */
+	nutritionRange: z
+		.union([z.literal(7), z.literal(14), z.literal(30)])
+		.optional(),
+	/** Nutrient used for trends adherence chip. */
+	adherenceNutrient: z.enum(NUTRITION_HUB_NUTRIENT_KEYS).optional(),
 });
 
 export const HubWidgetLayoutSchema = z.object({

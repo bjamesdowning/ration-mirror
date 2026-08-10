@@ -17,10 +17,17 @@ import {
 	getCargoTags,
 	getExpiringCargo,
 } from "~/lib/cargo.server";
+import { buildWebFlagContext } from "~/lib/feature-flags/flags.server";
 import { getHubMealMatchWidgets } from "~/lib/hub-match.server";
 import { getKitchenEvents, getKitchenStats } from "~/lib/kitchen-events.server";
 import { getDistinctMealTags, getManifestPreview } from "~/lib/manifest.server";
 import { MOBILE_SUPPLY_ITEMS_SLICE } from "~/lib/mobile/hub.server";
+import { resolveNutritionCapabilities } from "~/lib/nutrition/feature-policy.server";
+import { loadHubNutritionData } from "~/lib/nutrition/hub-data.server";
+import {
+	filterNutritionHubWidgetsByFlags,
+	isNutritionHubWidgetsEnabled,
+} from "~/lib/nutrition/hub-widgets";
 import {
 	filterSupplyItemsByCargoTags,
 	getSupplyList,
@@ -33,7 +40,8 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		session: { user },
 		groupId,
 	} = await requireActiveGroup(context, request);
-	const db = context.cloudflare.env.DB;
+	const env = context.cloudflare.env;
+	const db = env.DB;
 
 	const settings = await getUserSettings(db, user.id);
 	const expirationAlertDays = settings.expirationAlertDays ?? 7;
@@ -52,9 +60,22 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 	const cargoExpiringConfig = findWidget("cargo-expiring");
 	const manifestPreviewConfig = findWidget("manifest-preview");
 	const supplyPreviewConfig = findWidget("supply-preview");
+	const nutritionTodayConfig = findWidget("nutrition-today");
+	const nutritionTrendsConfig = findWidget("nutrition-trends");
 	const flightRecorderVisible =
 		findWidget("flight-recorder")?.visible !== false &&
 		resolvedWidgets.some((w) => w.id === "flight-recorder" && w.visible);
+
+	const flagContext = buildWebFlagContext(request, env, { user });
+	const caps = await resolveNutritionCapabilities(env, flagContext);
+	const nutritionWidgetsEnabled = isNutritionHubWidgetsEnabled({
+		nutritionManifest: caps.manifest,
+		nutritionGoals: caps.goals,
+	});
+	const nutritionTodayVisible =
+		nutritionWidgetsEnabled && nutritionTodayConfig?.visible === true;
+	const nutritionTrendsVisible =
+		nutritionWidgetsEnabled && nutritionTrendsConfig?.visible === true;
 
 	// Derive per-widget filter values with safe defaults
 	const cargoLimit = cargoExpiringConfig?.filters?.limit ?? 10;
@@ -77,6 +98,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		cargoTagIndex,
 		flightRecorderStats,
 		flightRecorderRecent,
+		nutritionPayload,
 	] = await Promise.all([
 		getExpiringCargo(db, groupId, expirationAlertDays, cargoLimit, cargoDomain),
 		getCargoStats(db, groupId),
@@ -101,6 +123,17 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		flightRecorderVisible
 			? getKitchenEvents(db, groupId, { limit: 5 }).then((r) => r.events)
 			: Promise.resolve([]),
+		loadHubNutritionData({
+			env,
+			flagContext,
+			userId: user.id,
+			organizationId: groupId,
+			surface: "web",
+			requestId: request.headers.get("cf-ray") ?? undefined,
+			todayVisible: nutritionTodayVisible,
+			trendsVisible: nutritionTrendsVisible,
+			trendsRange: nutritionTrendsConfig?.filters?.nutritionRange,
+		}),
 	]);
 
 	const latestSupplyList = latestSupplyListRaw
@@ -154,6 +187,9 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		partialMealMatches,
 		snackMatches,
 		flightRecorderActivity,
+		nutritionToday: nutritionPayload.nutritionToday,
+		nutritionTrends: nutritionPayload.nutritionTrends,
+		nutritionWidgetsEnabled,
 	};
 }
 
@@ -194,6 +230,9 @@ export default function DashboardHub({ loaderData }: Route.ComponentProps) {
 		availableMealTags,
 		availableCargoTags,
 		flightRecorderActivity,
+		nutritionToday,
+		nutritionTrends,
+		nutritionWidgetsEnabled,
 	} = loaderData;
 
 	const [searchParams] = useSearchParams();
@@ -209,7 +248,10 @@ export default function DashboardHub({ loaderData }: Route.ComponentProps) {
 		dismissFetcher.state === "idle" &&
 		!dismissFetcher.data;
 
-	const resolvedLayout = resolveLayout(hubProfile, hubLayout);
+	const resolvedLayout = filterNutritionHubWidgetsByFlags(
+		resolveLayout(hubProfile, hubLayout),
+		nutritionWidgetsEnabled,
+	);
 	const widgetData = {
 		cargoStats,
 		expirationAlertDays,
@@ -220,6 +262,8 @@ export default function DashboardHub({ loaderData }: Route.ComponentProps) {
 		snackMatches,
 		manifestPreview,
 		flightRecorderActivity,
+		nutritionToday,
+		nutritionTrends,
 	};
 
 	useEffect(() => {
@@ -280,6 +324,7 @@ export default function DashboardHub({ loaderData }: Route.ComponentProps) {
 							data={widgetData}
 							availableMealTags={availableMealTags}
 							availableCargoTags={availableCargoTags}
+							nutritionWidgetsEnabled={nutritionWidgetsEnabled}
 							onExit={() => setIsEditing(false)}
 						/>
 					) : (
@@ -289,11 +334,16 @@ export default function DashboardHub({ loaderData }: Route.ComponentProps) {
 							data={widgetData}
 							availableMealTags={availableMealTags}
 							availableCargoTags={availableCargoTags}
+							nutritionWidgetsEnabled={nutritionWidgetsEnabled}
 							onExit={() => setIsEditing(false)}
 						/>
 					)
 				) : (
-					<LayoutEngine layout={resolvedLayout} data={widgetData} />
+					<LayoutEngine
+						layout={resolvedLayout}
+						data={widgetData}
+						nutritionWidgetsEnabled={nutritionWidgetsEnabled}
+					/>
 				)}
 			</div>
 		</>

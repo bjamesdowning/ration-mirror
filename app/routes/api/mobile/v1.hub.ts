@@ -27,6 +27,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 			context.cloudflare.env,
 			organizationId,
 			userId,
+			request,
 		);
 	} catch (e) {
 		return handleApiError(e);

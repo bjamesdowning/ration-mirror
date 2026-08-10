@@ -648,6 +648,7 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 		if (typeof window !== "undefined") {
 			const hash = window.location.hash.replace("#", "");
 			if (hash === "api" || hash === "connected-agents") return "developer";
+			if (hash === "nutrition-goals") return "preferences";
 			const valid: SectionId[] = [
 				"account",
 				"group",
@@ -664,6 +665,13 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 
 	const [activeSection, setActiveSection] =
 		useState<SectionId>(getInitialSection);
+
+	useEffect(() => {
+		if (typeof window === "undefined") return;
+		if (window.location.hash !== "#nutrition-goals") return;
+		const el = document.getElementById("nutrition-goals");
+		el?.scrollIntoView({ behavior: "smooth", block: "start" });
+	}, []);
 
 	const navItems = isAdmin
 		? [
@@ -1782,7 +1790,10 @@ function NutritionGoalsSection({
 	}
 
 	return (
-		<div className="glass-panel rounded-xl p-6">
+		<div
+			id="nutrition-goals"
+			className="glass-panel rounded-xl p-6 scroll-mt-24"
+		>
 			<h3 className="text-xs text-label text-muted mb-1">Nutrition goals</h3>
 			<p className="text-sm text-muted mb-4">
 				Set only the nutrients you care about. Manifest shows those targets as

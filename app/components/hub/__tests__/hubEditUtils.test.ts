@@ -13,9 +13,13 @@ import type { HubWidgetLayout } from "~/lib/types";
 
 describe("hubEditUtils", () => {
 	it("includes every registry widget in editable layout", () => {
-		const widgets = initEditableWidgets("custom", {
-			widgets: [{ id: "hub-stats", order: 0, size: "lg", visible: true }],
-		});
+		const widgets = initEditableWidgets(
+			"custom",
+			{
+				widgets: [{ id: "hub-stats", order: 0, size: "lg", visible: true }],
+			},
+			{ nutritionWidgetsEnabled: true },
+		);
 
 		expect(widgets.length).toBe(WIDGET_REGISTRY.size);
 		const unknown = widgets.find(
@@ -28,6 +32,15 @@ describe("hubEditUtils", () => {
 
 		const injected = widgets.find((widget) => widget.id === "meals-ready");
 		expect(injected?.visible).toBe(false);
+	});
+
+	it("omits nutrition widgets when nutritionWidgetsEnabled is false", () => {
+		const widgets = initEditableWidgets("full", undefined, {
+			nutritionWidgetsEnabled: false,
+		});
+		expect(widgets.some((w) => w.id === "nutrition-today")).toBe(false);
+		expect(widgets.some((w) => w.id === "nutrition-trends")).toBe(false);
+		expect(widgets.some((w) => w.id === "hub-stats")).toBe(true);
 	});
 
 	it("moves a widget and recalculates order indexes", () => {

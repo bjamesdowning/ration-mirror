@@ -2,7 +2,7 @@
 
 ## Hub home
 
-The **hub dashboard** shows configurable **widgets**: inventory stats, cookable meals, partial matches, expiring cargo, supply preview, manifest preview, and **Flight Recorder** (recent shared kitchen activity — logistics only, not personal kcal). You can change **layout presets** and per-widget visibility, size, and filters where the UI allows.
+The **hub dashboard** shows configurable **widgets**: inventory stats, cookable meals, partial matches, expiring cargo, supply preview, manifest preview, **Daily Fuel** / **Fuel Trends** (nutrition goal progress — when nutrition flags are on), and **Flight Recorder** (recent shared kitchen activity — logistics only, not personal kcal). You can change **layout presets** and per-widget visibility, size, and filters where the UI allows.
 
 ## Main areas
 

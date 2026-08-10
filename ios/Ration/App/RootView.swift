@@ -130,7 +130,13 @@ struct MainTabView: View {
                 onOpenSupply: { selectedTab = .supply },
                 onOpenCargo: { selectedTab = .cargo },
                 onOpenGalley: { selectedTab = .galley },
-                onOpenManifest: { selectedTab = .manifest }
+                onOpenManifest: { selectedTab = .manifest },
+                onOpenNutritionGoals: {
+                    guard env.session.clientFlags.isNutritionGoalsEnabled
+                        || env.session.clientFlags.isNutritionManifestEnabled
+                    else { return }
+                    showingNutritionGoals = true
+                }
             )
                 .id(orgGeneration)
                 .tabItem { Label(String(localized: "Hub"), systemImage: "square.grid.2x2") }

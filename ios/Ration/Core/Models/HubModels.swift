@@ -11,9 +11,15 @@ struct HubWidgetFilters: Codable, Sendable, Equatable {
     var limit: Int?
     var daySpan: Int?
     var supplyTags: [String]?
+    var nutrients: [String]?
+    var nutritionDisplay: String?
+    var nutritionRange: Int?
+    var adherenceNutrient: String?
 
     /// Mirrors `HubWidgetFiltersSchema.daySpan` (1 | 3 | 7 | 14) on the web side.
     static let allowedDaySpans = [1, 3, 7, 14]
+    static let allowedNutritionRanges = [7, 14, 30]
+    static let allowedNutrients = ["energy", "protein", "carbs", "fat", "fiber"]
 }
 
 struct HubWidgetLayout: Codable, Sendable, Identifiable, Equatable {
@@ -61,6 +67,8 @@ struct HubResponse: Codable, Sendable {
     let partialMealMatches: [MealMatch]
     let snackMatches: [MealMatch]
     let flightRecorderActivity: FlightRecorderActivity?
+    let nutritionToday: NutritionSummary?
+    let nutritionTrends: NutritionSummary?
 }
 
 struct FlightRecorderTotals: Codable, Sendable {

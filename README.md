@@ -775,6 +775,8 @@ The Hub (`/hub`) is a customisable widget dashboard giving an at-a-glance view o
 | `supply-preview` | D1 supply list | Shopping summary |
 | `manifest-preview` | D1 meal plan entries | Next 7 days |
 | `flight-recorder` | D1 `kitchen_event` (7d stats + recent) | Cooks, docks, expiries, jettisons — included in the `full` preset on web and iOS; add via Customize Hub on other profiles |
+| `nutrition-today` | Nutrition summary (today) | Daily Fuel — intake vs goals; tap opens Nutrition Goals in Preferences; gated by `nutrition-manifest` / `nutrition-goals` |
+| `nutrition-trends` | Nutrition summary (7/14/30d) | Fuel Trends — range averages vs goals; same Goals deep-link and flag gating |
 
 **Why deferred loaders on the Hub?** Meal matching involves an AI embedding call (or KV cache lookup) plus a Vectorize query. These are deferred via React Router's `defer()` so the page skeleton loads instantly and the matching widget fills in asynchronously, keeping the hub under 100ms for the initial paint.
 

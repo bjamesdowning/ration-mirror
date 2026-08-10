@@ -1,11 +1,15 @@
 import { resolveLayout } from "~/components/hub/widgets/registry";
 import { getUserSettings } from "~/lib/auth.server";
 import { getCargoStats, getExpiringCargo } from "~/lib/cargo.server";
+import { buildMobileFlagContext } from "~/lib/feature-flags/flags.server";
 import { getHubMealMatchWidgets } from "~/lib/hub-match.server";
 import { getKitchenEvents, getKitchenStats } from "~/lib/kitchen-events.server";
 import { log } from "~/lib/logging.server";
 import { getDistinctMealTags, getManifestPreview } from "~/lib/manifest.server";
 import { MEAL_MATCH_CANDIDATE_CAP } from "~/lib/matching.server";
+import { resolveNutritionCapabilities } from "~/lib/nutrition/feature-policy.server";
+import { loadHubNutritionData } from "~/lib/nutrition/hub-data.server";
+import { isNutritionHubWidgetsEnabled } from "~/lib/nutrition/hub-widgets";
 import {
 	filterSupplyItemsByCargoTags,
 	getSupplyItemStats,
@@ -41,6 +45,7 @@ export async function getMobileHubData(
 	env: Cloudflare.Env,
 	organizationId: string,
 	userId: string,
+	request?: Request,
 ) {
 	const db = env.DB;
 	const settings = await getUserSettings(db, userId);
@@ -57,9 +62,28 @@ export async function getMobileHubData(
 	const cargoExpiringConfig = findWidget("cargo-expiring");
 	const manifestPreviewConfig = findWidget("manifest-preview");
 	const supplyPreviewConfig = findWidget("supply-preview");
+	const nutritionTodayConfig = findWidget("nutrition-today");
+	const nutritionTrendsConfig = findWidget("nutrition-trends");
 	const flightRecorderVisible =
 		findWidget("flight-recorder")?.visible !== false &&
 		resolvedWidgets.some((w) => w.id === "flight-recorder" && w.visible);
+
+	const flagContext = request
+		? buildMobileFlagContext(request, env, { user: { id: userId } })
+		: buildMobileFlagContext(
+				new Request("https://ration.local/api/mobile/v1/hub"),
+				env,
+				{ user: { id: userId } },
+			);
+	const caps = await resolveNutritionCapabilities(env, flagContext);
+	const nutritionWidgetsEnabled = isNutritionHubWidgetsEnabled({
+		nutritionManifest: caps.manifest,
+		nutritionGoals: caps.goals,
+	});
+	const nutritionTodayVisible =
+		nutritionWidgetsEnabled && nutritionTodayConfig?.visible === true;
+	const nutritionTrendsVisible =
+		nutritionWidgetsEnabled && nutritionTrendsConfig?.visible === true;
 
 	const cargoLimit = clampWidgetLimit(cargoExpiringConfig?.filters?.limit, 10);
 	const cargoDomain = cargoExpiringConfig?.filters?.domain;
@@ -93,6 +117,7 @@ export async function getMobileHubData(
 		hubMatches,
 		flightRecorderStats,
 		flightRecorderRecent,
+		nutritionPayload,
 	] = await Promise.all([
 		getExpiringCargo(
 			db,
@@ -134,6 +159,17 @@ export async function getMobileHubData(
 		flightRecorderVisible
 			? getKitchenEvents(db, organizationId, { limit: 5 }).then((r) => r.events)
 			: Promise.resolve([]),
+		loadHubNutritionData({
+			env,
+			flagContext,
+			userId,
+			organizationId,
+			surface: "mobile",
+			requestId: request?.headers.get("cf-ray") ?? undefined,
+			todayVisible: nutritionTodayVisible,
+			trendsVisible: nutritionTrendsVisible,
+			trendsRange: nutritionTrendsConfig?.filters?.nutritionRange,
+		}),
 	]);
 
 	// Tag pickers are best-effort. cargoTagIndex is critical when the supply
@@ -243,5 +279,7 @@ export async function getMobileHubData(
 		partialMealMatches,
 		snackMatches,
 		flightRecorderActivity,
+		nutritionToday: nutritionPayload.nutritionToday,
+		nutritionTrends: nutritionPayload.nutritionTrends,
 	};
 }

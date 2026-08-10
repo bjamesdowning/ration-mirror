@@ -5,7 +5,7 @@ import XCTest
 final class HubViewModelTests: XCTestCase {
     func testResolvedLayoutEmptyWhileLoading() {
         let model = HubViewModel()
-        XCTAssertTrue(model.resolvedLayout.isEmpty)
+        XCTAssertTrue(model.resolvedLayout().isEmpty)
     }
 
     func testOfflineWithoutCacheFails() async {
@@ -46,7 +46,7 @@ final class HubViewModelTests: XCTestCase {
         let data = try makeHubResponse(profile: "cook")
         model.setLoadedForTesting(data)
         // Preset profiles always resolve to a non-empty widget set.
-        XCTAssertFalse(model.resolvedLayout.isEmpty)
+        XCTAssertFalse(model.resolvedLayout(nutritionWidgetsEnabled: true).isEmpty)
     }
 
     func testFullLayoutIncludesFlightRecorder() {

@@ -96,7 +96,7 @@ export const CargoNutritionOverrideSchema = NutritionSnapshotSchema.extend({
 
 /**
  * Server-trusted AI-ingest context. Client booleans alone must not enable AI.
- * Only `scan_review` (receipt / image scan review) may request AI estimate.
+ * Only `scan_review` (cargo photo / supply dock receipt review) may request AI estimate.
  */
 export const NutritionIngestSourceSchema = z.enum(["scan_review"]);
 

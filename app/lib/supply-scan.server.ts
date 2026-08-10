@@ -219,6 +219,7 @@ export function sanitizeDockFromScanItem(
 		tags,
 		expiresAt: clientDock.expiresAt ?? scanItem.expiresAt ?? undefined,
 		mergeTargetId: clientDock.mergeTargetId,
+		nutrition: clientDock.nutrition ?? undefined,
 	};
 }
 

@@ -4,9 +4,9 @@ You can review and correct energy and macros before they are stored, and change 
 
 ## Before you add (scan review)
 
-When the nutrition engine is on, receipt (and similar) **scan review** proposes a nutrition snapshot per line after USDA resolve (high- and medium-confidence matches). AI estimate is not applied on the resolve endpoint; after you confirm dock, Cargo ingest may fill a labelled **Estimated** snapshot only when USDA missed, `ingestSource` is `scan_review`, and `nutrition-ai-estimate` is on. Open the nutrition panel on a line, adjust values if needed, then confirm add to Cargo. Saving your edits marks the snapshot as an **override** (verified).
+When the nutrition engine is on, Cargo photo scan and Supply dock **review** propose a nutrition snapshot per line before confirm: USDA first (high- and medium-confidence matches), then a labelled **AI Estimate** when USDA misses and `nutrition-ai-estimate` is on (`ingestSource: scan_review`). Open the nutrition panel on a line, adjust values if needed, then confirm add to Cargo — the preview snapshot is carried through. Saving your edits marks the snapshot as an **override** (verified).
 
-If a line stays blank (true miss / low confidence), you can still add the item and fill nutrition later in Cargo.
+If a line stays blank (true miss / low confidence / AI off), you can still add the item and fill nutrition later in Cargo.
 
 ## Cargo later
 

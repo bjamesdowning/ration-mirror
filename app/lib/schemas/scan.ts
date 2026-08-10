@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { ITEM_DOMAINS } from "../domain";
-import { NutritionSnapshotSchema } from "./nutrition";
+import { AnyNutritionSnapshotSchema } from "./nutrition";
 import { UnitSchema } from "./units";
 
 /**
@@ -18,7 +18,7 @@ export const ScanResultItemSchema = z.object({
 	confidence: z.number().min(0).max(1).optional(), // AI confidence score 0-1
 	rawText: z.string().optional(), // Original text from receipt for debugging
 	/** Proposed / user-edited nutrition (nutrition-engine). */
-	nutrition: NutritionSnapshotSchema.nullable().optional(),
+	nutrition: AnyNutritionSnapshotSchema.nullable().optional(),
 });
 
 export type ScanResultItem = z.infer<typeof ScanResultItemSchema>;
@@ -52,8 +52,8 @@ export const BatchAddCargoSchema = z.object({
 			tags: z.array(z.string()).default([]),
 			expiresAt: z.coerce.date().optional(),
 			mergeTargetId: z.string().uuid().optional(),
-			/** Optional nutrition override / proposed snapshot from scan review. */
-			nutrition: NutritionSnapshotSchema.nullable().optional(),
+			/** Optional nutrition override / proposed snapshot from scan review (v1 or v2). */
+			nutrition: AnyNutritionSnapshotSchema.nullable().optional(),
 		}),
 	),
 	/**

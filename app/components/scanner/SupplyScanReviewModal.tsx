@@ -1,6 +1,8 @@
 import { AlertTriangle, Check, Edit2, Link2, Unlink, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useFetcher } from "react-router";
+import { useFetcher, useRouteLoaderData } from "react-router";
+import { projectNutritionSnapshotToLegacy } from "~/lib/nutrition/adapters";
+import type { AnyNutritionSnapshot } from "~/lib/nutrition/types";
 import type { ScanResultItem } from "~/lib/schemas/scan";
 import type { SupplyItemWithSource } from "~/lib/supply.server";
 import {
@@ -26,6 +28,7 @@ type ReviewPair = {
 	dockTags: string[];
 	dockExpiresAt?: string | null;
 	hasDelta: boolean;
+	nutrition?: AnyNutritionSnapshot | null;
 };
 
 interface SupplyScanReviewModalProps {
@@ -88,6 +91,19 @@ export function SupplyScanReviewModal({
 		docked?: number;
 		error?: string;
 	}>();
+	const rootData = useRouteLoaderData("root") as
+		| {
+				clientFlags?: {
+					nutritionEngine?: boolean;
+					nutritionAiEstimate?: boolean;
+				};
+		  }
+		| undefined;
+	const nutritionEngine = rootData?.clientFlags?.nutritionEngine === true;
+	const nutritionAiEstimate =
+		rootData?.clientFlags?.nutritionAiEstimate === true;
+	const allowAiNutritionEstimate = nutritionAiEstimate;
+	const [nutritionResolved, setNutritionResolved] = useState(false);
 	const [pairs, setPairs] = useState<ReviewPair[]>(() => [
 		...initialPairs.map(toReviewPair),
 		...receiptOnly.map(receiptOnlyToPair),
@@ -117,6 +133,72 @@ export function SupplyScanReviewModal({
 			prev.map((p) => (p.id === id ? { ...p, ...updates } : p)),
 		);
 	}, []);
+
+	// Propose nutrition snapshots after review opens (parity with cargo scan).
+	useEffect(() => {
+		if (!nutritionEngine || nutritionResolved) return;
+		const names = [
+			...new Set(
+				[
+					...initialPairs.map((p) => p.scanItem.name.trim()),
+					...receiptOnly.map((i) => i.name.trim()),
+				].filter((n) => n.length > 0),
+			),
+		];
+		if (names.length === 0) {
+			setNutritionResolved(true);
+			return;
+		}
+
+		let cancelled = false;
+		void (async () => {
+			try {
+				const response = await fetch("/api/nutrition/resolve", {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({
+						names,
+						...(allowAiNutritionEstimate
+							? { ingestSource: "scan_review" }
+							: {}),
+					}),
+				});
+				if (!response.ok || cancelled) return;
+				const body = (await response.json()) as {
+					snapshots?: Record<string, AnyNutritionSnapshot | null>;
+				};
+				const snapshots = body.snapshots ?? {};
+				if (cancelled) return;
+				setPairs((prev) =>
+					prev.map((pair) => {
+						const snap = snapshots[pair.dockName.trim()];
+						return snap !== undefined
+							? {
+									...pair,
+									nutrition: snap
+										? projectNutritionSnapshotToLegacy(snap)
+										: null,
+								}
+							: pair;
+					}),
+				);
+			} catch {
+				// Soft-fail: ingest still resolves on confirm when nutrition omitted.
+			} finally {
+				if (!cancelled) setNutritionResolved(true);
+			}
+		})();
+
+		return () => {
+			cancelled = true;
+		};
+	}, [
+		nutritionEngine,
+		allowAiNutritionEstimate,
+		nutritionResolved,
+		initialPairs,
+		receiptOnly,
+	]);
 
 	const beginEdit = (pair: ReviewPair) => {
 		setEditSnapshot({ ...pair, dockTags: [...pair.dockTags] });
@@ -191,6 +273,7 @@ export function SupplyScanReviewModal({
 						domain: p.dockDomain,
 						tags: p.dockTags,
 						expiresAt: p.dockExpiresAt || undefined,
+						...(p.nutrition != null ? { nutrition: p.nutrition } : {}),
 					},
 					updateSupply:
 						p.supplyItem && p.hasDelta
@@ -259,6 +342,7 @@ export function SupplyScanReviewModal({
 										<DockItemFields
 											key={`supply-edit-${pair.id}`}
 											idPrefix={`supply-${pair.id}`}
+											showNutrition={nutritionEngine}
 											value={{
 												name: pair.dockName,
 												quantity: pair.dockQuantity,
@@ -266,6 +350,7 @@ export function SupplyScanReviewModal({
 												domain: pair.dockDomain,
 												tags: pair.dockTags,
 												expiresAt: pair.dockExpiresAt,
+												nutrition: pair.nutrition,
 											}}
 											onChange={(next) => {
 												const nameChanged =
@@ -279,6 +364,7 @@ export function SupplyScanReviewModal({
 													dockDomain: next.domain,
 													dockTags: next.tags ?? [],
 													dockExpiresAt: next.expiresAt,
+													nutrition: next.nutrition,
 													matchType:
 														pair.supplyItem && nameChanged
 															? "manual"
@@ -339,6 +425,15 @@ export function SupplyScanReviewModal({
 											<p className="text-xs font-mono text-muted">
 												{pair.dockQuantity} {pair.dockUnit}
 												{pair.dockDomain ? ` · ${pair.dockDomain}` : ""}
+												{nutritionEngine &&
+													(() => {
+														const kcal =
+															pair.nutrition?.per100g?.energyKcal ??
+															pair.nutrition?.perServing?.energyKcal;
+														return kcal != null && Number.isFinite(kcal) ? (
+															<> • {Math.round(kcal)} kcal</>
+														) : null;
+													})()}
 											</p>
 
 											<div className="flex items-center gap-1 text-muted py-1">

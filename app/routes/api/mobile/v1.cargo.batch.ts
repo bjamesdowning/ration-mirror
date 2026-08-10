@@ -3,6 +3,7 @@ import { checkCapacity } from "~/lib/capacity.server";
 import { type IngestItem, ingestCargoItems } from "~/lib/cargo.server";
 import { handleApiError } from "~/lib/error-handler";
 import { requireMobileActiveGroup } from "~/lib/mobile/auth.server";
+import { projectNutritionSnapshotToLegacy } from "~/lib/nutrition/adapters";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import { BatchAddCargoSchema } from "~/lib/schemas/scan";
 import type { SupportedUnit } from "~/lib/units";
@@ -41,7 +42,9 @@ export async function action({ request, context }: Route.ActionArgs) {
 			tags: it.tags,
 			expiresAt: it.expiresAt,
 			mergeTargetId: it.mergeTargetId,
-			nutrition: it.nutrition ?? undefined,
+			nutrition: it.nutrition
+				? projectNutritionSnapshotToLegacy(it.nutrition)
+				: undefined,
 		}));
 
 		const ingestResults = await ingestCargoItems(

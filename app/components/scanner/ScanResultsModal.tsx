@@ -3,7 +3,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useFetcher, useRouteLoaderData } from "react-router";
 import { DOMAIN_LABELS, type ITEM_DOMAINS } from "~/lib/domain";
 import { normalizeForMatch, tokenMatchScore } from "~/lib/matching";
-import type { NutritionSnapshot } from "~/lib/nutrition/types";
+import { projectNutritionSnapshotToLegacy } from "~/lib/nutrition/adapters";
+import type { AnyNutritionSnapshot } from "~/lib/nutrition/types";
 import {
 	areIngredientUnitsCompatible,
 	convertForIngredient,
@@ -192,7 +193,7 @@ export function ScanResultsModal({
 				});
 				if (!response.ok || cancelled) return;
 				const body = (await response.json()) as {
-					snapshots?: Record<string, NutritionSnapshot | null>;
+					snapshots?: Record<string, AnyNutritionSnapshot | null>;
 				};
 				const snapshots = body.snapshots ?? {};
 				if (cancelled) return;
@@ -200,7 +201,12 @@ export function ScanResultsModal({
 					prev.map((item) => {
 						const snap = snapshots[item.name.trim()];
 						return snap !== undefined
-							? { ...item, nutrition: snap ?? null }
+							? {
+									...item,
+									nutrition: snap
+										? projectNutritionSnapshotToLegacy(snap)
+										: null,
+								}
 							: item;
 					}),
 				);
@@ -542,8 +548,8 @@ function ScanResultItemRow({
 	const isLowConfidence =
 		typeof item.confidence === "number" && item.confidence < 0.7;
 	const kcal =
-		item.nutrition?.perServing?.energyKcal ??
-		item.nutrition?.per100g?.energyKcal;
+		item.nutrition?.per100g?.energyKcal ??
+		item.nutrition?.perServing?.energyKcal;
 
 	return (
 		<div

@@ -38,6 +38,8 @@ struct SupplyScanCompleteDock: Encodable, Sendable {
     let domain: String
     var tags: [String] = []
     var expiresAt: String?
+    /// Preview resolve / user override carried into cargo ingest.
+    var nutrition: NutritionSnapshot?
 }
 
 struct SupplyScanCompletePair: Encodable, Sendable {

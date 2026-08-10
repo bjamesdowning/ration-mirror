@@ -29,6 +29,11 @@ struct SupplyScanReviewRow: Identifiable, Sendable {
     var dockTags: [String]
     var dockExpiresAt: String?
     var hasDelta: Bool
+    var nutrition: NutritionSnapshot?
+
+    var estimatedEnergyKcal: Double? {
+        nutrition?.displayNutrients?.energyKcal
+    }
 
     func toEditableScanItem() -> EditableScanResultItem {
         let proxy = ScanResultItem(
@@ -41,7 +46,9 @@ struct SupplyScanReviewRow: Identifiable, Sendable {
             expiresAt: dockExpiresAt,
             confidence: scanItem.confidence
         )
-        return EditableScanResultItem(from: proxy, selected: selected)
+        var editable = EditableScanResultItem(from: proxy, selected: selected)
+        editable.nutrition = nutrition
+        return editable
     }
 
     mutating func applyDockEdit(_ edited: EditableScanResultItem) {
@@ -51,6 +58,7 @@ struct SupplyScanReviewRow: Identifiable, Sendable {
         dockUnit = edited.unit
         dockDomain = edited.domain ?? "food"
         dockTags = edited.tags
+        nutrition = edited.nutrition
         if let date = edited.expiresAt {
             let formatter = DateFormatter()
             formatter.calendar = Calendar(identifier: .gregorian)
@@ -166,6 +174,13 @@ struct SupplyScanReviewView: View {
             .sheet(item: $model.paywallContext) { ctx in
                 PaywallView(context: ctx)
             }
+            .task {
+                await model.resolveNutritionIfNeeded(
+                    api: env.api,
+                    nutritionEngine: env.session.clientFlags.isNutritionEngineEnabled,
+                    nutritionAiEstimate: env.session.clientFlags.isNutritionAiEstimateEnabled
+                )
+            }
         }
     }
 
@@ -196,6 +211,13 @@ struct SupplyScanReviewView: View {
                 )
                 .rationCaption()
                 .foregroundStyle(Theme.muted)
+
+                if env.session.clientFlags.isNutritionEngineEnabled,
+                   let kcal = row.estimatedEnergyKcal {
+                    Text("\(Int(kcal.rounded())) kcal")
+                        .rationCaption()
+                        .foregroundStyle(Theme.muted)
+                }
 
                 if !row.dockDomain.isEmpty {
                     Text(row.dockDomain.capitalized)

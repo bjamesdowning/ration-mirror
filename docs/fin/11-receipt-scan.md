@@ -18,7 +18,7 @@ If the operation fails after credits were reserved, Ration’s ledger is designe
 
 ## Nutrition on review
 
-When nutrition is enabled for your account, scan **review** proposes energy and macros per line from a USDA match when the matcher attaches (including medium-confidence matches you can edit). Labelled AI estimates are **not** filled on the resolve call — they may appear only after you confirm add to Cargo when `scan_review` ingest and `nutrition-ai-estimate` are on and USDA still missed. Edit nutrients on the review screen before adding — see *Editing nutrition* and *Nutrition overview*.
+When nutrition is enabled for your account, scan **review** (Cargo photo scan and Supply dock receipt) proposes energy and macros per line before you confirm. USDA matches attach when the matcher finds them (including medium-confidence matches you can edit). If USDA misses and `nutrition-ai-estimate` is on, the same review call may fill a labelled **AI Estimate**. Edit nutrients on the review screen before adding — see *Editing nutrition* and *Nutrition overview*.
 
 ## Tips
 

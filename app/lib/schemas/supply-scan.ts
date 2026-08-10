@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { ITEM_DOMAINS } from "../domain";
+import { AnyNutritionSnapshotSchema } from "./nutrition";
 import { RequestIdSchema } from "./queue";
 import { UnitSchema } from "./units";
 
@@ -30,6 +31,8 @@ export const SupplyScanCompletePairSchema = z.object({
 				{ message: "Expiry must be a calendar date" },
 			),
 		mergeTargetId: z.string().uuid().optional(),
+		/** Preview resolve / user override carried into cargo ingest (v1 or v2). */
+		nutrition: AnyNutritionSnapshotSchema.nullable().optional(),
 	}),
 	updateSupply: z
 		.object({

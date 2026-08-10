@@ -38,6 +38,8 @@ import {
 	resolveCargoBucketsForIngredient,
 	sumConvertedToTarget,
 } from "./matching.server";
+import { projectNutritionSnapshotToLegacy } from "./nutrition/adapters";
+import type { AnyNutritionSnapshot } from "./nutrition/types";
 import { getOrganizationMetadata } from "./org-supply-settings.server";
 import {
 	chunkArray,
@@ -2469,6 +2471,7 @@ export type SupplyScanCompleteInput = {
 		tags?: string[];
 		expiresAt?: string;
 		mergeTargetId?: string;
+		nutrition?: AnyNutritionSnapshot | null;
 	};
 	updateSupply?: { quantity: number; unit: string };
 };
@@ -2528,6 +2531,9 @@ export async function completeSupplyFromScan(
 			? (parseDockExpiresAt(p.dock.expiresAt) ?? undefined)
 			: undefined,
 		mergeTargetId: p.dock.mergeTargetId,
+		...(p.dock.nutrition != null
+			? { nutrition: projectNutritionSnapshotToLegacy(p.dock.nutrition) }
+			: {}),
 	}));
 
 	const ingestResults = await ingestCargoItems(

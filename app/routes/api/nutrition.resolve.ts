@@ -7,13 +7,15 @@ import { NUTRITION_RESOLVE_CONCURRENCY } from "~/lib/nutrition/constants";
 import { serializeNutritionSnapshot } from "~/lib/nutrition/dto.server";
 import { mapWithConcurrency } from "~/lib/nutrition/map-concurrency";
 import { maybeResolveCargoNutrition } from "~/lib/nutrition/persist.server";
+import { allowAiEstimateForResolveIngestSource } from "~/lib/nutrition/resolve-ai-policy";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import { NutritionResolveRequestSchema } from "~/lib/schemas/nutrition";
 import type { Route } from "./+types/nutrition.resolve";
 
 /**
- * Resolve proposed nutrition snapshots for item names (scan review).
+ * Resolve proposed nutrition snapshots for item names (scan / dock review).
  * Flag-gated: nutrition-engine must be on.
+ * AI after USDA miss when ingestSource is scan_review (and nutrition-ai-estimate).
  */
 export async function action({ request, context }: Route.ActionArgs) {
 	if (request.method !== "POST") {
@@ -55,12 +57,11 @@ export async function action({ request, context }: Route.ActionArgs) {
 			...new Set(parsed.data.names.map((n) => n.trim())),
 		].filter(Boolean);
 
-		// Body ingestSource/allowAiEstimate are accepted for compatibility but
-		// ignored as policy inputs. AI remains disabled until a server-verified
-		// scan/job binding exists (and nutrition-ai-estimate is on).
-		void parsed.data.ingestSource;
+		// Deprecated body allowAiEstimate is ignored; only ingestSource gates AI.
 		void parsed.data.allowAiEstimate;
-		const allowAiEstimate = false;
+		const allowAiEstimate = allowAiEstimateForResolveIngestSource(
+			parsed.data.ingestSource,
+		);
 
 		const entries = await mapWithConcurrency(
 			uniqueNames,

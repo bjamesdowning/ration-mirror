@@ -2,11 +2,12 @@ import { useState } from "react";
 import { NutritionPanel } from "~/components/nutrition/NutritionPanel";
 import { TagChipEditor } from "~/components/shared/TagChipEditor";
 import { DOMAIN_LABELS, ITEM_DOMAINS } from "~/lib/domain";
+import { projectNutritionSnapshotToLegacy } from "~/lib/nutrition/adapters";
 import {
 	cargoPackageSizeChanged,
 	scaleCargoNutritionToPackage,
 } from "~/lib/nutrition/package-scale";
-import type { NutritionSnapshot } from "~/lib/nutrition/types";
+import type { AnyNutritionSnapshot } from "~/lib/nutrition/types";
 import {
 	SUPPORTED_UNITS,
 	type SupportedUnit,
@@ -20,7 +21,7 @@ export type DockItemDraft = {
 	domain: string;
 	tags?: string[];
 	expiresAt?: string | null;
-	nutrition?: NutritionSnapshot | null;
+	nutrition?: AnyNutritionSnapshot | null;
 };
 
 const inputClassName =
@@ -69,7 +70,7 @@ export function DockItemFields({
 			const nextUnit = toSupportedUnit(next.unit) ?? null;
 			const prevUnit = toSupportedUnit(value.unit) ?? null;
 			next.nutrition = scaleCargoNutritionToPackage(
-				value.nutrition,
+				projectNutritionSnapshotToLegacy(value.nutrition),
 				next.quantity,
 				nextUnit,
 				next.name,
@@ -198,7 +199,11 @@ export function DockItemFields({
 			{showNutrition && (
 				<NutritionPanel
 					mode="cargo"
-					nutrition={value.nutrition ?? null}
+					nutrition={
+						value.nutrition
+							? projectNutritionSnapshotToLegacy(value.nutrition)
+							: null
+					}
 					editable
 					onChange={(nutrition) => patch({ nutrition })}
 				/>

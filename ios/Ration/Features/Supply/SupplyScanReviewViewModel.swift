@@ -72,6 +72,37 @@ final class SupplyScanReviewViewModel {
         rows = built
     }
 
+    /// Soft-fail USDA / AI estimate proposal (parity with cargo scan review).
+    func resolveNutritionIfNeeded(
+        api: RationAPI,
+        nutritionEngine: Bool,
+        nutritionAiEstimate: Bool
+    ) async {
+        guard nutritionEngine else { return }
+        let names = Array(
+            Set(
+                rows
+                    .map { $0.dockName.trimmingCharacters(in: .whitespacesAndNewlines) }
+                    .filter { !$0.isEmpty }
+            )
+        )
+        guard !names.isEmpty else { return }
+        do {
+            let response = try await api.resolveNutrition(
+                names: names,
+                ingestSource: nutritionAiEstimate ? "scan_review" : nil
+            )
+            for index in rows.indices {
+                let key = rows[index].dockName.trimmingCharacters(in: .whitespacesAndNewlines)
+                if let entry = response.snapshots[key] {
+                    rows[index].nutrition = entry
+                }
+            }
+        } catch {
+            // Soft-fail — dock confirm can still resolve when nutrition is omitted.
+        }
+    }
+
     var selectedCount: Int {
         rows.filter(\.selected).count
     }
@@ -166,7 +197,8 @@ final class SupplyScanReviewViewModel {
                     unit: row.dockUnit,
                     domain: row.dockDomain,
                     tags: row.dockTags,
-                    expiresAt: row.dockExpiresAt
+                    expiresAt: row.dockExpiresAt,
+                    nutrition: row.nutrition
                 ),
                 updateSupply: row.supplyItem != nil && row.hasDelta
                     ? SupplyScanUpdateSupply(quantity: row.dockQuantity, unit: row.dockUnit)

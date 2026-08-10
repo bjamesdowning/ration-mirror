@@ -298,6 +298,8 @@ export async function recomputeAndStoreMealNutrition(
 
 			const resolved = await resolveFoodName(env, ing.ingredientName, {
 				organizationId,
+				// Meal aggregates must stay fail-closed — medium is for scan review only.
+				requireAutoAccept: true,
 			});
 			return {
 				name: ing.ingredientName,

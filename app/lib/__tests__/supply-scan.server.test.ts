@@ -135,6 +135,36 @@ describe("sanitizeDockFromScanItem", () => {
 		).toBe("unit");
 	});
 
+	it("rejects packaging remap that inflates piece-equivalent past the qty cap", () => {
+		expect(() =>
+			sanitizeDockFromScanItem(
+				scanItem({ name: "energy drink", quantity: 1, unit: "can" }),
+				{
+					name: "energy drink",
+					quantity: 10,
+					unit: "dozen",
+					domain: "food",
+					tags: [],
+				},
+			),
+		).toThrow(/too high/i);
+	});
+
+	it("allows modest can → unit corrections within the piece cap", () => {
+		const result = sanitizeDockFromScanItem(
+			scanItem({ name: "beans", quantity: 1, unit: "can" }),
+			{
+				name: "beans",
+				quantity: 10,
+				unit: "unit",
+				domain: "food",
+				tags: [],
+			},
+		);
+		expect(result.quantity).toBe(10);
+		expect(result.unit).toBe("unit");
+	});
+
 	it("allows volume family corrections for milk l → ml", () => {
 		const result = sanitizeDockFromScanItem(
 			scanItem({ name: "whole milk", quantity: 2, unit: "l" }),

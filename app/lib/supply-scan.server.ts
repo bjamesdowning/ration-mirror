@@ -46,6 +46,18 @@ function isPackagingCountUnit(unit: SupportedUnit): boolean {
 	return PACKAGING_COUNT_FAMILIES.has(getUnitFamily(unit));
 }
 
+/**
+ * Piece-equivalent for packaging anti-abuse.
+ * count_unit uses base factors (dozen → 12); can/pack stay 1:1 opaque packages.
+ */
+function packagingPieceCount(quantity: number, unit: SupportedUnit): number {
+	if (getUnitFamily(unit) === "count_unit") {
+		const asUnit = getUnitMultiplier(unit, "unit");
+		return quantity * (asUnit ?? 1);
+	}
+	return quantity;
+}
+
 /** Dock unit may differ from OCR when density-compatible or packaging remap. */
 function isDockUnitCompatibleWithReceipt(
 	clientUnit: SupportedUnit,
@@ -159,22 +171,46 @@ export function sanitizeDockFromScanItem(
 		toScanMultiplier == null
 			? convertForIngredient(scanItem.quantity, scanUnit, clientUnit, name)
 			: null;
+	const packagingRemap =
+		toScanMultiplier == null &&
+		densityConverted == null &&
+		isPackagingCountUnit(clientUnit) &&
+		isPackagingCountUnit(scanUnit);
 
-	let scanQtyInClientUnit: number;
+	let maxQty: number;
 	if (toScanMultiplier != null) {
-		scanQtyInClientUnit = scanItem.quantity / toScanMultiplier;
+		const scanQtyInClientUnit = scanItem.quantity / toScanMultiplier;
+		maxQty = Math.min(
+			MAX_ABSOLUTE_QTY,
+			Math.max(
+				scanQtyInClientUnit * MAX_QTY_MULTIPLIER,
+				scanQtyInClientUnit + 1,
+			),
+		);
 	} else if (densityConverted != null) {
-		scanQtyInClientUnit = densityConverted;
+		maxQty = Math.min(
+			MAX_ABSOLUTE_QTY,
+			Math.max(densityConverted * MAX_QTY_MULTIPLIER, densityConverted + 1),
+		);
+	} else if (packagingRemap) {
+		// Bound by piece-equivalent so 1 can ↛ 10 dozen (120 pieces).
+		const scanPieces = packagingPieceCount(scanItem.quantity, scanUnit);
+		const maxPieces = Math.min(
+			MAX_ABSOLUTE_QTY,
+			Math.max(scanPieces * MAX_QTY_MULTIPLIER, scanPieces + 1),
+		);
+		const clientPieceFactor = packagingPieceCount(1, clientUnit);
+		maxQty = Math.min(
+			MAX_ABSOLUTE_QTY,
+			maxPieces / Math.max(clientPieceFactor, 1),
+		);
 	} else {
-		// Same-family packaging remap (can/pack/unit) or identical unit fallback:
-		// bound qty against the raw receipt quantity.
-		scanQtyInClientUnit = scanItem.quantity;
+		maxQty = Math.min(
+			MAX_ABSOLUTE_QTY,
+			Math.max(scanItem.quantity * MAX_QTY_MULTIPLIER, scanItem.quantity + 1),
+		);
 	}
 
-	const maxQty = Math.min(
-		MAX_ABSOLUTE_QTY,
-		Math.max(scanQtyInClientUnit * MAX_QTY_MULTIPLIER, scanQtyInClientUnit + 1),
-	);
 	const quantityRaw = clientDock.quantity;
 	if (!Number.isFinite(quantityRaw) || quantityRaw < 0) {
 		throw new SupplyScanError(

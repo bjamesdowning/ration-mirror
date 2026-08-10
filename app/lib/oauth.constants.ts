@@ -26,10 +26,15 @@ export const OAUTH_REGISTRATION_SCOPES = [
 ] as const;
 
 /**
- * Default scopes for newly registered MCP clients.
- * Consent must opt into write/nutrition scopes and offline_access explicitly.
+ * Default scopes stored on newly registered MCP clients (DCR).
+ * This is the client's *allowed request vocabulary*, not the user grant.
+ * Consent still pre-checks only {@link OAUTH_CONSENT_DEFAULT_CHECKED_SCOPES};
+ * users must opt into write/nutrition on the consent screen.
  */
-export const OAUTH_REGISTRATION_DEFAULT_SCOPES = ["mcp:read"] as const;
+export const OAUTH_REGISTRATION_DEFAULT_SCOPES = [
+	...OAUTH_DCR_MCP_SCOPES,
+	"offline_access",
+] as const;
 
 /** Full OAuth provider vocabulary. */
 export const OAUTH_PROVIDER_SCOPES = [

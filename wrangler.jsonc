@@ -165,6 +165,7 @@
 				"binding": "IMPORT_URL_QUEUE"
 			},
 			{
+				// Queue id: c8ab6a25927a4feda10db6390630092c
 				"queue": "ration-nutrition-recompute",
 				"binding": "NUTRITION_RECOMPUTE_QUEUE"
 			}
@@ -195,6 +196,8 @@
 				"max_retries": 3
 			},
 			{
+				// Queue id: c8ab6a25927a4feda10db6390630092c
+				// DLQ id: 031067650ce940d087369b93f0c8bac0
 				"queue": "ration-nutrition-recompute",
 				"max_batch_size": 5,
 				"max_batch_timeout": 2,

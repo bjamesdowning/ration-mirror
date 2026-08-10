@@ -14,13 +14,13 @@ Operator playbook for dogfood / App Review nutrition. Flags stay **off** until t
 
 ## Queue / DLQ
 
-Queues (create in Cloudflare dashboard before enabling async):
+Queues (create in Cloudflare dashboard before enabling async). Wrangler binds by **name**; IDs are ops reference only:
 
-| Env | Queue | DLQ |
-|-----|-------|-----|
-| prod | `ration-nutrition-recompute` | `ration-nutrition-recompute-dlq` |
-| dev | `ration-nutrition-recompute-dev` | `ration-nutrition-recompute-dlq-dev` |
-| local | `ration-nutrition-recompute-local` | `ration-nutrition-recompute-dlq-local` |
+| Env | Queue | Queue id | DLQ | DLQ id |
+|-----|-------|----------|-----|--------|
+| prod | `ration-nutrition-recompute` | `c8ab6a25927a4feda10db6390630092c` | `ration-nutrition-recompute-dlq` | `031067650ce940d087369b93f0c8bac0` |
+| dev | `ration-nutrition-recompute-dev` | *(create)* | `ration-nutrition-recompute-dlq-dev` | *(create)* |
+| local | `ration-nutrition-recompute-local` | *(local only)* | `ration-nutrition-recompute-dlq-local` | *(local only)* |
 
 Symptoms:
 

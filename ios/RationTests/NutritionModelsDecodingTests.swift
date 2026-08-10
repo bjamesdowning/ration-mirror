@@ -347,10 +347,10 @@ final class NutritionModelsDecodingTests: XCTestCase {
         let snap = try decoder.decode(NutritionSnapshot.self, from: json)
         XCTAssertEqual(snap.source, "usda")
         XCTAssertEqual(snap.provenanceLabel, "USDA")
-        XCTAssertEqual(snap.basisLabel, "Package")
-        XCTAssertEqual(snap.nutritionSectionTitle, "Nutrition · Package")
-        XCTAssertEqual(snap.displayNutrients?.energyKcal, 95)
-        XCTAssertEqual(snap.displayNutrients?.carbG, 25)
+        XCTAssertEqual(snap.basisLabel, "Per 100 g")
+        XCTAssertEqual(snap.nutritionSectionTitle, "Nutrition · Per 100 g")
+        XCTAssertEqual(snap.displayNutrients?.energyKcal, 52)
+        XCTAssertEqual(snap.displayNutrients?.carbG, 14)
     }
 
     func testAiEstimateProvenanceAndPer100gBasis() throws {

@@ -35,6 +35,7 @@
 		"db:migrate:dev": "wrangler d1 migrations apply ration-db-dev --remote --env dev",
 		"db:migrate:prod": "wrangler d1 migrations apply DB --remote",
 		"db:nutrition:seed:local": "wrangler d1 execute ration-nutrition --local --file=nutrition-db/schema.sql && wrangler d1 execute ration-nutrition --local --file=nutrition-db/seed-minimal.sql",
+		"db:nutrition:alias:remote": "wrangler d1 execute ration-nutrition --remote --file=nutrition-db/migrations/0002_food_alias.sql && wrangler d1 execute ration-nutrition --remote --file=nutrition-db/seed-food-alias.sql",
 		"db:nutrition:import:generate": "bun scripts/import-fdc-nutrition.ts",
 		"db:nutrition:import:remote": "bun scripts/import-fdc-nutrition.ts --apply-remote",
 		"dev:mcp": "wrangler dev --config wrangler.mcp.jsonc --env dev",

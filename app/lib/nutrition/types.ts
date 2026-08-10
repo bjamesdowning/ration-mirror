@@ -78,7 +78,14 @@ export type NutritionMatchMeta = {
 	quality: NutritionMatchQuality;
 	score: number | null;
 	margin: number | null;
-	method: "exact" | "fts_rank" | "org_ledger" | "user" | "barcode" | "unknown";
+	method:
+		| "exact"
+		| "fts_rank"
+		| "alias"
+		| "org_ledger"
+		| "user"
+		| "barcode"
+		| "unknown";
 };
 
 export type NutritionMassMeta = {

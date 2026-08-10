@@ -146,6 +146,54 @@ export async function resolveFdcPortionGrams(
 	};
 }
 
+/**
+ * Prefer a household "cup" / "serving" portion for cargo display (not package qty).
+ * Returns grams for one household unit, or null.
+ */
+export async function resolveHouseholdServingGrams(
+	env: Env,
+	fdcId: number,
+): Promise<{ grams: number | null; portion: FdcPortionRow | null }> {
+	if (!env.NUTRITION_DB || !Number.isFinite(fdcId)) {
+		return { grams: null, portion: null };
+	}
+	try {
+		const result = await env.NUTRITION_DB.prepare(
+			`SELECT id, fdc_id AS fdcId, modifier AS portionDescription,
+        gram_weight AS gramWeight, amount, measure_unit AS measureUnit
+       FROM food_portion
+       WHERE fdc_id = ?
+       LIMIT 40`,
+		)
+			.bind(fdcId)
+			.all<{
+				id: number;
+				fdcId: number;
+				portionDescription: string | null;
+				gramWeight: number;
+				amount: number | null;
+				measureUnit: string | null;
+			}>();
+		const rows = (result.results ?? []).map((r) => ({
+			id: r.id,
+			fdcId: r.fdcId,
+			portionDescription: r.portionDescription,
+			gramWeight: r.gramWeight,
+			amount: r.amount,
+			measureUnit: r.measureUnit,
+		}));
+		const preferred =
+			pickBestPortion(rows, "cup") ??
+			pickBestPortion(rows, "serving") ??
+			(rows.length === 1 ? rows[0] : null);
+		if (!preferred) return { grams: null, portion: null };
+		const grams = gramsPerUnitFromPortion(preferred);
+		return { grams, portion: preferred };
+	} catch {
+		return { grams: null, portion: null };
+	}
+}
+
 export function gramsPerUnitFromPortion(portion: FdcPortionRow): number | null {
 	const amount =
 		portion.amount != null &&

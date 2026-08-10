@@ -7,6 +7,8 @@ import {
 	NUTRITION_MATCHER_VERSION,
 	nutritionMatchCacheKey,
 } from "./constants";
+import { searchFdcApiCandidates } from "./fdc-api.server";
+import { lookupFoodAlias } from "./food-alias.server";
 import { sha256Hex } from "./hash";
 import {
 	readOrgMatchDecision,
@@ -77,8 +79,8 @@ function isCachedMiss(value: unknown): value is CachedMiss {
 
 /**
  * Resolve a food name against NUTRITION_DB (USDA-shaped).
- * Lookup: org ledger → versioned KV → FTS5 (bm25) → JS re-rank.
- * No unindexed `%LIKE%` fallback.
+ * Lookup: curated alias → org ledger → versioned KV → FTS5 + prefix →
+ * live FDC search (if USDA_FDC_API_KEY) → JS re-rank.
  */
 export async function resolveFoodName(
 	env: Env,
@@ -98,6 +100,19 @@ export async function resolveFoodName(
 
 	const requireAutoAccept = opts?.requireAutoAccept === true;
 	const writeLedger = opts?.writeLedger !== false && !!opts?.organizationId;
+
+	const alias = await lookupFoodAlias(env, normalized);
+	if (alias) {
+		const hydrated = await hydrateFdcId(env, alias.fdcId, {
+			matchQuality: "high",
+			autoAccept: true,
+			method: "alias",
+		});
+		if (hydrated) {
+			emitNutritionResolve("hit");
+			return hydrated;
+		}
+	}
 
 	if (opts?.organizationId) {
 		const decision = await readOrgMatchDecision(
@@ -164,29 +179,48 @@ export async function resolveFoodName(
 	}
 
 	const fetchResult = await fetchFtsCandidates(env.NUTRITION_DB, normalized);
-	if (!fetchResult.ok) {
-		// Soft-fail: do not poison KV / org miss cache on FTS errors.
-		emitNutritionResolve("miss");
-		return null;
-	}
-	const candidates = fetchResult.candidates;
-	const best = pickBestFoodMatch(normalized, candidates);
+	let candidates: FoodMatchCandidate[] = fetchResult.ok
+		? fetchResult.candidates
+		: [];
+
+	let best = pickBestFoodMatch(normalized, candidates);
+
 	if (!best) {
-		await cacheMiss(kv, cacheKey);
-		if (writeLedger && opts?.organizationId) {
-			await upsertOrgMatchDecision(env, {
-				organizationId: opts.organizationId,
-				normalizedName: normalized,
-				fdcId: null,
-				description: null,
-				resolutionKind: "miss",
-				decisionSource: "automatic",
-				matchQuality: null,
-				matchScore: null,
-				scoreMargin: null,
-			});
+		const apiCandidates = await searchFdcApiCandidates(env, normalized);
+		if (apiCandidates.length > 0) {
+			// Live FDC returns ids that may not exist in self-hosted NUTRITION_DB.
+			// Only keep rows we can hydrate locally — never miss-poison on remote-only ids.
+			const localApi = await filterCandidatesPresentInDb(
+				env.NUTRITION_DB,
+				apiCandidates,
+			);
+			if (localApi.length > 0) {
+				candidates = mergeFoodMatchCandidates(candidates, localApi);
+				best = pickBestFoodMatch(normalized, candidates);
+			}
 		}
-		emitNutritionResolve("miss");
+	}
+
+	if (!best) {
+		// Poison miss only when local retrieve succeeded with zero candidates
+		// (after optional live FDC merge). Ranker abstention amid noise ≠ miss.
+		if (fetchResult.ok && candidates.length === 0) {
+			await cacheMiss(kv, cacheKey);
+			if (writeLedger && opts?.organizationId) {
+				await upsertOrgMatchDecision(env, {
+					organizationId: opts.organizationId,
+					normalizedName: normalized,
+					fdcId: null,
+					description: null,
+					resolutionKind: "miss",
+					decisionSource: "automatic",
+					matchQuality: null,
+					matchScore: null,
+					scoreMargin: null,
+				});
+			}
+		}
+		emitNutritionResolve(candidates.length > 0 ? "abstain" : "miss");
 		return null;
 	}
 
@@ -200,7 +234,7 @@ export async function resolveFoodName(
 	});
 
 	if (!hydrated) {
-		await cacheMiss(kv, cacheKey);
+		// Soft-fail: do not poison KV when food row/nutrients are missing mid-hydrate.
 		emitNutritionResolve("miss");
 		return null;
 	}
@@ -360,6 +394,35 @@ async function fetchPrimaryPrefixCandidates(
 	}
 
 	return merged;
+}
+
+/** Keep only FDC ids that exist in the local nutrition corpus (D1 100-param safe). */
+export async function filterCandidatesPresentInDb(
+	db: D1Database | undefined,
+	candidates: FoodMatchCandidate[],
+): Promise<FoodMatchCandidate[]> {
+	if (!db || candidates.length === 0) return [];
+	const uniqueIds = [...new Set(candidates.map((c) => c.fdcId))];
+	const present = new Set<number>();
+	const chunkSize = 50;
+	for (let i = 0; i < uniqueIds.length; i += chunkSize) {
+		const chunk = uniqueIds.slice(i, i + chunkSize);
+		const placeholders = chunk.map(() => "?").join(", ");
+		try {
+			const rows = await db
+				.prepare(
+					`SELECT fdc_id AS fdcId FROM food WHERE fdc_id IN (${placeholders})`,
+				)
+				.bind(...chunk)
+				.all<{ fdcId: number }>();
+			for (const row of rows.results ?? []) {
+				if (typeof row.fdcId === "number") present.add(row.fdcId);
+			}
+		} catch {
+			return [];
+		}
+	}
+	return candidates.filter((c) => present.has(c.fdcId));
 }
 
 async function hydrateFdcId(

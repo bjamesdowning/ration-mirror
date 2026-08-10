@@ -329,10 +329,22 @@ struct NutritionSnapshot: Codable, Sendable, Equatable, Hashable {
         self.description = description
     }
 
+    /// Cargo display basis: density first, then household serving — never package.
+    var basisLabel: String? {
+        if let per100g, per100g.hasAnyMacro { return "Per 100 g" }
+        if let perServing, perServing.hasAnyMacro { return "Per serving" }
+        return nil
+    }
+
+    var nutritionSectionTitle: String {
+        if let basisLabel { return "Nutrition · \(basisLabel)" }
+        return "Nutrition"
+    }
+
     var displayNutrients: NutrientValues? {
-        if let perServing, perServing.hasAnyMacro { return perServing }
         if let per100g, per100g.hasAnyMacro { return per100g }
-        return perServing ?? per100g
+        if let perServing, perServing.hasAnyMacro { return perServing }
+        return per100g ?? perServing
     }
 
     var provenanceLabel: String {
@@ -342,18 +354,6 @@ struct NutritionSnapshot: Codable, Sendable, Equatable, Hashable {
         case "user_override": return "Override"
         default: return displayNutrients == nil ? "Blank" : "Nutrition"
         }
-    }
-
-    /// Cargo display basis: package totals preferred over per-100g density.
-    var basisLabel: String? {
-        if let perServing, perServing.hasAnyMacro { return "Package" }
-        if let per100g, per100g.hasAnyMacro { return "Per 100 g" }
-        return nil
-    }
-
-    var nutritionSectionTitle: String {
-        if let basisLabel { return "Nutrition · \(basisLabel)" }
-        return "Nutrition"
     }
 
     /// Empty override shell used when the user starts typing macros from a blank state.

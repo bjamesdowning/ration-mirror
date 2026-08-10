@@ -24,6 +24,8 @@ CREATE TABLE IF NOT EXISTS database_snapshot (
 	notes TEXT
 );
 
--- Provenance columns (skip if already present on this DB).
--- ALTER TABLE food_nutrient ADD COLUMN energy_nutrient_id INTEGER;
--- ALTER TABLE food_nutrient ADD COLUMN salt_derivation TEXT;
+-- Provenance columns on older DBs (pre-schema.sql with energy_nutrient_id):
+-- The import script adds these via ensureFoodNutrientColumns() before loading foods.
+-- Manual one-shot if needed:
+--   ALTER TABLE food_nutrient ADD COLUMN energy_nutrient_id INTEGER;
+--   ALTER TABLE food_nutrient ADD COLUMN salt_derivation TEXT;

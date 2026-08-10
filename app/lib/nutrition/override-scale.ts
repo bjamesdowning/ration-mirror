@@ -92,36 +92,53 @@ function updatedAtMs(value: CargoOverrideCandidate["updatedAt"]): number {
 	return Number.isFinite(parsed) ? parsed : 0;
 }
 
+const CARGO_DENSITY_SOURCE_RANK: Record<string, number> = {
+	user_override: 0,
+	usda: 1,
+	ai_estimate: 2,
+};
+
+function hasCargoDensity(c: CargoOverrideCandidate): boolean {
+	const n = c.nutrition;
+	if (!n) return false;
+	if (n.per100g != null || n.perServing != null) return true;
+	return false;
+}
+
 /**
- * Pick the best org cargo row with `user_override` for a meal ingredient.
- * Prefer linked cargoId, then exact dedup-key match. Never invent weak matches.
+ * Pick the best org cargo density for a meal ingredient.
+ * Prefer linked cargoId, then exact dedup-key match.
+ * Source order: user_override → usda → ai_estimate.
  */
 export function pickBestCargoOverrideForIngredient(
 	ingredientName: string,
 	candidates: CargoOverrideCandidate[],
 	linkedCargoId?: string | null,
 ): CargoOverrideCandidate | null {
-	const overrides = candidates.filter(
-		(c) =>
-			c.nutrition?.source === "user_override" &&
-			(c.nutrition.perServing != null || c.nutrition.per100g != null),
-	);
-	if (overrides.length === 0) return null;
+	const usable = candidates.filter(hasCargoDensity);
+	if (usable.length === 0) return null;
+
+	const rank = (c: CargoOverrideCandidate) =>
+		CARGO_DENSITY_SOURCE_RANK[c.nutrition?.source ?? ""] ?? 99;
 
 	if (linkedCargoId) {
-		const linked = overrides.find((c) => c.id === linkedCargoId);
-		if (linked) return linked;
+		const linked = usable
+			.filter((c) => c.id === linkedCargoId)
+			.sort((a, b) => rank(a) - rank(b));
+		if (linked[0]) return linked[0];
 	}
 
 	const targetKey = normalizeForCargoDedup(ingredientName);
 	if (!targetKey) return null;
 
-	const exact = overrides.filter(
+	const exact = usable.filter(
 		(c) => normalizeForCargoDedup(c.name) === targetKey,
 	);
 	if (exact.length === 0) return null;
 
 	exact.sort((a, b) => {
+		const sourceDelta = rank(a) - rank(b);
+		if (sourceDelta !== 0) return sourceDelta;
 		if (b.quantity !== a.quantity) return b.quantity - a.quantity;
 		return updatedAtMs(b.updatedAt) - updatedAtMs(a.updatedAt);
 	});

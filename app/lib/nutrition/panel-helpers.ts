@@ -11,8 +11,8 @@ export const KJ_PER_KCAL = 4.184;
 
 export type ProvenanceLabel = "USDA" | "AI Estimate" | "Override" | "Blank";
 
-/** Which nutrient block Cargo is displaying. */
-export type CargoNutritionBasisLabel = "Package" | "Per 100 g";
+/** Which nutrient block Cargo is displaying (density / household serving — never package). */
+export type CargoNutritionBasisLabel = "Per 100 g" | "Per serving";
 
 export function kcalToKj(kcal: number): number {
 	return kcal * KJ_PER_KCAL;
@@ -46,15 +46,15 @@ export function provenanceLabel(
 }
 
 /**
- * Cargo display basis: package/line totals (`perServing`) preferred over density.
+ * Cargo display basis: density first, then household serving — never package totals.
  * Matches {@link getDisplayNutrients} for mode `"cargo"`.
  */
 export function cargoNutritionBasisLabel(
 	nutrition: NutritionSnapshot | null | undefined,
 ): CargoNutritionBasisLabel | null {
 	if (!nutrition) return null;
-	if (nutrition.perServing != null) return "Package";
 	if (nutrition.per100g != null) return "Per 100 g";
+	if (nutrition.perServing != null) return "Per serving";
 	return null;
 }
 
@@ -77,7 +77,7 @@ export function formatCoveragePercent(coverage: number): string {
 	return `${pct}%`;
 }
 
-/** Prefer per-serving; cargo falls back to per-100g. */
+/** Meal: per recipe serving. Cargo: density (per 100 g) first, then household serving. */
 export function getDisplayNutrients(
 	nutrition: MealNutritionSnapshot | NutritionSnapshot | null,
 	mode: "meal" | "cargo",
@@ -89,7 +89,7 @@ export function getDisplayNutrients(
 	if (mode === "meal") {
 		return nutrition.perServing;
 	}
-	return nutrition.perServing ?? nutrition.per100g;
+	return nutrition.per100g ?? nutrition.perServing;
 }
 
 export type MacroPatch = Partial<

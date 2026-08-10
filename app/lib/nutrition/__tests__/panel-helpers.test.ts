@@ -75,10 +75,10 @@ describe("provenanceLabel", () => {
 });
 
 describe("cargoNutritionBasisLabel", () => {
-	it("prefers Package when perServing present", () => {
-		expect(cargoNutritionBasisLabel(cargoSnap)).toBe("Package");
-		expect(cargoNutritionBasisLabel({ ...cargoSnap, perServing: null })).toBe(
-			"Per 100 g",
+	it("prefers Per 100 g when density present", () => {
+		expect(cargoNutritionBasisLabel(cargoSnap)).toBe("Per 100 g");
+		expect(cargoNutritionBasisLabel({ ...cargoSnap, per100g: null })).toBe(
+			"Per serving",
 		);
 		expect(cargoNutritionBasisLabel(null)).toBeNull();
 	});
@@ -89,10 +89,10 @@ describe("nutritionPanelBasisSuffix", () => {
 		expect(nutritionPanelBasisSuffix(mealSnap, "meal")).toBe(
 			"Per recipe serving",
 		);
-		expect(nutritionPanelBasisSuffix(cargoSnap, "cargo")).toBe("Package");
+		expect(nutritionPanelBasisSuffix(cargoSnap, "cargo")).toBe("Per 100 g");
 		expect(
-			nutritionPanelBasisSuffix({ ...cargoSnap, perServing: null }, "cargo"),
-		).toBe("Per 100 g");
+			nutritionPanelBasisSuffix({ ...cargoSnap, per100g: null }, "cargo"),
+		).toBe("Per serving");
 	});
 });
 
@@ -109,13 +109,13 @@ describe("getDisplayNutrients", () => {
 		expect(getDisplayNutrients(mealSnap, "meal")?.energyKcal).toBe(95);
 	});
 
-	it("prefers cargo perServing then per100g", () => {
-		expect(getDisplayNutrients(cargoSnap, "cargo")?.energyKcal).toBe(95);
-		const per100Only: NutritionSnapshot = {
+	it("prefers cargo per100g then perServing", () => {
+		expect(getDisplayNutrients(cargoSnap, "cargo")?.energyKcal).toBe(52);
+		const perServingOnly: NutritionSnapshot = {
 			...cargoSnap,
-			perServing: null,
+			per100g: null,
 		};
-		expect(getDisplayNutrients(per100Only, "cargo")?.energyKcal).toBe(52);
+		expect(getDisplayNutrients(perServingOnly, "cargo")?.energyKcal).toBe(95);
 	});
 });
 

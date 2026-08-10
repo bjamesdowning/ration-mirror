@@ -105,7 +105,7 @@ export async function maybeResolveCargoNutrition(
 	});
 }
 
-function toOverrideCandidate(r: {
+function toDensityCandidate(r: {
 	id: string;
 	name: string;
 	quantity: number;
@@ -113,26 +113,29 @@ function toOverrideCandidate(r: {
 	nutrition: unknown;
 	updatedAt: Date | string | number | null;
 }): CargoOverrideCandidate | null {
+	if (r.nutrition == null || typeof r.nutrition !== "object") return null;
+	const nutrition = r.nutrition as NutritionSnapshot;
 	if (
-		r.nutrition == null ||
-		typeof r.nutrition !== "object" ||
-		(r.nutrition as NutritionSnapshot).source !== "user_override"
+		nutrition.source !== "user_override" &&
+		nutrition.source !== "usda" &&
+		nutrition.source !== "ai_estimate"
 	) {
 		return null;
 	}
+	if (nutrition.per100g == null && nutrition.perServing == null) return null;
 	return {
 		id: r.id,
 		name: r.name,
 		quantity: r.quantity,
 		unit: r.unit,
-		nutrition: r.nutrition as NutritionSnapshot,
+		nutrition,
 		updatedAt: r.updatedAt,
 	};
 }
 
 /**
- * Load org cargo rows with user_override nutrition. Always includes any
- * meal-linked cargo IDs so linked overrides are never dropped by the sample cap.
+ * Load org cargo rows with usable nutrition density (override / USDA / AI).
+ * Always includes any meal-linked cargo IDs so linked density is never dropped.
  */
 async function loadOrgCargoOverrideCandidates(
 	db: D1Database,
@@ -153,7 +156,7 @@ async function loadOrgCargoOverrideCandidates(
 		.where(
 			and(
 				eq(schema.cargo.organizationId, organizationId),
-				sql`json_extract(${schema.cargo.nutrition}, '$.source') = 'user_override'`,
+				sql`${schema.cargo.nutrition} IS NOT NULL`,
 			),
 		)
 		.orderBy(desc(schema.cargo.updatedAt))
@@ -161,7 +164,7 @@ async function loadOrgCargoOverrideCandidates(
 
 	const byId = new Map<string, CargoOverrideCandidate>();
 	for (const r of rows) {
-		const candidate = toOverrideCandidate(r);
+		const candidate = toDensityCandidate(r);
 		if (candidate) byId.set(candidate.id, candidate);
 	}
 
@@ -188,7 +191,7 @@ async function loadOrgCargoOverrideCandidates(
 				),
 		);
 		for (const r of linkedRows) {
-			const candidate = toOverrideCandidate(r);
+			const candidate = toDensityCandidate(r);
 			if (candidate) byId.set(candidate.id, candidate);
 		}
 	}
@@ -291,7 +294,8 @@ export async function recomputeAndStoreMealNutrition(
 						unit: (unit ?? ing.unit) as SupportedUnit | null,
 						nutrientsPer100g,
 						fdcId: override.nutrition.fdcId ?? null,
-						source: "user_override" as NutritionSource,
+						source: (override.nutrition.source ??
+							"user_override") as NutritionSource,
 					};
 				}
 			}

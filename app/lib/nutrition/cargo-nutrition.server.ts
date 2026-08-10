@@ -1,8 +1,7 @@
 import type { SupportedUnit } from "~/lib/units";
 import { upgradeNutritionSnapshotToV2 } from "./adapters";
 import { estimateNutritionWithAi } from "./ai-estimate.server";
-import { resolveFdcPortionGrams } from "./fdc-portion.server";
-import { resolveIngredientMass } from "./mass-resolution";
+import { resolveHouseholdServingGrams } from "./fdc-portion.server";
 import { resolveFoodName } from "./resolve-food.server";
 import {
 	projectNullableValuesToLegacy,
@@ -24,7 +23,8 @@ export type ResolveCargoNutritionOptions = {
 
 /**
  * Resolve nutrition for a cargo item name against USDA seed DB.
- * Returns a NutritionSnapshot or null when unresolved.
+ * Cargo stores **density** (`per100g`) as authoritative; `perServing` is an
+ * optional household portion (cup/serving), never the cargo package total.
  * Automated USDA name matches are never marked `verified` (user/barcode only).
  */
 export async function resolveAndBuildCargoNutrition(
@@ -37,48 +37,25 @@ export async function resolveAndBuildCargoNutrition(
 		userId: opts?.userId,
 	});
 	if (resolved) {
-		let fdcPortionGrams: number | null = null;
-		let fdcPortionConfidence = 0;
-
-		if (resolved.fdcId != null && opts?.quantity != null && opts.unit) {
-			const portion = await resolveFdcPortionGrams(
-				env,
-				resolved.fdcId,
-				opts.quantity,
-				opts.unit,
-			);
-			fdcPortionGrams = portion.grams;
-			fdcPortionConfidence = portion.confidence;
-		}
-
-		const mass = resolveIngredientMass(
-			opts?.quantity,
-			opts?.unit ?? null,
-			name,
-			{
-				forNutrition: true,
-				fdcPortionGrams,
-				fdcPortionConfidence,
-			},
-		);
-
-		const perServingNullable =
-			mass.grams != null
-				? scaleNullableNutrientValues(
+		let householdPerServing = null;
+		if (resolved.fdcId != null) {
+			const household = await resolveHouseholdServingGrams(env, resolved.fdcId);
+			if (household.grams != null && household.grams > 0) {
+				householdPerServing = projectNullableValuesToLegacy(
+					scaleNullableNutrientValues(
 						resolved.nutrientsPer100g,
-						mass.grams / 100,
-					)
-				: null;
+						household.grams / 100,
+					),
+				);
+			}
+		}
 
 		return {
 			source: "usda",
 			confidence: resolved.autoAccept ? 0.95 : 0.7,
-			// Automated USDA name matches are never verified (user/barcode only).
 			verified: false,
 			per100g: projectNullableValuesToLegacy(resolved.nutrientsPer100g),
-			perServing: perServingNullable
-				? projectNullableValuesToLegacy(perServingNullable)
-				: null,
+			perServing: householdPerServing,
 			fdcId: resolved.fdcId,
 			description: resolved.description,
 		};
@@ -118,36 +95,25 @@ export async function resolveAndBuildCargoNutritionV2(
 		return legacy ? upgradeNutritionSnapshotToV2(legacy) : null;
 	}
 
+	let householdGrams: number | null = null;
 	let portionId: number | null = null;
 	let portionDescription: string | null = null;
-	let fdcPortionGrams: number | null = null;
-	let fdcPortionConfidence = 0;
-
-	if (resolved.fdcId != null && opts?.quantity != null && opts.unit) {
-		const portion = await resolveFdcPortionGrams(
-			env,
-			resolved.fdcId,
-			opts.quantity,
-			opts.unit,
-		);
-		fdcPortionGrams = portion.grams;
-		fdcPortionConfidence = portion.confidence;
-		portionId = portion.portion?.id ?? null;
+	if (resolved.fdcId != null) {
+		const household = await resolveHouseholdServingGrams(env, resolved.fdcId);
+		householdGrams = household.grams;
+		portionId = household.portion?.id ?? null;
 		portionDescription =
-			portion.portion?.portionDescription ??
-			portion.portion?.measureUnit ??
+			household.portion?.portionDescription ??
+			household.portion?.measureUnit ??
 			null;
 	}
 
-	const mass = resolveIngredientMass(opts?.quantity, opts?.unit ?? null, name, {
-		forNutrition: true,
-		fdcPortionGrams,
-		fdcPortionConfidence,
-	});
-
 	const perServingNullable =
-		mass.grams != null
-			? scaleNullableNutrientValues(resolved.nutrientsPer100g, mass.grams / 100)
+		householdGrams != null && householdGrams > 0
+			? scaleNullableNutrientValues(
+					resolved.nutrientsPer100g,
+					householdGrams / 100,
+				)
 			: null;
 
 	const legacy: NutritionSnapshot = {
@@ -172,9 +138,9 @@ export async function resolveAndBuildCargoNutritionV2(
 		provenance: resolved.provenance ?? null,
 		match: resolved.match ?? null,
 		mass: {
-			grams: mass.grams,
-			method: mass.method,
-			confidence: mass.confidence,
+			grams: householdGrams,
+			method: householdGrams != null ? "fdc_portion" : "unknown",
+			confidence: householdGrams != null ? 0.85 : 0,
 			portionId,
 			portionDescription,
 		},

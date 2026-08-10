@@ -4,13 +4,27 @@ Operator playbook for dogfood / App Review nutrition. Flags stay **off** until t
 
 ## Pinned FDC dataset
 
-1. Place verified Foundation + SR Legacy CSV folders under `nutrition-db/raw/`.
+1. Place verified Foundation + SR Legacy (+ optional FNDDS/survey) CSV folders under `nutrition-db/raw/`.
 2. Fill `archiveSha256` (and URLs/dates) in `nutrition-db/releases/current.json`.
 3. `bun run db:nutrition:import:generate` → review `nutrition-db/generated/MANIFEST.txt` + `release-manifest.json`.
 4. Apply to a **staging** D1 only (`--apply-remote --db=ration-nutrition-dev`). Never clear/refill the live production binding.
-5. Smoke: resolve milk / olive oil / known abstentions; confirm null macros stay null.
-6. Promote by binding change + set `NUTRITION_DATASET_SNAPSHOT_ID` in `app/lib/nutrition/constants.ts` to the emitted snapshot id.
-7. **Never** enable `nutrition-engine` for reviewers against `seed-minimal.sql`.
+   - Import applies `schema.sql` then ensures `food_nutrient.energy_nutrient_id` / `salt_derivation` exist (older DBs lack these; `CREATE TABLE IF NOT EXISTS` does not upgrade).
+   - A failed apply after `00-clear.sql` leaves the DB empty — fix schema drift and re-run the full import, then re-seed aliases.
+5. Apply alias table + curated staples (after food rows exist):
+   ```bash
+   wrangler d1 execute ration-nutrition --remote --file=nutrition-db/migrations/0002_food_alias.sql
+   wrangler d1 execute ration-nutrition --remote --file=nutrition-db/seed-food-alias.sql
+   # same for ration-nutrition-dev / --local as needed
+   ```
+6. Smoke: resolve `whole milk` / `olive oil` / `chicken breast` via alias; confirm cargo shows **Per 100 g**.
+7. Promote by binding change + set `NUTRITION_DATASET_SNAPSHOT_ID` in `app/lib/nutrition/constants.ts` to the emitted snapshot id.
+8. **Never** enable `nutrition-engine` for reviewers against `seed-minimal.sql`.
+
+## Live FDC search fallback (optional)
+
+1. Create an API key at https://api.data.gov/signup/
+2. `wrangler secret put USDA_FDC_API_KEY` (prod) and `--env dev` for `ration-dev`
+3. Redeploy Workers. Fallback runs only after alias + local FTS miss; sends **food names only** (no PII).
 
 ## Queue / DLQ
 

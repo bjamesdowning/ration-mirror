@@ -122,10 +122,35 @@ describe("pickBestCargoOverrideForIngredient", () => {
 		expect(best?.id).toBe("b");
 	});
 
-	it("ignores usda snapshots", () => {
+	it("accepts usda density when no override exists", () => {
 		const usdaOnly = candidates.filter((c) => c.id === "c");
 		const best = pickBestCargoOverrideForIngredient("whole milk", usdaOnly);
-		expect(best).toBeNull();
+		expect(best?.id).toBe("c");
+		expect(best?.nutrition.source).toBe("usda");
+	});
+
+	it("override beats USDA when both match the same name", () => {
+		const both = [
+			{
+				id: "b",
+				name: "whole milk",
+				quantity: 1,
+				unit: "l",
+				nutrition: milkOverride,
+				updatedAt: "2026-02-01T00:00:00.000Z",
+			},
+			{
+				id: "c",
+				name: "whole milk",
+				quantity: 2,
+				unit: "l",
+				nutrition: { ...milkOverride, source: "usda" as const },
+				updatedAt: "2026-03-01T00:00:00.000Z",
+			},
+		];
+		const best = pickBestCargoOverrideForIngredient("whole milk", both);
+		expect(best?.id).toBe("b");
+		expect(best?.nutrition.source).toBe("user_override");
 	});
 
 	it("override beats wrong USDA conceptually (caller prefers override when present)", () => {

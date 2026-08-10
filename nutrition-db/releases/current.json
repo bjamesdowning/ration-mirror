@@ -9,17 +9,24 @@
 			"packageHint": "FoodData_Central_foundation_food_csv_2026-04-30",
 			"officialUrl": "https://fdc.nal.usda.gov/download-datasets",
 			"publicationDate": "2026-04-30",
-			"archiveSha256": null
+			"archiveSha256": "d6d4f41dcd19a46abcdd67775379cb6f0292ff08daa7e0680fdd0982830bf57b"
 		},
 		{
 			"dataType": "sr_legacy_food",
 			"packageHint": "FoodData_Central_sr_legacy_food_csv_2018-04",
 			"officialUrl": "https://fdc.nal.usda.gov/download-datasets",
 			"publicationDate": "2018-04",
-			"archiveSha256": null
+			"archiveSha256": "b80817294b8850530aaedf2e515c02593b1824f763a0ff356e5c2081643e6fd0"
+		},
+		{
+			"dataType": "survey_fndds_food",
+			"packageHint": "FoodData_Central_survey_food_csv",
+			"officialUrl": "https://fdc.nal.usda.gov/download-datasets",
+			"publicationDate": null,
+			"archiveSha256": "5ccc25ec2777a8982fbb61378a42f415316173eb11e48c9a8ba4cb19f5a4f29c"
 		}
 	],
-	"matcherVersion": "1.1.0",
+	"matcherVersion": "1.4.0",
 	"portionMatcherVersion": "1.0.0",
 	"importedAt": null,
 	"rowCounts": null,

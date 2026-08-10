@@ -76,6 +76,11 @@ declare namespace Cloudflare {
 		APP_REVIEW_DEMO_USER_ID?: string;
 		/** Optional USDA-shaped nutrition composition DB (ration-nutrition). */
 		NUTRITION_DB?: D1Database;
+		/**
+		 * USDA FoodData Central API key (api.data.gov) — live search miss fallback.
+		 * Set via `wrangler secret put USDA_FDC_API_KEY`. Name-only queries; no PII.
+		 */
+		USDA_FDC_API_KEY?: string;
 	}
 }
 

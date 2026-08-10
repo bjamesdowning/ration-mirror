@@ -59,6 +59,17 @@ CREATE INDEX IF NOT EXISTS idx_food_description ON food(description);
 CREATE INDEX IF NOT EXISTS idx_food_data_type ON food(data_type);
 CREATE INDEX IF NOT EXISTS idx_food_portion_fdc ON food_portion(fdc_id);
 
+-- Global pantry name → FDC id (curated staples + learned aliases).
+CREATE TABLE IF NOT EXISTS food_alias (
+	normalized_name TEXT PRIMARY KEY NOT NULL,
+	fdc_id INTEGER NOT NULL REFERENCES food(fdc_id) ON DELETE CASCADE,
+	locale TEXT NOT NULL DEFAULT 'en',
+	source TEXT NOT NULL DEFAULT 'curated',
+	created_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_food_alias_fdc ON food_alias(fdc_id);
+
 -- External-content FTS5; populate after seeding food rows (see seed-minimal.sql).
 CREATE VIRTUAL TABLE IF NOT EXISTS food_fts USING fts5(
 	description,

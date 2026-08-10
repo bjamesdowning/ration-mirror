@@ -30,6 +30,12 @@ const ROOT = path.join(import.meta.dir, "..");
 const RAW_DIR = path.join(ROOT, "nutrition-db", "raw");
 const OUT_DIR = path.join(ROOT, "nutrition-db", "generated");
 const SCHEMA = path.join(ROOT, "nutrition-db", "schema.sql");
+const MIGRATION_RELEASE_METADATA = path.join(
+	ROOT,
+	"nutrition-db",
+	"migrations",
+	"0001_release_metadata.sql",
+);
 const RELEASE_MANIFEST = path.join(
 	ROOT,
 	"nutrition-db",
@@ -37,7 +43,11 @@ const RELEASE_MANIFEST = path.join(
 	"current.json",
 );
 
-const ALLOWED_DATA_TYPES = new Set(["sr_legacy_food", "foundation_food"]);
+const ALLOWED_DATA_TYPES = new Set([
+	"sr_legacy_food",
+	"foundation_food",
+	"survey_fndds_food",
+]);
 
 type FoodRow = {
 	fdcId: number;
@@ -152,14 +162,22 @@ function headerIndex(header: string[], name: string): number {
 async function findDatasetDirs(): Promise<{
 	srLegacy?: string;
 	foundation?: string;
+	survey?: string;
 }> {
 	const entries = await readdir(RAW_DIR, { withFileTypes: true });
 	const dirs = entries.filter((e) => e.isDirectory()).map((e) => e.name);
 	const srLegacy = dirs.find((d) => d.includes("sr_legacy_food_csv"));
 	const foundation = dirs.find((d) => d.includes("foundation_food_csv"));
+	const survey = dirs.find(
+		(d) =>
+			d.includes("survey_food_csv") ||
+			d.includes("fndds") ||
+			d.includes("FoodData_Central_survey"),
+	);
 	return {
 		srLegacy: srLegacy ? path.join(RAW_DIR, srLegacy) : undefined,
 		foundation: foundation ? path.join(RAW_DIR, foundation) : undefined,
+		survey: survey ? path.join(RAW_DIR, survey) : undefined,
 	};
 }
 
@@ -194,6 +212,13 @@ async function loadFoods(
 		const existing = foods.get(fdcId);
 		if (existing && existing.dataType === "foundation_food") continue;
 		if (existing && dataType === "sr_legacy_food") continue;
+		if (
+			existing &&
+			existing.dataType === "sr_legacy_food" &&
+			dataType === "survey_fndds_food"
+		) {
+			continue;
+		}
 		foods.set(fdcId, { fdcId, description, dataType });
 		added += 1;
 	}
@@ -334,9 +359,9 @@ function computeSnapshotHash(parts: string[]): string {
 async function generate(): Promise<string[]> {
 	const manifest = await loadReleaseManifest();
 	const datasets = await findDatasetDirs();
-	if (!datasets.srLegacy && !datasets.foundation) {
+	if (!datasets.srLegacy && !datasets.foundation && !datasets.survey) {
 		throw new Error(
-			`No FDC CSV folders found under ${RAW_DIR}. Expected *sr_legacy_food_csv* and/or *foundation_food_csv*.`,
+			`No FDC CSV folders found under ${RAW_DIR}. Expected *sr_legacy_food_csv*, *foundation_food_csv*, and/or *survey_food_csv* / FNDDS.`,
 		);
 	}
 
@@ -348,6 +373,10 @@ async function generate(): Promise<string[]> {
 	if (datasets.foundation) {
 		const n = await loadFoods(datasets.foundation, foods);
 		console.log(`Foundation foods added/updated: ${n}`);
+	}
+	if (datasets.survey) {
+		const n = await loadFoods(datasets.survey, foods);
+		console.log(`FNDDS / survey foods added: ${n}`);
 	}
 
 	const foodIds = new Set(foods.keys());
@@ -361,6 +390,10 @@ async function generate(): Promise<string[]> {
 		console.log("Pivoting Foundation nutrients (stream)…");
 		await loadNutrients(datasets.foundation, foods, nutrients);
 	}
+	if (datasets.survey) {
+		console.log("Pivoting FNDDS / survey nutrients (stream)…");
+		await loadNutrients(datasets.survey, foods, nutrients);
+	}
 	for (const wide of nutrients.values()) {
 		finalizeImportSalt(wide);
 	}
@@ -373,6 +406,10 @@ async function generate(): Promise<string[]> {
 	if (datasets.foundation) {
 		const units = await loadMeasureUnits(datasets.foundation);
 		await loadPortions(datasets.foundation, foodIds, units, portions);
+	}
+	if (datasets.survey) {
+		const units = await loadMeasureUnits(datasets.survey);
+		await loadPortions(datasets.survey, foodIds, units, portions);
 	}
 
 	const foodList = [...foods.values()].sort((a, b) => a.fdcId - b.fdcId);
@@ -557,6 +594,63 @@ INSERT INTO food_fts(food_fts) VALUES('rebuild');
 	return written;
 }
 
+async function d1ExecuteFile(
+	db: string,
+	file: string,
+	remote: boolean,
+): Promise<void> {
+	if (remote) {
+		await $`bunx wrangler d1 execute ${db} --remote --file=${file}`;
+	} else {
+		await $`bunx wrangler d1 execute ${db} --local --file=${file}`;
+	}
+}
+
+async function d1ExecuteCommand(
+	db: string,
+	command: string,
+	remote: boolean,
+): Promise<void> {
+	if (remote) {
+		await $`bunx wrangler d1 execute ${db} --remote --command=${command}`;
+	} else {
+		await $`bunx wrangler d1 execute ${db} --local --command=${command}`;
+	}
+}
+
+/** Existing D1 DBs used CREATE TABLE IF NOT EXISTS — additive columns need ALTER. */
+async function ensureFoodNutrientColumns(
+	db: string,
+	remote: boolean,
+): Promise<void> {
+	const columns = ["energy_nutrient_id INTEGER", "salt_derivation TEXT"];
+	for (const col of columns) {
+		const name = col.split(/\s+/)[0] ?? col;
+		try {
+			await d1ExecuteCommand(
+				db,
+				`ALTER TABLE food_nutrient ADD COLUMN ${col}`,
+				remote,
+			);
+			console.log(`Added food_nutrient.${name}`);
+		} catch (err) {
+			const shell = err as {
+				message?: string;
+				stderr?: string;
+				stdout?: string;
+			};
+			const msg = [shell.message, shell.stderr, shell.stdout]
+				.filter(Boolean)
+				.join("\n");
+			if (/duplicate column/i.test(msg)) {
+				console.log(`food_nutrient.${name} already present`);
+				continue;
+			}
+			throw err;
+		}
+	}
+}
+
 async function applyFiles(
 	files: string[],
 	opts: { remote: boolean; db: string },
@@ -574,20 +668,15 @@ async function applyFiles(
 	console.log(
 		`Applying schema to ${opts.db} (${opts.remote ? "remote" : "local"})…`,
 	);
-	if (opts.remote) {
-		await $`bunx wrangler d1 execute ${opts.db} --remote --file=${SCHEMA}`;
-	} else {
-		await $`bunx wrangler d1 execute ${opts.db} --local --file=${SCHEMA}`;
-	}
+	await d1ExecuteFile(opts.db, SCHEMA, opts.remote);
+	console.log("Applying release metadata migration…");
+	await d1ExecuteFile(opts.db, MIGRATION_RELEASE_METADATA, opts.remote);
+	await ensureFoodNutrientColumns(opts.db, opts.remote);
 
 	for (const file of files) {
 		const rel = path.relative(ROOT, file);
 		console.log(`Applying ${rel}…`);
-		if (opts.remote) {
-			await $`bunx wrangler d1 execute ${opts.db} --remote --file=${file}`;
-		} else {
-			await $`bunx wrangler d1 execute ${opts.db} --local --file=${file}`;
-		}
+		await d1ExecuteFile(opts.db, file, opts.remote);
 	}
 	console.log("Apply complete.");
 }

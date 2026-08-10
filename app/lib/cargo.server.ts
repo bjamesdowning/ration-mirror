@@ -1075,20 +1075,31 @@ export async function ingestCargoItems(
 		await bumpReadinessCacheVersions(env.RATION_KV, organizationId);
 	}
 
-	// Refresh meals when ingest wrote user_override nutrition (scan review path).
+	// Refresh meals when ingest wrote any usable cargo nutrition density.
 	if (nutritionEngineOn) {
-		const overrideTargets = new Map<string, string>();
+		const densityTargets = new Map<string, string>();
 		for (let i = 0; i < results.length; i++) {
 			const result = results[i];
 			const it = items[i];
 			if (!result || !it || !result.item) continue;
 			if (result.status !== "created" && result.status !== "merged") continue;
 			const item = result.item;
-			const snap =
+			const densitySnap =
 				result.status === "created"
 					? (item.nutrition as NutritionSnapshot | null | undefined)
-					: it.nutrition;
-			if (!snap || snap.source !== "user_override") continue;
+					: (it.nutrition ??
+						(result.mergedInto
+							? mergeNutritionByTargetId.get(result.mergedInto.id)
+							: null) ??
+						(item.nutrition as NutritionSnapshot | null | undefined));
+			if (
+				!densitySnap ||
+				(densitySnap.source !== "user_override" &&
+					densitySnap.source !== "usda" &&
+					densitySnap.source !== "ai_estimate")
+			) {
+				continue;
+			}
 			const id =
 				result.status === "merged" && result.mergedInto
 					? result.mergedInto.id
@@ -1097,11 +1108,11 @@ export async function ingestCargoItems(
 				result.status === "merged" && result.mergedInto
 					? result.mergedInto.name
 					: item.name;
-			overrideTargets.set(id, name);
+			densityTargets.set(id, name);
 		}
-		if (overrideTargets.size > 0) {
+		if (densityTargets.size > 0) {
 			const recomputePromise = mapWithConcurrency(
-				[...overrideTargets.entries()],
+				[...densityTargets.entries()],
 				NUTRITION_MEAL_RECOMPUTE_CONCURRENCY,
 				([cargoId, cargoName]) =>
 					recomputeMealsAffectedByCargoNutrition(

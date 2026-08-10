@@ -30,7 +30,7 @@ other MCP-compatible AI client can operate the kitchen with natural language.
 - **Database:** Cloudflare D1 (SQLite at the edge) + Drizzle ORM
 - **Object store:** Cloudflare R2
 - **Vector search:** Cloudflare Vectorize (semantic recipe and ingredient search)
-- **Image AI:** Google Gemini 3.5 Flash via Cloudflare AI Gateway for receipt parsing and recipe generation
+- **Image AI:** Google Gemini 3.5 Flash-Lite via Cloudflare AI Gateway for receipt parsing and recipe generation
 - **Auth:** Better Auth (edge-compatible)
 - **Payments:** Stripe (Crew Member subscription tier + credit packs)
 

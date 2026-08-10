@@ -212,7 +212,7 @@ flowchart TB
 | `PROJECT_THINK` | Durable Object | Copilot-only — one `ProjectThinkAgent` isolate per `{org}:{user}:{tier}:{conversationId}` |
 | `COPILOT_ANALYTICS` | Analytics Engine | Copilot-only — conversation, tool, and billing telemetry (`ration_copilot` dataset) |
 | `RATION_ANALYTICS` | Analytics Engine | Main + MCP Workers — ops counters (`ration_ops` / `ration_ops_dev`): 503, 429, queue retries, Gemini invoke, credit deduct/refund, signup, credit purchase |
-| AI Gateway | External fetch | Proxied LLM calls to Google AI Studio — `gemini-3.5-flash` for scan, generate, plan, import |
+| AI Gateway | External fetch | Proxied LLM calls to Google AI Studio — `gemini-3.5-flash-lite` for scan, generate, plan, import, nutrition estimate |
 | `SCAN_QUEUE` | Queue producer | Enqueue scan jobs; consumer runs AI vision + D1/Vectorize |
 | `MEAL_GENERATE_QUEUE` | Queue producer | Enqueue meal generation jobs; consumer runs LLM + Vectorize verification |
 | `PLAN_WEEK_QUEUE` | Queue producer | Enqueue plan-week jobs; consumer runs Gemini for weekly meal schedule |
@@ -243,7 +243,7 @@ Apply the same rule to `ration-storage-dev` for dev/prod parity. Verify with `np
 
 1. **Guardrails** — enable on prompts + responses; start with content **flagged, not blocked**. Review analytics for false positives on food scans and recipe URLs before switching categories to block.
 2. **Spend limits** — set generously above normal usage as a backstop behind app credits + KV rate limits. Scope by `cf-aig-metadata` dimensions (`userId`, `feature`, `organizationId`). Trips return HTTP 429.
-3. **Model fallback (Dynamic Routing)** — primary `gemini-3.5-flash` with a **Gemini-family** fallback that supports vision (for scan). Non-Gemini fallbacks require response-format changes and are out of scope.
+3. **Model fallback (Dynamic Routing)** — primary `gemini-3.5-flash-lite` with a **Gemini-family** fallback that supports vision (for scan). Non-Gemini fallbacks require response-format changes and are out of scope.
 4. **Analytics** — use metadata-tagged logs for per-feature/per-user cost visibility.
 
 **Per-request control-plane headers** (set in code via [`GATEWAY_FEATURE_CONFIG`](app/lib/ai-config.server.ts)):
@@ -354,7 +354,7 @@ sequenceDiagram
     rect rgb(227, 242, 253)
         Note over Consumer,AIGateway: Consumer (async)
         Consumer->>R2: get(imageKey)
-        Consumer->>AIGateway: POST gemini-3.5-flash (vision)
+        Consumer->>AIGateway: POST gemini-3.5-flash-lite (vision)
         AIGateway-->>Consumer: { items: [...] }
         Consumer->>Consumer: Zod validate + ingest to D1 + Vectorize
         Consumer->>D1: updateQueueJobResult(requestId, "completed" | "failed")
@@ -371,7 +371,7 @@ sequenceDiagram
 **AI Gateway routing** (via [`callGemini`](app/lib/ai-gateway.server.ts)):
 ```
 https://gateway.ai.cloudflare.com/v1/{ACCOUNT_ID}/{GATEWAY_ID}/google-ai-studio
-  → /v1beta/models/gemini-3.5-flash:generateContent
+  → /v1beta/models/gemini-3.5-flash-lite:generateContent
   + cf-aig-* headers (timeout, retries, cache, metadata)
 ```
 
@@ -491,7 +491,7 @@ sequenceDiagram
     rect rgb(232, 245, 233)
         Note over Consumer,Vectorize: Consumer (async)
         Consumer->>D1: Fetch cargo names + user allergens
-        Consumer->>AIGateway: POST gemini-3.5-flash (pantry + allergen prompt)
+        Consumer->>AIGateway: POST gemini-3.5-flash-lite (pantry + allergen prompt)
         AIGateway-->>Consumer: { recipes: [3 AI-generated meals] }
         Consumer->>Consumer: Zod validate + INJECTION_PATTERNS check
         loop For each recipe
@@ -616,7 +616,7 @@ sequenceDiagram
     rect rgb(232, 245, 233)
         Note over Consumer,AIGateway: Consumer (async)
         Consumer->>D1: Fetch meals, user allergens
-        Consumer->>AIGateway: POST gemini-3.5-flash (week plan prompt)
+        Consumer->>AIGateway: POST gemini-3.5-flash-lite (week plan prompt)
         AIGateway-->>Consumer: { schedule: [...] }
         Consumer->>Consumer: Validate mealIds against org whitelist
         Consumer->>D1: updateQueueJobResult(requestId, "completed" | "failed")
@@ -900,10 +900,10 @@ Credits belong to the **organization**, not the user. All members of a group dra
 
 | Operation | Cost | Route | AI Service |
 |-----------|------|-------|------------|
-| Receipt Scan | 2 cr | `POST /api/scan` | AI Gateway → Gemini 3.5 Flash |
-| Meal Generate | 2 cr | `POST /api/meals/generate` | AI Gateway → Gemini 3.5 Flash |
-| URL Recipe Import | 1 cr | `POST /api/meals/import` | AI Gateway → Gemini 3.5 Flash |
-| Weekly Meal Plan | 3 cr | `POST /api/meal-plans/:id/plan-week` | AI Gateway → Gemini 3.5 Flash |
+| Receipt Scan | 2 cr | `POST /api/scan` | AI Gateway → Gemini 3.5 Flash-Lite |
+| Meal Generate | 2 cr | `POST /api/meals/generate` | AI Gateway → Gemini 3.5 Flash-Lite |
+| URL Recipe Import | 1 cr | `POST /api/meals/import` | AI Gateway → Gemini 3.5 Flash-Lite |
+| Weekly Meal Plan | 3 cr | `POST /api/meal-plans/:id/plan-week` | AI Gateway → Gemini 3.5 Flash-Lite |
 | Organize Cargo | 2 cr | *(reserved — not yet implemented)* | — |
 
 **Queue pattern (Scan, Meal Generate, Plan Week, Import URL):** All four AI features use the same queue + D1 status pattern. Producer: `withCreditGate` → enqueue → `insertQueueJobPending` → return `requestId`. Client polls `getQueueJob` until `completed` or `failed`. Consumer runs the AI and calls `updateQueueJobResult`. Credit costs unchanged; timeouts avoided.
@@ -924,10 +924,10 @@ All AI-heavy operations use Cloudflare Queues with a central **registry** in `ap
 
 | Queue | Job Type | Consumer | AI Service |
 |-------|----------|----------|------------|
-| `ration-scan` | `scan` | `runScanConsumerJob` | AI Gateway → Gemini 3.5 Flash |
-| `ration-meal-generate` | `meal_generate` | `runMealGenerateConsumerJob` | AI Gateway → Gemini 3.5 Flash |
-| `ration-plan-week` | `plan_week` | `runPlanWeekConsumerJob` | AI Gateway → Gemini 3.5 Flash |
-| `ration-import-url` | `import_url` | `runImportUrlConsumerJob` | AI Gateway → Gemini 3.5 Flash |
+| `ration-scan` | `scan` | `runScanConsumerJob` | AI Gateway → Gemini 3.5 Flash-Lite |
+| `ration-meal-generate` | `meal_generate` | `runMealGenerateConsumerJob` | AI Gateway → Gemini 3.5 Flash-Lite |
+| `ration-plan-week` | `plan_week` | `runPlanWeekConsumerJob` | AI Gateway → Gemini 3.5 Flash-Lite |
+| `ration-import-url` | `import_url` | `runImportUrlConsumerJob` | AI Gateway → Gemini 3.5 Flash-Lite |
 
 **Flow:** Producer → enqueue + `insertQueueJobPending(DB, requestId, jobType, orgId)` → return `requestId`. Client polls `GET /api/.../status/:requestId` which calls `getQueueJob(DB, requestId)`. Consumer runs the AI, writes `updateQueueJobResult(DB, requestId, status, result)`. D1 provides strong read-after-write consistency for status; no KV eventual consistency.
 

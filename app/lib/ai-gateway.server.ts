@@ -107,7 +107,7 @@ export function buildGatewayRequest(
 		headers,
 		body: JSON.stringify({
 			contents: [{ parts: options.parts }],
-			...getGenerationConfig(config.thinkingLevel),
+			...getGenerationConfig(config),
 		}),
 	};
 }

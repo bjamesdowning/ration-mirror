@@ -19,7 +19,7 @@ const metadata = {
 };
 
 describe("buildGatewayRequest", () => {
-	it("builds scan request with skip-cache and HIGH thinking config", () => {
+	it("builds scan request with skip-cache, HIGH thinking, mediaResolution, and maxOutputTokens", () => {
 		const request = buildGatewayRequest(baseEnv, {
 			feature: "scan",
 			parts: [
@@ -31,7 +31,7 @@ describe("buildGatewayRequest", () => {
 
 		expect(request).not.toBeNull();
 		expect(request?.url).toBe(
-			"https://gateway.ai.cloudflare.com/v1/841fa4c177353aa4844f0c7439b59f86/ration-gateway/google-ai-studio/v1beta/models/gemini-3.5-flash:generateContent",
+			"https://gateway.ai.cloudflare.com/v1/841fa4c177353aa4844f0c7439b59f86/ration-gateway/google-ai-studio/v1beta/models/gemini-3.5-flash-lite:generateContent",
 		);
 		expect(request?.headers["cf-aig-authorization"]).toBe(
 			"Bearer test-aig-token",
@@ -45,9 +45,15 @@ describe("buildGatewayRequest", () => {
 		const body = JSON.parse(request?.body ?? "{}") as {
 			generationConfig?: {
 				thinkingConfig?: { thinkingLevel?: string };
+				maxOutputTokens?: number;
+				mediaResolution?: string;
 			};
 		};
 		expect(body.generationConfig?.thinkingConfig?.thinkingLevel).toBe("HIGH");
+		expect(body.generationConfig?.maxOutputTokens).toBe(16_384);
+		expect(body.generationConfig?.mediaResolution).toBe(
+			"MEDIA_RESOLUTION_HIGH",
+		);
 
 		const meta = JSON.parse(request?.headers["cf-aig-metadata"] ?? "{}") as {
 			organizationId: string;
@@ -63,7 +69,7 @@ describe("buildGatewayRequest", () => {
 		});
 	});
 
-	it("builds import_url request with cache TTL and LOW thinking config", () => {
+	it("builds import_url request with cache TTL and MINIMAL thinking config", () => {
 		const request = buildGatewayRequest(baseEnv, {
 			feature: "import_url",
 			parts: [{ text: "system" }, { text: "page" }],
@@ -77,9 +83,36 @@ describe("buildGatewayRequest", () => {
 		const body = JSON.parse(request?.body ?? "{}") as {
 			generationConfig?: {
 				thinkingConfig?: { thinkingLevel?: string };
+				maxOutputTokens?: number;
+				mediaResolution?: string;
 			};
 		};
-		expect(body.generationConfig?.thinkingConfig?.thinkingLevel).toBe("LOW");
+		expect(body.generationConfig?.thinkingConfig?.thinkingLevel).toBe(
+			"MINIMAL",
+		);
+		expect(body.generationConfig?.maxOutputTokens).toBe(4_096);
+		expect(body.generationConfig?.mediaResolution).toBeUndefined();
+	});
+
+	it("builds nutrition_estimate request with MINIMAL thinking and small output cap", () => {
+		const request = buildGatewayRequest(baseEnv, {
+			feature: "nutrition_estimate",
+			parts: [{ text: "estimate prompt" }],
+			metadata,
+		});
+
+		const body = JSON.parse(request?.body ?? "{}") as {
+			generationConfig?: {
+				thinkingConfig?: { thinkingLevel?: string };
+				maxOutputTokens?: number;
+				mediaResolution?: string;
+			};
+		};
+		expect(body.generationConfig?.thinkingConfig?.thinkingLevel).toBe(
+			"MINIMAL",
+		);
+		expect(body.generationConfig?.maxOutputTokens).toBe(1_024);
+		expect(body.generationConfig?.mediaResolution).toBeUndefined();
 	});
 
 	it("returns null when gateway credentials are missing", () => {

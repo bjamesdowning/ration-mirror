@@ -157,6 +157,8 @@ struct HubFuelRing: View {
     let progress: Double
     let valueText: String
     var overTarget: Bool = false
+    /// When true, fill represents remaining fuel (depletes). When false, fill grows with intake.
+    var depleting: Bool = false
     var diameter: CGFloat = 88
 
     private var clamped: Double { min(max(progress, 0), 1) }
@@ -164,7 +166,7 @@ struct HubFuelRing: View {
     var body: some View {
         ZStack {
             Circle()
-                .stroke(Theme.platinum, lineWidth: 8)
+                .stroke(Theme.platinum.opacity(depleting ? 0.55 : 0.35), lineWidth: 8)
             Circle()
                 .trim(from: 0, to: clamped)
                 .stroke(
@@ -188,6 +190,8 @@ struct HubMacroBar: View {
     let valueText: String
     let progress: Double
     var overTarget: Bool = false
+    /// Remaining mode: bar drains from the trailing edge.
+    var depleting: Bool = false
 
     private var clamped: Double { min(max(progress, 0), 1) }
 
@@ -203,7 +207,7 @@ struct HubMacroBar: View {
                     .foregroundStyle(Theme.carbon)
             }
             GeometryReader { geo in
-                ZStack(alignment: .leading) {
+                ZStack(alignment: depleting ? .trailing : .leading) {
                     Capsule().fill(Theme.platinum)
                     Capsule()
                         .fill(overTarget ? Theme.warning : Theme.hyperGreen)

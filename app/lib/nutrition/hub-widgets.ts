@@ -146,6 +146,24 @@ export function clampedRatio(ratio: number | null): number {
 	return Math.min(Math.max(ratio, 0), 1);
 }
 
+/**
+ * Chart fill for Daily Fuel.
+ * - consumed: fills up toward the goal (actual / target)
+ * - remaining: depletes from full (remaining / target); empty when over
+ */
+export function nutritionChartFill(
+	mode: NutritionHubDisplayMode,
+	ratio: number | null,
+): number {
+	if (ratio == null || !Number.isFinite(ratio)) return 0;
+	const consumed = clampedRatio(ratio);
+	if (mode === "remaining") {
+		if (ratio > 1) return 0;
+		return 1 - consumed;
+	}
+	return consumed;
+}
+
 /** Remaining toward target (floored at 0). Null when no target. */
 export function nutrientRemaining(
 	actual: number | null,

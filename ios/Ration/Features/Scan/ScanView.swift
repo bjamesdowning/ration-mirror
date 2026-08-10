@@ -139,6 +139,13 @@ struct ScanView: View {
                         Text("Tap edit to adjust name, quantity, tags, domain, expiry, or nutrition")
                             .rationCaption()
                             .foregroundStyle(Theme.muted)
+                        if env.session.clientFlags.isNutritionEngineEnabled {
+                            if model.isResolvingNutrition {
+                                NutritionLookupStatusLabel(kind: .loading)
+                            } else if model.nutritionLookupFailed {
+                                NutritionLookupStatusLabel(kind: .failed(dock: false))
+                            }
+                        }
                     }
                 }
                 if model.reviewItems.isEmpty {
@@ -151,6 +158,8 @@ struct ScanView: View {
                     ForEach(model.reviewItems) { item in
                         ScanReviewItemRow(
                             item: item,
+                            isResolvingNutrition: env.session.clientFlags.isNutritionEngineEnabled
+                                && model.isResolvingNutrition,
                             onToggleSelection: { model.toggleSelection(item.id) },
                             onStartEdit: { editingItem = item }
                         )

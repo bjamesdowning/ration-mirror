@@ -2,6 +2,11 @@ import { AlertTriangle, Check, Edit2, Link2, Unlink, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useFetcher, useRouteLoaderData } from "react-router";
 import { projectNutritionSnapshotToLegacy } from "~/lib/nutrition/adapters";
+import {
+	fetchNutritionResolveChunk,
+	type NutritionLookupStatus,
+	resolveNutritionInChunks,
+} from "~/lib/nutrition/scan-review-resolve";
 import type { AnyNutritionSnapshot } from "~/lib/nutrition/types";
 import type { ScanResultItem } from "~/lib/schemas/scan";
 import type { SupplyItemWithSource } from "~/lib/supply.server";
@@ -13,6 +18,10 @@ import {
 import type { SupplyScanPair } from "~/lib/supply-scan-match.server";
 import type { SupportedUnit } from "~/lib/units";
 import { DockItemFields } from "./DockItemFields";
+import {
+	NutritionKcalHint,
+	NutritionLookupBanner,
+} from "./NutritionLookupStatus";
 
 type ReviewPair = {
 	id: string;
@@ -103,7 +112,8 @@ export function SupplyScanReviewModal({
 	const nutritionAiEstimate =
 		rootData?.clientFlags?.nutritionAiEstimate === true;
 	const allowAiNutritionEstimate = nutritionAiEstimate;
-	const [nutritionResolved, setNutritionResolved] = useState(false);
+	const [nutritionLookupStatus, setNutritionLookupStatus] =
+		useState<NutritionLookupStatus>(nutritionEngine ? "loading" : "idle");
 	const [pairs, setPairs] = useState<ReviewPair[]>(() => [
 		...initialPairs.map(toReviewPair),
 		...receiptOnly.map(receiptOnlyToPair),
@@ -135,70 +145,59 @@ export function SupplyScanReviewModal({
 	}, []);
 
 	// Propose nutrition snapshots after review opens (parity with cargo scan).
+	// Chunked so large receipts paint kcal progressively while the user reviews.
 	useEffect(() => {
-		if (!nutritionEngine || nutritionResolved) return;
+		if (!nutritionEngine) {
+			setNutritionLookupStatus("idle");
+			return;
+		}
 		const names = [
-			...new Set(
-				[
-					...initialPairs.map((p) => p.scanItem.name.trim()),
-					...receiptOnly.map((i) => i.name.trim()),
-				].filter((n) => n.length > 0),
-			),
+			...initialPairs.map((p) => p.scanItem.name),
+			...receiptOnly.map((i) => i.name),
 		];
-		if (names.length === 0) {
-			setNutritionResolved(true);
+		if (names.every((n) => !n.trim())) {
+			setNutritionLookupStatus("done");
 			return;
 		}
 
-		let cancelled = false;
+		const controller = new AbortController();
+		setNutritionLookupStatus("loading");
 		void (async () => {
-			try {
-				const response = await fetch("/api/nutrition/resolve", {
-					method: "POST",
-					headers: { "Content-Type": "application/json" },
-					body: JSON.stringify({
-						names,
-						...(allowAiNutritionEstimate
-							? { ingestSource: "scan_review" }
-							: {}),
+			const status = await resolveNutritionInChunks({
+				names,
+				ingestSource: allowAiNutritionEstimate ? "scan_review" : undefined,
+				signal: controller.signal,
+				fetchChunk: (chunk, signal) =>
+					fetchNutritionResolveChunk(chunk, {
+						ingestSource: allowAiNutritionEstimate ? "scan_review" : undefined,
+						signal,
 					}),
-				});
-				if (!response.ok || cancelled) return;
-				const body = (await response.json()) as {
-					snapshots?: Record<string, AnyNutritionSnapshot | null>;
-				};
-				const snapshots = body.snapshots ?? {};
-				if (cancelled) return;
-				setPairs((prev) =>
-					prev.map((pair) => {
-						const snap = snapshots[pair.dockName.trim()];
-						return snap !== undefined
-							? {
-									...pair,
-									nutrition: snap
-										? projectNutritionSnapshotToLegacy(snap)
-										: null,
-								}
-							: pair;
-					}),
-				);
-			} catch {
-				// Soft-fail: ingest still resolves on confirm when nutrition omitted.
-			} finally {
-				if (!cancelled) setNutritionResolved(true);
+				onChunk: (snapshots) => {
+					setPairs((prev) =>
+						prev.map((pair) => {
+							const key = pair.dockName.trim();
+							const snap = snapshots[key] as
+								| AnyNutritionSnapshot
+								| null
+								| undefined;
+							if (snap === undefined) return pair;
+							return {
+								...pair,
+								nutrition: snap ? projectNutritionSnapshotToLegacy(snap) : null,
+							};
+						}),
+					);
+				},
+			});
+			if (!controller.signal.aborted) {
+				setNutritionLookupStatus(status);
 			}
 		})();
 
 		return () => {
-			cancelled = true;
+			controller.abort();
 		};
-	}, [
-		nutritionEngine,
-		allowAiNutritionEstimate,
-		nutritionResolved,
-		initialPairs,
-		receiptOnly,
-	]);
+	}, [nutritionEngine, allowAiNutritionEstimate, initialPairs, receiptOnly]);
 
 	const beginEdit = (pair: ReviewPair) => {
 		setEditSnapshot({ ...pair, dockTags: [...pair.dockTags] });
@@ -307,6 +306,11 @@ export function SupplyScanReviewModal({
 						<p className="text-xs text-muted">
 							Confirm pairings before docking to Cargo
 						</p>
+						{nutritionEngine ? (
+							<div className="mt-1">
+								<NutritionLookupBanner status={nutritionLookupStatus} />
+							</div>
+						) : null}
 					</div>
 					<button
 						type="button"
@@ -425,15 +429,16 @@ export function SupplyScanReviewModal({
 											<p className="text-xs font-mono text-muted">
 												{pair.dockQuantity} {pair.dockUnit}
 												{pair.dockDomain ? ` · ${pair.dockDomain}` : ""}
-												{nutritionEngine &&
-													(() => {
-														const kcal =
+												{nutritionEngine && (
+													<NutritionKcalHint
+														kcal={
 															pair.nutrition?.per100g?.energyKcal ??
-															pair.nutrition?.perServing?.energyKcal;
-														return kcal != null && Number.isFinite(kcal) ? (
-															<> • {Math.round(kcal)} kcal</>
-														) : null;
-													})()}
+															pair.nutrition?.perServing?.energyKcal
+														}
+														lookupStatus={nutritionLookupStatus}
+														nutritionField={pair.nutrition}
+													/>
+												)}
 											</p>
 
 											<div className="flex items-center gap-1 text-muted py-1">

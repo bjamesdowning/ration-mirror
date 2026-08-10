@@ -13,6 +13,8 @@ final class SupplyScanReviewViewModel {
     var editingItem: EditableScanResultItem?
     /// Row currently choosing a supply link in the picker sheet.
     var linkingContext: SupplyLinkPickerContext?
+    private(set) var isResolvingNutrition = false
+    private(set) var nutritionLookupFailed = false
 
     init(match: SupplyScanMatchResponse) {
         var byId: [String: SupplyItem] = [:]
@@ -73,34 +75,49 @@ final class SupplyScanReviewViewModel {
     }
 
     /// Soft-fail USDA / AI estimate proposal (parity with cargo scan review).
+    /// Resolves in chunks so kcal can appear progressively while the user reviews.
     func resolveNutritionIfNeeded(
         api: RationAPI,
         nutritionEngine: Bool,
         nutritionAiEstimate: Bool
     ) async {
-        guard nutritionEngine else { return }
-        let names = Array(
-            Set(
-                rows
-                    .map { $0.dockName.trimmingCharacters(in: .whitespacesAndNewlines) }
-                    .filter { !$0.isEmpty }
-            )
-        )
-        guard !names.isEmpty else { return }
-        do {
-            let response = try await api.resolveNutrition(
-                names: names,
-                ingestSource: nutritionAiEstimate ? "scan_review" : nil
-            )
-            for index in rows.indices {
-                let key = rows[index].dockName.trimmingCharacters(in: .whitespacesAndNewlines)
-                if let entry = response.snapshots[key] {
-                    rows[index].nutrition = entry
-                }
-            }
-        } catch {
-            // Soft-fail — dock confirm can still resolve when nutrition is omitted.
+        guard nutritionEngine else {
+            isResolvingNutrition = false
+            nutritionLookupFailed = false
+            return
         }
+        let names = NutritionResolveChunking.uniqueTrimmedNames(rows.map(\.dockName))
+        guard !names.isEmpty else {
+            isResolvingNutrition = false
+            nutritionLookupFailed = false
+            return
+        }
+
+        isResolvingNutrition = true
+        nutritionLookupFailed = false
+        defer { isResolvingNutrition = false }
+
+        var anyOk = false
+        for chunk in NutritionResolveChunking.chunks(names) {
+            do {
+                let response = try await api.resolveNutrition(
+                    names: chunk,
+                    ingestSource: nutritionAiEstimate ? "scan_review" : nil
+                )
+                anyOk = true
+                for (name, snap) in response.snapshots {
+                    for index in rows.indices {
+                        let key = rows[index].dockName.trimmingCharacters(in: .whitespacesAndNewlines)
+                        if key == name {
+                            rows[index].nutrition = snap
+                        }
+                    }
+                }
+            } catch {
+                // Soft-fail this chunk; continue remaining batches.
+            }
+        }
+        nutritionLookupFailed = !anyOk
     }
 
     var selectedCount: Int {

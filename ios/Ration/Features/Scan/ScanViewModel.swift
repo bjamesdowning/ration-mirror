@@ -20,6 +20,10 @@ final class ScanViewModel {
     var editingItemId: String?
     var shouldShowPaywall = false
     var paywallContext: PaywallContext?
+    /// True while chunked nutrition resolve is in flight (scan review UI).
+    private(set) var isResolvingNutrition = false
+    /// Soft-fail banner when every resolve chunk failed.
+    private(set) var nutritionLookupFailed = false
     private var activeTask: Task<Void, Never>?
     private var submissionGeneration = 0
 
@@ -132,35 +136,59 @@ final class ScanViewModel {
     }
 
     /// Soft-fail USDA / AI estimate proposal after OCR (web ScanResultsModal parity).
+    /// Resolves in chunks so kcal can appear progressively while the user reviews.
     func resolveNutritionIfNeeded(
         api: RationAPI,
         generation: Int,
         nutritionEngine: Bool,
         nutritionAiEstimate: Bool
     ) async {
-        guard nutritionEngine else { return }
-        let names = Array(
-            Set(
-                reviewItems
-                    .map { $0.name.trimmingCharacters(in: .whitespacesAndNewlines) }
-                    .filter { !$0.isEmpty }
-            )
+        guard nutritionEngine else {
+            isResolvingNutrition = false
+            nutritionLookupFailed = false
+            return
+        }
+        let names = NutritionResolveChunking.uniqueTrimmedNames(
+            reviewItems.map(\.name)
         )
-        guard !names.isEmpty else { return }
-        do {
-            let response = try await api.resolveNutrition(
-                names: names,
-                ingestSource: nutritionAiEstimate ? "scan_review" : nil
-            )
-            guard isCurrent(generation) else { return }
-            for index in reviewItems.indices {
-                let key = reviewItems[index].name.trimmingCharacters(in: .whitespacesAndNewlines)
-                if let entry = response.snapshots[key] {
-                    reviewItems[index].nutrition = entry
-                }
+        guard !names.isEmpty else {
+            isResolvingNutrition = false
+            nutritionLookupFailed = false
+            return
+        }
+
+        isResolvingNutrition = true
+        nutritionLookupFailed = false
+        defer {
+            if isCurrent(generation) {
+                isResolvingNutrition = false
             }
-        } catch {
-            // Soft-fail — batch confirm can still resolve when nutrition is omitted.
+        }
+
+        var anyOk = false
+        for chunk in NutritionResolveChunking.chunks(names) {
+            guard isCurrent(generation) else { return }
+            do {
+                let response = try await api.resolveNutrition(
+                    names: chunk,
+                    ingestSource: nutritionAiEstimate ? "scan_review" : nil
+                )
+                guard isCurrent(generation) else { return }
+                anyOk = true
+                for (name, snap) in response.snapshots {
+                    for index in reviewItems.indices {
+                        let key = reviewItems[index].name.trimmingCharacters(in: .whitespacesAndNewlines)
+                        if key == name {
+                            reviewItems[index].nutrition = snap
+                        }
+                    }
+                }
+            } catch {
+                // Soft-fail this chunk; continue remaining batches.
+            }
+        }
+        if isCurrent(generation) {
+            nutritionLookupFailed = !anyOk
         }
     }
 
@@ -249,6 +277,8 @@ final class ScanViewModel {
         editingItemId = nil
         shouldShowPaywall = false
         paywallContext = nil
+        isResolvingNutrition = false
+        nutritionLookupFailed = false
     }
 
     private func isCurrent(_ generation: Int) -> Bool {

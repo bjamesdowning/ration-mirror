@@ -678,26 +678,44 @@ private enum HubFuelMath {
         return (hit, total)
     }
 
+    /// Chart fill: consumed grows toward goal; remaining depletes from full.
+    static func chartFill(mode: String, ratio: Double?) -> Double {
+        guard let ratio, ratio.isFinite else { return 0 }
+        let consumed = min(max(ratio, 0), 1)
+        if mode == "remaining" {
+            if ratio > 1 { return 0 }
+            return 1 - consumed
+        }
+        return consumed
+    }
+
     static func valueText(
         actual: Double?,
         target: Double?,
         nutrient: HubFuelNutrient,
-        mode: String
-    ) -> (text: String, over: Bool, progress: Double) {
-        let ratio = ratio(actual: actual, target: target) ?? 0
+        mode: String,
+        includeUnit: Bool = true
+    ) -> (text: String, over: Bool, progress: Double, depleting: Bool) {
+        let ratio = ratio(actual: actual, target: target)
         let over = overage(actual: actual, target: target)
+        let fill = chartFill(mode: mode, ratio: ratio)
+        let unitSuffix = includeUnit ? nutrient.unit : ""
         if mode == "remaining", target != nil {
             if let over {
-                return ("+\(Int(over.rounded()))\(nutrient.unit)", true, ratio)
+                return ("+\(Int(over.rounded()))\(unitSuffix)", true, fill, true)
             }
             let rem = remaining(actual: actual, target: target) ?? 0
-            return ("\(Int(rem.rounded()))\(nutrient.unit)", false, ratio)
+            let suffix = includeUnit ? "\(nutrient.unit) left" : ""
+            let text = includeUnit
+                ? "\(Int(rem.rounded()))\(suffix)"
+                : "\(Int(rem.rounded()))"
+            return (text, false, fill, true)
         }
-        let base = "\(Int((actual ?? 0).rounded()))\(nutrient.unit)"
+        let amount = "\(Int((actual ?? 0).rounded()))\(unitSuffix)"
         if let target {
-            return ("\(base) / \(Int(target.rounded()))", over != nil, ratio)
+            return ("\(amount) / \(Int(target.rounded()))", over != nil, fill, false)
         }
-        return (base, false, ratio)
+        return (amount, false, fill, false)
     }
 }
 
@@ -737,8 +755,15 @@ struct DailyFuelWidget: View {
                 actual: primaryActual,
                 target: primaryTarget,
                 nutrient: primary,
-                mode: mode
+                mode: mode,
+                includeUnit: false
             )
+            let primaryCaption: String = {
+                if mode == "remaining", primaryTarget != nil {
+                    return primaryDisplay.over ? "Over" : "Left"
+                }
+                return primary.label
+            }()
             let macros = nutrients.filter { $0 != primary }.prefix(3)
 
             HStack(alignment: .top, spacing: 16) {
@@ -747,9 +772,10 @@ struct DailyFuelWidget: View {
                         progress: primaryDisplay.progress,
                         valueText: primaryDisplay.text,
                         overTarget: primaryDisplay.over,
+                        depleting: primaryDisplay.depleting,
                         diameter: size == "lg" ? 96 : 72
                     )
-                    Text(primary.label)
+                    Text(primaryCaption)
                         .rationCaption()
                 }
                 if size != "sm" {
@@ -767,7 +793,8 @@ struct DailyFuelWidget: View {
                                 label: nutrient.shortLabel,
                                 valueText: display.text,
                                 progress: display.progress,
-                                overTarget: display.over
+                                overTarget: display.over,
+                                depleting: display.depleting
                             )
                         }
                     }
@@ -849,7 +876,8 @@ struct FuelTrendsWidget: View {
                         label: nutrient.shortLabel,
                         valueText: display.text,
                         progress: display.progress,
-                        overTarget: display.over
+                        overTarget: display.over,
+                        depleting: display.depleting
                     )
                 }
             }

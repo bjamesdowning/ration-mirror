@@ -10,6 +10,7 @@ import {
 	normalizeNutritionHubRange,
 	nutrientOverage,
 	nutrientRemaining,
+	nutritionChartFill,
 	nutritionRangeBounds,
 } from "~/lib/nutrition/hub-widgets";
 
@@ -67,6 +68,14 @@ describe("remaining / overage / clamp", () => {
 		expect(nutrientOverage(800, 2000)).toBeNull();
 		expect(clampedRatio(1.5)).toBe(1);
 		expect(clampedRatio(null)).toBe(0);
+	});
+
+	it("maps consumed vs remaining chart fills", () => {
+		expect(nutritionChartFill("consumed", 0.25)).toBe(0.25);
+		expect(nutritionChartFill("remaining", 0.25)).toBe(0.75);
+		expect(nutritionChartFill("remaining", 1.1)).toBe(0);
+		expect(nutritionChartFill("remaining", null)).toBe(0);
+		expect(nutritionChartFill("consumed", null)).toBe(0);
 	});
 });
 

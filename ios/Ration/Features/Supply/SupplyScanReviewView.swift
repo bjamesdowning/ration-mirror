@@ -100,6 +100,16 @@ struct SupplyScanReviewView: View {
                     ErrorBanner(message: errorMessage).listRowBackground(Color.clear)
                 }
 
+                if env.session.clientFlags.isNutritionEngineEnabled {
+                    if model.isResolvingNutrition {
+                        NutritionLookupStatusLabel(kind: .loading)
+                            .listRowBackground(Color.clear)
+                    } else if model.nutritionLookupFailed {
+                        NutritionLookupStatusLabel(kind: .failed(dock: true))
+                            .listRowBackground(Color.clear)
+                    }
+                }
+
                 if model.rows.isEmpty {
                     Text("No receipt lines to review.")
                         .rationCaption()
@@ -217,6 +227,12 @@ struct SupplyScanReviewView: View {
                     Text("\(Int(kcal.rounded())) kcal")
                         .rationCaption()
                         .foregroundStyle(Theme.muted)
+                } else if env.session.clientFlags.isNutritionEngineEnabled,
+                          model.isResolvingNutrition {
+                    RoundedRectangle(cornerRadius: 3)
+                        .fill(Theme.platinum.opacity(0.55))
+                        .frame(width: 72, height: 10)
+                        .accessibilityLabel("Looking up calories")
                 }
 
                 if !row.dockDomain.isEmpty {

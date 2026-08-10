@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ScanReviewItemRow: View {
     let item: EditableScanResultItem
+    var isResolvingNutrition: Bool = false
     let onToggleSelection: () -> Void
     let onStartEdit: () -> Void
 
@@ -48,6 +49,12 @@ struct ScanReviewItemRow: View {
                         Text("\(Int(kcal.rounded())) kcal · \(item.nutrition?.provenanceLabel ?? "Nutrition")")
                             .rationCaption()
                             .foregroundStyle(Theme.muted)
+                    } else if isResolvingNutrition {
+                        RoundedRectangle(cornerRadius: 3)
+                            .fill(Theme.platinum.opacity(0.55))
+                            .frame(width: 72, height: 10)
+                            .opacity(0.85)
+                            .accessibilityLabel("Looking up calories")
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)

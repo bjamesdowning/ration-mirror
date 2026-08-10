@@ -3,8 +3,8 @@ import { Link } from "react-router";
 import {
 	adherenceDayCount,
 	averageDailyAmounts,
-	clampedRatio,
 	fillSparseNutritionDays,
+	type NutritionHubDisplayMode,
 	type NutritionHubNutrient,
 	normalizeNutritionDisplayMode,
 	normalizeNutritionHubNutrients,
@@ -17,6 +17,7 @@ import {
 	nutrientShortLabel,
 	nutrientTarget,
 	nutrientUnit,
+	nutritionChartFill,
 } from "~/lib/nutrition/hub-widgets";
 import type { NutritionSummary } from "~/lib/schemas/nutrition";
 import type { HubWidgetFilters, HubWidgetProps } from "~/lib/types";
@@ -27,15 +28,18 @@ function FuelRing({
 	ratio,
 	label,
 	valueText,
+	mode,
 	size = "md",
 }: {
 	ratio: number | null;
 	label: string;
 	valueText: string;
+	mode: NutritionHubDisplayMode;
 	size?: "sm" | "md";
 }) {
-	const progress = clampedRatio(ratio);
+	const progress = nutritionChartFill(mode, ratio);
 	const over = ratio != null && ratio > 1;
+	const depleting = mode === "remaining";
 	const dim = size === "sm" ? 72 : 96;
 	const stroke = size === "sm" ? 6 : 8;
 	const r = (dim - stroke) / 2;
@@ -58,7 +62,11 @@ function FuelRing({
 						fill="none"
 						stroke="currentColor"
 						strokeWidth={stroke}
-						className="text-platinum dark:text-white/10"
+						className={
+							depleting
+								? "text-platinum dark:text-white/20"
+								: "text-platinum dark:text-white/10"
+						}
 					/>
 					<circle
 						cx={dim / 2}
@@ -100,8 +108,9 @@ function MacroBar({
 	const ratio = nutrientRatio(actual, target);
 	const remaining = nutrientRemaining(actual, target);
 	const over = nutrientOverage(actual, target);
-	const fill = clampedRatio(ratio);
+	const fill = nutritionChartFill(mode, ratio);
 	const unit = nutrientUnit(nutrient);
+	const depleting = mode === "remaining" && target != null;
 	const display =
 		mode === "remaining" && target != null
 			? over != null
@@ -125,7 +134,7 @@ function MacroBar({
 				<div
 					className={`h-full rounded-full transition-all ${
 						over != null ? "bg-warning" : "bg-hyper-green"
-					}`}
+					} ${depleting ? "ml-auto" : ""}`}
 					style={{ width: `${fill * 100}%` }}
 				/>
 			</div>
@@ -231,6 +240,12 @@ export function NutritionTodayWidget({ data, size, filters }: HubWidgetProps) {
 				? `+${Math.round(primaryOver)}`
 				: `${Math.round(primaryRemaining ?? 0)}`
 			: `${Math.round(primaryActual ?? 0)}`;
+	const primaryLabel =
+		mode === "remaining" && primaryTarget != null
+			? primaryOver != null
+				? "Over"
+				: "Left"
+			: nutrientLabel(primary);
 
 	return (
 		<WidgetShell
@@ -246,8 +261,9 @@ export function NutritionTodayWidget({ data, size, filters }: HubWidgetProps) {
 			>
 				<FuelRing
 					ratio={primaryRatio}
-					label={nutrientLabel(primary)}
-					valueText={`${primaryValue}${nutrientUnit(primary)}`}
+					label={primaryLabel}
+					valueText={primaryValue}
+					mode={mode}
 					size={size === "lg" ? "md" : "sm"}
 				/>
 				{size !== "sm" && macros.length > 0 ? (

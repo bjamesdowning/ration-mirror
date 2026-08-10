@@ -4,6 +4,11 @@ import { useFetcher, useRouteLoaderData } from "react-router";
 import { DOMAIN_LABELS, type ITEM_DOMAINS } from "~/lib/domain";
 import { normalizeForMatch, tokenMatchScore } from "~/lib/matching";
 import { projectNutritionSnapshotToLegacy } from "~/lib/nutrition/adapters";
+import {
+	fetchNutritionResolveChunk,
+	type NutritionLookupStatus,
+	resolveNutritionInChunks,
+} from "~/lib/nutrition/scan-review-resolve";
 import type { AnyNutritionSnapshot } from "~/lib/nutrition/types";
 import {
 	areIngredientUnitsCompatible,
@@ -11,6 +16,10 @@ import {
 } from "~/lib/present-quantity";
 import type { ScanResult, ScanResultItem } from "~/lib/schemas/scan";
 import { DockItemFields } from "./DockItemFields";
+import {
+	NutritionKcalHint,
+	NutritionLookupBanner,
+} from "./NutritionLookupStatus";
 
 type ItemDomain = (typeof ITEM_DOMAINS)[number];
 
@@ -64,7 +73,8 @@ export function ScanResultsModal({
 	const isAiIngestSource =
 		result.metadata.source === "image" || result.metadata.source === "pdf";
 	const allowAiNutritionEstimate = isAiIngestSource && nutritionAiEstimate;
-	const [nutritionResolved, setNutritionResolved] = useState(false);
+	const [nutritionLookupStatus, setNutritionLookupStatus] =
+		useState<NutritionLookupStatus>(nutritionEngine ? "loading" : "idle");
 
 	const dismissMerge = (id: string) =>
 		setDismissedMerges((prev) => new Set(prev).add(id));
@@ -166,66 +176,56 @@ export function ScanResultsModal({
 	}, [items, findMergeMatch, dismissedMerges]);
 
 	// Propose nutrition snapshots after scan results load (nutrition-engine).
+	// Chunked so large receipts paint kcal progressively while the user reviews.
 	useEffect(() => {
-		if (!nutritionEngine || nutritionResolved) return;
-		const names = [
-			...new Set(
-				result.items.map((i) => i.name.trim()).filter((n) => n.length > 0),
-			),
-		];
-		if (names.length === 0) {
-			setNutritionResolved(true);
+		if (!nutritionEngine) {
+			setNutritionLookupStatus("idle");
+			return;
+		}
+		const names = result.items.map((i) => i.name);
+		if (names.every((n) => !n.trim())) {
+			setNutritionLookupStatus("done");
 			return;
 		}
 
-		let cancelled = false;
+		const controller = new AbortController();
+		setNutritionLookupStatus("loading");
 		void (async () => {
-			try {
-				const response = await fetch("/api/nutrition/resolve", {
-					method: "POST",
-					headers: { "Content-Type": "application/json" },
-					body: JSON.stringify({
-						names,
-						...(allowAiNutritionEstimate
-							? { ingestSource: "scan_review" }
-							: {}),
+			const status = await resolveNutritionInChunks({
+				names,
+				ingestSource: allowAiNutritionEstimate ? "scan_review" : undefined,
+				signal: controller.signal,
+				fetchChunk: (chunk, signal) =>
+					fetchNutritionResolveChunk(chunk, {
+						ingestSource: allowAiNutritionEstimate ? "scan_review" : undefined,
+						signal,
 					}),
-				});
-				if (!response.ok || cancelled) return;
-				const body = (await response.json()) as {
-					snapshots?: Record<string, AnyNutritionSnapshot | null>;
-				};
-				const snapshots = body.snapshots ?? {};
-				if (cancelled) return;
-				setItems((prev) =>
-					prev.map((item) => {
-						const snap = snapshots[item.name.trim()];
-						return snap !== undefined
-							? {
-									...item,
-									nutrition: snap
-										? projectNutritionSnapshotToLegacy(snap)
-										: null,
-								}
-							: item;
-					}),
-				);
-			} catch {
-				// Soft-fail: ingest still resolves on confirm when nutrition omitted.
-			} finally {
-				if (!cancelled) setNutritionResolved(true);
+				onChunk: (snapshots) => {
+					setItems((prev) =>
+						prev.map((item) => {
+							const key = item.name.trim();
+							const snap = snapshots[key] as
+								| AnyNutritionSnapshot
+								| null
+								| undefined;
+							if (snap === undefined) return item;
+							return {
+								...item,
+								nutrition: snap ? projectNutritionSnapshotToLegacy(snap) : null,
+							};
+						}),
+					);
+				},
+			});
+			if (!controller.signal.aborted) {
+				setNutritionLookupStatus(status);
 			}
 		})();
 
 		return () => {
-			cancelled = true;
+			controller.abort();
 		};
-	}, [
-		nutritionEngine,
-		allowAiNutritionEstimate,
-		nutritionResolved,
-		result.items,
-	]);
+	}, [nutritionEngine, allowAiNutritionEstimate, result.items]);
 
 	// Handle submit
 	const handleSubmit = () => {
@@ -297,6 +297,11 @@ export function ScanResultsModal({
 						<p className="text-xs text-muted mt-0.5">
 							Tap edit to fix names, quantities, or units
 						</p>
+						{nutritionEngine ? (
+							<div className="mt-1">
+								<NutritionLookupBanner status={nutritionLookupStatus} />
+							</div>
+						) : null}
 					</div>
 					<button
 						type="button"
@@ -413,6 +418,7 @@ export function ScanResultsModal({
 								mergeMatch={mergeMatch ?? null}
 								isEditing={editingId === item.id}
 								nutritionEngine={nutritionEngine}
+								nutritionLookupStatus={nutritionLookupStatus}
 								onToggleSelection={toggleSelection}
 								onStartEdit={(id) => setEditingId(id)}
 								onCancelEdit={() => setEditingId(null)}
@@ -469,6 +475,7 @@ interface ScanResultItemRowProps {
 	mergeMatch: MergeMatch | null;
 	isEditing: boolean;
 	nutritionEngine: boolean;
+	nutritionLookupStatus: NutritionLookupStatus;
 	onToggleSelection: (id: string) => void;
 	onStartEdit: (id: string) => void;
 	onCancelEdit: () => void;
@@ -481,6 +488,7 @@ function ScanResultItemRow({
 	mergeMatch,
 	isEditing,
 	nutritionEngine,
+	nutritionLookupStatus,
 	onToggleSelection,
 	onStartEdit,
 	onCancelEdit,
@@ -592,8 +600,12 @@ function ScanResultItemRow({
 										• Expires: {new Date(item.expiresAt).toLocaleDateString()}
 									</>
 								)}
-								{nutritionEngine && kcal != null && Number.isFinite(kcal) && (
-									<> • {Math.round(kcal)} kcal</>
+								{nutritionEngine && (
+									<NutritionKcalHint
+										kcal={kcal}
+										lookupStatus={nutritionLookupStatus}
+										nutritionField={item.nutrition}
+									/>
 								)}
 							</p>
 							{mergeMatch && (

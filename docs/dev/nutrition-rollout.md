@@ -90,7 +90,7 @@ When `nutrition-cook-log-split` is on for the client cohort:
 
 ## MCP / Copilot (agent dogfood)
 
-Workers expose Cook/Eat parity tools over shared libs (`cook_manifest_entries`, `log_manifest_intake`, `clear_manifest_intake`, `list_nutrition_intakes`, plus summary/goals). Agents evaluate Flagship via `buildAgentFlagContext`: `clientPlatform` `mcp`|`copilot` + web `APP_VERSION` (never a faked `ios`/`1.3.25` header).
+Workers expose Cook/Eat parity tools over shared libs (`cook_manifest_entries`, `log_manifest_intake`, `clear_manifest_intake`, `list_nutrition_intakes`, plus summary/goals). Agents evaluate Flagship via `buildAgentFlagContext`: `clientPlatform` `mcp`|`copilot` + web `APP_VERSION` (never a faked `ios`/`1.3.25` header). The **`ration-mcp` Worker must bind Flagship** (`FLAGS` in `wrangler.mcp.jsonc`) — without it, nutrition flags always evaluate off regardless of dashboard rules. Redeploy with `bun run deploy:mcp` after Flagship binding changes.
 
 Dogfood agents with the same nutrition flags + `userId` allowlist **+** `clientPlatform` in `{mcp,copilot}` (optional `clientVersion` ≥ current web `APP_VERSION`). Nutrition tools require explicit `mcp:nutrition:read` / `mcp:nutrition:write`. Legacy broad `mcp` expands only to pre-nutrition kitchen scopes (never nutrition); existing keys are rewritten on authenticate. New API keys cannot create blanket `mcp`. OAuth consent must re-grant nutrition scopes (and Connected Agent / `agent_processing` consent) before agents can read or write health data. Copilot may include nutrition scopes in its capability set, but empty-text intent still exposes only core tools.
 

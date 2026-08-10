@@ -18,8 +18,19 @@
 	},
 	"vars": {
 		"BETTER_AUTH_URL": "https://ration.mayutic.com",
-		"MCP_OAUTH_ENABLED": "true"
+		"MCP_OAUTH_ENABLED": "true",
+		"RATION_ENV": "production"
 	},
+	/**
+	 * Same Flagship app as the main Worker — MCP/Copilot evaluate nutrition and
+	 * other release flags via buildAgentFlagContext (clientPlatform: mcp).
+	 */
+	"flagship": [
+		{
+			"binding": "FLAGS",
+			"app_id": "4400dc10-dd7a-44b2-9905-7037fbd26f33"
+		}
+	],
 	/**
 	 * Secrets (set via CLI): REVENUECAT_API_KEY for get_billing_summary cross-store data.
 	 */
@@ -28,6 +39,11 @@
 			"binding": "DB",
 			"database_name": "ration-db",
 			"database_id": "41e98836-d752-4bbe-a14f-68e802c72c10"
+		},
+		{
+			"binding": "NUTRITION_DB",
+			"database_name": "ration-nutrition",
+			"database_id": "e39b5516-e21b-4ced-9294-9890d2c222a1"
 		}
 	],
 	"r2_buckets": [
@@ -63,11 +79,28 @@
 			// dev-tier resources on Cloudflare's network (Remote Bindings, GA Sep 2025).
 			// This replaces the deprecated "wrangler dev --remote" approach which
 			// required the custom domain to already be deployed.
+			"vars": {
+				"BETTER_AUTH_URL": "https://ration.mayutic.com",
+				"MCP_OAUTH_ENABLED": "true",
+				"RATION_ENV": "development"
+			},
+			"flagship": [
+				{
+					"binding": "FLAGS",
+					"app_id": "d2623663-dabd-4f7e-87a9-29339ddef4e6"
+				}
+			],
 			"d1_databases": [
 				{
 					"binding": "DB",
 					"database_name": "ration-db-dev",
 					"database_id": "eec9f2f0-5d34-4392-89dd-317f373bf1e9",
+					"remote": true
+				},
+				{
+					"binding": "NUTRITION_DB",
+					"database_name": "ration-nutrition-dev",
+					"database_id": "8fa918c3-34af-4099-9637-8993579a8931",
 					"remote": true
 				}
 			],

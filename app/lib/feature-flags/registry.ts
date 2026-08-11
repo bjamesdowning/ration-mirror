@@ -115,6 +115,13 @@ export const FLAG_REGISTRY: Record<string, FlagRegistryEntry> = {
 		clientVisible: true,
 		clientKey: "nutritionCookLogSplit",
 	},
+	"cargo-quick-eat": {
+		defaultEnabled: false,
+		description:
+			"Cargo Quick Eat: snack on Manifest with best-effort pantry deduct + optional intake",
+		clientVisible: true,
+		clientKey: "cargoQuickEat",
+	},
 	"nutrition-async-recompute": {
 		defaultEnabled: false,
 		description:

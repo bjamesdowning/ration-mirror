@@ -9,6 +9,7 @@ struct CargoDetailView: View {
     @State private var showingEdit = false
     @State private var showingDeleteConfirm = false
     @State private var showingRestockQuantity = false
+    @State private var showingQuickEat = false
     @State private var connectedMealsSort: ConnectedMealsSort = .alphabetical
     @State private var expandedMealIds: Set<String> = []
     @State private var showAllConnectedMeals = false
@@ -52,6 +53,17 @@ struct CargoDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .tabDockAction(tag: scrollContext.activeTab, isActive: model.item != nil) {
             IconFABMenuCore(systemImage: "ellipsis.circle.fill", accessibilityLabel: "Cargo actions") {
+                if env.session.clientFlags.isCargoQuickEatEnabled {
+                    Button { showingQuickEat = true } label: {
+                        Label {
+                            Text("Eat")
+                        } icon: {
+                            Image("EatBite")
+                                .renderingMode(.template)
+                        }
+                    }
+                    .disabled(model.isQuickEating || !env.network.isOnline)
+                }
                 Button {
                     Task { await handleSupplyToggle() }
                 } label: {
@@ -61,6 +73,15 @@ struct CargoDetailView: View {
                     )
                 }
                 .disabled(model.isTogglingRestock || !env.network.isOnline)
+                Button {
+                    Task { await handlePromote() }
+                } label: {
+                    Label(
+                        model.isPromoted ? "In Galley" : "Add to Galley",
+                        systemImage: model.isPromoted ? "checkmark.circle" : "fork.knife"
+                    )
+                }
+                .disabled(model.isPromoting || model.isPromoted || !env.network.isOnline)
                 Button { showingEdit = true } label: {
                     Label("Edit", systemImage: "pencil")
                 }
@@ -108,6 +129,15 @@ struct CargoDetailView: View {
                 }
             }
         }
+        .sheet(isPresented: $showingQuickEat) {
+            if let item = model.item {
+                CargoQuickEatSheet(item: item) { quantity in
+                    await model.quickEat(quantity: quantity, api: env.api)
+                } onFinished: { _ in
+                    env.notifyCargoDataChanged()
+                }
+            }
+        }
         .confirmationDialog("Delete this cargo item?", isPresented: $showingDeleteConfirm, titleVisibility: .visible) {
             Button("Delete", role: .destructive) {
                 Task {
@@ -126,6 +156,14 @@ struct CargoDetailView: View {
         } else {
             showingRestockQuantity = true
         }
+    }
+
+    private func handlePromote() async {
+        let result = await model.promoteToGalley(api: env.api)
+        if result == .capacityExceeded {
+            // Paywall is handled via error banner; no extra sheet here.
+        }
+        env.notifyCargoDataChanged()
     }
 
     private var cargoLoadFailureView: some View {

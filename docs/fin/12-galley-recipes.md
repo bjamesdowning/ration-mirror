@@ -17,6 +17,7 @@ Both can appear in the **Manifest** and in cookable-meal matching. See *Matching
 - **Toggle active for Supply** — Mark meals to include in Supply sync. Selection bars show counts.
 - **Clear selections** — Clear all active meal selections for Supply.
 - **Cook / consume** — Deduct ingredients from Cargo for the chosen **servings**. Semantic matching links ingredient names to pantry lines. If stock is short, confirm before cooking with what’s available (short-stock confirm). When **nutrition-cook-log-split** is on for your account, Cook also places the meal as *Prepared* on **today’s Manifest** (reusing an uncooked plan row when present) and may offer **Log my serving** for personal intake—same plate-up as Manifest Eat. Flags off: Cargo-only cook (no Manifest write).
+- **Cargo Quick Eat** — From Cargo (when enabled), eating a pantry item auto-uses a linked provision and always lands as today’s Manifest **snack** with silent partial deduct (no short-stock confirm sheet).
 - **Add to Manifest** — When cook/log-split is on, schedule this meal via Manifest Add-to-plan with meal and day prefilled; you confirm slot and Add. Hidden when the flag is off.
 - **AI generate** — Propose recipes from your pantry. Cost: see *AI meal generation* and *AI credits explained* (typically **2 credits**).
 - **URL import** — Import a recipe from an HTTPS page, social post, or photo into Galley. Cost: see *Import a recipe from a URL* and *AI credits explained* (typically **3 credits**).

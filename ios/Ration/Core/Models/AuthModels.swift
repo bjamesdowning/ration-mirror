@@ -90,6 +90,8 @@ struct ClientFlags: Codable, Sendable, Equatable {
     var nutritionGoals: Bool?
     /// Separate Manifest Cook from private Log my serving (additive).
     var nutritionCookLogSplit: Bool?
+    /// Cargo Quick Eat composed snack shortcut (additive).
+    var cargoQuickEat: Bool?
 
     static let disabled = ClientFlags()
 
@@ -110,6 +112,9 @@ struct ClientFlags: Codable, Sendable, Equatable {
     var isNutritionManifestEnabled: Bool { nutritionManifest == true }
     var isNutritionGoalsEnabled: Bool { nutritionGoals == true }
     var isNutritionCookLogSplitEnabled: Bool { nutritionCookLogSplit == true }
+    var isCargoQuickEatEnabled: Bool {
+        cargoQuickEat == true && nutritionCookLogSplit == true
+    }
 }
 
 /// `GET /api/mobile/v1/client-flags` (unsigned)

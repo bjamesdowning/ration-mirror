@@ -50,6 +50,10 @@ import {
 	scheduleMealNutritionRecompute,
 } from "./nutrition/recompute-outbox.server";
 import {
+	isStockShapedProvision,
+	resolveProvisionUnitPortionFromRaw,
+} from "./provision-portion";
+import {
 	chunkArray,
 	chunkedQuery,
 	D1_MAX_BOUND_PARAMS,
@@ -1852,6 +1856,8 @@ export async function createProvisionFromCargo(
 		mealTagRows = tagIds.map((tagId) => ({ mealId, tagId }));
 	}
 
+	const unitPortion = resolveProvisionUnitPortionFromRaw(cargoItem.unit);
+
 	// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types complex
 	const batch: any[] = [
 		d1.insert(meal).values({
@@ -1868,8 +1874,8 @@ export async function createProvisionFromCargo(
 				{
 					cargoId,
 					ingredientName: cargoItem.name,
-					quantity: cargoItem.quantity,
-					unit: cargoItem.unit,
+					quantity: unitPortion.quantity,
+					unit: unitPortion.unit,
 				},
 				0,
 				ingredientId,
@@ -1891,6 +1897,146 @@ export async function createProvisionFromCargo(
 
 	const provision = await getMeal(db, organizationId, mealId);
 	return { provision, alreadyExisted: false };
+}
+
+/**
+ * If a cargo-linked provision still stores full pantry stock as one serving,
+ * rewrite the ingredient to a unit portion. Returns whether a write occurred.
+ */
+export async function normalizeProvisionPortionIfNeeded(
+	env: Env,
+	organizationId: string,
+	provisionMealId: string,
+	cargoItem: {
+		quantity: number;
+		unit: string;
+	},
+	flagContext?: FlagshipEvaluationContext,
+): Promise<{ normalized: boolean }> {
+	const d1 = drizzle(env.DB);
+	const [row] = await d1
+		.select({
+			mealId: meal.id,
+			servings: meal.servings,
+			ingredientId: mealIngredient.id,
+			ingredientQuantity: mealIngredient.quantity,
+			ingredientUnit: mealIngredient.unit,
+			ingredientName: mealIngredient.ingredientName,
+		})
+		.from(meal)
+		.innerJoin(mealIngredient, eq(mealIngredient.mealId, meal.id))
+		.where(
+			and(
+				eq(meal.id, provisionMealId),
+				eq(meal.organizationId, organizationId),
+				eq(meal.type, "provision"),
+			),
+		)
+		.orderBy(mealIngredient.orderIndex)
+		.limit(1);
+
+	if (!row) {
+		return { normalized: false };
+	}
+
+	if (
+		!isStockShapedProvision({
+			mealServings: row.servings ?? 1,
+			ingredientQuantity: row.ingredientQuantity,
+			ingredientUnit: row.ingredientUnit,
+			cargoQuantity: cargoItem.quantity,
+			cargoUnit: cargoItem.unit,
+		})
+	) {
+		return { normalized: false };
+	}
+
+	const unitPortion = resolveProvisionUnitPortionFromRaw(
+		row.ingredientUnit || cargoItem.unit,
+	);
+	const base = computeBaseFields(
+		unitPortion.quantity,
+		unitPortion.unit,
+		row.ingredientName,
+	);
+
+	await d1
+		.update(mealIngredient)
+		.set({
+			quantity: unitPortion.quantity,
+			unit: unitPortion.unit,
+			baseQuantity: base.baseQuantity,
+			baseUnit: base.baseUnit,
+		})
+		.where(eq(mealIngredient.id, row.ingredientId));
+
+	const ctx = flagContext ?? buildSystemFlagContext(env);
+	await scheduleMealNutritionRecompute(
+		env,
+		env.DB,
+		provisionMealId,
+		organizationId,
+		ctx,
+		{
+			trigger: "repair",
+			origin: {
+				surface: "provision_portion_normalize",
+				userId: null,
+			},
+		},
+	);
+
+	return { normalized: true };
+}
+
+/**
+ * Ensure a cargo-linked unit-portion provision exists (create or reuse + normalize).
+ */
+export async function ensureProvisionFromCargo(
+	env: Env,
+	organizationId: string,
+	cargoId: string,
+	flagContext?: FlagshipEvaluationContext,
+): Promise<{
+	provision: Awaited<ReturnType<typeof getMeal>>;
+	alreadyExisted: boolean;
+	normalized: boolean;
+}> {
+	const created = await createProvisionFromCargo(
+		env.DB,
+		organizationId,
+		cargoId,
+		env,
+	);
+	const d1 = drizzle(env.DB);
+	const [cargoItem] = await d1
+		.select({ quantity: cargo.quantity, unit: cargo.unit })
+		.from(cargo)
+		.where(and(eq(cargo.id, cargoId), eq(cargo.organizationId, organizationId)))
+		.limit(1);
+
+	let normalized = false;
+	if (cargoItem && created.provision) {
+		const result = await normalizeProvisionPortionIfNeeded(
+			env,
+			organizationId,
+			created.provision.id,
+			cargoItem,
+			flagContext,
+		);
+		normalized = result.normalized;
+	}
+
+	const provision =
+		normalized && created.provision
+			? await getMeal(env.DB, organizationId, created.provision.id)
+			: created.provision;
+
+	return {
+		provision,
+		alreadyExisted: created.alreadyExisted,
+		normalized,
+	};
 }
 
 /**

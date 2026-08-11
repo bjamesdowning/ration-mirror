@@ -74,4 +74,12 @@ extension RationAPI {
     func cargoTagIndex() async throws -> CargoTagIndexResponse {
         try await client.get("cargo/tag-index")
     }
+
+    func quickEatCargo(id: String, _ body: CargoQuickEatRequest) async throws -> CargoQuickEatResponse {
+        try await client.post("cargo/\(id)/quick-eat", body: body)
+    }
+
+    func promoteCargoToProvision(id: String) async throws -> CargoPromoteResponse {
+        try await client.post("cargo/\(id)/promote", body: EmptyBody())
+    }
 }

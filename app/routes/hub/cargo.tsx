@@ -51,7 +51,7 @@ import type { ITEM_DOMAINS } from "~/lib/domain";
 import { buildWebFlagContext } from "~/lib/feature-flags/context.server";
 import { log } from "~/lib/logging.server";
 import {
-	createProvisionFromCargo,
+	ensureProvisionFromCargo,
 	getPromotedCargoIds,
 } from "~/lib/meals.server";
 import type { TagRecord } from "~/lib/tags";
@@ -393,16 +393,19 @@ export async function action({ request, context }: Route.ActionArgs) {
 		if (!itemId) return { success: false, error: "Missing Item ID" };
 
 		try {
-			const result = await createProvisionFromCargo(
-				context.cloudflare.env.DB,
+			const result = await ensureProvisionFromCargo(
+				context.cloudflare.env,
 				groupId,
 				itemId,
-				context.cloudflare.env,
+				buildWebFlagContext(request, context.cloudflare.env, {
+					user,
+				}),
 			);
 			return {
 				success: true,
 				provisionId: result.provision?.id,
 				alreadyExisted: result.alreadyExisted,
+				normalized: result.normalized,
 			};
 		} catch (error) {
 			if (

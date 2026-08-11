@@ -157,6 +157,7 @@ export default [
 		"api/cargo/:id/toggle-restock",
 		"routes/api/cargo.$id.toggle-restock.ts",
 	),
+	route("api/cargo/:id/quick-eat", "routes/api/cargo.$id.quick-eat.ts"),
 
 	// API - v1 programmatic (API key auth)
 	route("api/v1/inventory/export", "routes/api/v1.inventory.export.ts"),
@@ -394,6 +395,14 @@ export default [
 	route(
 		"api/mobile/v1/cargo/:id/toggle-restock",
 		"routes/api/mobile/v1.cargo.$id.toggle-restock.ts",
+	),
+	route(
+		"api/mobile/v1/cargo/:id/quick-eat",
+		"routes/api/mobile/v1.cargo.$id.quick-eat.ts",
+	),
+	route(
+		"api/mobile/v1/cargo/:id/promote",
+		"routes/api/mobile/v1.cargo.$id.promote.ts",
 	),
 	route("api/mobile/v1/scan", "routes/api/mobile/v1.scan.ts"),
 	route(

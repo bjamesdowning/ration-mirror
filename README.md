@@ -699,8 +699,9 @@ Cargo is the core inventory primitive. Each item belongs to an organization and 
 - **Bulk ingest (scan)** — After a receipt scan, `POST /api/cargo/batch` runs `ingestCargoItems` which applies the same dedup logic for each item in the scan result. When `nutrition-engine` is on, scan review can attach nutrition snapshots before batch add (see [§4.7](#47-nutrition-feature-flagged)).
 - **Ingredient detail view** — `GET /hub/cargo/:id` shows full cargo metadata and all linked Galley meals, including whether each link is direct (`cargoId`) or an unlinked name match. Connected meal names link to Galley detail.
 - **Cross-navigation** — Meal ingredient rows, supply list item names, hub expiring-cargo preview lines, and snoozed supply rows link to Cargo detail when a name match exists (`app/lib/cargo-links.ts`). Galley meal detail ingredient names link to Cargo the same way. iOS mirrors this via `CargoLinkResolver` and `resolvedCargoId` on meal ingredients from the API.
-- **Promote to Galley** — A cargo item can be promoted to a single-ingredient Provision (see §4.2) for use in meal planning.
-- **Mark Empty vs Delete** — Quantity may be **0** (out of stock); the row stays as a restock reminder for grocery-style Cargo management without meals. **Mark Empty** sets quantity to 0; **Delete** permanently removes the row (`jettisonItem`). Web exposes both in cargo menus/detail (amber soft vs red delete). iOS trailing swipe: yellow **Mark Empty** (`0.circle`, full-swipe default) + red **Delete**. Galley uses the same swipe pattern with yellow **Cook** + red **Delete** (Cook is not inline on list rows).
+- **Promote to Galley** — A cargo item can be promoted to a single-ingredient Provision (see §4.2) for use in meal planning. Promoted provisions store a **unit portion** (not full pantry stock) so cooking one serving deducts one portion.
+- **Quick Eat** (Flagship `cargo-quick-eat` + `nutrition-cook-log-split`) — `POST /api/cargo/:id/quick-eat` and `POST /api/mobile/v1/cargo/:id/quick-eat` ensure a linked provision, prepare today’s Manifest **snack**, best-effort pantry deduct (including when stock is 0), and optionally log private intake. iOS: yellow trailing **Eat** swipe (bite icon) + detail FAB; Mark Empty remains detail-only.
+- **Mark Empty vs Delete** — Quantity may be **0** (out of stock); the row stays as a restock reminder for grocery-style Cargo management without meals. **Mark Empty** sets quantity to 0; **Delete** permanently removes the row (`jettisonItem`). Web exposes both in cargo menus/detail (amber soft vs red delete). iOS: Mark Empty on Cargo detail only; list trailing soft action is **Eat** when Quick Eat is enabled (else Delete-only). Galley uses yellow **Cook** + red **Delete**.
 - **CSV import/export** — Via `POST /api/v1/inventory/import` and `GET /api/cargo/export`. Validated against `CargoCsvRowSchema` (max 500 rows per import).
 - **Vectorize write-through** — Every cargo create/update triggers `upsertCargoVector`, keeping the Vectorize index in sync with D1. Deletes call `deleteCargoVectors`.
 
@@ -1881,6 +1882,8 @@ Bearer-authenticated REST surface for the **iOS app** at `/api/mobile/v1/*`. Web
 | `POST` | `/api/mobile/v1/groups/credits/transfer` | Transfer credits between orgs (source owner, dest member) |
 | `GET` / `POST` | `/api/mobile/v1/meals` | List/create meals |
 | `POST` | `/api/mobile/v1/provisions` | Create provision (single-item snack/staple) |
+| `POST` | `/api/mobile/v1/cargo/:id/promote` | Add Cargo item to Galley as unit-portion provision |
+| `POST` | `/api/mobile/v1/cargo/:id/quick-eat` | Quick Eat snack (Manifest + best-effort deduct + optional intake) |
 | `GET` / `PATCH` / `DELETE` | `/api/mobile/v1/meals/:id` | Meal detail / update / delete |
 | `GET` | `/api/mobile/v1/meals/tags` | Distinct meal tags |
 | `GET` | `/api/mobile/v1/meals/match` | Match meals to cargo (optional `q` name filter) |

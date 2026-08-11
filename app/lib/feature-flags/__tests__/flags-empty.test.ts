@@ -23,6 +23,7 @@ describe("getClientSafeFlags", () => {
 			nutritionManifest: false,
 			nutritionGoals: false,
 			nutritionCookLogSplit: false,
+			cargoQuickEat: false,
 		});
 	});
 });

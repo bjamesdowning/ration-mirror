@@ -11,6 +11,7 @@ struct CargoListView: View {
     @State private var showingFilters = false
     @State private var editingItem: CargoItem?
     @State private var restockItem: CargoItem?
+    @State private var eatItem: CargoItem?
     @State private var paywallContext: PaywallContext?
 
     private var organizationId: String? {
@@ -134,6 +135,14 @@ struct CargoListView: View {
             .sheet(item: $restockItem) { item in
                 CargoRestockQuantitySheet(item: item) { quantity in
                     await model.toggleRestock(item, quantity: quantity, api: env.api)
+                }
+            }
+            .sheet(item: $eatItem) { item in
+                CargoQuickEatSheet(item: item) { quantity in
+                    await model.quickEat(item, quantity: quantity, api: env.api)
+                } onFinished: { _ in
+                    env.notifyCargoDataChanged()
+                    Task { await reload() }
                 }
             }
         }
@@ -270,13 +279,8 @@ struct CargoListView: View {
                             onEdit: { editingItem = item }
                         )
                         .cargoTrailingSwipeActions(
-                            quantity: item.quantity,
-                            onMarkEmpty: {
-                                model.runMutation {
-                                    await model.markEmpty(item, api: env.api)
-                                    env.notifyCargoDataChanged()
-                                }
-                            },
+                            showEat: env.session.clientFlags.isCargoQuickEatEnabled,
+                            onEat: { eatItem = item },
                             onDelete: {
                                 model.runMutation {
                                     await model.delete(item, api: env.api)
@@ -303,11 +307,12 @@ struct CargoListView: View {
                             }
                         )
                         .cargoTrailingSwipeActions(
-                            quantity: result.quantity,
-                            onMarkEmpty: {
-                                model.runMutation {
-                                    await model.markEmpty(id: result.id, api: env.api)
-                                    env.notifyCargoDataChanged()
+                            showEat: env.session.clientFlags.isCargoQuickEatEnabled,
+                            onEat: {
+                                Task {
+                                    if let item = await resolveSearchCargoItem(result) {
+                                        eatItem = item
+                                    }
                                 }
                             },
                             onDelete: {

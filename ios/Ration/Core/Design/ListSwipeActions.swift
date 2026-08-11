@@ -44,10 +44,31 @@ extension View {
         onSoft: @escaping () -> Void,
         onDelete: @escaping () -> Void
     ) -> some View {
+        inventorySoftHardTrailingSwipe(
+            softLabel: softLabel,
+            softIcon: { Image(systemName: softSystemImage) },
+            showSoft: showSoft,
+            onSoft: onSoft,
+            onDelete: onDelete
+        )
+    }
+
+    /// Trailing soft+hard with a custom soft icon (asset or SF Symbol).
+    func inventorySoftHardTrailingSwipe<SoftIcon: View>(
+        softLabel: String,
+        softIcon: () -> SoftIcon,
+        showSoft: Bool = true,
+        onSoft: @escaping () -> Void,
+        onDelete: @escaping () -> Void
+    ) -> some View {
         swipeActions(edge: .trailing, allowsFullSwipe: showSoft) {
             if showSoft {
                 Button(action: onSoft) {
-                    Label(softLabel, systemImage: softSystemImage)
+                    Label {
+                        Text(softLabel)
+                    } icon: {
+                        softIcon()
+                    }
                 }
                 .tint(Theme.warning)
             }
@@ -58,17 +79,20 @@ extension View {
         }
     }
 
-    /// Cargo: Mark Empty (yellow, full-swipe) + Delete (red). Hides Mark Empty when qty is already 0.
+    /// Cargo: Eat (yellow, full-swipe, bite icon) + Delete (red). Always shows Eat when enabled (incl. qty 0).
     func cargoTrailingSwipeActions(
-        quantity: Double,
-        onMarkEmpty: @escaping () -> Void,
+        showEat: Bool = true,
+        onEat: @escaping () -> Void,
         onDelete: @escaping () -> Void
     ) -> some View {
         inventorySoftHardTrailingSwipe(
-            softLabel: "Mark Empty",
-            softSystemImage: "0.circle",
-            showSoft: quantity > 0,
-            onSoft: onMarkEmpty,
+            softLabel: "Eat",
+            softIcon: {
+                Image("EatBite")
+                    .renderingMode(.template)
+            },
+            showSoft: showEat,
+            onSoft: onEat,
             onDelete: onDelete
         )
     }

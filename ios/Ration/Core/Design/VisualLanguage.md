@@ -68,7 +68,8 @@ Inventory-style lists share leading Supply/Edit and a trailing soft+hard pattern
 
 | List | Soft (yellow, full-swipe) | Hard (red) |
 |------|---------------------------|------------|
-| Cargo | Mark Empty (`0.circle`) — sets quantity to 0; hidden when already empty | Delete |
+| Cargo | Eat (`EatBite` asset) — Quick Eat snack when `cargoQuickEat` flag on; always available incl. qty 0 | Delete |
+| Cargo detail | Mark Empty (`0.circle`) — sets quantity to 0; hidden when already empty (detail FAB only) | — |
 | Galley | Cook (`flame`) — deducts ingredients; meal kept | Delete |
 
 **Where applied:** Cargo (inventory + search), Galley (meals + match mode).

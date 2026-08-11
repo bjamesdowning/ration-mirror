@@ -350,6 +350,47 @@ final class CargoViewModel {
         await markEmpty(id: item.id, api: api)
     }
 
+    func quickEat(_ item: CargoItem, quantity: Double, api: RationAPI) async -> CargoQuickEatResponse? {
+        do {
+            let response = try await MutationRetry.once {
+                try await api.quickEatCargo(
+                    id: item.id,
+                    CargoQuickEatRequest(
+                        quantity: quantity,
+                        unit: item.unit,
+                        date: CargoLocalDate.todayString(),
+                        operationKey: UUID().uuidString
+                    )
+                )
+            }
+            if let idx = rawItems.firstIndex(where: { $0.id == item.id }) {
+                let previous = rawItems[idx]
+                rawItems[idx] = CargoItem(
+                    id: previous.id,
+                    organizationId: previous.organizationId,
+                    name: previous.name,
+                    quantity: response.cargo.quantity,
+                    unit: response.cargo.unit,
+                    baseQuantity: response.cargo.quantity,
+                    baseUnit: previous.baseUnit,
+                    tags: previous.tags,
+                    domain: previous.domain,
+                    status: previous.status,
+                    expiresAt: previous.expiresAt,
+                    createdAt: previous.createdAt,
+                    updatedAt: previous.updatedAt,
+                    nutrition: previous.nutrition
+                )
+                applyClientFilters()
+            }
+            Haptics.light()
+            return response
+        } catch {
+            errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+            return nil
+        }
+    }
+
     func markEmpty(id: String, api: RationAPI) async {
         let previousContent = listContent
         let previousRawItems = rawItems

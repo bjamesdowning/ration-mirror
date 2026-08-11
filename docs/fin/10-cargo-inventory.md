@@ -16,7 +16,8 @@ Domains separate **food**, **household**, and **alcohol** for filtering and poli
 - **Merge or add as new** — When Ration detects a very similar existing item, choose **merge** (combine quantity) or **add as new**.
 - **Toggle restock / buy quantity** — Mark an item for Supply restock and set the buy quantity (default 1). Restock lines feed Supply sync.
 - **Clear restock** — Remove the restock selection (also cleared or reduced after a successful dock when fulfilled).
-- **Promote to provision** — Create a single-ingredient **provision** in Galley from a Cargo item for quick planning. See *Galley (recipes and provisions)*.
+- **Promote to provision** — Create a single-ingredient **provision** in Galley from a Cargo item for quick planning. The provision stores a **unit portion** (not the full pantry quantity) so cooking one serving deducts one portion. See *Galley (recipes and provisions)*.
+- **Quick Eat** (when enabled) — Log a snack from Cargo in one step: choose how much you ate; Ration prepares today’s Manifest **snack**, deducts pantry best-effort (including **0** when empty), and may log personal intake when nutrition consent is active.
 - **Receipt / batch ingest** — Accept line items from a **receipt scan** (or batch ingest) through the same dedup/merge path. Scan cost: see *Receipt scanning* and *AI credits explained* (typically **2 credits**).
 - **CSV import / export** — Spreadsheet-style import and export (limits and format shown in the app). Large imports may also use the REST API with an inventory-scoped key.
 - **Open detail + linked meals** — View full item fields, optional nutrition snapshot, and which Galley meals use this pantry line.

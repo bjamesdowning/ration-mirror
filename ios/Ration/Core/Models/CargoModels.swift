@@ -272,3 +272,54 @@ struct ConnectedCargoMeal: Codable, Sendable, Identifiable {
         self.connectedIngredients = connectedIngredients
     }
 }
+
+// MARK: - Quick Eat / Promote
+
+struct CargoQuickEatRequest: Encodable, Sendable {
+    let quantity: Double
+    var unit: String? = nil
+    let date: String
+    let operationKey: String
+    var logIntake: Bool? = nil
+}
+
+struct CargoQuickEatCargoSnapshot: Codable, Sendable {
+    let id: String
+    let name: String
+    let quantity: Double
+    let unit: String
+}
+
+struct CargoQuickEatProvisionSnapshot: Codable, Sendable {
+    let id: String
+    let alreadyExisted: Bool
+    let normalized: Bool
+}
+
+struct CargoQuickEatEntrySnapshot: Codable, Sendable {
+    let id: String
+    let planId: String
+    let date: String
+    let slotType: String
+    let cookedAt: String?
+}
+
+struct CargoQuickEatResponse: Codable, Sendable {
+    let cargo: CargoQuickEatCargoSnapshot
+    let provision: CargoQuickEatProvisionSnapshot
+    let entry: CargoQuickEatEntrySnapshot
+    let cookServings: Double
+    let requestedQuantity: Double
+    let deductedQuantity: Double
+    let stockWasShort: Bool
+    let intakeLogged: Bool
+    let intakeSkipReason: String?
+    let intakeServings: Double?
+}
+
+struct CargoPromoteResponse: Codable, Sendable {
+    let provision: Meal
+    let alreadyExisted: Bool
+    let normalized: Bool?
+}
+

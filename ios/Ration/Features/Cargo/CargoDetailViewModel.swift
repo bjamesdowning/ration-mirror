@@ -10,7 +10,17 @@ final class CargoDetailViewModel {
     private(set) var isSelectedForRestock = false
     private(set) var isTogglingRestock = false
     private(set) var isMarkingEmpty = false
+    private(set) var isQuickEating = false
+    private(set) var isPromoting = false
+    private(set) var isPromoted = false
     var errorMessage: String?
+
+    enum PromoteResult {
+        case created
+        case alreadyExisted
+        case capacityExceeded
+        case failed
+    }
 
     func load(id: String, api: RationAPI) async {
         isLoading = true
@@ -24,10 +34,12 @@ final class CargoDetailViewModel {
             item = response.item
             connectedMeals = response.connectedMeals ?? []
             isSelectedForRestock = activePage.activeCargoIds?.contains(id) ?? false
+            isPromoted = (response.connectedMeals ?? []).contains { $0.type == "provision" }
         } catch {
             item = nil
             connectedMeals = []
             isSelectedForRestock = false
+            isPromoted = false
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
         }
     }
@@ -77,6 +89,72 @@ final class CargoDetailViewModel {
         } catch {
             self.item = previous
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+        }
+    }
+
+    func quickEat(quantity: Double, api: RationAPI) async -> CargoQuickEatResponse? {
+        guard let item, !isQuickEating else { return nil }
+        isQuickEating = true
+        defer { isQuickEating = false }
+        do {
+            let response = try await api.quickEatCargo(
+                id: item.id,
+                CargoQuickEatRequest(
+                    quantity: quantity,
+                    unit: item.unit,
+                    date: CargoLocalDate.todayString(),
+                    operationKey: UUID().uuidString
+                )
+            )
+            let previous = item
+            self.item = CargoItem(
+                id: previous.id,
+                organizationId: previous.organizationId,
+                name: previous.name,
+                quantity: response.cargo.quantity,
+                unit: response.cargo.unit,
+                baseQuantity: response.cargo.quantity,
+                baseUnit: previous.baseUnit,
+                tags: previous.tags,
+                domain: previous.domain,
+                status: previous.status,
+                expiresAt: previous.expiresAt,
+                createdAt: previous.createdAt,
+                updatedAt: previous.updatedAt,
+                nutrition: previous.nutrition
+            )
+            isPromoted = true
+            Haptics.light()
+            return response
+        } catch {
+            errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+            return nil
+        }
+    }
+
+    func promoteToGalley(api: RationAPI) async -> PromoteResult {
+        guard let item, !isPromoting, !isPromoted else {
+            return isPromoted ? .alreadyExisted : .failed
+        }
+        isPromoting = true
+        defer { isPromoting = false }
+        do {
+            let response = try await api.promoteCargoToProvision(id: item.id)
+            isPromoted = true
+            Haptics.light()
+            return response.alreadyExisted ? .alreadyExisted : .created
+        } catch let error as APIError {
+            if case let .server(status, _, code, errorCode, _, _, _, _, _, _) = error,
+               status == 403,
+               code == "capacity_exceeded" || errorCode == "capacity_exceeded" {
+                errorMessage = "Meal capacity reached. Upgrade to add more Galley items."
+                return .capacityExceeded
+            }
+            errorMessage = error.errorDescription ?? "Couldn’t add to Galley"
+            return .failed
+        } catch {
+            errorMessage = error.localizedDescription
+            return .failed
         }
     }
 }

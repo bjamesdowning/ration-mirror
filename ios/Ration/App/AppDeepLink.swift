@@ -15,12 +15,14 @@ enum AppDeepLink {
             let path = url.path.lowercased()
             if path == "/generate" { return .galleyGenerate }
             if path == "/import" {
-                let urlParam = URLComponents(url: url, resolvingAgainstBaseURL: false)?
-                    .queryItems?
-                    .first(where: { $0.name == "url" })?
-                    .value
+                let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems
+                let urlParam = items?.first(where: { $0.name == "url" })?.value
                 let decoded = urlParam.flatMap { $0.removingPercentEncoding } ?? urlParam
-                return .galleyImport(url: decoded)
+                let autoRaw = items?.first(where: { $0.name == "auto" })?.value?
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                    .lowercased()
+                let autoStart = autoRaw == "1" || autoRaw == "true" || autoRaw == "yes"
+                return .galleyImport(url: decoded, autoStart: autoStart)
             }
             return nil
         case "manifest":

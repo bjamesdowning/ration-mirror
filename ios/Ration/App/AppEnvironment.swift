@@ -11,7 +11,7 @@ final class AppEnvironment {
         case scan
         case cargo
         case galleyGenerate
-        case galleyImport(url: String?)
+        case galleyImport(url: String?, autoStart: Bool)
         case manifestPlanWeek
         /// Open Manifest Add-to-plan with meal + date prefilled (nutrition-cook-log-split).
         case manifestAddEntry(mealId: String, date: String)

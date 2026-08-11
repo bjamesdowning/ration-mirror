@@ -180,7 +180,7 @@ Ration/
     ├── Supply/     # Shopping list with filters + dock FAB
     ├── Scan/       # Camera capture → resize → POST /scan
     ├── Galley/     # Meals CRUD, AI generate/import, match mode; Share → Import URL prefill
-    │               # RationShare: App Group + modern openURL options handoff (iOS 1.4.3+)
+    │               # RationShare: App Group + auto-start Import (iOS 1.4.5+)
     ├── Manifest/   # Edge week rocker + toolbar Today, plan-week AI, Cook/Eat (flag-gated)
     ├── Settings/   # Account settings (profile, tier, appearance, privacy, sign out)
     │               # GroupSettingsView — org switch, members, invite, credits transfer
@@ -273,7 +273,7 @@ handler also opens the picker when access is lost remotely.
 | `/meals` | POST | Create meal(s) |
 | `/meals/:id` | PATCH/DELETE | Edit/delete meal |
 | `/meals/generate`, `/meals/generate/:requestId` | POST/GET | AI meal ideas (2 credits) |
-| `/meals/import`, `/meals/import/:requestId`, `/meals/import/confirm` | POST/GET/POST | Recipe import URL / social / photo (3 credits); Share Extension → App Group + `ration://` Import prefill |
+| `/meals/import`, `/meals/import/:requestId`, `/meals/import/confirm` | POST/GET/POST | Recipe import URL / social / photo (3 credits); Share → App Group + auto-start Import processing |
 | `/manifest/plan-week`, `/manifest/plan-week/:requestId` | POST/GET | AI week plan (3 credits) |
 | `/manifest/bulk` | POST | Bulk add plan entries |
 | `/manifest/entries/:entryId` | DELETE | Remove manifest entry |

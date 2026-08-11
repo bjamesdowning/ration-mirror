@@ -643,7 +643,7 @@ Parent flag: `ai-import-url`. Secret: `SUPADATA_API_KEY` (optional `YOUTUBE_DATA
 
 Some publishers **block automated fetches**. Clients may still offer assisted HTML or screenshot recovery:
 
-- **iOS** — Share Extension (`RationShare`) appears in TikTok/Instagram/YouTube share sheets, persists the URL in the App Group, then opens `ration://galley/import?url=…` via the modern responder-chain `open(_:options:)` path (deprecated `openURL:` silently fails on iOS 18+). If the host app cannot open automatically, the extension keeps a confirmation sheet with **Open Ration**; opening Ration later still consumes the pending App Group URL. Import UI is URL-first; meal detail shows **View source**. On-device page capture remains available when useful.
+- **iOS** — Share Extension (`RationShare`) writes the recipe URL + auto-start flag to the App Group, then opens `ration://galley/import?…&auto=1` via Chrome/Readest-style responder-chain `openURL:options:completionHandler:` (nil completion). Ration switches to Galley Import and **starts the import job immediately** (processing wait screen), diverting only for AI consent or insufficient credits (paywall). If the host cannot open automatically, the extension keeps **Open Ration**; opening Ration later still consumes the pending App Group payload with auto-start. Meal detail shows **View source**. On-device page capture remains available when useful.
 - **Web** — Import modal opens on the URL field (explainers behind Info). Paste-HTML recovery remains for power users. Soft social / photo misses may set **`softFailToPhoto`**.
 
 Client HTML / photos are stored briefly in **R2** (`import-page/{requestId}`, `import-photo/{requestId}`); queue payloads never carry HTML/media/transcript blobs.

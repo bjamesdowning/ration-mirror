@@ -81,6 +81,25 @@ final class DeepLinkRouterTests: XCTestCase {
     }
 
     @MainActor
+    func testReplayPendingOpensGalleyImportWithAutoStart() {
+        let router = DeepLinkRouter()
+        router.enqueue(.galleyImport(url: "https://example.com/r", autoStart: true))
+        var selectedTab: MainTab = .hub
+        router.replayPending(
+            selectedTab: &selectedTab,
+            openAskSheet: {},
+            openScan: {}
+        )
+        XCTAssertEqual(selectedTab, .galley)
+        XCTAssertTrue(router.galleyImportPending)
+        XCTAssertEqual(router.galleyImportURL, "https://example.com/r")
+        XCTAssertTrue(router.galleyImportAutoStart)
+        router.acknowledgeGalleyImport()
+        XCTAssertFalse(router.galleyImportPending)
+        XCTAssertFalse(router.galleyImportAutoStart)
+    }
+
+    @MainActor
     func testQueuedDestinationsReplayInOrder() {
         let router = DeepLinkRouter()
         router.enqueue(.ask)

@@ -10,7 +10,10 @@ struct ImportRecipeSheet: View {
     @State private var paywallContext: PaywallContext?
     @State private var photoPickerItem: PhotosPickerItem?
     @State private var showingInfo = false
+    @State private var didAutoStart = false
     var initialURL: String? = nil
+    /// When true (Share Extension handoff), start import after credit/consent gates.
+    var autoStart: Bool = false
     var onComplete: () async -> Void = {}
     var onImportedMeal: (MealSummary) -> Void = { _ in }
     var onAddManually: () -> Void = {}
@@ -141,8 +144,26 @@ struct ImportRecipeSheet: View {
                 if !linkImportEnabled, photoImportEnabled {
                     model.inputMode = .photo
                 }
+                attemptAutoStartIfNeeded()
             }
             .onDisappear { model.cancelActiveWork() }
+        }
+    }
+
+    /// Share handoff: land on processing (or consent/paywall) without an Import tap.
+    private func attemptAutoStartIfNeeded() {
+        guard autoStart, !didAutoStart else { return }
+        guard linkImportEnabled else { return }
+        let trimmed = model.url.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        didAutoStart = true
+        model.inputMode = .link
+        if env.session.credits < creditCost {
+            paywallContext = .credits()
+            return
+        }
+        consent.presentIfNeeded(session: env.session) {
+            model.submit(api: env.api, session: env.session)
         }
     }
 

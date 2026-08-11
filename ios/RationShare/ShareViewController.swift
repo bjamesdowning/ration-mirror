@@ -1,20 +1,22 @@
 import UIKit
 import UniformTypeIdentifiers
 
-/// Lightweight share extension: capture a URL (or URL-in-text), persist via App Group,
-/// then open Ration Import.
+/// Lightweight share extension: capture a URL (or URL-in-text), persist via App Group
+/// with auto-start intent, then open Ration Import.
 ///
-/// Host launch must use `open(_:options:completionHandler:)` on the responder chain.
-/// The deprecated `openURL:` selector silently fails on iOS 18+ ("BUG IN CLIENT OF UIKIT"),
-/// which dismissed the sheet with no app open — the bug users hit from TikTok/IG.
+/// Host launch uses Chrome/Readest-style `openURL:options:completionHandler:` on the
+/// responder chain with a nil completion. Passing a Swift closure through an unsafe
+/// IMP cast mis-reports success and can dismiss without bringing the host forward.
 final class ShareViewController: UIViewController {
     private static let appGroupId = "group.com.mayutic.ration"
     private static let pendingURLKey = "pendingImportURL"
     private static let pendingAtKey = "pendingImportURLAt"
+    private static let pendingAutoStartKey = "pendingImportAutoStart"
 
     private var didStart = false
     private var statusLabel: UILabel?
     private var openButton: UIButton?
+    private var doneButton: UIButton?
     private var pendingOpenURL: URL?
 
     override func viewDidLoad() {
@@ -23,8 +25,8 @@ final class ShareViewController: UIViewController {
         buildChrome()
     }
 
-    override func viewDidAppear(_ animated: Bool) {
-        super.viewDidAppear(animated)
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
         guard !didStart else { return }
         didStart = true
         Task { await handleShare() }
@@ -62,7 +64,9 @@ final class ShareViewController: UIViewController {
         doneConfig.title = "Done"
         doneConfig.baseForegroundColor = UIColor(white: 0.067, alpha: 0.55)
         let done = UIButton(configuration: doneConfig)
+        done.isHidden = true
         done.addTarget(self, action: #selector(finish), for: .touchUpInside)
+        doneButton = done
         stack.addArrangedSubview(done)
 
         NSLayoutConstraint.activate([
@@ -78,27 +82,29 @@ final class ShareViewController: UIViewController {
                 statusLabel?.text =
                     "No link found in this share. Copy the recipe URL and paste it in Ration → Import."
                 openButton?.isHidden = true
+                doneButton?.isHidden = false
             }
             return
         }
 
-        persistPendingURL(url)
+        persistPendingURL(url, autoStart: true)
 
         let encoded =
             url.absoluteString.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)
             ?? url.absoluteString
-        guard let openURL = URL(string: "ration://galley/import?url=\(encoded)") else {
+        guard let openURL = URL(string: "ration://galley/import?url=\(encoded)&auto=1") else {
             await MainActor.run {
                 statusLabel?.text = "Could not prepare Import link."
+                doneButton?.isHidden = false
             }
             return
         }
 
         pendingOpenURL = openURL
-        let opened = await openHostApp(openURL)
+        let opened = openHostApp(openURL)
         if opened {
             // Give the system a beat to activate the host before tearing down.
-            try? await Task.sleep(nanoseconds: 150_000_000)
+            try? await Task.sleep(nanoseconds: 250_000_000)
             finish()
             return
         }
@@ -107,15 +113,15 @@ final class ShareViewController: UIViewController {
             statusLabel?.text =
                 "Link saved. Open Ration to import — or tap below if it didn’t switch automatically."
             openButton?.isHidden = false
+            doneButton?.isHidden = false
         }
     }
 
     @objc private func retryOpenHost() {
         guard let openURL = pendingOpenURL else { return }
-        Task {
-            let opened = await openHostApp(openURL)
-            if opened {
-                try? await Task.sleep(nanoseconds: 150_000_000)
+        if openHostApp(openURL) {
+            Task {
+                try? await Task.sleep(nanoseconds: 250_000_000)
                 finish()
             }
         }
@@ -125,10 +131,11 @@ final class ShareViewController: UIViewController {
         extensionContext?.completeRequest(returningItems: nil, completionHandler: nil)
     }
 
-    private func persistPendingURL(_ url: URL) {
+    private func persistPendingURL(_ url: URL, autoStart: Bool) {
         guard let defaults = UserDefaults(suiteName: Self.appGroupId) else { return }
         defaults.set(url.absoluteString, forKey: Self.pendingURLKey)
         defaults.set(Date().timeIntervalSince1970, forKey: Self.pendingAtKey)
+        defaults.set(autoStart, forKey: Self.pendingAutoStartKey)
         defaults.synchronize()
     }
 
@@ -166,7 +173,6 @@ final class ShareViewController: UIViewController {
                     return url
                 }
             }
-            // Some hosts put the URL in attributedContentText / contentText only.
             if let text = item.attributedContentText?.string ?? item.attributedTitle?.string,
                let url = firstHTTPSURL(in: text)
             {
@@ -204,7 +210,9 @@ final class ShareViewController: UIViewController {
             provider.loadItem(forTypeIdentifier: type, options: nil) { item, _ in
                 if let url = item as? URL {
                     continuation.resume(returning: url)
-                } else if let string = item as? String, let url = URL(string: string.trimmingCharacters(in: .whitespacesAndNewlines)) {
+                } else if let string = item as? String,
+                          let url = URL(string: string.trimmingCharacters(in: .whitespacesAndNewlines))
+                {
                     continuation.resume(returning: url)
                 } else if let data = item as? Data,
                           let string = String(data: data, encoding: .utf8),
@@ -247,38 +255,37 @@ final class ShareViewController: UIViewController {
     }
 
     /// Opens the host via the modern UIApplication API on the responder chain.
-    /// Deprecated `openURL:` no-ops on iOS 18+; this 3-arg selector is what Chrome/Readest use.
-    private func openHostApp(_ url: URL) async -> Bool {
-        await withCheckedContinuation { continuation in
-            DispatchQueue.main.async {
-                let selector = NSSelectorFromString("openURL:options:completionHandler:")
-                var responder: UIResponder? = self
-                while let current = responder {
-                    if let application = current as? UIApplication {
-                        application.open(url, options: [:]) { success in
-                            continuation.resume(returning: success)
-                        }
-                        return
-                    }
-                    if current.responds(to: selector) {
-                        typealias OpenURLFn = @convention(c) (
-                            AnyObject,
-                            Selector,
-                            URL,
-                            NSDictionary,
-                            (@convention(block) (Bool) -> Void)?
-                        ) -> Void
-                        let imp = current.method(for: selector)
-                        let open = unsafeBitCast(imp, to: OpenURLFn.self)
-                        open(current, selector, url, [:]) { success in
-                            continuation.resume(returning: success)
-                        }
-                        return
-                    }
-                    responder = current.next
-                }
-                continuation.resume(returning: false)
+    /// Matches Chrome `extension_open_url.mm` / Readest: nil options + nil completion.
+    @discardableResult
+    private func openHostApp(_ url: URL) -> Bool {
+        let selector = NSSelectorFromString("openURL:options:completionHandler:")
+        var responder: UIResponder? = self
+        while let current = responder {
+            if let application = current as? UIApplication {
+                application.open(url, options: [:], completionHandler: nil)
+                return true
             }
+            if current.responds(to: selector) {
+                typealias OpenURLFn = @convention(c) (
+                    AnyObject,
+                    Selector,
+                    URL,
+                    NSDictionary?,
+                    AnyObject?
+                ) -> Void
+                let target = current as AnyObject
+                let cls: AnyClass = object_getClass(target) ?? type(of: target)
+                guard let method = class_getInstanceMethod(cls, selector) else {
+                    responder = current.next
+                    continue
+                }
+                let imp = method_getImplementation(method)
+                let open = unsafeBitCast(imp, to: OpenURLFn.self)
+                open(target, selector, url, nil, nil)
+                return true
+            }
+            responder = current.next
         }
+        return false
     }
 }

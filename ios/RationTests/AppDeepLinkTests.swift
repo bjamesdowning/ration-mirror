@@ -7,10 +7,21 @@ final class AppDeepLinkTests: XCTestCase {
         XCTAssertEqual(AppDeepLink.parse("ration://scan"), .scan)
         XCTAssertEqual(AppDeepLink.parse("ration://cargo"), .cargo)
         XCTAssertEqual(AppDeepLink.parse("ration://galley/generate"), .galleyGenerate)
-        XCTAssertEqual(AppDeepLink.parse("ration://galley/import"), .galleyImport(url: nil))
+        XCTAssertEqual(
+            AppDeepLink.parse("ration://galley/import"),
+            .galleyImport(url: nil, autoStart: false)
+        )
         XCTAssertEqual(
             AppDeepLink.parse("ration://galley/import?url=https%3A%2F%2Ftiktok.com%2F%40x%2Fvideo%2F1"),
-            .galleyImport(url: "https://tiktok.com/@x/video/1")
+            .galleyImport(url: "https://tiktok.com/@x/video/1", autoStart: false)
+        )
+        XCTAssertEqual(
+            AppDeepLink.parse("ration://galley/import?url=https%3A%2F%2Fx.com%2Fa&auto=1"),
+            .galleyImport(url: "https://x.com/a", autoStart: true)
+        )
+        XCTAssertEqual(
+            AppDeepLink.parse("ration://galley/import?auto=true"),
+            .galleyImport(url: nil, autoStart: true)
         )
         XCTAssertEqual(AppDeepLink.parse("ration://manifest/plan-week"), .manifestPlanWeek)
         XCTAssertEqual(AppDeepLink.parse("RATION://Ask"), .ask)

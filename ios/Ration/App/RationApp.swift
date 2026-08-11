@@ -6,6 +6,7 @@ struct RationApp: App {
     @State private var env = AppEnvironment()
     /// Prevents Universal Link + custom-scheme callbacks from exchanging the same code twice.
     @State private var handledAuthCode: String?
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
         WindowGroup {
@@ -33,6 +34,12 @@ struct RationApp: App {
                     }
                     handleAuthHandoff(url)
                 }
+                .onChange(of: scenePhase) { _, phase in
+                    // Share Extension may fail to open the host (host-app policy).
+                    // App Group payload is still consumed when the user returns to Ration.
+                    guard phase == .active else { return }
+                    consumeSharedImportHandoff()
+                }
         }
     }
 
@@ -52,11 +59,16 @@ struct RationApp: App {
             env.openDeepLink(destination)
             return true
         }
-        if let shared = SharedImportHandoff.consumePendingURL() {
-            env.openDeepLink(.galleyImport(url: shared))
-            return true
-        }
-        return false
+        return consumeSharedImportHandoff()
+    }
+
+    /// Prefer App Group handoff from Share Extension when present.
+    @MainActor
+    @discardableResult
+    private func consumeSharedImportHandoff() -> Bool {
+        guard let shared = SharedImportHandoff.consumePendingURL() else { return false }
+        env.openDeepLink(.galleyImport(url: shared))
+        return true
     }
 
     @MainActor

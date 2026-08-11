@@ -14,7 +14,7 @@ Deductions are applied safely at the database layer so you cannot go **negative*
 |-----------|-------------------|
 | Receipt scan | 2 |
 | AI meal generation | 2 |
-| Import recipe from URL | 1 |
+| Import recipe (URL / social / photo) | 3 |
 | AI plan week | 3 |
 | Ask Ration (Copilot) | 1 credit per 20,000 tokens per conversation (minimum 1); capped at 128,000 tokens per chat (max 7 credits) |
 

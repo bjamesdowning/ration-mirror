@@ -117,13 +117,16 @@ Permanent boolean kill switches for billed AI pipelines. Registry `defaultEnable
 
 | Flag key | Client key | Server choke point |
 |----------|------------|--------------------|
-| `ai-import-url` | `aiImportUrl` | `submitRecipeImport` |
+| `ai-import-url` | `aiImportUrl` | `submitRecipeImport` (parent) |
+| `ai-import-web` | `aiImportWeb` | Website lane (plain fetch / Supadata scrape / client HTML) |
+| `ai-import-social` | `aiImportSocial` | Social lane (TikTok / Instagram / YouTube) |
+| `ai-import-photo` | `aiImportPhoto` | Photo / screenshot lane |
 | `ai-scan-receipt` | `aiScanReceipt` | `submitVisualScan` |
 | `ai-dock-from-receipt` | `aiDockFromReceipt` | Supply scan-match / scan-complete |
 | `ai-generate-meal` | `aiGenerateMeal` | `submitMealGenerate` |
 | `ai-plan-week` | `aiPlanWeek` | `submitPlanWeek` |
 
-**Operator matrix:** `ai-scan-receipt` off kills Cargo and Dock AI spend; `ai-dock-from-receipt` off leaves Cargo scan available. Asserts throw **403** + `FEATURE_DISABLED` before credit debit. Mobile bootstrap: `GET /api/mobile/v1/session` returns `clientFlags`. Emergency bulk kill: `FEATURE_FLAG_OVERRIDES` JSON on the `ration` Worker, e.g. `{"ai-scan-receipt":false,"ai-import-url":false,...}`.
+**Operator matrix:** Parent `ai-import-url` plus the matching lane flag must be on for that submit path. `ai-scan-receipt` off kills Cargo and Dock AI spend; `ai-dock-from-receipt` off leaves Cargo scan available. Asserts throw **403** + `FEATURE_DISABLED` before credit debit. Mobile bootstrap: `GET /api/mobile/v1/session` returns `clientFlags`. Emergency bulk kill: `FEATURE_FLAG_OVERRIDES` JSON on the `ration` Worker, e.g. `{"ai-scan-receipt":false,"ai-import-url":false,...}`.
 
 ## Nutrition flags (F0 spine — registry only)
 

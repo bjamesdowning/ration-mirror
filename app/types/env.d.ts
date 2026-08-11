@@ -4,7 +4,11 @@ declare namespace Cloudflare {
 		AI_GATEWAY_ACCOUNT_ID: string;
 		AI_GATEWAY_ID: string;
 		RATION_ENV?: string;
-		/** Browser Rendering API token (optional); when absent, recipe import falls back to plain fetch */
+		/** Supadata API key — web scrape + social transcripts for recipe import */
+		SUPADATA_API_KEY?: string;
+		/** Optional YouTube Data API key for video description metadata */
+		YOUTUBE_DATA_API_KEY?: string;
+		/** Browser Rendering API token (optional; unused by recipe import; kept for other tooling) */
 		CF_BROWSER_RENDERING_TOKEN?: string;
 		// Secrets (set via wrangler secret put; not in wrangler.jsonc)
 		BETTER_AUTH_SECRET?: string;

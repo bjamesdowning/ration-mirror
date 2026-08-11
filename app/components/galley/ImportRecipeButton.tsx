@@ -1,5 +1,12 @@
-import { AlertCircle, Check, ExternalLink, Link2 } from "lucide-react";
 import {
+	AlertCircle,
+	Check,
+	ExternalLink,
+	ImageIcon,
+	Link2,
+} from "lucide-react";
+import {
+	type ChangeEvent,
 	forwardRef,
 	useEffect,
 	useImperativeHandle,
@@ -30,11 +37,100 @@ interface ImportRecipeButtonProps {
 }
 
 const SITE_BLOCKED_CODE = "SITE_BLOCKED";
+const IMPORT_PROVIDER_UNAVAILABLE_CODE = "IMPORT_PROVIDER_UNAVAILABLE";
+const PHOTO_ACCEPT = "image/jpeg,image/png,image/webp";
+
+type ImportInputMode = "link" | "photo";
+
+function buildImportIntroDescription(options: {
+	costPerImport: number;
+	web: boolean;
+	social: boolean;
+	photo: boolean;
+}): string {
+	const { costPerImport, web, social, photo } = options;
+	const creditPhrase = `${costPerImport} credits per import`;
+
+	let opener: string;
+	if (photo && (web || social)) {
+		opener = "Paste a recipe link or add a photo";
+	} else if (photo) {
+		opener = "Add a photo of a recipe";
+	} else {
+		opener = "Paste a recipe link";
+	}
+
+	const sourceParts: string[] = [];
+	if (web) {
+		sourceParts.push(
+			"recipe websites (if a site blocks bots, we'll help you reload on-device or paste the page)",
+		);
+	}
+	if (social) {
+		sourceParts.push(
+			"social posts using captions, descriptions, and transcripts when needed",
+		);
+	}
+	if (photo && !web && !social) {
+		sourceParts.push("your recipe photo");
+	}
+
+	let desc = `${opener} — ${creditPhrase}.`;
+	if (sourceParts.length > 0) {
+		desc += ` Ration pulls structure from ${sourceParts.join(", and from ")}.`;
+	}
+	desc += " Review before it lands in your Galley.";
+	return desc;
+}
+
+function buildImportLinkHint(options: {
+	web: boolean;
+	social: boolean;
+}): string {
+	const { web, social } = options;
+	const linkTypes: string[] = [];
+	if (web) linkTypes.push("recipe websites");
+	if (social) linkTypes.push("social posts");
+
+	if (linkTypes.length === 0) {
+		return "HTTPS links to supported recipe sources.";
+	}
+
+	let hint = `HTTPS links to ${linkTypes.join(" and ")}.`;
+	if (web) {
+		hint +=
+			" If a site blocks bots, you can reload on-device or paste the page HTML.";
+	}
+	return hint;
+}
+
+function readPhotoAsBase64(file: File): Promise<{
+	base64: string;
+	mimeType: string;
+	preview: string;
+}> {
+	return new Promise((resolve, reject) => {
+		const reader = new FileReader();
+		reader.onload = () => {
+			const result = reader.result;
+			if (typeof result !== "string") {
+				reject(new Error("Could not read photo"));
+				return;
+			}
+			const comma = result.indexOf(",");
+			const base64 = comma >= 0 ? result.slice(comma + 1) : result;
+			resolve({ base64, mimeType: file.type, preview: result });
+		};
+		reader.onerror = () => reject(new Error("Could not read photo"));
+		reader.readAsDataURL(file);
+	});
+}
 
 function isSiteBlockedFailure(code?: string, error?: string): boolean {
 	if (code === SITE_BLOCKED_CODE) return true;
+	if (code === IMPORT_PROVIDER_UNAVAILABLE_CODE) return true;
 	if (!error) return false;
-	return /blocked automated import|access issue|paste the page HTML/i.test(
+	return /blocked automated import|access issue|paste the page HTML|import helpers are temporarily unavailable/i.test(
 		error,
 	);
 }
@@ -42,14 +138,42 @@ function isSiteBlockedFailure(code?: string, error?: string): boolean {
 export const ImportRecipeButton = forwardRef<
 	ImportRecipeButtonHandle,
 	ImportRecipeButtonProps
->(({ className, credits, costPerImport = 1 }, ref) => {
+>(({ className, credits, costPerImport = 3 }, ref) => {
 	const rootData = useRouteLoaderData("root") as
-		| { clientFlags?: { nutritionEngine?: boolean } }
+		| {
+				clientFlags?: {
+					nutritionEngine?: boolean;
+					aiImportWeb?: boolean;
+					aiImportSocial?: boolean;
+					aiImportPhoto?: boolean;
+				};
+		  }
 		| undefined;
 	const nutritionEngine = rootData?.clientFlags?.nutritionEngine === true;
+	const aiImportWeb = rootData?.clientFlags?.aiImportWeb === true;
+	const aiImportSocial = rootData?.clientFlags?.aiImportSocial === true;
+	const aiImportPhoto = rootData?.clientFlags?.aiImportPhoto === true;
+	const linkEnabled = aiImportWeb || aiImportSocial;
+	const showInputTabs = linkEnabled && aiImportPhoto;
+	const importIntroDescription = buildImportIntroDescription({
+		costPerImport,
+		web: aiImportWeb,
+		social: aiImportSocial,
+		photo: aiImportPhoto,
+	});
+	const importLinkHint = buildImportLinkHint({
+		web: aiImportWeb,
+		social: aiImportSocial,
+	});
 	const [showModal, setShowModal] = useState(false);
 	const [url, setUrl] = useState("");
 	const [pageHtml, setPageHtml] = useState("");
+	const [inputMode, setInputMode] = useState<ImportInputMode>("link");
+	const [photoBase64, setPhotoBase64] = useState<string | null>(null);
+	const [photoMimeType, setPhotoMimeType] = useState<string | null>(null);
+	const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+	const [softFailMessage, setSoftFailMessage] = useState<string | null>(null);
+	const photoInputRef = useRef<HTMLInputElement>(null);
 	const [view, setView] = useState<
 		| "intro"
 		| "url"
@@ -58,6 +182,7 @@ export const ImportRecipeButton = forwardRef<
 		| "error"
 		| "site_blocked"
 		| "duplicate"
+		| "soft_fail_photo"
 	>("intro");
 	const [showErrorToast, setShowErrorToast] = useState(false);
 	const [errorToastMessage, setErrorToastMessage] = useState("");
@@ -90,11 +215,23 @@ export const ImportRecipeButton = forwardRef<
 	>();
 	const navigate = useNavigate();
 
+	const clearPhotoSelection = () => {
+		setPhotoBase64(null);
+		setPhotoMimeType(null);
+		setPhotoPreview(null);
+		if (photoInputRef.current) {
+			photoInputRef.current.value = "";
+		}
+	};
+
 	useImperativeHandle(ref, () => ({
 		open: () => {
 			setShowModal(true);
 			setUrl("");
 			setPageHtml("");
+			setInputMode(linkEnabled ? "link" : "photo");
+			clearPhotoSelection();
+			setSoftFailMessage(null);
 			setView("intro");
 			setPollRequestId(null);
 			setDuplicateData(null);
@@ -103,6 +240,13 @@ export const ImportRecipeButton = forwardRef<
 			assistedSubmit.current = false;
 		},
 	}));
+
+	const switchToPhotoMode = () => {
+		setInputMode("photo");
+		setSoftFailMessage(null);
+		setView("url");
+		clearPhotoSelection();
+	};
 
 	const importError =
 		typeof importFetcher.data === "object" &&
@@ -179,6 +323,7 @@ export const ImportRecipeButton = forwardRef<
 					error?: string;
 					existingMealId?: string;
 					existingMealName?: string;
+					softFailToPhoto?: boolean;
 				};
 				if (data.status === "pending") return;
 				if (
@@ -222,6 +367,16 @@ export const ImportRecipeButton = forwardRef<
 					setPollRequestId(null);
 					importInFlight.current = false;
 
+					if (data.softFailToPhoto === true && aiImportPhoto) {
+						setSoftFailMessage(
+							data.error ??
+								"We couldn't extract a recipe from this link. Try a screenshot instead.",
+						);
+						setView("soft_fail_photo");
+						assistedSubmit.current = false;
+						return;
+					}
+
 					if (blocked && !assistedSubmit.current) {
 						setAssistedFailed(false);
 						setPageHtml("");
@@ -250,7 +405,7 @@ export const ImportRecipeButton = forwardRef<
 		};
 
 		return startBackoffPollLoop(poll);
-	}, [pollRequestId]);
+	}, [pollRequestId, aiImportPhoto]);
 
 	// Handle confirm success: navigate to meal, close modal, show toast
 	useEffect(() => {
@@ -268,6 +423,13 @@ export const ImportRecipeButton = forwardRef<
 				setView("intro");
 				setUrl("");
 				setPageHtml("");
+				setPhotoBase64(null);
+				setPhotoMimeType(null);
+				setPhotoPreview(null);
+				if (photoInputRef.current) {
+					photoInputRef.current.value = "";
+				}
+				setSoftFailMessage(null);
 				setVerificationData(null);
 				setDuplicateData(null);
 				navigate(`/hub/galley/${meal.id}`);
@@ -301,6 +463,8 @@ export const ImportRecipeButton = forwardRef<
 		setView("intro");
 		setUrl("");
 		setPageHtml("");
+		clearPhotoSelection();
+		setSoftFailMessage(null);
 		setVerificationData(null);
 		setDuplicateData(null);
 	};
@@ -312,12 +476,49 @@ export const ImportRecipeButton = forwardRef<
 		importInFlight.current = true;
 		assistedSubmit.current = false;
 		setAssistedFailed(false);
+		setSoftFailMessage(null);
 		setDuplicateData(null);
 		importFetcher.submit(JSON.stringify({ url: trimmed }), {
 			method: "post",
 			action: "/api/meals/import",
 			encType: "application/json",
 		});
+	};
+
+	const handlePhotoSelect = async (event: ChangeEvent<HTMLInputElement>) => {
+		const file = event.target.files?.[0];
+		if (!file) return;
+		try {
+			const { base64, mimeType, preview } = await readPhotoAsBase64(file);
+			setPhotoBase64(base64);
+			setPhotoMimeType(mimeType);
+			setPhotoPreview(preview);
+		} catch {
+			setErrorToastMessage("Could not read that photo. Try another image.");
+			setShowErrorToast(true);
+			clearPhotoSelection();
+		}
+	};
+
+	const handlePhotoImport = () => {
+		if (!photoBase64 || !photoMimeType || importInFlight.current) return;
+		setView("loading");
+		importInFlight.current = true;
+		assistedSubmit.current = false;
+		setAssistedFailed(false);
+		setSoftFailMessage(null);
+		setDuplicateData(null);
+		importFetcher.submit(
+			JSON.stringify({
+				photoBase64,
+				photoMimeType,
+			}),
+			{
+				method: "post",
+				action: "/api/meals/import",
+				encType: "application/json",
+			},
+		);
 	};
 
 	const handleExtractFromPaste = () => {
@@ -351,6 +552,9 @@ export const ImportRecipeButton = forwardRef<
 	const resetState = () => {
 		setUrl("");
 		setPageHtml("");
+		setInputMode(linkEnabled ? "link" : "photo");
+		clearPhotoSelection();
+		setSoftFailMessage(null);
 		setView("url");
 		setDuplicateData(null);
 		setAssistedFailed(false);
@@ -362,11 +566,19 @@ export const ImportRecipeButton = forwardRef<
 		setView("intro");
 		setUrl("");
 		setPageHtml("");
+		setInputMode(linkEnabled ? "link" : "photo");
+		clearPhotoSelection();
+		setSoftFailMessage(null);
 		setPollRequestId(null);
 		setDuplicateData(null);
 		setVerificationData(null);
 		setAssistedFailed(false);
 		assistedSubmit.current = false;
+	};
+
+	const handleIntroConfirm = () => {
+		setInputMode(linkEnabled ? "link" : "photo");
+		setView("url");
 	};
 
 	const showIntro = view === "intro";
@@ -376,6 +588,13 @@ export const ImportRecipeButton = forwardRef<
 	const showError = view === "error";
 	const showSiteBlocked = view === "site_blocked";
 	const showDuplicate = view === "duplicate";
+	const showSoftFailPhoto = view === "soft_fail_photo";
+	const modalSubtitle =
+		inputMode === "photo" && aiImportPhoto
+			? "Add a recipe photo to extract a meal"
+			: linkEnabled
+				? "Paste a link to extract a meal"
+				: "Add a photo to extract a meal";
 
 	return (
 		<>
@@ -417,72 +636,194 @@ export const ImportRecipeButton = forwardRef<
 					open={showModal}
 					onClose={handleClose}
 					title="Import Meal"
-					subtitle="Paste a URL to extract a meal"
-					icon={<Link2 className="w-5 h-5 text-hyper-green" />}
+					subtitle={modalSubtitle}
+					icon={
+						inputMode === "photo" && aiImportPhoto ? (
+							<ImageIcon className="w-5 h-5 text-hyper-green" />
+						) : (
+							<Link2 className="w-5 h-5 text-hyper-green" />
+						)
+					}
 					maxWidth="md"
 				>
 					{showIntro ? (
 						<AIFeatureIntroView
-							description="Paste a recipe webpage URL. AI extracts ingredients and steps into your Galley. Use an HTTPS link to a recipe page — not a video. Some sites block automated bots; if that happens, you can paste the page HTML or add the meal manually."
+							description={importIntroDescription}
 							hint={nutritionEngine ? NUTRITION_INGEST_HINT : undefined}
 							cost={costPerImport}
 							costLabel="per import"
 							credits={typeof credits === "number" ? credits : 0}
 							onCancel={handleClose}
-							onConfirm={() => setView("url")}
+							onConfirm={handleIntroConfirm}
 							confirmLabel="Continue"
 						/>
 					) : (
 						<div className="p-8">
 							{showUrlInput && (
 								<div className="space-y-6 text-center py-12">
-									<p className="text-carbon/80 dark:text-white/80 max-w-md mx-auto">
-										Paste a meal URL and we'll extract it into your Galley.
-									</p>
-									<div className="max-w-md mx-auto text-left">
-										<label
-											htmlFor="import-recipe-url"
-											className="block text-sm font-medium text-carbon dark:text-white mb-1"
+									{showInputTabs && (
+										<div
+											className="flex gap-2 p-1 bg-platinum/50 dark:bg-white/10 rounded-xl max-w-md mx-auto"
+											role="tablist"
+											aria-label="Import source"
 										>
-											Meal URL
-										</label>
-										<input
-											id="import-recipe-url"
-											type="url"
-											value={url}
-											onChange={(e) => setUrl(e.target.value)}
-											placeholder="https://example.com/recipe/..."
-											className="w-full px-4 py-3 rounded-lg border border-platinum dark:border-white/20 bg-white dark:bg-white/5 text-carbon dark:text-white placeholder:text-muted"
-											aria-describedby="import-url-hint"
-										/>
-										<p id="import-url-hint" className="text-xs text-muted mt-1">
-											HTTPS recipe pages only. Video links (YouTube, TikTok,
-											Reels) and non-recipe pages won&apos;t work. Some sites
-											block automated bots — you&apos;ll be asked to paste the
-											page HTML, or add the meal manually.
-										</p>
-									</div>
-									<button
-										type="button"
-										onClick={handleImport}
-										disabled={!url.trim()}
-										className="px-8 py-4 bg-hyper-green text-on-hyper-green font-bold rounded-xl shadow-glow hover:scale-105 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+											<button
+												type="button"
+												role="tab"
+												aria-selected={inputMode === "link"}
+												id="import-link-tab"
+												aria-controls="import-input-panel"
+												onClick={() => {
+													setInputMode("link");
+													clearPhotoSelection();
+												}}
+												className={`flex-1 py-2.5 px-4 rounded-lg font-bold text-sm transition-all focus-ring ${
+													inputMode === "link"
+														? "bg-hyper-green text-on-hyper-green shadow-glow-sm"
+														: "text-muted hover:bg-platinum hover:text-carbon dark:hover:bg-white/10 dark:hover:text-white"
+												}`}
+											>
+												Link
+											</button>
+											<button
+												type="button"
+												role="tab"
+												aria-selected={inputMode === "photo"}
+												id="import-photo-tab"
+												aria-controls="import-input-panel"
+												onClick={() => {
+													setInputMode("photo");
+													setUrl("");
+												}}
+												className={`flex-1 py-2.5 px-4 rounded-lg font-bold text-sm transition-all focus-ring ${
+													inputMode === "photo"
+														? "bg-hyper-green text-on-hyper-green shadow-glow-sm"
+														: "text-muted hover:bg-platinum hover:text-carbon dark:hover:bg-white/10 dark:hover:text-white"
+												}`}
+											>
+												Photo
+											</button>
+										</div>
+									)}
+
+									<div
+										id="import-input-panel"
+										role="tabpanel"
+										aria-labelledby={
+											inputMode === "photo"
+												? "import-photo-tab"
+												: "import-link-tab"
+										}
 									>
-										Import Meal
-									</button>
+										{inputMode === "link" && linkEnabled ? (
+											<>
+												<p className="text-carbon/80 dark:text-white/80 max-w-md mx-auto mb-6">
+													Paste a recipe link and we&apos;ll extract it into
+													your Galley.
+												</p>
+												<div className="max-w-md mx-auto text-left">
+													<label
+														htmlFor="import-recipe-url"
+														className="block text-sm font-medium text-carbon dark:text-white mb-1"
+													>
+														Recipe link
+													</label>
+													<input
+														id="import-recipe-url"
+														type="url"
+														value={url}
+														onChange={(e) => setUrl(e.target.value)}
+														placeholder="https://example.com/recipe/..."
+														className="w-full px-4 py-3 rounded-lg border border-platinum dark:border-white/20 bg-white dark:bg-white/5 text-carbon dark:text-white placeholder:text-muted"
+														aria-describedby="import-url-hint"
+													/>
+													<p
+														id="import-url-hint"
+														className="text-xs text-muted mt-1"
+													>
+														{importLinkHint}
+													</p>
+												</div>
+												<button
+													type="button"
+													onClick={handleImport}
+													disabled={!url.trim()}
+													className="mt-6 px-8 py-4 bg-hyper-green text-on-hyper-green font-bold rounded-xl shadow-glow hover:scale-105 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+												>
+													Import Meal
+												</button>
+											</>
+										) : aiImportPhoto ? (
+											<>
+												<p className="text-carbon/80 dark:text-white/80 max-w-md mx-auto mb-6">
+													Add a screenshot or photo of the recipe and we&apos;ll
+													extract it into your Galley.
+												</p>
+												<div className="max-w-md mx-auto text-left space-y-4">
+													<label
+														htmlFor="import-recipe-photo"
+														className="block text-sm font-medium text-carbon dark:text-white mb-1"
+													>
+														Recipe photo
+													</label>
+													<input
+														ref={photoInputRef}
+														id="import-recipe-photo"
+														type="file"
+														accept={PHOTO_ACCEPT}
+														onChange={handlePhotoSelect}
+														className="w-full text-sm text-carbon dark:text-white file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-hyper-green file:text-on-hyper-green file:font-semibold file:cursor-pointer"
+														aria-describedby="import-photo-hint"
+													/>
+													<p
+														id="import-photo-hint"
+														className="text-xs text-muted"
+													>
+														JPEG, PNG, or WebP — a clear screenshot or photo of
+														the full recipe works best.
+													</p>
+													{photoPreview && (
+														<div className="rounded-lg border border-platinum dark:border-white/20 overflow-hidden bg-white dark:bg-white/5">
+															<img
+																src={photoPreview}
+																alt="Selected recipe preview"
+																className="w-full max-h-48 object-contain"
+															/>
+														</div>
+													)}
+												</div>
+												<button
+													type="button"
+													onClick={handlePhotoImport}
+													disabled={!photoBase64 || !photoMimeType}
+													className="mt-6 px-8 py-4 bg-hyper-green text-on-hyper-green font-bold rounded-xl shadow-glow hover:scale-105 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+												>
+													Import Meal
+												</button>
+											</>
+										) : null}
+									</div>
 								</div>
 							)}
 
 							{showProcessing && (
 								<div className="animate-pulse space-y-4 text-center py-12">
 									<div className="w-16 h-16 mx-auto rounded-full bg-hyper-green/20 flex items-center justify-center animate-spin-slow">
-										<Link2 className="w-8 h-8 text-hyper-green" />
+										{inputMode === "photo" && aiImportPhoto ? (
+											<ImageIcon className="w-8 h-8 text-hyper-green" />
+										) : (
+											<Link2 className="w-8 h-8 text-hyper-green" />
+										)}
 									</div>
 									<h4 className="text-lg font-medium text-carbon dark:text-white">
-										Extracting Meal...
+										{inputMode === "photo" && aiImportPhoto
+											? "Analyzing Recipe Photo..."
+											: "Extracting Meal..."}
 									</h4>
 									<p className="text-muted text-sm">
-										Reading and analyzing the page.
+										{inputMode === "photo" && aiImportPhoto
+											? "Reading ingredients and steps from your image."
+											: "Reading and analyzing the page."}
 									</p>
 								</div>
 							)}
@@ -550,7 +891,9 @@ export const ImportRecipeButton = forwardRef<
 													Source, or Select All → Copy). Prefer the recipe
 													section if the full page is huge.
 												</li>
-												<li>Paste it below and extract (uses 1 credit).</li>
+												<li>
+													Paste it below and extract ({costPerImport} credits).
+												</li>
 											</ol>
 
 											{url.trim() && (
@@ -581,8 +924,8 @@ export const ImportRecipeButton = forwardRef<
 													className="w-full px-3 py-2 rounded-lg border border-platinum dark:border-white/20 bg-white dark:bg-white/5 text-carbon dark:text-white placeholder:text-muted text-xs font-mono"
 												/>
 												<p className="text-xs text-muted mt-1">
-													Uses 1 credit. Keep under ~1MB (recipe excerpt is
-													fine).
+													{costPerImport} credits. Keep under ~1MB (recipe
+													excerpt is fine).
 												</p>
 											</div>
 
@@ -614,6 +957,35 @@ export const ImportRecipeButton = forwardRef<
 											className="flex-1 px-4 py-2.5 bg-platinum/20 text-carbon dark:text-white rounded-lg hover:bg-platinum/40 text-sm"
 										>
 											Try a different URL
+										</button>
+									</div>
+								</div>
+							)}
+
+							{showSoftFailPhoto && (
+								<div className="flex flex-col items-center justify-center py-12 text-center space-y-4 max-w-md mx-auto">
+									<AlertCircle className="w-12 h-12 text-amber-600 dark:text-amber-400" />
+									<h4 className="text-lg font-bold text-carbon dark:text-white">
+										Couldn&apos;t extract from this link
+									</h4>
+									<p className="text-sm text-muted">
+										{softFailMessage ??
+											"We couldn't pull a recipe from this link. A screenshot often works better."}
+									</p>
+									<div className="flex flex-col sm:flex-row gap-2 pt-2">
+										<button
+											type="button"
+											onClick={switchToPhotoMode}
+											className="px-6 py-2.5 bg-hyper-green text-on-hyper-green font-semibold rounded-lg shadow-glow-sm hover:shadow-glow transition-all text-sm"
+										>
+											Import from screenshot
+										</button>
+										<button
+											type="button"
+											onClick={resetState}
+											className="px-6 py-2.5 bg-platinum/20 text-carbon dark:text-white rounded-lg hover:bg-platinum/40 text-sm"
+										>
+											Try a different link
 										</button>
 									</div>
 								</div>

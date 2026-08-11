@@ -51,12 +51,19 @@ describe("isD1ContentionError", () => {
 		).toBe(true);
 	});
 
-	it("returns true for 'timeout' pattern", () => {
+	it("returns true for query timeout pattern", () => {
 		expect(isD1ContentionError(new Error("query timeout after 30s"))).toBe(
 			true,
 		);
 	});
 
+	it("does not treat generic AbortError timeouts as D1 contention", () => {
+		expect(
+			isD1ContentionError(
+				new Error("The operation was aborted due to timeout"),
+			),
+		).toBe(false);
+	});
 	it("returns true for 'worker exceeded' pattern", () => {
 		expect(isD1ContentionError(new Error("worker exceeded memory limit"))).toBe(
 			true,

@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildPageContentFromHtml } from "~/lib/import-url-consumer.server";
 import {
+	IMPORT_PROVIDER_UNAVAILABLE_CODE,
+	IMPORT_PROVIDER_UNAVAILABLE_MESSAGE,
 	SITE_BLOCKED_CODE,
 	SITE_BLOCKED_MESSAGE,
 } from "~/lib/recipe-import-block.server";
@@ -103,7 +105,7 @@ describe("runImportUrlConsumerJob SITE_BLOCKED on 402", () => {
 		updateQueueJobResult.mockReset();
 	});
 
-	it("returns SITE_BLOCKED when remote fetch returns 402", async () => {
+	it("refunds with IMPORT_PROVIDER_UNAVAILABLE when 402 and Supadata key missing", async () => {
 		vi.stubGlobal(
 			"fetch",
 			vi.fn().mockResolvedValue({
@@ -134,7 +136,7 @@ describe("runImportUrlConsumerJob SITE_BLOCKED on 402", () => {
 			organizationId: "org_1",
 			userId: "user_1",
 			url: "https://www.allrecipes.com/recipe/14430/simple-potato-salad/",
-			cost: 1,
+			cost: 3,
 		});
 
 		expect(updateQueueJobResult).toHaveBeenCalledWith(
@@ -143,8 +145,63 @@ describe("runImportUrlConsumerJob SITE_BLOCKED on 402", () => {
 			"failed",
 			expect.objectContaining({
 				success: false,
-				code: SITE_BLOCKED_CODE,
-				error: SITE_BLOCKED_MESSAGE,
+				code: IMPORT_PROVIDER_UNAVAILABLE_CODE,
+				error: IMPORT_PROVIDER_UNAVAILABLE_MESSAGE,
+				softFailToPhoto: true,
+			}),
+		);
+	});
+
+	it("refunds with IMPORT_PROVIDER_UNAVAILABLE when Supadata scrape times out", async () => {
+		vi.stubGlobal(
+			"fetch",
+			vi.fn(async (input: RequestInfo | URL) => {
+				const url = String(input);
+				if (url.includes("api.supadata.ai")) {
+					const err = new Error("Aborted");
+					err.name = "AbortError";
+					throw err;
+				}
+				return {
+					url: "https://www.allrecipes.com/recipe/1/",
+					ok: false,
+					status: 403,
+					headers: new Headers({ "Content-Type": "text/html" }),
+					text: async () => "blocked",
+				};
+			}),
+		);
+
+		const { runImportUrlConsumerJob } = await import(
+			"../import-url-consumer.server"
+		);
+
+		const env = {
+			DB: {},
+			RATION_KV: createMemoryKV(),
+			STORAGE: createMockR2(),
+			AI_GATEWAY_ACCOUNT_ID: "acct",
+			AI_GATEWAY_ID: "gw",
+			CF_AIG_TOKEN: "token",
+			SUPADATA_API_KEY: "key",
+		} as unknown as Cloudflare.Env;
+
+		await runImportUrlConsumerJob(env, {
+			requestId: "req_supa_timeout",
+			organizationId: "org_1",
+			userId: "user_1",
+			url: "https://www.allrecipes.com/recipe/1/",
+			cost: 3,
+		});
+
+		expect(updateQueueJobResult).toHaveBeenCalledWith(
+			env.DB,
+			"req_supa_timeout",
+			"failed",
+			expect.objectContaining({
+				success: false,
+				code: IMPORT_PROVIDER_UNAVAILABLE_CODE,
+				softFailToPhoto: true,
 			}),
 		);
 	});
@@ -184,7 +241,7 @@ describe("runImportUrlConsumerJob client HTML from R2", () => {
 			organizationId: "org_1",
 			userId: "user_1",
 			url: "https://www.allrecipes.com/recipe/1/",
-			cost: 1,
+			cost: 3,
 			contentSource: "client",
 		});
 

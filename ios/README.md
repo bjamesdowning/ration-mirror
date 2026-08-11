@@ -272,7 +272,7 @@ handler also opens the picker when access is lost remotely.
 | `/meals` | POST | Create meal(s) |
 | `/meals/:id` | PATCH/DELETE | Edit/delete meal |
 | `/meals/generate`, `/meals/generate/:requestId` | POST/GET | AI meal ideas (2 credits) |
-| `/meals/import`, `/meals/import/:requestId`, `/meals/import/confirm` | POST/GET/POST | URL import (1 credit) |
+| `/meals/import`, `/meals/import/:requestId`, `/meals/import/confirm` | POST/GET/POST | Recipe import URL / social / photo (3 credits) |
 | `/manifest/plan-week`, `/manifest/plan-week/:requestId` | POST/GET | AI week plan (3 credits) |
 | `/manifest/bulk` | POST | Bulk add plan entries |
 | `/manifest/entries/:entryId` | DELETE | Remove manifest entry |

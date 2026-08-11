@@ -111,8 +111,9 @@
 	 *   - STRIPE_PUBLISHABLE_KEY: Stripe client-side key
 	 *   - STRIPE_WEBHOOK_SECRET: Stripe webhook signing secret
 	 *   - BETTER_AUTH_SECRET: Better Auth encryption key
-	 *   - CF_BROWSER_RENDERING_TOKEN: Cloudflare Browser Rendering API token
-	 *     (optional; when absent, recipe import uses plain fetch only)
+	 *   - SUPADATA_API_KEY: Supadata (web.scrape + transcripts for recipe import)
+	 *   - YOUTUBE_DATA_API_KEY: optional YouTube Data API for social import metadata
+	 *   - CF_BROWSER_RENDERING_TOKEN: optional; unused by recipe import path
 	 *   - APP_REVIEW_DEMO_EMAIL / APP_REVIEW_DEMO_PASSWORD / APP_REVIEW_DEMO_USER_ID:
 	 *     App Store review login (gated by Flagship `app-review-login`)
 	 */

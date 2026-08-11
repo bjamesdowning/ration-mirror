@@ -5,27 +5,78 @@ import { normalizeUnitAlias } from "../units";
 export const RECIPE_IMPORT_PAGE_HTML_MAX = 1_000_000;
 export const RECIPE_IMPORT_PAGE_HTML_MIN = 200;
 
-/** Request body schema for recipe import API. HTTPS-only URLs. */
-export const RecipeImportRequestSchema = z.object({
-	url: z
-		.string()
-		.url("Must be a valid URL")
-		.max(2048)
-		.refine((u) => u.startsWith("https://"), "Only HTTPS URLs are allowed"),
-	/** Optional page HTML from client-assisted capture (iOS / web paste). */
-	pageHtml: z
-		.string()
-		.min(
-			RECIPE_IMPORT_PAGE_HTML_MIN,
-			"Page HTML is too short to extract a recipe",
-		)
-		.refine(
-			(s) =>
-				new TextEncoder().encode(s).byteLength <= RECIPE_IMPORT_PAGE_HTML_MAX,
-			"Page HTML is too large to process",
-		)
-		.optional(),
-});
+/** Photo / screenshot import limits. */
+export const RECIPE_IMPORT_PHOTO_MAX_BYTES = 5 * 1024 * 1024;
+export const RECIPE_IMPORT_PHOTO_MIME = [
+	"image/jpeg",
+	"image/png",
+	"image/webp",
+] as const;
+
+const httpsUrlSchema = z
+	.string()
+	.url("Must be a valid URL")
+	.max(2048)
+	.refine((u) => u.startsWith("https://"), "Only HTTPS URLs are allowed");
+
+/** Request body schema for recipe import API (URL, social, and/or photo). */
+export const RecipeImportRequestSchema = z
+	.object({
+		url: httpsUrlSchema.optional(),
+		/** Optional page HTML from client-assisted capture (iOS / web paste). */
+		pageHtml: z
+			.string()
+			.min(
+				RECIPE_IMPORT_PAGE_HTML_MIN,
+				"Page HTML is too short to extract a recipe",
+			)
+			.refine(
+				(s) =>
+					new TextEncoder().encode(s).byteLength <= RECIPE_IMPORT_PAGE_HTML_MAX,
+				"Page HTML is too large to process",
+			)
+			.optional(),
+		/** Optional caption / share text (Instagram). */
+		userText: z.string().max(8_000).optional(),
+		/** Base64-encoded recipe photo / screenshot (no data: prefix). */
+		photoBase64: z.string().min(32).max(7_000_000).optional(),
+		photoMimeType: z.enum(RECIPE_IMPORT_PHOTO_MIME).optional(),
+	})
+	.superRefine((data, ctx) => {
+		const hasPhoto = Boolean(data.photoBase64?.trim());
+		const hasUrl = Boolean(data.url?.trim());
+		if (!hasPhoto && !hasUrl) {
+			ctx.addIssue({
+				code: z.ZodIssueCode.custom,
+				message: "Provide a recipe URL or a photo",
+				path: ["url"],
+			});
+		}
+		if (hasPhoto && !data.photoMimeType) {
+			ctx.addIssue({
+				code: z.ZodIssueCode.custom,
+				message: "photoMimeType is required with photoBase64",
+				path: ["photoMimeType"],
+			});
+		}
+		if (hasPhoto && data.photoBase64) {
+			const approxBytes = Math.ceil((data.photoBase64.length * 3) / 4);
+			if (approxBytes > RECIPE_IMPORT_PHOTO_MAX_BYTES) {
+				ctx.addIssue({
+					code: z.ZodIssueCode.custom,
+					message: "Photo is too large (Max 5MB)",
+					path: ["photoBase64"],
+				});
+			}
+		}
+		if (data.pageHtml && hasPhoto) {
+			ctx.addIssue({
+				code: z.ZodIssueCode.custom,
+				message: "Cannot combine pageHtml with photo import",
+				path: ["pageHtml"],
+			});
+		}
+	});
 
 export type RecipeImportRequest = z.infer<typeof RecipeImportRequestSchema>;
 

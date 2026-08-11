@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import type { AppLoadContext } from "react-router";
 import * as schema from "~/db/schema";
+import { isD1ContentionError } from "~/lib/error-handler";
 import { throwMobileJsonError } from "~/lib/mobile/responses.server";
 import {
 	assertMobileOrgMembership,
@@ -9,6 +10,16 @@ import {
 } from "~/lib/mobile/token.server";
 import { isPersonalOrganization } from "~/lib/personal-group";
 import { isUserPurgePending } from "~/lib/purge-pending.server";
+
+/** React Router `data()` responses carry this type marker. */
+function isDataWithResponseInit(error: unknown): boolean {
+	return (
+		error !== null &&
+		typeof error === "object" &&
+		"type" in error &&
+		(error as { type: string }).type === "DataWithResponseInit"
+	);
+}
 export interface MobileAuthContext {
 	userId: string;
 	organizationId: string;
@@ -39,7 +50,15 @@ export async function requireMobileUserAuth(
 			throwMobileJsonError("Unauthorized", 401, "unauthorized");
 		}
 		return { userId: claims.userId };
-	} catch {
+	} catch (error) {
+		if (isDataWithResponseInit(error)) throw error;
+		if (isD1ContentionError(error)) {
+			throwMobileJsonError(
+				"The server is under heavy load. Please wait a moment and try again.",
+				503,
+				"server_busy",
+			);
+		}
 		throwMobileJsonError("Unauthorized", 401, "unauthorized");
 	}
 }
@@ -70,8 +89,18 @@ export async function requireMobileAuth(
 			organizationId: claims.organizationId,
 		};
 	} catch (error) {
+		if (isDataWithResponseInit(error)) throw error;
 		if (error instanceof Error && error.message === "forbidden_org") {
 			throwMobileJsonError("Organization access denied", 403, "forbidden_org");
+		}
+		// D1 blips during membership checks must not look like expired sessions —
+		// iOS treats 401 + failed refresh as forced logout.
+		if (isD1ContentionError(error)) {
+			throwMobileJsonError(
+				"The server is under heavy load. Please wait a moment and try again.",
+				503,
+				"server_busy",
+			);
 		}
 		throwMobileJsonError("Unauthorized", 401, "unauthorized");
 	}

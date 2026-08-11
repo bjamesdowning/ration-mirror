@@ -18,6 +18,9 @@ const WARM_MS = Number(process.env.E2E_VITE_WARM_MS ?? "35000");
 const E2E_AI_FLAG_OVERRIDES = {
 	"ai-scan-receipt": true,
 	"ai-import-url": true,
+	"ai-import-web": true,
+	"ai-import-social": true,
+	"ai-import-photo": true,
 	"ai-dock-from-receipt": true,
 	"ai-generate-meal": true,
 	"ai-plan-week": true,

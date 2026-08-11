@@ -125,17 +125,21 @@ export async function rotateMobileRefreshToken(
 
 	await assertMobileOrgMembership(env, row.userId, row.organizationId);
 
-	await db
-		.update(schema.mobileRefreshToken)
-		.set({ revokedAt: new Date() })
-		.where(eq(schema.mobileRefreshToken.id, row.id));
-
-	return issueMobileTokenPair(
+	// Issue the new pair before revoking the old row. Revoke-then-issue left
+	// clients stranded when D1 failed mid-rotation under load.
+	const pair = await issueMobileTokenPair(
 		env,
 		row.userId,
 		row.organizationId,
 		row.familyId,
 	);
+
+	await db
+		.update(schema.mobileRefreshToken)
+		.set({ revokedAt: new Date() })
+		.where(eq(schema.mobileRefreshToken.id, row.id));
+
+	return pair;
 }
 
 export async function revokeMobileRefreshFamilies(

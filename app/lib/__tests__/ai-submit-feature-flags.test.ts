@@ -54,6 +54,36 @@ describe("AI submit feature flags", () => {
 		expect(send).not.toHaveBeenCalled();
 	});
 
+	it("submitRecipeImport asserts lane flag after parent", async () => {
+		const send = vi.fn();
+		const getBooleanValue = vi
+			.fn()
+			.mockResolvedValueOnce(true) // ai-import-url
+			.mockResolvedValueOnce(false); // ai-import-web
+		const env = {
+			...createMockEnv(),
+			FLAGS: createMockFlagship({ getBooleanValue }),
+			IMPORT_URL_QUEUE: { send },
+		} as unknown as Cloudflare.Env;
+
+		await expect(
+			submitRecipeImport(env, {
+				userId: "u1",
+				organizationId: "o1",
+				url: "https://example.com/recipe",
+				flagContext: { userId: "u1" },
+			}),
+		).rejects.toMatchObject({
+			type: "DataWithResponseInit",
+			data: { code: FEATURE_DISABLED_CODE },
+			init: { status: 403 },
+		});
+		expect(assertFeatureEnabled).toHaveBeenCalledWith(env, "ai-import-web", {
+			userId: "u1",
+		});
+		expect(send).not.toHaveBeenCalled();
+	});
+
 	it("submitVisualScan asserts ai-scan-receipt before credit work", async () => {
 		const env = {
 			...createMockEnv(),

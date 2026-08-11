@@ -72,6 +72,9 @@ struct ClientFlags: Codable, Sendable, Equatable {
     var appleWebLogin: Bool?
     var rationCopilot: Bool?
     var aiImportUrl: Bool?
+    var aiImportWeb: Bool?
+    var aiImportSocial: Bool?
+    var aiImportPhoto: Bool?
     var aiScanReceipt: Bool?
     var aiDockFromReceipt: Bool?
     var aiGenerateMeal: Bool?
@@ -92,6 +95,9 @@ struct ClientFlags: Codable, Sendable, Equatable {
 
     var isRationCopilotEnabled: Bool { rationCopilot == true }
     var isAiImportUrlEnabled: Bool { aiImportUrl == true }
+    var isAiImportWebEnabled: Bool { aiImportWeb == true }
+    var isAiImportSocialEnabled: Bool { aiImportSocial == true }
+    var isAiImportPhotoEnabled: Bool { aiImportPhoto == true }
     var isAiScanReceiptEnabled: Bool { aiScanReceipt == true }
     var isAiDockFromReceiptEnabled: Bool {
         aiDockFromReceipt == true && aiScanReceipt == true

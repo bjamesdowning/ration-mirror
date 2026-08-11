@@ -23,7 +23,8 @@ import {
 export const AI_COSTS = {
 	SCAN: 2,
 	MEAL_GENERATE: 2,
-	IMPORT_URL: 1,
+	/** Premium import (web / social / photo) — Supadata + Gemini. */
+	IMPORT_URL: 3,
 	ORGANIZE_CARGO: 2,
 	MEAL_PLAN_WEEKLY: 3,
 	COPILOT_TURN: 1,

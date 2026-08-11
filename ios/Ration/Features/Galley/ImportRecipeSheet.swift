@@ -1,3 +1,4 @@
+import PhotosUI
 import SwiftUI
 import Observation
 
@@ -7,12 +8,23 @@ struct ImportRecipeSheet: View {
     @State private var model = ImportRecipeViewModel()
     @State private var consent = AIConsentCoordinator()
     @State private var paywallContext: PaywallContext?
+    @State private var photoPickerItem: PhotosPickerItem?
     var onComplete: () async -> Void = {}
     var onImportedMeal: (MealSummary) -> Void = { _ in }
     var onAddManually: () -> Void = {}
 
+    private var clientFlags: ClientFlags { env.session.clientFlags }
+
     private var creditCost: Int {
-        env.session.session?.aiCosts?.importUrl ?? 1
+        env.session.session?.aiCosts?.importUrl ?? 3
+    }
+
+    private var photoImportEnabled: Bool {
+        clientFlags.isAiImportPhotoEnabled
+    }
+
+    private var linkImportEnabled: Bool {
+        clientFlags.isAiImportWebEnabled || clientFlags.isAiImportSocialEnabled
     }
 
     var body: some View {
@@ -44,6 +56,8 @@ struct ImportRecipeSheet: View {
                         }
                         .buttonStyle(SecondaryButtonStyle())
                     }
+                case let .softFailToPhoto(message):
+                    softFailToPhotoContent(message)
                 case let .siteBlocked(message):
                     siteBlockedContent(message)
                 }
@@ -81,6 +95,15 @@ struct ImportRecipeSheet: View {
                     paywallContext = model.paywallContext ?? .credits()
                 }
             }
+            .onChange(of: photoPickerItem) { _, item in
+                guard let item else { return }
+                Task { await handlePhotoSelection(item) }
+            }
+            .onAppear {
+                if !linkImportEnabled, photoImportEnabled {
+                    model.inputMode = .photo
+                }
+            }
             .onDisappear { model.cancelActiveWork() }
         }
     }
@@ -90,33 +113,117 @@ struct ImportRecipeSheet: View {
             VStack(spacing: 16) {
                 AIFeatureInlineIntro(
                     title: "Import recipe",
-                    detail: "Paste an HTTPS recipe webpage URL and Ration extracts ingredients and directions into Galley. Video links and non-recipe pages aren’t supported. Some sites block automated imports — if so, Ration will try loading the page on your device; if that fails too, add the meal manually.",
+                    detail: importIntroDetail,
                     creditCost: creditCost,
                     costLabel: "per import",
                     nextSteps: "Review the imported meal before adding to Galley.",
-                    hint: env.session.clientFlags.isNutritionEngineEnabled
+                    hint: clientFlags.isNutritionEngineEnabled
                         ? "Nutrition (when available): USDA match first; AI estimates are labelled—edit before saving."
                         : nil
                 )
-                TextField("Recipe URL", text: $model.url)
-                    .textInputAutocapitalization(.never)
-                    .keyboardType(.URL)
-                    .textFieldStyle(.roundedBorder)
-                Text("Needs a recipe page with ingredients and steps — not a video link. If a site blocks bots, you’ll get a device reload or manual entry next step.")
-                    .rationCaption()
-                    .foregroundStyle(Theme.muted)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                AIFeaturePrimaryButton(
-                    label: "Import",
-                    creditCost: creditCost,
-                    isDisabled: model.url.trimmingCharacters(in: .whitespaces).isEmpty
-                ) {
-                    consent.presentIfNeeded(session: env.session) {
-                        model.submit(api: env.api, session: env.session)
+
+                if photoImportEnabled, linkImportEnabled {
+                    Picker("Import source", selection: $model.inputMode) {
+                        ForEach(ImportRecipeViewModel.ImportInputMode.allCases) { mode in
+                            Text(mode.label).tag(mode)
+                        }
                     }
+                    .pickerStyle(.segmented)
+                }
+
+                switch model.inputMode {
+                case .link:
+                    linkInputContent
+                case .photo:
+                    photoInputContent
                 }
             }
         }
+    }
+
+    private var linkInputContent: some View {
+        VStack(spacing: 16) {
+            TextField("Recipe URL", text: $model.url)
+                .textInputAutocapitalization(.never)
+                .keyboardType(.URL)
+                .textFieldStyle(.roundedBorder)
+            Text(supportedSourcesCaption)
+                .rationCaption()
+                .foregroundStyle(Theme.muted)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            if clientFlags.isAiImportWebEnabled {
+                Text("Some recipe sites block automated imports — Ration can reload the page on your device when that happens.")
+                    .rationCaption()
+                    .foregroundStyle(Theme.muted)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            AIFeaturePrimaryButton(
+                label: "Import",
+                creditCost: creditCost,
+                isDisabled: model.url.trimmingCharacters(in: .whitespaces).isEmpty
+            ) {
+                consent.presentIfNeeded(session: env.session) {
+                    model.submit(api: env.api, session: env.session)
+                }
+            }
+        }
+    }
+
+    private var photoInputContent: some View {
+        VStack(spacing: 16) {
+            Text("Choose a clear screenshot or photo of a recipe with ingredients and steps visible.")
+                .rationCaption()
+                .foregroundStyle(Theme.muted)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            PhotosPicker(selection: $photoPickerItem, matching: .images) {
+                Label("Choose photo", systemImage: "photo.on.rectangle.angled")
+            }
+            .buttonStyle(SecondaryButtonStyle())
+            Text("JPEG, PNG, or WebP · max 5MB")
+                .rationCaption()
+                .foregroundStyle(Theme.muted)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private var importIntroDetail: String {
+        let sources = supportedSourcePhrases
+        let sourceText: String
+        if sources.isEmpty {
+            sourceText = "recipe links and photos"
+        } else if sources.count == 1 {
+            sourceText = sources[0]
+        } else if sources.count == 2 {
+            sourceText = "\(sources[0]) and \(sources[1])"
+        } else {
+            sourceText = "\(sources.dropLast().joined(separator: ", ")), and \(sources.last!)"
+        }
+        return "Bring a recipe into Galley from \(sourceText). Ration extracts ingredients and directions so you can review before saving."
+    }
+
+    private var supportedSourcePhrases: [String] {
+        var phrases: [String] = []
+        if clientFlags.isAiImportWebEnabled {
+            phrases.append("recipe websites")
+        }
+        if clientFlags.isAiImportSocialEnabled {
+            phrases.append("TikTok, YouTube, and Instagram links")
+        }
+        if clientFlags.isAiImportPhotoEnabled {
+            phrases.append("recipe screenshots or photos")
+        }
+        return phrases
+    }
+
+    private var supportedSourcesCaption: String {
+        let phrases = supportedSourcePhrases
+        guard !phrases.isEmpty else {
+            return "Paste an HTTPS link to a page with ingredients and directions."
+        }
+        if phrases.count == 1 {
+            return "Works with \(phrases[0])."
+        }
+        return "Works with \(phrases.dropLast().joined(separator: ", ")), and \(phrases.last!)."
     }
 
     private var capturingContent: some View {
@@ -125,13 +232,32 @@ struct ImportRecipeSheet: View {
                 .tint(Theme.hyperGreen)
             Text("Loading page on your device…")
                 .rationHeadline()
-            Text("This site blocked our servers. Trying again with your connection (uses 1 credit if extraction starts).")
+            Text("This site blocked our servers. Trying again with your connection (uses \(creditCost) credits if extraction starts).")
                 .rationCaption()
                 .foregroundStyle(Theme.muted)
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 24)
+    }
+
+    private func softFailToPhotoContent(_ message: String) -> some View {
+        VStack(spacing: 12) {
+            ErrorBanner(message: message)
+            if photoImportEnabled {
+                Button("Import from screenshot") {
+                    model.switchToPhotoImport()
+                }
+                .buttonStyle(PrimaryButtonStyle())
+            }
+            Button("Try again") { model.reset() }
+                .buttonStyle(SecondaryButtonStyle())
+            Button("Add meal manually") {
+                dismiss()
+                onAddManually()
+            }
+            .buttonStyle(SecondaryButtonStyle())
+        }
     }
 
     private func siteBlockedContent(_ message: String) -> some View {
@@ -222,6 +348,21 @@ struct ImportRecipeSheet: View {
                 }
             }
             .buttonStyle(PrimaryButtonStyle())
+        }
+    }
+
+    private func handlePhotoSelection(_ item: PhotosPickerItem) async {
+        defer { photoPickerItem = nil }
+        do {
+            guard let data = try await item.loadTransferable(type: Data.self) else {
+                model.fail(with: ImportRecipeViewModel.PhotoPrepError.unreadable.localizedDescription)
+                return
+            }
+            consent.presentIfNeeded(session: env.session) {
+                model.submitPhoto(data: data, api: env.api, session: env.session)
+            }
+        } catch {
+            model.fail(with: error.localizedDescription)
         }
     }
 }

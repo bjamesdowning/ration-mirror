@@ -28,9 +28,29 @@ export const FLAG_REGISTRY: Record<string, FlagRegistryEntry> = {
 	},
 	"ai-import-url": {
 		defaultEnabled: false,
-		description: "AI recipe URL import (Browser Rendering + LLM)",
+		description: "AI recipe import parent switch (web / social / photo lanes)",
 		clientVisible: true,
 		clientKey: "aiImportUrl",
+	},
+	"ai-import-web": {
+		defaultEnabled: false,
+		description:
+			"Website recipe import (plain fetch + Supadata scrape + client assist)",
+		clientVisible: true,
+		clientKey: "aiImportWeb",
+	},
+	"ai-import-social": {
+		defaultEnabled: false,
+		description:
+			"Social URL import (TikTok / Instagram / YouTube via metadata + Supadata)",
+		clientVisible: true,
+		clientKey: "aiImportSocial",
+	},
+	"ai-import-photo": {
+		defaultEnabled: false,
+		description: "Screenshot / photo recipe import (Gemini vision)",
+		clientVisible: true,
+		clientKey: "aiImportPhoto",
 	},
 	"ai-scan-receipt": {
 		defaultEnabled: false,

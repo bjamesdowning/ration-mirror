@@ -85,7 +85,11 @@ export function isD1ContentionError(error: unknown): boolean {
 		isD1ParamLimitError(error) ||
 		msg.includes("database is locked") ||
 		msg.includes("too many connections") ||
-		msg.includes("timeout") ||
+		// Prefer D1/query-shaped timeouts — bare "timeout" over-classifies
+		// unrelated AbortErrors and fetch deadlines as "server busy".
+		msg.includes("query timeout") ||
+		msg.includes("a timeout occurred") ||
+		msg.includes("request timed out") ||
 		msg.includes("worker exceeded") ||
 		// D1 HTTP error codes for timeouts
 		msg.includes("522") ||

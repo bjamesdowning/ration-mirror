@@ -59,6 +59,7 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
 			error?: string;
 			existingMealId?: string;
 			existingMealName?: string;
+			softFailToPhoto?: boolean;
 		}>(job.resultJson);
 
 		return data(
@@ -72,6 +73,7 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
 				error: result.error,
 				existingMealId: result.existingMealId,
 				existingMealName: result.existingMealName,
+				softFailToPhoto: result.softFailToPhoto === true,
 			},
 			{ headers: NO_STORE },
 		);

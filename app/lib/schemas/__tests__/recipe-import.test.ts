@@ -41,6 +41,26 @@ describe("RecipeImportRequestSchema", () => {
 		});
 		expect(result.success).toBe(false);
 	});
+
+	it("accepts photo-only import", () => {
+		const result = RecipeImportRequestSchema.safeParse({
+			photoBase64: "a".repeat(64),
+			photoMimeType: "image/jpeg",
+		});
+		expect(result.success).toBe(true);
+	});
+
+	it("rejects photo without mime type", () => {
+		const result = RecipeImportRequestSchema.safeParse({
+			photoBase64: "a".repeat(64),
+		});
+		expect(result.success).toBe(false);
+	});
+
+	it("rejects empty body", () => {
+		const result = RecipeImportRequestSchema.safeParse({});
+		expect(result.success).toBe(false);
+	});
 });
 
 describe("ImportConfirmRequestSchema", () => {

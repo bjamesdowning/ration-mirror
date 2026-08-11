@@ -135,8 +135,13 @@ final class APIClient {
             do {
                 _ = try await auth.refreshAccessToken()
             } catch {
-                await auth.signOutLocal()
-                throw APIError.unauthorized
+                // Only wipe the session on definitive auth failure. Transient
+                // 503/server_busy during refresh must not force re-login.
+                if Self.shouldForceSignOut(afterRefreshError: error) {
+                    await auth.signOutLocal()
+                    throw APIError.unauthorized
+                }
+                throw error
             }
             // Only auto-replay idempotent reads. Mutating verbs require caller retry.
             let methodUpper = method.uppercased()
@@ -211,6 +216,20 @@ final class APIClient {
             return CancellationError()
         }
         return APIError.transport(error.localizedDescription)
+    }
+
+    /// Definitive auth failures only — not transient overload during token rotation.
+    nonisolated static func shouldForceSignOut(afterRefreshError error: Error) -> Bool {
+        if case APIError.unauthorized = error { return true }
+        if case APIError.notAuthenticated = error { return true }
+        if case let APIError.server(status, _, code, _, _, _, _, _, _, _) = error {
+            if status == 503 || code == "server_busy" { return false }
+            if code == "invalid_refresh_token" { return true }
+            if status == 401 { return true }
+            return false
+        }
+        // Transport / decoding / cancellation — keep local session.
+        return false
     }
 }
 

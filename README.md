@@ -18,7 +18,7 @@ An AI-powered pantry and meal-planning application built as a Cloudflare Worker 
   - [3.5 Supply Sync (D1 + Vectorize)](#35-supply-sync-d1--vectorize)
   - [3.6 Meal Plan Consume Flow (D1 + Vectorize)](#36-meal-plan-consume-flow-d1--vectorize)
   - [3.7 Plan Week (Queue + AI Gateway)](#37-plan-week-queue--ai-gateway)
-  - [3.8 Import URL (Queue + AI Gateway + Browser Rendering)](#38-import-url-queue--ai-gateway--browser-rendering)
+  - [3.8 Recipe import (Queue + AI Gateway + Supadata)](#38-recipe-import-queue--ai-gateway--supadata)
 - [4. Feature Reference](#4-feature-reference)
   - [4.1 Cargo (Inventory)](#41-cargo-inventory)
   - [4.2 Galley (Recipes & Provisions)](#42-galley-recipes--provisions)
@@ -109,13 +109,13 @@ flowchart TB
     subgraph External["External Services"]
         Google["Google OAuth 2.0"]
         Stripe["Stripe API + Webhooks"]
-        BrowserRendering["Browser Rendering REST API"]
+        Supadata["Supadata — web.scrape + transcripts"]
     end
 
     BetterAuth -->|OAuth| Google
     ReactRouter -->|Checkout / Portal| Stripe
     Stripe -->|POST /api/webhook| Worker
-    Worker -->|Recipe import| BrowserRendering
+    Worker -->|Recipe import| Supadata
 ```
 
 #### 1.3 MCP Worker (ration-mcp) — AI agent interface
@@ -218,7 +218,7 @@ flowchart TB
 | `PLAN_WEEK_QUEUE` | Queue producer | Enqueue plan-week jobs; consumer runs Gemini for weekly meal schedule |
 | `IMPORT_URL_QUEUE` | Queue producer | Enqueue URL import jobs; consumer fetches page, runs Gemini extraction, creates meal |
 
-**Secrets (wrangler):** `CF_BROWSER_RENDERING_TOKEN` — optional; when set, recipe import uses Cloudflare Browser Rendering for JS-heavy sites. When absent, plain fetch only.
+**Secrets (wrangler):** `SUPADATA_API_KEY` — recipe import web scrape + social transcripts. Optional `YOUTUBE_DATA_API_KEY` for YouTube description metadata. `CF_BROWSER_RENDERING_TOKEN` is unused by the import path.
 
 **R2 lifecycle (`scan-pending/*`):** Failed/abandoned scans can leave orphaned objects under `scan-pending/*` in the `ration-storage` bucket. Cleanup is a native, zero-code **R2 Object Lifecycle Rule** (not application code), applied once per bucket by an operator:
 
@@ -627,16 +627,25 @@ User confirms the preview → bulk add via `POST /api/meal-plans/:id/entries/bul
 
 ---
 
-### 3.8 Import URL (Queue + AI Gateway + Browser Rendering + client assist)
+### 3.8 Recipe import (Queue + AI Gateway + Supadata)
 
-URL import uses a queue to offload page fetch, AI extraction, and meal creation. Producer validates URL (SSRF, duplicate) before enqueue; consumer fetches (plain or Browser Rendering fallback), runs Gemini via AI Gateway, and stores an **extracted recipe** for user verification (meal is created only on confirm).
+Recipe import uses a queue to offload content acquisition, Gemini extraction, and verify → confirm meal creation. Producer asserts parent + lane feature flags, validates input (SSRF for URLs, photo size/mime), and debits **3 credits** before enqueue. Consumer routes by `sourceKind`:
 
-Some publishers (notably allrecipes.com / Dotdash) **block automated fetches** (HTTP 402/403 and access-support pages). When that happens the job fails with code **`SITE_BLOCKED`** (credit refunded). Clients can retry with **assisted HTML**:
+| Lane | Acquisition | Flag |
+|------|-------------|------|
+| Website | Plain fetch (Schema.org JSON-LD prefer) → Supadata `web.scrape` → client HTML | `ai-import-web` |
+| Social | TikTok oEmbed / YouTube description → recipe-signal gate → optional Supadata transcript | `ai-import-social` |
+| Photo | R2 upload → Gemini vision | `ai-import-photo` |
 
-- **iOS** — on `SITE_BLOCKED`, the app captures the page on-device (`URLSession`, then `WKWebView`) and re-submits `{ url, pageHtml }`.
-- **Web** — shows a paste-HTML recovery step (open the recipe → copy page source → paste → extract). Manual Galley entry remains available.
+Parent flag: `ai-import-url`. Secret: `SUPADATA_API_KEY` (optional `YOUTUBE_DATA_API_KEY` for richer YouTube metadata).
 
-Client HTML is stored briefly in **R2** (`import-page/{requestId}`) because queue payloads are too small and KV is eventually consistent across colos; the consumer reads R2 and skips remote fetch, then deletes the object after a terminal job result.
+Some publishers **block automated fetches**. When that happens the job fails with code **`SITE_BLOCKED`** (credit refunded). If Supadata is missing, timing out, or returning auth/5xx errors, the job fails with **`IMPORT_PROVIDER_UNAVAILABLE`** (also refunded) and may set `softFailToPhoto`. Clients can retry with **assisted HTML** or a screenshot when photo import is enabled:
+
+- **iOS** — on `SITE_BLOCKED` / provider-unavailable (web lane), the app captures the page on-device and re-submits `{ url, pageHtml }`.
+- **Web** — paste-HTML recovery step. Manual Galley entry remains available.
+- Soft social / provider misses may set **`softFailToPhoto`** so the client can offer screenshot import.
+
+Client HTML / photos are stored briefly in **R2** (`import-page/{requestId}`, `import-photo/{requestId}`); queue payloads never carry HTML/media/transcript blobs.
 
 ```mermaid
 sequenceDiagram
@@ -645,37 +654,36 @@ sequenceDiagram
     participant D1 as D1 Database
     participant Queue as IMPORT_URL_QUEUE
     participant Consumer as Queue Consumer
-    participant Fetch as Plain Fetch / BR / Client HTML
+    participant Acquire as Plain / Supadata / Social / Photo
     participant AIGateway as AI Gateway
 
-    User->>Worker: POST /api/meals/import { url } or { url, pageHtml }
-    Worker->>Worker: requireActiveGroup + SSRF check + duplicate check
-    Worker->>Worker: withCreditGate(cost=1)
+    User->>Worker: POST /api/meals/import { url } or photo / pageHtml
+    Worker->>Worker: flags + SSRF/dedup + withCreditGate(cost=3)
     Worker->>D1: insertQueueJobPending(requestId, "import_url", orgId)
-    opt pageHtml present
-        Worker->>Worker: R2 put import-page/requestId
+    opt pageHtml or photo
+        Worker->>Worker: R2 put artifact
     end
-    Worker->>Queue: send({ requestId, organizationId, userId, url, cost, contentSource? })
+    Worker->>Queue: send({ requestId, url, cost, sourceKind, ... })
     Worker-->>User: { status: "processing", requestId }
 
     loop Poll until done
         User->>Worker: GET /api/meals/import/status/:requestId
         Worker->>D1: getQueueJob(requestId)
         D1-->>Worker: { status, extractedRecipe? | error? }
-        Worker-->>User: { status, success?, extractedRecipe? | error? }
+        Worker-->>User: { status, success?, extractedRecipe? | softFailToPhoto? }
     end
 
     rect rgb(232, 245, 233)
         Note over Consumer,AIGateway: Consumer (async)
-        Consumer->>Fetch: remote fetch, BR, or R2 client HTML
-        Fetch-->>Consumer: page content or SITE_BLOCKED
+        Consumer->>Acquire: lane acquire (web / social / photo)
+        Acquire-->>Consumer: prompt text or SITE_BLOCKED
         Consumer->>AIGateway: POST gemini — JSON extraction
         AIGateway-->>Consumer: { title, ingredients, steps, ... }
         Consumer->>D1: updateQueueJobResult(requestId, "completed" | "failed")
     end
 ```
 
-On success the client shows verification, then confirms via `POST /api/meals/import/confirm`. Duplicate URLs return `DUPLICATE_URL` (sync or from poll). Browser Rendering is used when plain fetch yields 402/403/429, too little content, or non-access `NOT_A_RECIPE` — it cannot bypass sites that identify Cloudflare Browser Run as a bot.
+On success the client shows verification, then confirms via `POST /api/meals/import/confirm`. Duplicate URLs return `DUPLICATE_URL` (sync or from poll).
 
 ---
 
@@ -715,7 +723,7 @@ The Galley holds two types: **Recipes** (full multi-ingredient meals) and **Prov
 **Key workflows:**
 - **Create** — Via `MealBuilder` form or AI generation. Ingredients can be linked to an existing cargo item (`cargoId`) or left as a free-text name. The link is optional — it enables quantity deduction on cook but is not required.
 - **AI generation** — `POST /api/meals/generate` (2 credits) sends pantry context to Gemini and returns 3 Vectorize-verified recipes.
-- **URL import** — `POST /api/meals/import` (1 credit) accepts `{ url }` or `{ url, pageHtml }` and returns `{ status: "processing", requestId }`; client polls `GET /api/meals/import/status/:requestId`. Consumer fetches the page (plain fetch, Browser Rendering fallback, or client-supplied HTML from R2), runs Gemini via AI Gateway for extraction, then waits for verify → `POST /api/meals/import/confirm`. Bot-walled sites return `SITE_BLOCKED` (refunded); web offers paste-HTML recovery and iOS retries with on-device capture. Duplicate URLs return `DUPLICATE_URL` (409 or from poll). HTTPS-only + SSRF guard. Optional `CF_BROWSER_RENDERING_TOKEN` for JS-heavy (non-walled) sites.
+- **URL import** — `POST /api/meals/import` (3 credits) accepts `{ url }`, `{ url, pageHtml }`, `{ url, userText }` (social), or `{ photoBase64, photoMimeType }` and returns `{ status: "processing", requestId }`; client polls `GET /api/meals/import/status/:requestId`. Consumer routes by lane: website (plain fetch → Supadata `web.scrape` → client HTML), social (metadata → optional Supadata transcript → Gemini), or photo (R2 → Gemini vision). Verify → `POST /api/meals/import/confirm`. Bot-walled sites return `SITE_BLOCKED` (refunded). Supadata outages return `IMPORT_PROVIDER_UNAVAILABLE` (refunded, often with `softFailToPhoto`). Soft social misses may set `softFailToPhoto`. Duplicate URLs return `DUPLICATE_URL`. HTTPS-only + SSRF guard for URL lanes. Requires `SUPADATA_API_KEY` for scrape/transcript escalation. Parent flag `ai-import-url` plus lane flags `ai-import-web` / `ai-import-social` / `ai-import-photo`.
 - **Cook** — `POST /api/meals/:id/cook` deducts all ingredients from cargo via the Vectorize-backed resolver (updates both `quantity` and `base_quantity`). Accepts a `servings` override to scale quantities.
 - **Match mode** — `GET /api/meals/match` returns meals ranked by how much of their ingredient list is already in the pantry, in either `strict` (100% match only) or `delta` (partial match, sorted by %) mode.
 - **Tags** — Shared org-wide registry via `tag` + `meal_tag` junction (same tags as cargo). Used for filtering in Galley, Manifest, Supply, and MCP `list_meals`.
@@ -1877,7 +1885,7 @@ Bearer-authenticated REST surface for the **iOS app** at `/api/mobile/v1/*`. Web
 | `GET` | `/api/mobile/v1/meals/match` | Match meals to cargo (optional `q` name filter) |
 | `POST` | `/api/mobile/v1/meals/generate` | AI meal ideas (2 credits) |
 | `GET` | `/api/mobile/v1/meals/generate/:requestId` | Poll generate job |
-| `POST` | `/api/mobile/v1/meals/import` | URL recipe import (1 credit) |
+| `POST` | `/api/mobile/v1/meals/import` | Recipe import URL / social / photo (3 credits) |
 | `GET` | `/api/mobile/v1/meals/import/:requestId` | Poll import job |
 | `POST` | `/api/mobile/v1/meals/import/confirm` | Confirm imported recipe |
 | `POST` | `/api/mobile/v1/meals/:id/cook` | Cook meal (deduct cargo) |
@@ -2222,7 +2230,7 @@ Gradual rollouts use [Cloudflare Flagship](https://developers.cloudflare.com/fla
 - **Validate registry:** `bun run flag:check`
 - **Setup:** Flagship apps `ration` (production) and `ration-dev` (local/remote dev) are wired in `wrangler.jsonc`, `wrangler.dev.jsonc`, `wrangler.local.jsonc`, and `wrangler.copilot.jsonc`; run `bun run cf-typegen` after changing `app_id`
 
-**AI ops kill switches** (permanent; registry default off / fail closed): `ai-import-url`, `ai-scan-receipt`, `ai-dock-from-receipt`, `ai-generate-meal`, `ai-plan-week`. Server asserts **403** `FEATURE_DISABLED` before credit debit. Web + iOS hide entry points via `clientFlags` (mobile: `GET /api/mobile/v1/session`). For already-live AI, create Flagship flags with default **ON** before deploy; emergency kill via dashboard or `FEATURE_FLAG_OVERRIDES`. See [`docs/dev/feature-flags.md`](docs/dev/feature-flags.md) § AI ops kill switches.
+**AI ops kill switches** (permanent; registry default off / fail closed): `ai-import-url` (parent), `ai-import-web`, `ai-import-social`, `ai-import-photo`, `ai-scan-receipt`, `ai-dock-from-receipt`, `ai-generate-meal`, `ai-plan-week`. Server asserts **403** `FEATURE_DISABLED` before credit debit. Web + iOS hide entry points via `clientFlags` (mobile: `GET /api/mobile/v1/session`). For already-live AI, create Flagship flags with default **ON** before deploy; emergency kill via dashboard or `FEATURE_FLAG_OVERRIDES`. See [`docs/dev/feature-flags.md`](docs/dev/feature-flags.md) § AI ops kill switches.
 
 **Nutrition flags** (F0 spine; registry default off): `nutrition-engine`, `nutrition-ai-estimate`, `nutrition-manifest`, `nutrition-goals`, `nutrition-cook-log-split`, `nutrition-async-recompute`. Bind `NUTRITION_DB` to `ration-nutrition` / `ration-nutrition-dev`. Local smoke seed: `bun run db:nutrition:seed:local` (`nutrition-db/schema.sql` + `nutrition-db/seed-minimal.sql`) — **never** promote the smoke seed to production/reviewers. Verified Foundation + SR Legacy (+ optional FNDDS) import: pin `nutrition-db/releases/current.json`, then `bun run db:nutrition:import:generate` (remote apply requires archive SHA pins; promote via binding change). After food rows exist, apply curated aliases with `bun run db:nutrition:alias:remote`. Matcher/KV keys are versioned by dataset snapshot + matcher (`1.4.0`); automated name matches are quality `high`, never `verified`. Main D1 stores cargo/meal snapshots plus `ingredient_nutrition_match`, `nutrition_consent`, `nutrition_goal`, `nutrition_intake`, request-level `nutrition_operation`, value-free `nutrition_access_audit`, and the `nutrition_recompute_job` outbox/lease ledger. Migrations `0045_*`–`0050_*` add the release-hardening columns, indexes, ledgers, consent-withdrawal idempotency, stable committed operation results, durable intake-undo consumption, user-scoped operation keys, one open goal, and deletion-safe recompute context; they are operator-applied before hardening code is enabled. Operator order: [nutrition-rollout.md](docs/dev/nutrition-rollout.md).
 

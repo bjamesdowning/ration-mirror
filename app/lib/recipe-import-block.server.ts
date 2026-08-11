@@ -8,6 +8,13 @@ export const SITE_BLOCKED_CODE = "SITE_BLOCKED" as const;
 export const SITE_BLOCKED_MESSAGE =
 	"This site blocked automated import. On the app we'll try loading it on your device; on web, paste the page HTML, or add the recipe manually.";
 
+/** Supadata (or other import helper) down / misconfigured — always refund. */
+export const IMPORT_PROVIDER_UNAVAILABLE_CODE =
+	"IMPORT_PROVIDER_UNAVAILABLE" as const;
+
+export const IMPORT_PROVIDER_UNAVAILABLE_MESSAGE =
+	"Recipe import helpers are temporarily unavailable. Try again shortly, paste the page HTML, or import from a screenshot.";
+
 /** HTTP statuses that indicate the origin refused automated access. */
 export const SITE_BLOCK_HTTP_STATUSES = new Set([402, 403, 429]);
 
@@ -59,6 +66,12 @@ export const IMPORT_PAGE_R2_PREFIX = "import-page/";
 
 export function importPageR2Key(requestId: string): string {
 	return `${IMPORT_PAGE_R2_PREFIX}${requestId}`;
+}
+
+const IMPORT_PHOTO_R2_PREFIX = "import-photo/";
+
+export function importPhotoR2Key(requestId: string): string {
+	return `${IMPORT_PHOTO_R2_PREFIX}${requestId}`;
 }
 
 /** UTF-8 byte length of a string (Workers / browser). */

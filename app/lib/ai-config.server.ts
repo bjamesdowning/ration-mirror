@@ -18,6 +18,7 @@ export type GatewayFeature =
 	| "meal_generate"
 	| "plan_week"
 	| "import_url"
+	| "import_photo"
 	| "nutrition_estimate";
 
 export type GatewayBackoff = "constant" | "linear" | "exponential";
@@ -82,6 +83,16 @@ export const GATEWAY_FEATURE_CONFIG: Record<
 		retryDelayMs: 1_500,
 		backoff: "exponential",
 		cache: { ttlSeconds: 3600 },
+	},
+	import_photo: {
+		thinkingLevel: "MINIMAL",
+		mediaResolution: "MEDIA_RESOLUTION_HIGH",
+		maxOutputTokens: 4_096,
+		requestTimeoutMs: 90_000,
+		maxAttempts: 2,
+		retryDelayMs: 1_500,
+		backoff: "exponential",
+		cache: { skip: true },
 	},
 	nutrition_estimate: {
 		thinkingLevel: "MINIMAL",

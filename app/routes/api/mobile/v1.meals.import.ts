@@ -53,6 +53,9 @@ export async function action({ request, context }: Route.ActionArgs) {
 			organizationId,
 			url: parsedRequest.data.url,
 			pageHtml: parsedRequest.data.pageHtml,
+			userText: parsedRequest.data.userText,
+			photoBase64: parsedRequest.data.photoBase64,
+			photoMimeType: parsedRequest.data.photoMimeType,
 			flagContext: buildFlagContext(request, env, { user: { id: userId } }),
 		});
 

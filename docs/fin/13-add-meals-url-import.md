@@ -1,22 +1,24 @@
-# Import a recipe from a URL
+# Import a recipe (URL, social, or photo)
 
 ## What it does
 
-**URL import** fetches a public recipe page, extracts structure (title, ingredients, steps), and creates a new meal in your **Galley** after you review and confirm.
+**Recipe import** extracts structure (title, ingredients, steps) from a **website URL**, a **social video URL** (TikTok / Instagram / YouTube), or a **photo / screenshot**, then creates a new meal in your **Galley** after you review and confirm.
 
 ## Credits
 
-URL import costs **1 AI credit** per job. Credits come from your **organization** balance. Failed automated fetches that return **site blocked** are refunded; a successful assisted retry (paste HTML / on-device capture) is a new 1-credit job.
+Each import costs **3 AI credits** (premium — external fetch/transcript plus Gemini). Credits come from your **organization** balance. Failed automated fetches that return **site blocked** are refunded; a successful assisted retry (paste HTML / on-device capture / photo) is a new **3-credit** job.
 
-## Requirements
+## Supported sources
 
-- **HTTPS recipe webpage** — Only **https://** URLs that open a recipe page (ingredients and directions in HTML) are supported. This also protects against unsafe internal network requests.
-- **Not supported** — Video links (YouTube, TikTok, Instagram Reels, and similar) and non-recipe pages. Import needs readable recipe HTML, not a video player.
-- Manual Galley entry always remains available if a link cannot be imported.
+- **Recipe websites** — HTTPS pages with ingredients and directions. If a publisher blocks bots, Ration helps you paste the page HTML (web) or reload on-device (iOS).
+- **Social posts** — TikTok, Instagram, and YouTube (including Shorts). Ration uses captions, descriptions, and transcripts when needed.
+- **Photos / screenshots** — Upload a clear image of a recipe card, cookbook page, or caption.
+
+Manual Galley entry always remains available.
 
 ## Processing and polling
 
-Import runs **asynchronously**. After you submit a URL, the app shows **processing** and **polls** until extraction finishes or an error is returned. You then **verify** the extracted recipe and confirm to add it to Galley.
+Import runs **asynchronously**. After you submit, the app shows **processing** and **polls** until extraction finishes or an error is returned. You then **verify** the extracted recipe and confirm to add it to Galley.
 
 When nutrition is enabled, Ration prefers a **USDA** match for ingredients; AI nutrient estimates (labelled, not verified until you edit) apply only when nutrition AI estimate is also on for this AI ingest path. Review nutrition before relying on day totals—see *Nutrition overview*.
 
@@ -28,7 +30,7 @@ If that recipe URL was already imported for your organization, Ration returns a 
 
 Some publishers block server-side downloads with bot protection. Ration detects this as **site blocked** and guides you:
 
-- **Web** — Open the recipe, copy the page HTML (or recipe text; keep under ~1MB), paste it into the import dialog, and extract (1 credit). Or add the meal manually.
-- **iOS** — Ration tries loading the page on your device, then re-submits the HTML (1 credit if extraction starts). If that still fails, open in Safari and add the meal manually.
+- **Web** — Open the recipe, copy the page HTML (or recipe text; keep under ~1MB), paste it into the import dialog, and extract (**3 credits**). Or add the meal manually. If photo import is enabled, you can also import from a screenshot.
+- **iOS** — Ration tries loading the page on your device, then re-submits the HTML (**3 credits** if extraction starts). If that still fails, open in Safari, add the meal manually, or use a screenshot when photo import is on.
 
 If pricing shows a different credit cost, **trust the pricing page**.

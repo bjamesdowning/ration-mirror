@@ -60,7 +60,7 @@ describe("runImportUrlConsumerJob SSRF redirect re-check", () => {
 			organizationId: "org_1",
 			userId: "user_1",
 			url: "https://example.com/recipe",
-			cost: 1,
+			cost: 3,
 		});
 
 		expect(updateQueueJobResult).toHaveBeenCalledWith(

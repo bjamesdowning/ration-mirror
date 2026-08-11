@@ -5,6 +5,11 @@ import { meal } from "~/db/schema";
 import { assertFeatureEnabled } from "~/lib/feature-flags/assert-enabled.server";
 import type { FlagshipEvaluationContext } from "~/lib/feature-flags/flags.server";
 import {
+	classifyImportUrl,
+	type ImportSourceKind,
+	laneFlagForSource,
+} from "~/lib/import/classify-import-url";
+import {
 	AI_COSTS,
 	InsufficientCreditsError,
 	withCreditGate,
@@ -13,9 +18,14 @@ import { log } from "~/lib/logging.server";
 import { insertQueueJobPending } from "~/lib/queue-job.server";
 import {
 	importPageR2Key,
+	importPhotoR2Key,
 	utf8ByteLength,
 } from "~/lib/recipe-import-block.server";
-import { RECIPE_IMPORT_PAGE_HTML_MAX } from "~/lib/schemas/recipe-import";
+import {
+	RECIPE_IMPORT_PAGE_HTML_MAX,
+	RECIPE_IMPORT_PHOTO_MAX_BYTES,
+	type RecipeImportRequest,
+} from "~/lib/schemas/recipe-import";
 
 /** Private IP ranges and known metadata endpoints to block (SSRF mitigation). */
 const BLOCKED_HOSTNAMES = new Set([
@@ -69,9 +79,12 @@ export function isBlockedImportUrl(rawUrl: string): boolean {
 export interface SubmitRecipeImportInput {
 	userId: string;
 	organizationId: string;
-	url: string;
+	url?: string;
 	/** Client-assisted page HTML (stored in R2; not sent on the queue). */
 	pageHtml?: string;
+	userText?: string;
+	photoBase64?: string;
+	photoMimeType?: RecipeImportRequest["photoMimeType"];
 	flagContext: FlagshipEvaluationContext;
 }
 
@@ -85,6 +98,15 @@ export type SubmitRecipeImportResult =
 			error: string;
 	  };
 
+function decodeBase64Photo(base64: string): ArrayBuffer {
+	const binary = atob(base64.replace(/\s/g, ""));
+	const bytes = new Uint8Array(binary.length);
+	for (let i = 0; i < binary.length; i++) {
+		bytes[i] = binary.charCodeAt(i);
+	}
+	return bytes.buffer;
+}
+
 export async function submitRecipeImport(
 	env: Cloudflare.Env,
 	input: SubmitRecipeImportInput,
@@ -92,14 +114,32 @@ export async function submitRecipeImport(
 	const {
 		userId,
 		organizationId,
-		url: validatedUrl,
+		url,
 		pageHtml,
+		userText,
+		photoBase64,
+		photoMimeType,
 		flagContext,
 	} = input;
 
 	await assertFeatureEnabled(env, "ai-import-url", flagContext);
 
-	if (isBlockedImportUrl(validatedUrl)) {
+	const hasPhoto = Boolean(photoBase64?.trim());
+	const sourceKind: ImportSourceKind = hasPhoto
+		? "photo"
+		: classifyImportUrl(url ?? "");
+
+	await assertFeatureEnabled(env, laneFlagForSource(sourceKind), flagContext);
+
+	const validatedUrl = url?.trim() ?? "";
+	if (!hasPhoto) {
+		if (!validatedUrl) {
+			throw data({ error: "Provide a recipe URL or a photo" }, { status: 400 });
+		}
+		if (isBlockedImportUrl(validatedUrl)) {
+			throw data({ error: "That URL is not accessible." }, { status: 422 });
+		}
+	} else if (validatedUrl && isBlockedImportUrl(validatedUrl)) {
 		throw data({ error: "That URL is not accessible." }, { status: 422 });
 	}
 
@@ -107,31 +147,45 @@ export async function submitRecipeImport(
 		throw data({ error: "Page HTML is too large to process" }, { status: 400 });
 	}
 
-	try {
-		const db = drizzle(env.DB);
-		const duplicates = await db
-			.select({ id: meal.id, name: meal.name })
-			.from(meal)
-			.where(
-				and(
-					eq(meal.organizationId, organizationId),
-					sql`json_extract(${meal.customFields}, '$.sourceUrl') = ${validatedUrl}`,
-				),
-			)
-			.limit(1);
-
-		if (duplicates.length > 0 && duplicates[0]) {
-			const dup = duplicates[0];
-			return {
-				success: false,
-				code: "DUPLICATE_URL",
-				existingMealId: dup.id,
-				existingMealName: dup.name,
-				error: `This URL has already been imported as "${dup.name}".`,
-			};
+	if (hasPhoto && photoBase64) {
+		try {
+			const buf = decodeBase64Photo(photoBase64);
+			if (buf.byteLength > RECIPE_IMPORT_PHOTO_MAX_BYTES) {
+				throw data({ error: "Photo is too large (Max 5MB)" }, { status: 400 });
+			}
+		} catch (err) {
+			if (err && typeof err === "object" && "type" in err) throw err;
+			throw data({ error: "Invalid photo data" }, { status: 400 });
 		}
-	} catch (dedupErr) {
-		log.error("Dedup check failed", dedupErr);
+	}
+
+	if (validatedUrl) {
+		try {
+			const db = drizzle(env.DB);
+			const duplicates = await db
+				.select({ id: meal.id, name: meal.name })
+				.from(meal)
+				.where(
+					and(
+						eq(meal.organizationId, organizationId),
+						sql`json_extract(${meal.customFields}, '$.sourceUrl') = ${validatedUrl}`,
+					),
+				)
+				.limit(1);
+
+			if (duplicates.length > 0 && duplicates[0]) {
+				const dup = duplicates[0];
+				return {
+					success: false,
+					code: "DUPLICATE_URL",
+					existingMealId: dup.id,
+					existingMealName: dup.name,
+					error: `This URL has already been imported as "${dup.name}".`,
+				};
+			}
+		} catch (dedupErr) {
+			log.error("Dedup check failed", dedupErr);
+		}
 	}
 
 	const queue = env.IMPORT_URL_QUEUE;
@@ -156,7 +210,7 @@ export async function submitRecipeImport(
 				organizationId,
 			);
 
-			const useClientHtml = Boolean(pageHtml?.trim());
+			const useClientHtml = Boolean(pageHtml?.trim()) && !hasPhoto;
 			if (useClientHtml && pageHtml) {
 				// R2 for strong read-after-write (KV is eventually consistent across colos).
 				await env.STORAGE.put(importPageR2Key(requestId), pageHtml, {
@@ -164,13 +218,29 @@ export async function submitRecipeImport(
 				});
 			}
 
+			let photoR2Key: string | undefined;
+			if (hasPhoto && photoBase64 && photoMimeType) {
+				photoR2Key = importPhotoR2Key(requestId);
+				const buf = decodeBase64Photo(photoBase64);
+				await env.STORAGE.put(photoR2Key, buf, {
+					httpMetadata: { contentType: photoMimeType },
+				});
+			}
+
+			const queueUrl = validatedUrl || (hasPhoto ? `photo://${requestId}` : "");
+
 			await queue.send({
 				requestId,
 				organizationId,
 				userId,
-				url: validatedUrl,
+				url: queueUrl,
 				cost: AI_COSTS.IMPORT_URL,
+				sourceKind,
 				...(useClientHtml ? { contentSource: "client" as const } : {}),
+				...(userText?.trim() ? { userText: userText.trim() } : {}),
+				...(photoR2Key
+					? { photoR2Key, photoMimeType: photoMimeType ?? "image/jpeg" }
+					: {}),
 			});
 			return { status: "processing" as const, requestId };
 		},

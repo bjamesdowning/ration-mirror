@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { IMPORT_COMPLETENESS } from "~/lib/import/import-completeness";
 import { normalizeUnitAlias } from "../units";
 
 /** Max client-supplied HTML size (matches consumer MAX_HTML_BYTES). */
@@ -90,6 +91,10 @@ export const RECIPE_IMPORT_JSON_SCHEMA = {
 		status: { type: "string", enum: ["ok", "error"] },
 		title: { type: "string" },
 		description: { type: "string" },
+		completeness: {
+			type: "string",
+			enum: [...IMPORT_COMPLETENESS],
+		},
 		ingredients: {
 			type: "array",
 			items: {
@@ -115,35 +120,49 @@ export const RECIPE_IMPORT_JSON_SCHEMA = {
 		},
 		message: { type: "string" },
 	},
-	// When status is "ok", model must include ingredients and steps; when status is "error", use [] for both.
+	// When status is "ok", include ingredients/steps arrays (may be partial); when error, use [].
 	required: ["status", "ingredients", "steps"],
 } as const;
 
-/** Zod schema for AI success response (semantic validation). */
-export const RecipeImportAISuccessSchema = z.object({
-	status: z.literal("ok"),
-	title: z.string().min(1),
-	description: z.string().optional().default(""),
-	ingredients: z
-		.array(
-			z.object({
-				name: z.string().min(1),
-				quantity: z.number().nonnegative(), // 0 allowed for "to taste", "pinch", etc.
-				unit: z
-					.string()
-					.min(1)
-					.transform((v) => normalizeUnitAlias(v)),
-				isOptional: z.boolean().optional().default(false),
-			}),
-		)
-		.min(1),
-	steps: z.array(z.string().min(1)).min(1),
-	prepTime: z.number().nonnegative().optional().default(0),
-	cookTime: z.number().nonnegative().optional().default(0),
-	servings: z.number().int().positive().optional().default(1),
-	tags: z.array(z.string()).optional().default([]),
-	equipment: z.array(z.string()).optional().default([]),
+const RecipeImportIngredientSchema = z.object({
+	name: z.string().min(1),
+	quantity: z.number().nonnegative(), // 0 allowed for unknown / "to taste"
+	unit: z
+		.string()
+		.min(1)
+		.transform((v) => normalizeUnitAlias(v)),
+	isOptional: z.boolean().optional().default(false),
 });
+
+/** Zod schema for AI success response (full or skeleton). */
+export const RecipeImportAISuccessSchema = z
+	.object({
+		status: z.literal("ok"),
+		title: z.string().min(1),
+		description: z.string().optional().default(""),
+		completeness: z.enum(IMPORT_COMPLETENESS).optional(),
+		ingredients: z.array(RecipeImportIngredientSchema).default([]),
+		steps: z.array(z.string().min(1)).default([]),
+		prepTime: z.number().nonnegative().optional().default(0),
+		cookTime: z.number().nonnegative().optional().default(0),
+		servings: z.number().int().positive().optional().default(1),
+		tags: z.array(z.string()).optional().default([]),
+		equipment: z.array(z.string()).optional().default([]),
+	})
+	.superRefine((data, ctx) => {
+		const hasIngredient = data.ingredients.some(
+			(i) => i.name.trim().length > 0,
+		);
+		const hasStep = data.steps.some((s) => s.trim().length > 0);
+		if (!hasIngredient && !hasStep) {
+			ctx.addIssue({
+				code: z.ZodIssueCode.custom,
+				message:
+					"Skeleton recipes need at least one ingredient name or one step",
+				path: ["ingredients"],
+			});
+		}
+	});
 
 /** Zod schema for AI error response. */
 export const RecipeImportAIErrorSchema = z.object({

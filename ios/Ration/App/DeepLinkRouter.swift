@@ -14,6 +14,7 @@ final class DeepLinkRouter {
     private var queue: [AppEnvironment.DeepLinkDestination] = []
     private(set) var galleyGeneratePending = false
     private(set) var galleyImportPending = false
+    private(set) var galleyImportURL: String?
     private(set) var manifestPlanWeekPending = false
     private(set) var manifestAddEntryPending: ManifestAddEntryPrefill?
 
@@ -22,7 +23,14 @@ final class DeepLinkRouter {
     }
 
     func enqueue(_ destination: AppEnvironment.DeepLinkDestination) {
-        guard !queue.contains(destination) else { return }
+        if case .galleyImport = destination {
+            queue.removeAll {
+                if case .galleyImport = $0 { return true }
+                return false
+            }
+        } else {
+            guard !queue.contains(destination) else { return }
+        }
         queue.append(destination)
     }
 
@@ -30,6 +38,7 @@ final class DeepLinkRouter {
         queue = []
         galleyGeneratePending = false
         galleyImportPending = false
+        galleyImportURL = nil
         manifestPlanWeekPending = false
         manifestAddEntryPending = nil
     }
@@ -51,9 +60,10 @@ final class DeepLinkRouter {
         case .galleyGenerate:
             selectedTab = .galley
             galleyGeneratePending = true
-        case .galleyImport:
+        case .galleyImport(let url):
             selectedTab = .galley
             galleyImportPending = true
+            galleyImportURL = url
         case .manifestPlanWeek:
             selectedTab = .manifest
             manifestPlanWeekPending = true
@@ -65,7 +75,10 @@ final class DeepLinkRouter {
     }
 
     func acknowledgeGalleyGenerate() { galleyGeneratePending = false }
-    func acknowledgeGalleyImport() { galleyImportPending = false }
+    func acknowledgeGalleyImport() {
+        galleyImportPending = false
+        galleyImportURL = nil
+    }
     func acknowledgeManifestPlanWeek() { manifestPlanWeekPending = false }
     func acknowledgeManifestAddEntry() { manifestAddEntryPending = nil }
 }

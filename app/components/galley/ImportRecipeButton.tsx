@@ -183,7 +183,8 @@ export const ImportRecipeButton = forwardRef<
 		| "site_blocked"
 		| "duplicate"
 		| "soft_fail_photo"
-	>("intro");
+	>("url");
+	const [showImportInfo, setShowImportInfo] = useState(false);
 	const [showErrorToast, setShowErrorToast] = useState(false);
 	const [errorToastMessage, setErrorToastMessage] = useState("");
 	const [showSuccessToast, setShowSuccessToast] = useState(false);
@@ -196,6 +197,8 @@ export const ImportRecipeButton = forwardRef<
 		requestId: string;
 		mealName: string;
 		ingredientCount: number;
+		completeness?: "full" | "skeleton" | "link_holder";
+		sourceUrl?: string;
 	} | null>(null);
 	const [assistedFailed, setAssistedFailed] = useState(false);
 	const importInFlight = useRef(false);
@@ -232,7 +235,8 @@ export const ImportRecipeButton = forwardRef<
 			setInputMode(linkEnabled ? "link" : "photo");
 			clearPhotoSelection();
 			setSoftFailMessage(null);
-			setView("intro");
+			setView("url");
+			setShowImportInfo(false);
 			setPollRequestId(null);
 			setDuplicateData(null);
 			setVerificationData(null);
@@ -319,6 +323,7 @@ export const ImportRecipeButton = forwardRef<
 					meal?: { id: string; name: string };
 					extractedRecipe?: { name?: string; ingredients?: unknown[] };
 					sourceUrl?: string;
+					completeness?: "full" | "skeleton" | "link_holder";
 					code?: string;
 					error?: string;
 					existingMealId?: string;
@@ -345,6 +350,8 @@ export const ImportRecipeButton = forwardRef<
 						ingredientCount: Array.isArray(data.extractedRecipe.ingredients)
 							? data.extractedRecipe.ingredients.length
 							: 0,
+						completeness: data.completeness,
+						sourceUrl: data.sourceUrl,
 					});
 					setView("verification");
 				} else if (
@@ -420,7 +427,7 @@ export const ImportRecipeButton = forwardRef<
 			const meal = d.meal as { id?: string; name?: string };
 			if (meal.id) {
 				setShowModal(false);
-				setView("intro");
+				setView("url");
 				setUrl("");
 				setPageHtml("");
 				setPhotoBase64(null);
@@ -460,7 +467,8 @@ export const ImportRecipeButton = forwardRef<
 
 	const handleDismissVerification = () => {
 		setShowModal(false);
-		setView("intro");
+		setView("url");
+		setShowImportInfo(false);
 		setUrl("");
 		setPageHtml("");
 		clearPhotoSelection();
@@ -561,9 +569,20 @@ export const ImportRecipeButton = forwardRef<
 		assistedSubmit.current = false;
 	};
 
+	/** Return to URL input without clearing the pasted link. */
+	const retryKeepUrl = () => {
+		setPageHtml("");
+		setSoftFailMessage(null);
+		setView("url");
+		setDuplicateData(null);
+		setAssistedFailed(false);
+		assistedSubmit.current = false;
+	};
+
 	const handleClose = () => {
 		setShowModal(false);
-		setView("intro");
+		setView("url");
+		setShowImportInfo(false);
 		setUrl("");
 		setPageHtml("");
 		setInputMode(linkEnabled ? "link" : "photo");
@@ -576,13 +595,7 @@ export const ImportRecipeButton = forwardRef<
 		assistedSubmit.current = false;
 	};
 
-	const handleIntroConfirm = () => {
-		setInputMode(linkEnabled ? "link" : "photo");
-		setView("url");
-	};
-
-	const showIntro = view === "intro";
-	const showUrlInput = view === "url";
+	const showUrlInput = view === "url" || view === "intro";
 	const showProcessing = view === "loading";
 	const showVerification = view === "verification" && verificationData;
 	const showError = view === "error";
@@ -595,6 +608,12 @@ export const ImportRecipeButton = forwardRef<
 			: linkEnabled
 				? "Paste a link to extract a meal"
 				: "Add a photo to extract a meal";
+
+	const completenessLabel = (c?: string) => {
+		if (c === "link_holder") return "Saved link";
+		if (c === "skeleton") return "Partial recipe";
+		return "Recipe";
+	};
 
 	return (
 		<>
@@ -646,21 +665,21 @@ export const ImportRecipeButton = forwardRef<
 					}
 					maxWidth="md"
 				>
-					{showIntro ? (
+					{showImportInfo ? (
 						<AIFeatureIntroView
 							description={importIntroDescription}
 							hint={nutritionEngine ? NUTRITION_INGEST_HINT : undefined}
 							cost={costPerImport}
 							costLabel="per import"
 							credits={typeof credits === "number" ? credits : 0}
-							onCancel={handleClose}
-							onConfirm={handleIntroConfirm}
-							confirmLabel="Continue"
+							onCancel={() => setShowImportInfo(false)}
+							onConfirm={() => setShowImportInfo(false)}
+							confirmLabel="Got it"
 						/>
 					) : (
 						<div className="p-8">
 							{showUrlInput && (
-								<div className="space-y-6 text-center py-12">
+								<div className="space-y-6 text-center py-8">
 									{showInputTabs && (
 										<div
 											className="flex gap-2 p-1 bg-platinum/50 dark:bg-white/10 rounded-xl max-w-md mx-auto"
@@ -717,17 +736,23 @@ export const ImportRecipeButton = forwardRef<
 									>
 										{inputMode === "link" && linkEnabled ? (
 											<>
-												<p className="text-carbon/80 dark:text-white/80 max-w-md mx-auto mb-6">
-													Paste a recipe link and we&apos;ll extract it into
-													your Galley.
-												</p>
 												<div className="max-w-md mx-auto text-left">
-													<label
-														htmlFor="import-recipe-url"
-														className="block text-sm font-medium text-carbon dark:text-white mb-1"
-													>
-														Recipe link
-													</label>
+													<div className="flex items-center justify-between mb-1">
+														<label
+															htmlFor="import-recipe-url"
+															className="block text-sm font-medium text-carbon dark:text-white"
+														>
+															Recipe link
+														</label>
+														<button
+															type="button"
+															onClick={() => setShowImportInfo(true)}
+															className="text-xs text-hyper-green hover:underline"
+															aria-label="About recipe import"
+														>
+															Info
+														</button>
+													</div>
 													<input
 														id="import-recipe-url"
 														type="url"
@@ -736,6 +761,8 @@ export const ImportRecipeButton = forwardRef<
 														placeholder="https://example.com/recipe/..."
 														className="w-full px-4 py-3 rounded-lg border border-platinum dark:border-white/20 bg-white dark:bg-white/5 text-carbon dark:text-white placeholder:text-muted"
 														aria-describedby="import-url-hint"
+														// biome-ignore lint/a11y/noAutofocus: primary field on open
+														autoFocus
 													/>
 													<p
 														id="import-url-hint"
@@ -750,7 +777,8 @@ export const ImportRecipeButton = forwardRef<
 													disabled={!url.trim()}
 													className="mt-6 px-8 py-4 bg-hyper-green text-on-hyper-green font-bold rounded-xl shadow-glow hover:scale-105 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
 												>
-													Import Meal
+													Import · {costPerImport} credit
+													{costPerImport === 1 ? "" : "s"}
 												</button>
 											</>
 										) : aiImportPhoto ? (
@@ -798,7 +826,8 @@ export const ImportRecipeButton = forwardRef<
 													disabled={!photoBase64 || !photoMimeType}
 													className="mt-6 px-8 py-4 bg-hyper-green text-on-hyper-green font-bold rounded-xl shadow-glow hover:scale-105 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
 												>
-													Import Meal
+													Import · {costPerImport} credit
+													{costPerImport === 1 ? "" : "s"}
 												</button>
 											</>
 										) : null}
@@ -833,16 +862,46 @@ export const ImportRecipeButton = forwardRef<
 									<div className="w-14 h-14 rounded-full bg-hyper-green/10 flex items-center justify-center">
 										<Check className="w-7 h-7 text-hyper-green" />
 									</div>
+									<p className="text-xs font-semibold uppercase tracking-wide text-hyper-green">
+										{completenessLabel(verificationData.completeness)}
+									</p>
 									<h4 className="text-lg font-bold text-carbon dark:text-white capitalize">
 										{verificationData.mealName}
 									</h4>
-									<p className="text-sm text-muted">
-										{verificationData.ingredientCount}{" "}
-										{verificationData.ingredientCount === 1
-											? "ingredient"
-											: "ingredients"}{" "}
-										extracted. Add to your Galley?
-									</p>
+									{verificationData.completeness === "link_holder" ? (
+										<p className="text-sm text-muted max-w-sm">
+											We saved the source link. Add ingredients later, or open
+											the link for the full recipe.
+										</p>
+									) : verificationData.completeness === "skeleton" ? (
+										<p className="text-sm text-muted max-w-sm">
+											Partial recipe extracted (
+											{verificationData.ingredientCount}{" "}
+											{verificationData.ingredientCount === 1
+												? "ingredient"
+												: "ingredients"}
+											). Review and add to Galley?
+										</p>
+									) : (
+										<p className="text-sm text-muted">
+											{verificationData.ingredientCount}{" "}
+											{verificationData.ingredientCount === 1
+												? "ingredient"
+												: "ingredients"}{" "}
+											extracted. Add to your Galley?
+										</p>
+									)}
+									{verificationData.sourceUrl && (
+										<a
+											href={verificationData.sourceUrl}
+											target="_blank"
+											rel="noopener noreferrer"
+											className="inline-flex items-center gap-1.5 text-sm text-hyper-green hover:underline"
+										>
+											View source
+											<ExternalLink className="w-3.5 h-3.5" />
+										</a>
+									)}
 									<div className="flex gap-3 pt-2">
 										<button
 											type="button"
@@ -999,7 +1058,7 @@ export const ImportRecipeButton = forwardRef<
 									<div className="flex flex-col sm:flex-row gap-2">
 										<button
 											type="button"
-											onClick={resetState}
+											onClick={retryKeepUrl}
 											className="px-6 py-2 bg-platinum text-carbon dark:bg-white/10 dark:text-white rounded-lg hover:bg-platinum/80 dark:hover:bg-white/20"
 										>
 											Try Again

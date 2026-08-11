@@ -14,7 +14,14 @@ enum AppDeepLink {
         case "galley":
             let path = url.path.lowercased()
             if path == "/generate" { return .galleyGenerate }
-            if path == "/import" { return .galleyImport }
+            if path == "/import" {
+                let urlParam = URLComponents(url: url, resolvingAgainstBaseURL: false)?
+                    .queryItems?
+                    .first(where: { $0.name == "url" })?
+                    .value
+                let decoded = urlParam.flatMap { $0.removingPercentEncoding } ?? urlParam
+                return .galleyImport(url: decoded)
+            }
             return nil
         case "manifest":
             let path = url.path.lowercased()

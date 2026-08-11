@@ -221,6 +221,13 @@ struct MealDetailView: View {
                 if let description = meal.description, !description.isEmpty {
                     Text(description).rationBody()
                 }
+                if let sourceUrl = meal.sourceUrl, let url = URL(string: sourceUrl) {
+                    Link(destination: url) {
+                        Label("View source", systemImage: "arrow.up.right.square")
+                    }
+                    .font(Typography.caption())
+                    .foregroundStyle(Theme.hyperGreen)
+                }
                 HStack {
                     Label(meal.domain.capitalized, systemImage: "circle.hexagongrid")
                     if let cookTime = meal.cookTime {

@@ -1,11 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildPageContentFromHtml } from "~/lib/import-url-consumer.server";
-import {
-	IMPORT_PROVIDER_UNAVAILABLE_CODE,
-	IMPORT_PROVIDER_UNAVAILABLE_MESSAGE,
-	SITE_BLOCKED_CODE,
-	SITE_BLOCKED_MESSAGE,
-} from "~/lib/recipe-import-block.server";
+import { SITE_BLOCKED_CODE } from "~/lib/recipe-import-block.server";
 import { createMockR2 } from "~/test/helpers/mock-env";
 
 const updateQueueJobResult = vi.fn().mockResolvedValue(true);
@@ -34,6 +29,18 @@ vi.mock("~/lib/ledger.server", async (importOriginal) => {
 		},
 	};
 });
+
+vi.mock("drizzle-orm/d1", () => ({
+	drizzle: () => ({
+		select: () => ({
+			from: () => ({
+				where: () => ({
+					limit: async () => [],
+				}),
+			}),
+		}),
+	}),
+}));
 
 function createMemoryKV(): KVNamespace {
 	const store = new Map<string, string>();
@@ -78,34 +85,49 @@ function createMemoryR2(initial?: Record<string, string>): R2Bucket {
 describe("buildPageContentFromHtml", () => {
 	it("fails fast on People Inc access pages", () => {
 		const html = `
-			<p>If you are a reader experiencing an access issue, please contact
-			support@people.inc</p>`;
+			<html><body>
+			<p>If you are a reader experiencing an access issue, please contact support@people.inc</p>
+			</body></html>
+		`;
 		const result = buildPageContentFromHtml(html, "plain_fetch");
 		expect(result.ok).toBe(false);
 		if (!result.ok) {
 			expect(result.code).toBe(SITE_BLOCKED_CODE);
-			expect(result.error).toBe(SITE_BLOCKED_MESSAGE);
-		}
-	});
-
-	it("accepts recipe JSON-LD", () => {
-		const html = `<html><script type="application/ld+json">{"@type":"Recipe","name":"Soup"}</script></html>`;
-		const result = buildPageContentFromHtml(html, "client");
-		expect(result.ok).toBe(true);
-		if (result.ok) {
-			expect(result.content).toContain("recipe_json_ld");
-			expect(result.source).toBe("client");
 		}
 	});
 });
 
-describe("runImportUrlConsumerJob SITE_BLOCKED on 402", () => {
+describe("shortImportFailureMessage", () => {
+	it("maps known codes to short copy", async () => {
+		const { shortImportFailureMessage } = await import(
+			"~/lib/import-url-consumer.server"
+		);
+		expect(shortImportFailureMessage("NOT_A_RECIPE", "long essay")).toBe(
+			"No recipe found at this link.",
+		);
+		expect(shortImportFailureMessage("CONTENT_TOO_SHORT", "whatever")).toBe(
+			"Not enough recipe text to extract.",
+		);
+	});
+
+	it("truncates unknown long fallbacks", async () => {
+		const { shortImportFailureMessage } = await import(
+			"~/lib/import-url-consumer.server"
+		);
+		const long = "x".repeat(120);
+		const msg = shortImportFailureMessage("OTHER", long);
+		expect(msg.length).toBeLessThanOrEqual(80);
+		expect(msg.endsWith("…")).toBe(true);
+	});
+});
+
+describe("runImportUrlConsumerJob never-empty holders", () => {
 	afterEach(() => {
 		vi.unstubAllGlobals();
 		updateQueueJobResult.mockReset();
 	});
 
-	it("refunds with IMPORT_PROVIDER_UNAVAILABLE when 402 and Supadata key missing", async () => {
+	it("completes a link_holder when 402 and Supadata key missing", async () => {
 		vi.stubGlobal(
 			"fetch",
 			vi.fn().mockResolvedValue({
@@ -142,17 +164,23 @@ describe("runImportUrlConsumerJob SITE_BLOCKED on 402", () => {
 		expect(updateQueueJobResult).toHaveBeenCalledWith(
 			env.DB,
 			"req_402",
-			"failed",
+			"completed",
 			expect.objectContaining({
-				success: false,
-				code: IMPORT_PROVIDER_UNAVAILABLE_CODE,
-				error: IMPORT_PROVIDER_UNAVAILABLE_MESSAGE,
-				softFailToPhoto: true,
+				success: true,
+				completeness: "link_holder",
+				sourceUrl:
+					"https://www.allrecipes.com/recipe/14430/simple-potato-salad/",
+				extractedRecipe: expect.objectContaining({
+					customFields: expect.objectContaining({
+						sourceUrl:
+							"https://www.allrecipes.com/recipe/14430/simple-potato-salad/",
+					}),
+				}),
 			}),
 		);
 	});
 
-	it("refunds with IMPORT_PROVIDER_UNAVAILABLE when Supadata scrape times out", async () => {
+	it("completes a link_holder when Supadata scrape times out", async () => {
 		vi.stubGlobal(
 			"fetch",
 			vi.fn(async (input: RequestInfo | URL) => {
@@ -197,11 +225,10 @@ describe("runImportUrlConsumerJob SITE_BLOCKED on 402", () => {
 		expect(updateQueueJobResult).toHaveBeenCalledWith(
 			env.DB,
 			"req_supa_timeout",
-			"failed",
+			"completed",
 			expect.objectContaining({
-				success: false,
-				code: IMPORT_PROVIDER_UNAVAILABLE_CODE,
-				softFailToPhoto: true,
+				success: true,
+				completeness: "link_holder",
 			}),
 		);
 	});
@@ -213,7 +240,7 @@ describe("runImportUrlConsumerJob client HTML from R2", () => {
 		updateQueueJobResult.mockReset();
 	});
 
-	it("fails SITE_BLOCKED for client access-page HTML without calling fetch", async () => {
+	it("completes a link_holder for client access-page HTML without calling fetch", async () => {
 		const accessHtml =
 			"<p>If you are a reader experiencing an access issue, please contact support@people.inc. Include your IP from icanhazip.com for licensing at contentlicensing@people.inc.</p>";
 		const r2 = createMemoryR2({
@@ -249,9 +276,10 @@ describe("runImportUrlConsumerJob client HTML from R2", () => {
 		expect(updateQueueJobResult).toHaveBeenCalledWith(
 			env.DB,
 			"req_client",
-			"failed",
+			"completed",
 			expect.objectContaining({
-				code: SITE_BLOCKED_CODE,
+				success: true,
+				completeness: "link_holder",
 			}),
 		);
 	});

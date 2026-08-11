@@ -55,6 +55,7 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
 			meal?: { id: string; name: string };
 			extractedRecipe?: unknown;
 			sourceUrl?: string;
+			completeness?: "full" | "skeleton" | "link_holder";
 			code?: string;
 			error?: string;
 			existingMealId?: string;
@@ -69,6 +70,7 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
 				meal: result.meal,
 				extractedRecipe: result.extractedRecipe,
 				sourceUrl: result.sourceUrl,
+				completeness: result.completeness,
 				code: result.code,
 				error: result.error,
 				existingMealId: result.existingMealId,

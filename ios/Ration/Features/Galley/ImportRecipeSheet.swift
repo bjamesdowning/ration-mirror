@@ -9,6 +9,8 @@ struct ImportRecipeSheet: View {
     @State private var consent = AIConsentCoordinator()
     @State private var paywallContext: PaywallContext?
     @State private var photoPickerItem: PhotosPickerItem?
+    @State private var showingInfo = false
+    var initialURL: String? = nil
     var onComplete: () async -> Void = {}
     var onImportedMeal: (MealSummary) -> Void = { _ in }
     var onAddManually: () -> Void = {}
@@ -67,6 +69,39 @@ struct ImportRecipeSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } }
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        showingInfo = true
+                    } label: {
+                        Image(systemName: "info.circle")
+                    }
+                    .accessibilityLabel("About recipe import")
+                }
+            }
+            .sheet(isPresented: $showingInfo) {
+                NavigationStack {
+                    ScrollView {
+                        AIFeatureInlineIntro(
+                            title: "Import recipe",
+                            detail: importIntroDetail,
+                            creditCost: creditCost,
+                            costLabel: "per import",
+                            nextSteps: "Review the imported meal before adding to Galley.",
+                            hint: clientFlags.isNutritionEngineEnabled
+                                ? "Nutrition (when available): USDA match first; AI estimates are labelled—edit before saving."
+                                : nil
+                        )
+                        .padding(16)
+                    }
+                    .navigationTitle("About import")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("Done") { showingInfo = false }
+                        }
+                    }
+                }
+                .presentationDetents([.medium, .large])
             }
             .background(Theme.ceramic)
             .sheet(isPresented: Binding(
@@ -100,6 +135,9 @@ struct ImportRecipeSheet: View {
                 Task { await handlePhotoSelection(item) }
             }
             .onAppear {
+                if let initialURL, !initialURL.isEmpty, model.url.isEmpty {
+                    model.url = initialURL
+                }
                 if !linkImportEnabled, photoImportEnabled {
                     model.inputMode = .photo
                 }
@@ -111,17 +149,6 @@ struct ImportRecipeSheet: View {
     private var idleContent: some View {
         ScrollView {
             VStack(spacing: 16) {
-                AIFeatureInlineIntro(
-                    title: "Import recipe",
-                    detail: importIntroDetail,
-                    creditCost: creditCost,
-                    costLabel: "per import",
-                    nextSteps: "Review the imported meal before adding to Galley.",
-                    hint: clientFlags.isNutritionEngineEnabled
-                        ? "Nutrition (when available): USDA match first; AI estimates are labelled—edit before saving."
-                        : nil
-                )
-
                 if photoImportEnabled, linkImportEnabled {
                     Picker("Import source", selection: $model.inputMode) {
                         ForEach(ImportRecipeViewModel.ImportInputMode.allCases) { mode in
@@ -147,16 +174,11 @@ struct ImportRecipeSheet: View {
                 .textInputAutocapitalization(.never)
                 .keyboardType(.URL)
                 .textFieldStyle(.roundedBorder)
+                .accessibilityLabel("Recipe URL")
             Text(supportedSourcesCaption)
                 .rationCaption()
                 .foregroundStyle(Theme.muted)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            if clientFlags.isAiImportWebEnabled {
-                Text("Some recipe sites block automated imports — Ration can reload the page on your device when that happens.")
-                    .rationCaption()
-                    .foregroundStyle(Theme.muted)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
             AIFeaturePrimaryButton(
                 label: "Import",
                 creditCost: creditCost,
@@ -290,11 +312,28 @@ struct ImportRecipeSheet: View {
         VStack(spacing: 16) {
             GlassCard {
                 VStack(alignment: .leading, spacing: 8) {
+                    Text(extracted.completenessLabel)
+                        .rationCaption()
+                        .foregroundStyle(Theme.hyperGreen)
                     Text("Review import").rationHeadline()
                     Text(extracted.name.capitalized).rationBody()
-                    Text("\(extracted.ingredientCount) ingredients")
-                        .rationCaption()
-                        .foregroundStyle(Theme.muted)
+                    if extracted.completeness == "link_holder" {
+                        Text("We saved the source link. Add ingredients later, or open the link for the full recipe.")
+                            .rationCaption()
+                            .foregroundStyle(Theme.muted)
+                    } else {
+                        Text("\(extracted.ingredientCount) ingredients")
+                            .rationCaption()
+                            .foregroundStyle(Theme.muted)
+                    }
+                    if let source = extracted.sourceUrl ?? (model.url.isEmpty ? nil : model.url),
+                       let url = URL(string: source) {
+                        Link(destination: url) {
+                            Label("View source", systemImage: "arrow.up.right.square")
+                        }
+                        .font(Typography.caption())
+                        .foregroundStyle(Theme.hyperGreen)
+                    }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }

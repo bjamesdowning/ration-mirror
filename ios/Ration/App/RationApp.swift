@@ -38,9 +38,25 @@ struct RationApp: App {
 
     @MainActor
     private func handleAppDeepLink(_ url: URL) -> Bool {
-        guard let destination = AppDeepLink.parse(url) else { return false }
-        env.openDeepLink(destination)
-        return true
+        if let destination = AppDeepLink.parse(url) {
+            if case .galleyImport(let linkURL) = destination,
+               (linkURL == nil || linkURL?.isEmpty == true),
+               let shared = SharedImportHandoff.consumePendingURL() {
+                env.openDeepLink(.galleyImport(url: shared))
+                return true
+            }
+            // Deep link already has URL; clear any stale share payload.
+            if case .galleyImport = destination {
+                _ = SharedImportHandoff.consumePendingURL()
+            }
+            env.openDeepLink(destination)
+            return true
+        }
+        if let shared = SharedImportHandoff.consumePendingURL() {
+            env.openDeepLink(.galleyImport(url: shared))
+            return true
+        }
+        return false
     }
 
     @MainActor

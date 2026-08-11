@@ -95,3 +95,32 @@ describe("ImportConfirmRequestSchema", () => {
 		expect(result.success).toBe(false);
 	});
 });
+
+describe("RecipeImportAISuccessSchema skeleton", () => {
+	it("accepts ingredient-only skeleton", async () => {
+		const { RecipeImportAISuccessSchema } = await import(
+			"~/lib/schemas/recipe-import"
+		);
+		const result = RecipeImportAISuccessSchema.safeParse({
+			status: "ok",
+			title: "Smashburger",
+			completeness: "skeleton",
+			ingredients: [{ name: "beef", quantity: 0, unit: "unit" }],
+			steps: [],
+		});
+		expect(result.success).toBe(true);
+	});
+
+	it("rejects ok with neither ingredients nor steps", async () => {
+		const { RecipeImportAISuccessSchema } = await import(
+			"~/lib/schemas/recipe-import"
+		);
+		const result = RecipeImportAISuccessSchema.safeParse({
+			status: "ok",
+			title: "Empty",
+			ingredients: [],
+			steps: [],
+		});
+		expect(result.success).toBe(false);
+	});
+});

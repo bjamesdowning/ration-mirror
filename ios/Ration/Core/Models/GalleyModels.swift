@@ -34,6 +34,13 @@ struct Meal: Codable, Sendable, Identifiable {
     let ingredients: [MealIngredient]
     /// Additive meal.nutrition aggregate when nutrition-engine has computed it.
     var nutrition: MealNutritionSnapshot? = nil
+    /// Opaque custom fields (e.g. sourceUrl from recipe import).
+    var customFields: [String: String]? = nil
+
+    var sourceUrl: String? {
+        if let raw = customFields?["sourceUrl"], !raw.isEmpty { return raw }
+        return nil
+    }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -53,6 +60,13 @@ struct Meal: Codable, Sendable, Identifiable {
         tags = c.decodeTolerantTags(forKey: .tags)
         ingredients = try c.decodeIfPresent([MealIngredient].self, forKey: .ingredients) ?? []
         nutrition = try c.decodeIfPresent(MealNutritionSnapshot.self, forKey: .nutrition)
+        customFields = try c.decodeIfPresent([String: String].self, forKey: .customFields)
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, organizationId, name, domain, type, description, directions
+        case equipment, servings, prepTime, cookTime, createdAt, updatedAt
+        case tags, ingredients, nutrition, customFields
     }
 
     init(
@@ -71,7 +85,8 @@ struct Meal: Codable, Sendable, Identifiable {
         updatedAt: Date,
         tags: [Tag],
         ingredients: [MealIngredient],
-        nutrition: MealNutritionSnapshot? = nil
+        nutrition: MealNutritionSnapshot? = nil,
+        customFields: [String: String]? = nil
     ) {
         self.id = id
         self.organizationId = organizationId
@@ -89,6 +104,7 @@ struct Meal: Codable, Sendable, Identifiable {
         self.tags = tags
         self.ingredients = ingredients
         self.nutrition = nutrition
+        self.customFields = customFields
     }
 
     var tagSlugs: [String] { tags.map(\.slug) }
@@ -350,8 +366,26 @@ struct GeneratedRecipe: Sendable, Identifiable, Decodable {
 struct ExtractedRecipePreview: Codable, Sendable, Equatable {
     let name: String
     let ingredients: [CreateMealIngredientRequest]?
+    let description: String?
+    let customFields: [String: String]?
 
     var ingredientCount: Int { ingredients?.count ?? 0 }
+
+    var sourceUrl: String? {
+        customFields?["sourceUrl"]
+    }
+
+    var completeness: String? {
+        customFields?["importCompleteness"]
+    }
+
+    var completenessLabel: String {
+        switch completeness {
+        case "link_holder": return "Saved link"
+        case "skeleton": return "Partial recipe"
+        default: return "Recipe"
+        }
+    }
 }
 
 struct ImportRecipeStatusResponse: Codable, Sendable {
@@ -360,6 +394,7 @@ struct ImportRecipeStatusResponse: Codable, Sendable {
     let meal: MealSummary?
     let extractedRecipe: ExtractedRecipePreview?
     let sourceUrl: String?
+    let completeness: String?
     let code: String?
     let error: String?
     let existingMealId: String?

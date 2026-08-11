@@ -27,6 +27,18 @@ vi.mock("~/lib/ledger.server", async (importOriginal) => {
 	};
 });
 
+vi.mock("drizzle-orm/d1", () => ({
+	drizzle: () => ({
+		select: () => ({
+			from: () => ({
+				where: () => ({
+					limit: async () => [],
+				}),
+			}),
+		}),
+	}),
+}));
+
 const baseEnv = {
 	DB: {},
 	AI_GATEWAY_ACCOUNT_ID: "acct",
@@ -40,7 +52,7 @@ describe("runImportUrlConsumerJob SSRF redirect re-check", () => {
 		updateQueueJobResult.mockReset();
 	});
 
-	it("fails the job when fetch redirects to a blocked URL", async () => {
+	it("does not ingest redirected private content; saves holder for the original URL", async () => {
 		vi.stubGlobal(
 			"fetch",
 			vi.fn().mockResolvedValue({
@@ -63,13 +75,16 @@ describe("runImportUrlConsumerJob SSRF redirect re-check", () => {
 			cost: 3,
 		});
 
+		// Private redirect is rejected before AI; never-empty path holds the
+		// original submitted HTTPS URL (not 127.0.0.1).
 		expect(updateQueueJobResult).toHaveBeenCalledWith(
 			baseEnv.DB,
 			"req_1",
-			"failed",
+			"completed",
 			expect.objectContaining({
-				success: false,
-				error: "That URL is not accessible.",
+				success: true,
+				completeness: "link_holder",
+				sourceUrl: "https://example.com/recipe",
 			}),
 		);
 	});

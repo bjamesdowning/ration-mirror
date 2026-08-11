@@ -15,8 +15,8 @@ options:
 
 settings:
   base:
-    MARKETING_VERSION: "1.4.1"
-    CURRENT_PROJECT_VERSION: "104"
+    MARKETING_VERSION: "1.4.2"
+    CURRENT_PROJECT_VERSION: "105"
     SWIFT_VERSION: "5.9"
     # Set your Apple Developer Team ID here (must match App Store Connect / AASA).
     DEVELOPMENT_TEAM: "M2KJH5GDGH"
@@ -58,6 +58,8 @@ targets:
           - applinks:ration.mayutic.com
         com.apple.developer.applesignin:
           - Default
+        com.apple.security.application-groups:
+          - group.com.mayutic.ration
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.mayutic.ration
@@ -75,6 +77,29 @@ targets:
       - package: GoogleSignIn
         product: GoogleSignIn
       - package: Textual
+      - target: RationShare
+        embed: true
+  RationShare:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: RationShare
+    entitlements:
+      path: RationShare/RationShare.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.com.mayutic.ration
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.mayutic.ration.share
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: RationShare/Info.plist
+        TARGETED_DEVICE_FAMILY: "1"
+        LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks"
+      configs:
+        Release:
+          CODE_SIGN_STYLE: Automatic
+          DEVELOPMENT_TEAM: M2KJH5GDGH
   RationTests:
     type: bundle.unit-test
     platform: iOS
@@ -98,6 +123,7 @@ schemes:
     build:
       targets:
         Ration: [run, archive, profile, analyze]
+        RationShare: [run, archive, profile, analyze]
         RationTests: [test]
     run:
       config: Debug

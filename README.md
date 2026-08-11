@@ -639,11 +639,12 @@ Recipe import uses a queue to offload content acquisition, Gemini extraction, an
 
 Parent flag: `ai-import-url`. Secret: `SUPADATA_API_KEY` (optional `YOUTUBE_DATA_API_KEY` for richer YouTube metadata).
 
-Some publishers **block automated fetches**. When that happens the job fails with code **`SITE_BLOCKED`** (credit refunded). If Supadata is missing, timing out, or returning auth/5xx errors, the job fails with **`IMPORT_PROVIDER_UNAVAILABLE`** (also refunded) and may set `softFailToPhoto`. Clients can retry with **assisted HTML** or a screenshot when photo import is enabled:
+**Completeness ladder (URL lanes):** Gemini returns full or skeleton recipes when possible. If acquisition or extraction cannot produce a usable skeleton, the job still **completes** with a **link-holder** meal (title from metadata/hostname, description + `customFields.sourceUrl` = source link). Holder/skeleton successes are not refunded. Photo lane without a durable HTTPS URL may still fail soft to retry.
 
-- **iOS** — on `SITE_BLOCKED` / provider-unavailable (web lane), the app captures the page on-device and re-submits `{ url, pageHtml }`.
-- **Web** — paste-HTML recovery step. Manual Galley entry remains available.
-- Soft social / provider misses may set **`softFailToPhoto`** so the client can offer screenshot import.
+Some publishers **block automated fetches**. Clients may still offer assisted HTML or screenshot recovery:
+
+- **iOS** — Share Extension (`RationShare`) appears in TikTok/Instagram/YouTube share sheets and opens `ration://galley/import?url=…` (App Group backup). Import UI is URL-first; meal detail shows **View source**. On-device page capture remains available when useful.
+- **Web** — Import modal opens on the URL field (explainers behind Info). Paste-HTML recovery remains for power users. Soft social / photo misses may set **`softFailToPhoto`**.
 
 Client HTML / photos are stored briefly in **R2** (`import-page/{requestId}`, `import-photo/{requestId}`); queue payloads never carry HTML/media/transcript blobs.
 
@@ -723,7 +724,7 @@ The Galley holds two types: **Recipes** (full multi-ingredient meals) and **Prov
 **Key workflows:**
 - **Create** — Via `MealBuilder` form or AI generation. Ingredients can be linked to an existing cargo item (`cargoId`) or left as a free-text name. The link is optional — it enables quantity deduction on cook but is not required.
 - **AI generation** — `POST /api/meals/generate` (2 credits) sends pantry context to Gemini and returns 3 Vectorize-verified recipes.
-- **URL import** — `POST /api/meals/import` (3 credits) accepts `{ url }`, `{ url, pageHtml }`, `{ url, userText }` (social), or `{ photoBase64, photoMimeType }` and returns `{ status: "processing", requestId }`; client polls `GET /api/meals/import/status/:requestId`. Consumer routes by lane: website (plain fetch → Supadata `web.scrape` → client HTML), social (metadata → optional Supadata transcript → Gemini), or photo (R2 → Gemini vision). Verify → `POST /api/meals/import/confirm`. Bot-walled sites return `SITE_BLOCKED` (refunded). Supadata outages return `IMPORT_PROVIDER_UNAVAILABLE` (refunded, often with `softFailToPhoto`). Soft social misses may set `softFailToPhoto`. Duplicate URLs return `DUPLICATE_URL`. HTTPS-only + SSRF guard for URL lanes. Requires `SUPADATA_API_KEY` for scrape/transcript escalation. Parent flag `ai-import-url` plus lane flags `ai-import-web` / `ai-import-social` / `ai-import-photo`.
+- **URL import** — `POST /api/meals/import` (3 credits) accepts `{ url }`, `{ url, pageHtml }`, `{ url, userText }` (social), or `{ photoBase64, photoMimeType }` and returns `{ status: "processing", requestId }`; client polls `GET /api/meals/import/status/:requestId` (includes `completeness`: `full` | `skeleton` | `link_holder`). Consumer routes by lane: website (plain fetch → Supadata `web.scrape` → client HTML), social (metadata → optional Supadata transcript → Gemini), or photo (R2 → Gemini vision). URL lanes never-empty: thin/blocked/AI miss → link-holder meal. Verify → `POST /api/meals/import/confirm`. Soft social / photo misses may set `softFailToPhoto`. Duplicate URLs return `DUPLICATE_URL`. HTTPS-only + SSRF guard for URL lanes. Requires `SUPADATA_API_KEY` for scrape/transcript escalation. Parent flag `ai-import-url` plus lane flags `ai-import-web` / `ai-import-social` / `ai-import-photo`.
 - **Cook** — `POST /api/meals/:id/cook` deducts all ingredients from cargo via the Vectorize-backed resolver (updates both `quantity` and `base_quantity`). Accepts a `servings` override to scale quantities.
 - **Match mode** — `GET /api/meals/match` returns meals ranked by how much of their ingredient list is already in the pantry, in either `strict` (100% match only) or `delta` (partial match, sorted by %) mode.
 - **Tags** — Shared org-wide registry via `tag` + `meal_tag` junction (same tags as cargo). Used for filtering in Galley, Manifest, Supply, and MCP `list_meals`.

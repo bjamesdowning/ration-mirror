@@ -11,6 +11,7 @@ import {
 	type NutritionConsentSource,
 } from "~/lib/nutrition/consent.server";
 import { NUTRITION_COVERAGE_THRESHOLD } from "~/lib/nutrition/constants";
+import { toIsoDateString } from "~/lib/nutrition/dto.server";
 import { previousUtcCalendarDay } from "~/lib/nutrition/goal-effective";
 import {
 	getActiveNutritionGoal,
@@ -27,6 +28,29 @@ import type { MealNutritionSnapshot } from "~/lib/nutrition/types";
 import { UNDO_TOKEN_TTL_SECONDS } from "~/lib/undo-token.server";
 
 export const MAX_NUTRITION_OPERATION_ITEMS = 50;
+
+/**
+ * Resolve notes for a new intake row.
+ * Flag on → client value (blank → null). Flag off → preserve prior notes (kill-switch must not wipe).
+ */
+export function resolveIntakeNotesForWrite(input: {
+	notesEnabled: boolean;
+	requestedNotes: string | null | undefined;
+	priorNotes: string | null | undefined;
+}): string | null {
+	if (input.notesEnabled) {
+		return input.requestedNotes ?? null;
+	}
+	return input.priorNotes ?? null;
+}
+
+/** Include notes in the operation hash only when the flag is on. */
+export function intakeNotesForCanonicalHash(
+	notesEnabled: boolean,
+	requestedNotes: string | null | undefined,
+): { notes?: string | null } {
+	return notesEnabled ? { notes: requestedNotes ?? null } : {};
+}
 
 export type NutritionSurface = "web" | "mobile" | "mcp" | "copilot";
 
@@ -771,6 +795,8 @@ export async function logManifestIntakes(
 			servings: number;
 			idempotencyKey: string;
 			occurredAt?: Date;
+			/** Private Eat snippet; only persisted when nutrition-intake-notes is on. */
+			notes?: string | null;
 		}>;
 	},
 ): Promise<LogManifestIntakesResult> {
@@ -792,15 +818,27 @@ export async function logManifestIntakes(
 		"intake",
 	);
 
+	const notesEnabled = await isFeatureEnabled(
+		env,
+		"nutrition-intake-notes",
+		flags,
+	);
+	const normalizedItems = input.items.map((item) => ({
+		...item,
+		/** Client-requested notes; ignored when flag off (preserve prior at write). */
+		requestedNotes: item.notes ?? null,
+	}));
+
 	const canonicalInput = {
 		operationType: "log_manifest_intakes",
 		planId: input.planId,
-		items: [...input.items]
+		items: [...normalizedItems]
 			.map((item) => ({
 				entryId: item.entryId,
 				servings: item.servings,
 				idempotencyKey: item.idempotencyKey,
 				occurredAt: item.occurredAt?.toISOString() ?? null,
+				...intakeNotesForCanonicalHash(notesEnabled, item.requestedNotes),
 			}))
 			.sort((left, right) => left.entryId.localeCompare(right.entryId)),
 	};
@@ -816,18 +854,23 @@ export async function logManifestIntakes(
 			existingOperation,
 			requestHash,
 			"log_manifest_intakes",
-			input.items.length,
+			normalizedItems.length,
 		);
-		return reconstructLogResult(env, principal, existingOperation, input.items);
+		return reconstructLogResult(
+			env,
+			principal,
+			existingOperation,
+			normalizedItems,
+		);
 	}
 
 	const entries = await loadEntries(
 		db,
 		principal,
 		input.planId,
-		input.items.map((item) => item.entryId),
+		normalizedItems.map((item) => item.entryId),
 	);
-	for (const item of input.items) {
+	for (const item of normalizedItems) {
 		const entry = entries.get(item.entryId);
 		if (!entry) throw new ManifestIntakeTargetNotFoundError();
 		if (entry.cookedAt == null && entry.consumedAt == null) {
@@ -847,21 +890,23 @@ export async function logManifestIntakes(
 	const operationId = crypto.randomUUID();
 	const committedAt = new Date();
 	const stableIntakeIds = new Map(
-		input.items.map((item) => [item.idempotencyKey, crypto.randomUUID()]),
+		normalizedItems.map((item) => [item.idempotencyKey, crypto.randomUUID()]),
 	);
 
 	for (let attempt = 0; attempt < 3; attempt += 1) {
 		const byKey = await loadRowsByItemKeys(
 			db,
 			principal,
-			input.items.map((item) => item.idempotencyKey),
+			normalizedItems.map((item) => item.idempotencyKey),
 		);
-		for (const item of input.items) {
+		for (const item of normalizedItems) {
 			const row = byKey.get(item.idempotencyKey);
 			if (
 				row &&
 				(row.entryId !== item.entryId ||
 					row.servings !== item.servings ||
+					(notesEnabled &&
+						(row.notes ?? null) !== (item.requestedNotes ?? null)) ||
 					(item.occurredAt != null &&
 						row.occurredAt.getTime() !== item.occurredAt.getTime()))
 			) {
@@ -871,11 +916,11 @@ export async function logManifestIntakes(
 		const activeByEntry = await loadActiveRows(
 			db,
 			principal,
-			input.items.map((item) => item.entryId),
+			normalizedItems.map((item) => item.entryId),
 		);
 		const newRows: Array<typeof schema.nutritionIntake.$inferInsert> = [];
 		const results: NutritionIntakeResult[] = [];
-		for (const item of input.items) {
+		for (const item of normalizedItems) {
 			const replayedRow = byKey.get(item.idempotencyKey);
 			if (replayedRow) {
 				results.push({
@@ -910,6 +955,11 @@ export async function logManifestIntakes(
 			if (!intakeId) {
 				throw new Error("Stable nutrition intake ID was not precomputed");
 			}
+			const notes = resolveIntakeNotesForWrite({
+				notesEnabled,
+				requestedNotes: item.requestedNotes,
+				priorNotes: prior?.notes ?? null,
+			});
 			const row: IntakeRow = {
 				id: intakeId,
 				organizationId: principal.organizationId,
@@ -944,6 +994,7 @@ export async function logManifestIntakes(
 				voidOperationId: null,
 				voidedAt: null,
 				voidedByUserId: null,
+				notes,
 				createdAt: committedAt,
 			};
 			newRows.push(row);
@@ -964,7 +1015,7 @@ export async function logManifestIntakes(
 				requestHash,
 				operationType: "log_manifest_intakes",
 				status: "in_progress",
-				itemCount: input.items.length,
+				itemCount: normalizedItems.length,
 				createdAt: committedAt,
 			}),
 		];
@@ -1024,7 +1075,7 @@ export async function logManifestIntakes(
 					consentPolicyVersion: intakeConsent.statement.policyVersion,
 					requestId: input.operationKey,
 					operationId,
-					itemCount: input.items.length,
+					itemCount: normalizedItems.length,
 				}),
 			),
 		);
@@ -1044,13 +1095,13 @@ export async function logManifestIntakes(
 					racedOperation,
 					requestHash,
 					"log_manifest_intakes",
-					input.items.length,
+					normalizedItems.length,
 				);
 				return reconstructLogResult(
 					env,
 					principal,
 					racedOperation,
-					input.items,
+					normalizedItems,
 				);
 			}
 			if (
@@ -1736,7 +1787,8 @@ export async function attachPersonalIntakeToEntries(
 						proteinG: intake.proteinG,
 						carbsG: intake.carbsG,
 						fatG: intake.fatG,
-						occurredAt: intake.occurredAt,
+						occurredAt: toIsoDateString(intake.occurredAt),
+						notes: intake.notes ?? null,
 					}
 				: null,
 		};

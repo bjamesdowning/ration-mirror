@@ -199,11 +199,13 @@ struct ManifestPersonalIntake: Codable, Sendable, Equatable {
     let carbsG: Double
     let fatG: Double
     let occurredAt: Date
+    var notes: String? = nil
 }
 
 struct ManifestIntakeUpsertRequest: Encodable, Sendable {
     let servings: Double
     let idempotencyKey: String
+    var notes: String? = nil
 }
 
 struct ManifestIntakeUpsertResponse: Codable, Sendable {

@@ -92,6 +92,8 @@ struct ClientFlags: Codable, Sendable, Equatable {
     var nutritionCookLogSplit: Bool?
     /// Cargo Quick Eat composed snack shortcut (additive).
     var cargoQuickEat: Bool?
+    /// Optional private notes on Eat / Quick Eat intake logs (additive).
+    var nutritionIntakeNotes: Bool?
 
     static let disabled = ClientFlags()
 
@@ -115,6 +117,7 @@ struct ClientFlags: Codable, Sendable, Equatable {
     var isCargoQuickEatEnabled: Bool {
         cargoQuickEat == true && nutritionCookLogSplit == true
     }
+    var isNutritionIntakeNotesEnabled: Bool { nutritionIntakeNotes == true }
 }
 
 /// `GET /api/mobile/v1/client-flags` (unsigned)

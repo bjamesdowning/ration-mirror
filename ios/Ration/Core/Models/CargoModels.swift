@@ -281,6 +281,7 @@ struct CargoQuickEatRequest: Encodable, Sendable {
     let date: String
     let operationKey: String
     var logIntake: Bool? = nil
+    var notes: String? = nil
 }
 
 struct CargoQuickEatCargoSnapshot: Codable, Sendable {

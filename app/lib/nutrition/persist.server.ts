@@ -618,6 +618,7 @@ export type PersonalIntakeSummary = {
 	carbsG: number;
 	fatG: number;
 	occurredAt: Date;
+	notes: string | null;
 	idempotencyKey: string | null;
 	replacesIntakeId: string | null;
 };
@@ -649,6 +650,7 @@ export async function getActivePersonalIntakesForEntries(
 				carbsG: schema.nutritionIntake.carbsG,
 				fatG: schema.nutritionIntake.fatG,
 				occurredAt: schema.nutritionIntake.occurredAt,
+				notes: schema.nutritionIntake.notes,
 				idempotencyKey: schema.nutritionIntake.idempotencyKey,
 				replacesIntakeId: schema.nutritionIntake.replacesIntakeId,
 			})
@@ -674,6 +676,7 @@ export async function getActivePersonalIntakesForEntries(
 			carbsG: row.carbsG,
 			fatG: row.fatG,
 			occurredAt: row.occurredAt,
+			notes: row.notes ?? null,
 			idempotencyKey: row.idempotencyKey,
 			replacesIntakeId: row.replacesIntakeId,
 		});
@@ -728,6 +731,7 @@ export type NutritionIntakeRow = {
 	mealName: string | null;
 	verified: number;
 	occurredAt: Date;
+	notes: string | null;
 };
 
 export type ListNutritionIntakesOptions = {
@@ -823,6 +827,7 @@ export async function listNutritionIntakesForRange(
 			mealName: schema.meal.name,
 			verified: schema.nutritionIntake.verified,
 			occurredAt: schema.nutritionIntake.occurredAt,
+			notes: schema.nutritionIntake.notes,
 		})
 		.from(schema.nutritionIntake)
 		.leftJoin(schema.meal, eq(schema.nutritionIntake.mealId, schema.meal.id))
@@ -849,6 +854,7 @@ export async function listNutritionIntakesForRange(
 		mealName: r.mealName ?? null,
 		verified: r.verified,
 		occurredAt: r.occurredAt,
+		notes: r.notes ?? null,
 	}));
 
 	const last = page.at(-1);

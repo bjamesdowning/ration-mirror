@@ -537,6 +537,7 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 					nutritionManifest?: boolean;
 					nutritionGoals?: boolean;
 					nutritionCookLogSplit?: boolean;
+					nutritionIntakeNotes?: boolean;
 				};
 		  }
 		| undefined;
@@ -547,6 +548,8 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 	const nutritionGoalsFlag = rootData?.clientFlags?.nutritionGoals === true;
 	const nutritionCookLogSplitFlag =
 		rootData?.clientFlags?.nutritionCookLogSplit === true;
+	const nutritionIntakeNotesFlag =
+		rootData?.clientFlags?.nutritionIntakeNotes === true;
 	const showDayNutritionTotals = nutritionManifestFlag && nutritionGoalsFlag;
 	/** nutrition-cook-log-split — shared Cook replaces Consume; private Eat opens separately. */
 	const cookSplit = nutritionCookLogSplitFlag;
@@ -826,11 +829,16 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 		if (entry) setEatEntry(entry);
 	};
 
-	const handleEat = (entryId: string, servings: number) => {
+	const handleEat = (
+		entryId: string,
+		servings: number,
+		notes: string | null = null,
+	) => {
 		intakeFetcher.submit(
 			JSON.stringify({
 				servings,
 				idempotencyKey: crypto.randomUUID(),
+				...(notes != null ? { notes } : {}),
 			}),
 			{
 				method: "POST",
@@ -1477,12 +1485,18 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 					mode="eat"
 					mealName={eatEntry.mealName}
 					defaultServings={eatEntry.personalIntake?.servings ?? 1}
+					energyKcalPerServing={eatEntry.mealEnergyKcalPerServing}
+					proteinGPerServing={eatEntry.mealProteinGPerServing}
+					carbsGPerServing={eatEntry.mealCarbsGPerServing}
+					fatGPerServing={eatEntry.mealFatGPerServing}
 					intakeConsentGranted={intakeConsentGranted}
 					hasExistingIntake={!!eatEntry.personalIntake}
-					onConfirmEat={(servings) => {
+					notesEnabled={nutritionIntakeNotesFlag}
+					defaultNotes={eatEntry.personalIntake?.notes ?? null}
+					onConfirmEat={(servings, notes) => {
 						const entryId = eatEntry.id;
 						setEatEntry(null);
-						handleEat(entryId, servings);
+						handleEat(entryId, servings, notes);
 					}}
 					onRemoveLog={() => {
 						const entryId = eatEntry.id;

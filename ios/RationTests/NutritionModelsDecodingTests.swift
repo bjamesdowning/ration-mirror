@@ -168,6 +168,31 @@ final class NutritionModelsDecodingTests: XCTestCase {
         XCTAssertNil(summary.goal)
     }
 
+    func testDecodesNutritionSummaryWithStringAggregates() throws {
+        let json = """
+        {
+          "from": "2026-08-11",
+          "to": "2026-08-11",
+          "totals": { "energyKcal": "90", "proteinG": "2", "carbsG": "10", "fatG": "1" },
+          "days": [
+            {
+              "date": "2026-08-11",
+              "energyKcal": "90",
+              "proteinG": "2",
+              "carbsG": "10",
+              "fatG": "1",
+              "coverageAvg": "0.9",
+              "entryCount": "3"
+            }
+          ],
+          "goal": null
+        }
+        """.data(using: .utf8)!
+        let summary = try decoder.decode(NutritionSummary.self, from: json)
+        XCTAssertEqual(summary.days.first?.entryCount, 3)
+        XCTAssertEqual(summary.totals.energyKcal, 90)
+    }
+
     // MARK: - Cook
 
     func testDecodesCookEntriesResponseSuccess() throws {

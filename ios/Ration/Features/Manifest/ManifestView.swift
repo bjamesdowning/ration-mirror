@@ -148,8 +148,8 @@ struct ManifestView: View {
                 ManifestPlateUpSheet(
                     entry: entry,
                     hasIntakeConsent: model.manifest?.intakeConsentGranted ?? false,
-                    onSave: { servings in
-                        await handleLogServing(entry, servings: servings)
+                    onSave: { servings, notes in
+                        await handleLogServing(entry, servings: servings, notes: notes)
                     },
                     onRemove: entry.personalIntake != nil
                         ? { await handleClearServing(entry) }
@@ -591,10 +591,15 @@ struct ManifestView: View {
     }
 
     /// Eat — private serving log. Returns an error message on failure for the sheet to display.
-    private func handleLogServing(_ entry: ManifestEntry, servings: Double) async -> String? {
+    private func handleLogServing(
+        _ entry: ManifestEntry,
+        servings: Double,
+        notes: String? = nil
+    ) async -> String? {
         switch await model.logServing(
             entry,
             servings: servings,
+            notes: notes,
             idempotencyKey: UUID().uuidString,
             api: env.api,
             nutrition: env.nutrition

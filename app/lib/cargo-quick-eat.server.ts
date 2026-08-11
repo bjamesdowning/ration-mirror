@@ -131,6 +131,7 @@ export async function quickEatFromCargo(
 		date: string;
 		operationKey: string;
 		logIntake?: boolean;
+		notes?: string | null;
 		source?: KitchenEventSource;
 	},
 ): Promise<QuickEatResult> {
@@ -300,6 +301,7 @@ export async function quickEatFromCargo(
 						entryId: cookResult.entry.id,
 						servings: clamped.servings,
 						idempotencyKey: `${input.operationKey}:intake-item`,
+						notes: input.notes ?? null,
 					},
 				],
 			});

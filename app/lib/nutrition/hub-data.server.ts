@@ -18,7 +18,10 @@ import {
 	type NutritionPrincipal,
 	type NutritionSurface,
 } from "~/lib/nutrition/service.server";
-import type { NutritionSummary } from "~/lib/schemas/nutrition";
+import {
+	type NutritionSummary,
+	NutritionSummarySchema,
+} from "~/lib/schemas/nutrition";
 
 export type HubNutritionPayload = {
 	nutritionToday: NutritionSummary | null;
@@ -27,6 +30,29 @@ export type HubNutritionPayload = {
 
 function emptyPayload(): HubNutritionPayload {
 	return { nutritionToday: null, nutritionTrends: null };
+}
+
+/** Validate Hub nutrition slice; never poison the whole Hub decode. */
+function toHubNutritionSummary(
+	serialized: ReturnType<typeof serializeNutritionSummary> | null,
+	label: string,
+): NutritionSummary | null {
+	if (!serialized) return null;
+	const candidate = {
+		from: serialized.from,
+		to: serialized.to,
+		totals: serialized.totals,
+		days: serialized.days,
+		goal: serialized.goal,
+	};
+	const parsed = NutritionSummarySchema.safeParse(candidate);
+	if (!parsed.success) {
+		log.warn(`[hub] ${label} summary failed schema validation`, {
+			detail: parsed.error.issues[0]?.message ?? "invalid",
+		});
+		return null;
+	}
+	return parsed.data;
 }
 
 export async function loadHubNutritionData(options: {
@@ -108,24 +134,8 @@ export async function loadHubNutritionData(options: {
 		]);
 
 		return {
-			nutritionToday: todayResult
-				? {
-						from: todayResult.from,
-						to: todayResult.to,
-						totals: todayResult.totals,
-						days: todayResult.days,
-						goal: todayResult.goal,
-					}
-				: null,
-			nutritionTrends: trendsResult
-				? {
-						from: trendsResult.from,
-						to: trendsResult.to,
-						totals: trendsResult.totals,
-						days: trendsResult.days,
-						goal: trendsResult.goal,
-					}
-				: null,
+			nutritionToday: toHubNutritionSummary(todayResult, "nutritionToday"),
+			nutritionTrends: toHubNutritionSummary(trendsResult, "nutritionTrends"),
 		};
 	} catch (err) {
 		log.error("[hub] nutrition load failed", err);

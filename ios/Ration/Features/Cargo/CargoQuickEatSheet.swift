@@ -3,16 +3,19 @@ import SwiftUI
 /// Single-sheet Cargo Quick Eat: choose amount → confirm → done.
 struct CargoQuickEatSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(AppEnvironment.self) private var env
     let item: CargoItem
-    var onConfirm: (Double) async -> CargoQuickEatResponse?
+    var onConfirm: (_ quantity: Double, _ notes: String?) async -> CargoQuickEatResponse?
     var onFinished: (CargoQuickEatResponse) -> Void = { _ in }
 
     @State private var quantity: Double = 1
+    @State private var notes: String = ""
     @State private var isSaving = false
     @State private var errorMessage: String?
 
     private var stockEmpty: Bool { item.quantity <= 0 }
     private var remaining: Double { max(0, item.quantity - quantity) }
+    private var notesEnabled: Bool { env.session.clientFlags.isNutritionIntakeNotesEnabled }
 
     var body: some View {
         NavigationStack {
@@ -33,6 +36,25 @@ struct CargoQuickEatSheet: View {
                         Text("Remaining after: \(remaining.formatted()) \(item.unit)")
                             .rationCaption()
                             .foregroundStyle(Theme.muted)
+                    }
+                }
+                Section {
+                    IntakeMacroPreview(
+                        energyKcal: macroEstimate.energyKcal,
+                        proteinG: macroEstimate.proteinG,
+                        carbsG: macroEstimate.carbsG,
+                        fatG: macroEstimate.fatG,
+                        unavailableMessage: "Nutrition unavailable for this item."
+                    )
+                } footer: {
+                    Text("Estimates scale with amount. Saving logs nutrients to your private intake when available.")
+                        .rationCaption()
+                }
+                if notesEnabled {
+                    Section {
+                        IntakeNotesField(notes: $notes)
+                    } header: {
+                        Text("Notes")
                     }
                 }
                 if let errorMessage {
@@ -63,10 +85,23 @@ struct CargoQuickEatSheet: View {
                 }
             }
         }
-        .presentationDetents([.medium])
+        .presentationDetents([.medium, .large])
         .onAppear {
             quantity = defaultAmount
         }
+    }
+
+    private var macroEstimate: (
+        energyKcal: Double?,
+        proteinG: Double?,
+        carbsG: Double?,
+        fatG: Double?
+    ) {
+        CargoEatMacroEstimate.scaled(
+            nutrition: item.nutrition,
+            quantity: quantity,
+            unit: item.unit
+        )
     }
 
     private var defaultAmount: Double {
@@ -88,22 +123,12 @@ struct CargoQuickEatSheet: View {
         isSaving = true
         errorMessage = nil
         defer { isSaving = false }
-        if let result = await onConfirm(quantity) {
+        let notePayload = notesEnabled ? IntakeNotesField.payload(from: notes) : nil
+        if let result = await onConfirm(quantity, notePayload) {
             onFinished(result)
             dismiss()
         } else {
-            errorMessage = "Couldn’t log that snack. Try again."
+            errorMessage = "Couldn't log this snack. Try again."
         }
-    }
-}
-
-enum CargoLocalDate {
-    static func todayString(from date: Date = Date()) -> String {
-        let f = DateFormatter()
-        f.calendar = Calendar.current
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.timeZone = TimeZone.current
-        f.dateFormat = "yyyy-MM-dd"
-        return f.string(from: date)
     }
 }

@@ -204,6 +204,10 @@ final class APIClient {
         do {
             return try JSON.decoder.decode(T.self, from: data)
         } catch {
+            #if DEBUG
+            // Coding path only — never log response bodies (may contain PII).
+            NSLog("[RationAPI] decode failed for %@: %@", path, "\(error)")
+            #endif
             throw APIError.decoding("\(error)")
         }
     }

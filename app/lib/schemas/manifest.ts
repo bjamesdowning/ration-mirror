@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { INJECTION_PATTERNS } from "./meal";
 
 export const SLOT_TYPES = ["breakfast", "lunch", "dinner", "snack"] as const;
 
@@ -76,11 +77,24 @@ export const CookEntriesRequestSchema = z.object({
 	confirmInsufficient: z.boolean().optional(),
 });
 
+/** Optional private Eat snippet (≤280). Blank/omit → null. */
+export const IntakeNotesSchema = z
+	.string()
+	.trim()
+	.max(280)
+	.nullish()
+	.transform((v) => (v == null || v === "" ? null : v))
+	.refine((v) => v == null || !INJECTION_PATTERNS.test(v), {
+		message: "Invalid text",
+	});
+
 /** Private Eat upsert — path-scoped entry; no client user/org IDs. */
 export const ManifestPersonalIntakeUpsertSchema = z
 	.object({
 		servings: z.coerce.number().min(0.5).max(100),
 		idempotencyKey: z.string().uuid(),
+		/** Optional Eat snippet; persisted only when `nutrition-intake-notes` is on. */
+		notes: IntakeNotesSchema,
 	})
 	.strict();
 

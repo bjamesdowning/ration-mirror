@@ -285,20 +285,25 @@ struct GalleyView: View {
             ManifestPlateUpSheet(
                 entry: entry,
                 hasIntakeConsent: intakeConsentGranted,
-                onSave: { servings in
-                    await logServingFromGalley(entry: entry, servings: servings)
+                onSave: { servings, notes in
+                    await logServingFromGalley(entry: entry, servings: servings, notes: notes)
                 }
             )
         }
     }
 
     @MainActor
-    private func logServingFromGalley(entry: ManifestEntry, servings: Double) async -> String? {
+    private func logServingFromGalley(
+        entry: ManifestEntry,
+        servings: Double,
+        notes: String? = nil
+    ) async -> String? {
         do {
             let result = try await env.api.upsertManifestIntake(
                 entryId: entry.id,
                 servings: servings,
-                idempotencyKey: UUID().uuidString
+                idempotencyKey: UUID().uuidString,
+                notes: notes
             )
             if result.intakeConsentGranted == true {
                 intakeConsentGranted = true

@@ -309,10 +309,11 @@ grant — not an inline Eat field and not implied by Cook or goals. Galley **Coo
 onto today’s Manifest and may offer the same Eat sheet; **Add to Manifest** deep-links to
 Add-to-plan with meal + day prefilled (`ration://manifest/add?mealId=&date=`). Day view shows
 an Intake log derived from personal intake on entries. Settings → Nutrition goals remain a
-separate explicit consent path. Flags off → legacy Consume/Eat only; Galley Cook stays cargo-only.
+separate explicit consent path (in-form Save; grant must leave goals consent **active** before upsert). Flags off → legacy Consume/Eat only; Galley Cook stays cargo-only.
 
-**Nutrition goals + cargo override (iOS 1.3.25):** Nutrition Goals toolbar is Cancel/Save
-(Save dismisses on success) with `MutationRetry` and `asOf` on GET. Cargo/Scan nutrition
+**Eat macros + optional notes (iOS 1.4.9):** Shared `IntakeMacroPreview` on Manifest Eat and Cargo Quick Eat. Optional private notes (≤280) when `nutritionIntakeNotes` / `nutrition-intake-notes` is on. Hub/Manifest decode hardened for string aggregates and ISO `personalIntake.occurredAt`.
+
+**Nutrition goals + cargo override (iOS 1.3.25):** Nutrition Goals uses in-form Save (enabled when ≥1 target and consent affirmed or already active) with `MutationRetry` and `asOf` on GET. Cargo/Scan nutrition
 editors only send `user_override` when macros are explicitly edited — qty/unit-only saves
 omit nutrition so the server can density-scale USDA/AI snapshots.
 

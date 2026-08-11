@@ -140,6 +140,7 @@ export const NutritionIntakeDTOSchema = z.object({
 	mealName: z.string().nullable(),
 	verified: z.boolean(),
 	occurredAt: z.string().min(1),
+	notes: z.string().max(280).nullable().optional(),
 });
 
 export type NutritionIntakeDTO = z.infer<typeof NutritionIntakeDTOSchema>;

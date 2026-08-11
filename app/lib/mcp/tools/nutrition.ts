@@ -13,6 +13,7 @@ import {
 	logManifestIntakes,
 	setGoal,
 } from "../../nutrition/service.server";
+import { IntakeNotesSchema } from "../../schemas/manifest";
 import {
 	NutritionGoalUpsertSchema,
 	NutritionSummaryQuerySchema,
@@ -52,6 +53,7 @@ const intakePortionSchema = z.object({
 	entryId: z.string().uuid(),
 	servings: z.number().min(0.5).max(100),
 	idempotencyKey: z.string().uuid(),
+	notes: IntakeNotesSchema,
 });
 
 export function createNutritionToolDefs(env: McpToolsEnv) {
@@ -116,7 +118,7 @@ export function createNutritionToolDefs(env: McpToolsEnv) {
 		defineSharedTool({
 			name: "list_nutrition_intakes",
 			description:
-				"List the caller's personal intake rows for a UTC date range (meal/slot/servings/macros). Requires nutrition-goals or nutrition-manifest. Cursor-paginated (default limit 100, max 200). Not medical advice.",
+				"List the caller's personal intake rows for a UTC date range (meal/slot/servings/macros/optional notes). Requires nutrition-goals or nutrition-manifest. Cursor-paginated (default limit 100, max 200). Not medical advice.",
 			inputSchema: z.object({
 				from: z
 					.string()
@@ -314,7 +316,7 @@ export function createNutritionToolDefs(env: McpToolsEnv) {
 		defineSharedTool({
 			name: "log_manifest_intake",
 			description:
-				"Atomically log or update personal plate-up (Eat) for prepared Manifest entries. Never deducts Cargo. Requires active intake and agent-processing consent established in Ration. Pass operationKey plus portions[{entryId, servings, idempotencyKey}] (1–50); during the compatibility window, omission derives a stable operation key from the ordered item keys. Returns stable replay semantics and authoritative day totals. Not medical advice.",
+				"Atomically log or update personal plate-up (Eat) for prepared Manifest entries. Never deducts Cargo. Requires active intake and agent-processing consent established in Ration. Pass operationKey plus portions[{entryId, servings, idempotencyKey, notes?}] (1–50); optional notes (≤280) persist only when nutrition-intake-notes is on. During the compatibility window, omission derives a stable operation key from the ordered item keys. Returns stable replay semantics and authoritative day totals. Not medical advice.",
 			inputSchema: z.object({
 				portions: z.array(intakePortionSchema).min(1).max(50),
 				operationKey: z.string().uuid().optional(),

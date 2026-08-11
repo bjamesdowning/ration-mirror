@@ -92,7 +92,7 @@ final class CargoDetailViewModel {
         }
     }
 
-    func quickEat(quantity: Double, api: RationAPI) async -> CargoQuickEatResponse? {
+    func quickEat(quantity: Double, notes: String? = nil, api: RationAPI) async -> CargoQuickEatResponse? {
         guard let item, !isQuickEating else { return nil }
         isQuickEating = true
         defer { isQuickEating = false }
@@ -102,8 +102,9 @@ final class CargoDetailViewModel {
                 CargoQuickEatRequest(
                     quantity: quantity,
                     unit: item.unit,
-                    date: CargoLocalDate.todayString(),
-                    operationKey: UUID().uuidString
+                    date: LocalDay.todayISO(),
+                    operationKey: UUID().uuidString,
+                    notes: notes
                 )
             )
             let previous = item

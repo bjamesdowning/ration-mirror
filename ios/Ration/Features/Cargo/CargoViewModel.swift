@@ -350,7 +350,7 @@ final class CargoViewModel {
         await markEmpty(id: item.id, api: api)
     }
 
-    func quickEat(_ item: CargoItem, quantity: Double, api: RationAPI) async -> CargoQuickEatResponse? {
+    func quickEat(_ item: CargoItem, quantity: Double, notes: String? = nil, api: RationAPI) async -> CargoQuickEatResponse? {
         do {
             let response = try await MutationRetry.once {
                 try await api.quickEatCargo(
@@ -358,8 +358,9 @@ final class CargoViewModel {
                     CargoQuickEatRequest(
                         quantity: quantity,
                         unit: item.unit,
-                        date: CargoLocalDate.todayString(),
-                        operationKey: UUID().uuidString
+                        date: LocalDay.todayISO(),
+                        operationKey: UUID().uuidString,
+                        notes: notes
                     )
                 )
             }

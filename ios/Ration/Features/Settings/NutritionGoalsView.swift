@@ -102,7 +102,12 @@ final class NutritionGoalsViewModel {
                     errorMessage = "Review and accept the current nutrition goals consent statement."
                     return false
                 }
-                consentStatuses = try await api.grantNutritionConsent(goalsConsent).consents
+                let response = try await api.grantNutritionConsent(goalsConsent)
+                consentStatuses = response.consents
+                guard NutritionGoalsSavePolicy.hasActiveGoalsConsent(in: response.consents) else {
+                    errorMessage = "Consent could not be recorded. Try again."
+                    return false
+                }
             }
             let body = NutritionGoalUpsertRequest(
                 dailyEnergyKcal: Self.parseOptional(dailyEnergyKcal),
@@ -153,6 +158,16 @@ struct NutritionGoalsView: View {
         case energy, protein, carbs, fat, fiber
     }
 
+    private var canSave: Bool {
+        NutritionGoalsSavePolicy.canEnableSave(
+            isSaving: model.isSaving,
+            isUnavailable: model.isUnavailable,
+            hasAnyValue: model.hasAnyValue,
+            hasActiveGoalsConsent: model.hasActiveGoalsConsent,
+            affirmedGoalsConsent: affirmedGoalsConsent
+        )
+    }
+
     var body: some View {
         NavigationStack {
             Group {
@@ -173,23 +188,6 @@ struct NutritionGoalsView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
-                        Task {
-                            focusedField = nil
-                            if await model.save(api: env.api, affirmed: affirmedGoalsConsent) {
-                                Haptics.light()
-                                dismiss()
-                            }
-                        }
-                    }
-                    .disabled(
-                        model.isSaving
-                            || !model.hasAnyValue
-                            || model.isUnavailable
-                            || (!model.hasActiveGoalsConsent && !affirmedGoalsConsent)
-                    )
                 }
             }
             .background(Theme.ceramic)
@@ -213,7 +211,11 @@ struct NutritionGoalsView: View {
             } header: {
                 Text("Daily targets")
             } footer: {
-                Text("Set at least one target. Leave a field blank to skip it. Saving stores these goals to power your daily and weekly progress views.")
+                if !model.hasAnyValue {
+                    Text("Set at least one nutrient target to enable Save.")
+                } else {
+                    Text("Leave a field blank to skip it. Saving stores these goals to power your daily and weekly progress views.")
+                }
             }
 
             if !model.hasActiveGoalsConsent, let consent = model.goalsConsent {
@@ -226,6 +228,12 @@ struct NutritionGoalsView: View {
                     )
                     .tint(Theme.hyperGreen)
                     .accessibilityIdentifier("nutrition.goals.consent.toggle")
+                    .onChange(of: affirmedGoalsConsent) { _, _ in
+                        // Clear stale consent banner when the user toggles affirmation.
+                        if model.errorMessage?.localizedCaseInsensitiveContains("consent") == true {
+                            model.errorMessage = nil
+                        }
+                    }
                     Button("Privacy Policy") {
                         openURL(AppConfig.privacyURL)
                     }
@@ -240,6 +248,26 @@ struct NutritionGoalsView: View {
                 Section {
                     ErrorBanner(message: errorMessage)
                 }
+            }
+
+            Section {
+                Button {
+                    Task {
+                        focusedField = nil
+                        if await model.save(api: env.api, affirmed: affirmedGoalsConsent) {
+                            Haptics.light()
+                            dismiss()
+                        }
+                    }
+                } label: {
+                    if model.isSaving {
+                        ProgressView()
+                    } else {
+                        Text("Save")
+                    }
+                }
+                .disabled(!canSave)
+                .accessibilityIdentifier("nutrition.goals.save")
             }
 
             if model.goal != nil {

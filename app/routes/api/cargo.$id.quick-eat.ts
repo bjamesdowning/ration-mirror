@@ -66,6 +66,7 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 				date: input.date,
 				operationKey: input.operationKey,
 				logIntake: input.logIntake,
+				notes: input.notes,
 				source: "web",
 			},
 		);

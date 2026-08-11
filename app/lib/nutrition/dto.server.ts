@@ -38,6 +38,41 @@ function toIso(value: Date | string | null | undefined): string | undefined {
 	return value;
 }
 
+/** Coerce D1/SQLite aggregate quirks (string numbers) to finite JSON numbers. */
+export function coerceFiniteNumber(value: unknown, fallback = 0): number {
+	if (typeof value === "number" && Number.isFinite(value)) return value;
+	if (typeof value === "string" && value.trim() !== "") {
+		const n = Number(value);
+		if (Number.isFinite(n)) return n;
+	}
+	return fallback;
+}
+
+export function coerceOptionalFiniteNumber(
+	value: unknown,
+): number | null | undefined {
+	if (value == null) return value === null ? null : undefined;
+	if (typeof value === "number" && Number.isFinite(value)) return value;
+	if (typeof value === "string" && value.trim() !== "") {
+		const n = Number(value);
+		if (Number.isFinite(n)) return n;
+	}
+	return undefined;
+}
+
+/** Always emit an ISO-8601 string for iOS date decoding (string-only strategy). */
+export function toIsoDateString(value: Date | string | number): string {
+	if (value instanceof Date) return value.toISOString();
+	if (typeof value === "number" && Number.isFinite(value)) {
+		// Drizzle timestamp mode may yield unix seconds or ms.
+		const ms = value < 1e12 ? value * 1000 : value;
+		return new Date(ms).toISOString();
+	}
+	const asDate = new Date(String(value));
+	if (!Number.isNaN(asDate.getTime())) return asDate.toISOString();
+	return String(value);
+}
+
 /** API-facing nutrition snapshot (v2 fields + legacy projection + additive nutritionV2). */
 export function serializeNutritionSnapshot(snapshot: AnyNutritionSnapshot) {
 	const v2 = normalizeNutritionSnapshot(snapshot);
@@ -168,31 +203,35 @@ export function serializeNutritionSummary(
 	summary: NutritionSummaryResult,
 ): NutritionSummary & { goalAsOf: string; nutritionV2: NutritionSummaryV2 } {
 	const goal = summary.goal ? serializeNutritionGoal(summary.goal) : null;
-	const days: NutritionDayTotalsDTO[] = summary.days.map((day) => ({
-		schemaVersion: 2 as const,
+	const coercedDays = summary.days.map((day) => ({
 		date: day.date,
-		energyKcal: day.energyKcal,
-		proteinG: day.proteinG,
-		carbsG: day.carbsG,
-		fatG: day.fatG,
-		...(day.fiberG != null ? { fiberG: day.fiberG } : {}),
-		coverageAvg: day.coverageAvg,
-		entryCount: day.entryCount,
+		energyKcal: coerceFiniteNumber(day.energyKcal),
+		proteinG: coerceFiniteNumber(day.proteinG),
+		carbsG: coerceFiniteNumber(day.carbsG),
+		fatG: coerceFiniteNumber(day.fatG),
+		...(day.fiberG != null ? { fiberG: coerceFiniteNumber(day.fiberG) } : {}),
+		coverageAvg: coerceFiniteNumber(day.coverageAvg),
+		entryCount: Math.trunc(coerceFiniteNumber(day.entryCount)),
+	}));
+	const coercedTotals = {
+		energyKcal: coerceFiniteNumber(summary.totals.energyKcal),
+		proteinG: coerceFiniteNumber(summary.totals.proteinG),
+		carbsG: coerceFiniteNumber(summary.totals.carbsG),
+		fatG: coerceFiniteNumber(summary.totals.fatG),
+		...(summary.totals.fiberG != null
+			? { fiberG: coerceFiniteNumber(summary.totals.fiberG) }
+			: {}),
+	};
+	const days: NutritionDayTotalsDTO[] = coercedDays.map((day) => ({
+		schemaVersion: 2 as const,
+		...day,
 	}));
 	const nutritionV2: NutritionSummaryV2 = {
 		schemaVersion: 2,
 		from: summary.from,
 		to: summary.to,
 		goalAsOf: summary.to,
-		totals: {
-			energyKcal: summary.totals.energyKcal,
-			proteinG: summary.totals.proteinG,
-			carbsG: summary.totals.carbsG,
-			fatG: summary.totals.fatG,
-			...(summary.totals.fiberG != null
-				? { fiberG: summary.totals.fiberG }
-				: {}),
-		},
+		totals: coercedTotals,
 		days,
 		goal,
 	};
@@ -200,15 +239,16 @@ export function serializeNutritionSummary(
 		from: summary.from,
 		to: summary.to,
 		goalAsOf: summary.to,
-		totals: summary.totals,
-		days: summary.days,
+		totals: coercedTotals,
+		days: coercedDays,
 		goal: summary.goal
 			? {
-					dailyEnergyKcal: summary.goal.dailyEnergyKcal,
-					proteinG: summary.goal.proteinG,
-					carbsG: summary.goal.carbsG,
-					fatG: summary.goal.fatG,
-					fiberG: summary.goal.fiberG,
+					dailyEnergyKcal:
+						coerceOptionalFiniteNumber(summary.goal.dailyEnergyKcal) ?? null,
+					proteinG: coerceOptionalFiniteNumber(summary.goal.proteinG) ?? null,
+					carbsG: coerceOptionalFiniteNumber(summary.goal.carbsG) ?? null,
+					fatG: coerceOptionalFiniteNumber(summary.goal.fatG) ?? null,
+					fiberG: coerceOptionalFiniteNumber(summary.goal.fiberG) ?? null,
 					effectiveFrom: summary.goal.effectiveFrom,
 					effectiveTo: summary.goal.effectiveTo,
 				}
@@ -233,7 +273,8 @@ export function serializeNutritionIntake(
 		mealId: row.mealId,
 		mealName: row.mealName,
 		verified: row.verified === 1,
-		occurredAt: row.occurredAt.toISOString(),
+		occurredAt: toIsoDateString(row.occurredAt),
+		notes: row.notes ?? null,
 	};
 }
 

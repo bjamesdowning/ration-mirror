@@ -203,6 +203,7 @@ describe("createNutritionToolDefs", () => {
 					mealName: "Pasta",
 					verified: 1,
 					occurredAt: new Date("2026-08-01T12:00:00Z"),
+					notes: null,
 				},
 			],
 			nextCursor: null,

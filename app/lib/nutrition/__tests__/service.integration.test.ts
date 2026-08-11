@@ -90,6 +90,7 @@ function setup() {
 			void_operation_id text,
 			voided_at integer,
 			voided_by_user_id text,
+			notes text,
 			created_at integer not null
 		);
 		create unique index nutrition_intake_user_idempotency_uidx
@@ -363,7 +364,7 @@ describe("canonical nutrition service with transactional SQLite", () => {
 							 protein_g, carbs_g, fat_g, coverage, source, confidence, verified,
 							 occurred_at, kitchen_event_id, schema_version, nutrients_json,
 							 coverage_json, fiber_g, consent_id, '99999999-9999-4999-8999-999999999999',
-							 null, id, null, null, null, created_at
+							 null, id, null, null, null, notes, created_at
 							 from nutrition_intake where id = ?`,
 						)
 						.run(first.items[0]?.intake.id);

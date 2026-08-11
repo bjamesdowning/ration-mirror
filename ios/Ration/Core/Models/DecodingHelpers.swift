@@ -69,4 +69,68 @@ extension KeyedDecodingContainer {
         }
         return decodeTolerantStringArray(forKey: key).map { Tag(slug: $0) }
     }
+
+    /// String map that coerces non-string JSON values (numbers/bools) to strings
+    /// so one bad meal.customFields value cannot fail an entire Hub decode.
+    func decodeTolerantStringDictionary(forKey key: Key) -> [String: String]? {
+        guard contains(key), (try? decodeNil(forKey: key)) != true else {
+            return nil
+        }
+        if let exact = try? decode([String: String].self, forKey: key) {
+            return exact
+        }
+        guard let raw = try? decode([String: JSONValue].self, forKey: key) else {
+            return nil
+        }
+        var out: [String: String] = [:]
+        for (k, value) in raw {
+            switch value {
+            case let .string(s):
+                out[k] = s
+            case let .number(n):
+                if n.truncatingRemainder(dividingBy: 1) == 0 {
+                    out[k] = String(Int(n))
+                } else {
+                    out[k] = String(n)
+                }
+            case let .bool(b):
+                out[k] = b ? "true" : "false"
+            case .null:
+                continue
+            case .object, .array:
+                continue
+            }
+        }
+        return out
+    }
+
+    /// Int that tolerates JSON string numbers from D1 aggregates.
+    func decodeTolerantInt(forKey key: Key) throws -> Int {
+        if let v = try? decode(Int.self, forKey: key) { return v }
+        if let d = try? decode(Double.self, forKey: key) { return Int(d) }
+        if let s = try? decode(String.self, forKey: key), let v = Int(s) { return v }
+        throw DecodingError.dataCorruptedError(
+            forKey: key,
+            in: self,
+            debugDescription: "Expected Int-compatible value"
+        )
+    }
+
+    /// Double that tolerates JSON string numbers from D1 aggregates.
+    func decodeTolerantDouble(forKey key: Key) throws -> Double {
+        if let v = try? decode(Double.self, forKey: key) { return v }
+        if let s = try? decode(String.self, forKey: key), let v = Double(s) { return v }
+        throw DecodingError.dataCorruptedError(
+            forKey: key,
+            in: self,
+            debugDescription: "Expected Double-compatible value"
+        )
+    }
+
+    func decodeTolerantOptionalDouble(forKey key: Key) throws -> Double? {
+        guard contains(key), (try? decodeNil(forKey: key)) != true else {
+            return nil
+        }
+        return try decodeTolerantDouble(forKey: key)
+    }
 }

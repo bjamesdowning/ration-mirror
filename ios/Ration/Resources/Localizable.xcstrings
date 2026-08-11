@@ -20,6 +20,16 @@
         }
       }
     },
+    "%@ / %@ %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ / %2$@ %3$@"
+          }
+        }
+      }
+    },
     "%@ %@" : {
       "localizations" : {
         "en" : {
@@ -36,6 +46,16 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "%1$@ %2$@ selected %3$@"
+          }
+        }
+      }
+    },
+    "%@ %@/%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ %2$@/%3$@"
           }
         }
       }
@@ -78,6 +98,29 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "%1$@ item%2$@ from scan %3$@…"
+          }
+        }
+      }
+    },
+    "%@ kcal" : {
+
+    },
+    "%@ kcal · %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ kcal · %2$@"
+          }
+        }
+      }
+    },
+    "%@ of %@ days hit %@ goal" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ of %2$@ days hit %3$@ goal"
           }
         }
       }
@@ -196,6 +239,9 @@
     "14 days" : {
 
     },
+    "30 days" : {
+
+    },
     "Active" : {
 
     },
@@ -271,6 +317,16 @@
     "Already imported" : {
 
     },
+    "Amount: %@ %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Amount: %1$@ %2$@"
+          }
+        }
+      }
+    },
     "Anyone with the link will no longer be able to access it." : {
 
     },
@@ -278,6 +334,12 @@
 
     },
     "Ask a group owner or admin to change the planning horizon." : {
+
+    },
+    "Averaged across the last 7 days, including days with no logged meals." : {
+
+    },
+    "C %@g" : {
 
     },
     "Cancelled — access continues" : {
@@ -309,6 +371,9 @@
     "Check your inbox" : {
 
     },
+    "Choose a clear screenshot or photo of a recipe with ingredients and steps visible." : {
+
+    },
     "Choose a group to access its Cargo and Supply." : {
 
     },
@@ -322,6 +387,9 @@
 
     },
     "Connection type" : {
+
+    },
+    "Consumed" : {
 
     },
     "Contains allergens" : {
@@ -340,6 +408,9 @@
 
     },
     "Couldn't load deletion status. Pull to refresh or try again." : {
+
+    },
+    "Coverage %@%%" : {
 
     },
     "Create group" : {
@@ -364,6 +435,9 @@
           }
         }
       }
+    },
+    "Daily targets" : {
+
     },
     "Danger zone" : {
 
@@ -404,7 +478,16 @@
         }
       }
     },
+    "Eat" : {
+
+    },
     "End: %@" : {
+
+    },
+    "Erase nutrition data" : {
+
+    },
+    "Estimates scale with portion. Saving logs these nutrients to your private intake." : {
 
     },
     "Expanded" : {
@@ -413,7 +496,13 @@
     "Expires %@" : {
 
     },
+    "Explicit consent" : {
+
+    },
     "Extracting items" : {
+
+    },
+    "F %@g" : {
 
     },
     "Feature" : {
@@ -500,7 +589,16 @@
     "Ingredients" : {
 
     },
+    "Intake history is kept for about 13 months (~396 days), then deleted automatically. Erasing here removes it sooner. Withdrawal does not erase data." : {
+
+    },
+    "Intake log" : {
+
+    },
     "JPEG, PNG, or WebP · max 2MB" : {
+
+    },
+    "JPEG, PNG, or WebP · max 5MB" : {
 
     },
     "Light" : {
@@ -513,6 +611,15 @@
 
     },
     "Loading share status…" : {
+
+    },
+    "Log intakes from Manifest to see averages. Tap to manage goals." : {
+
+    },
+    "Log my serving" : {
+
+    },
+    "Looking up nutrients…" : {
 
     },
     "Manage who has access to this group's cargo." : {
@@ -547,9 +654,6 @@
     "Monday" : {
 
     },
-    "Needs a recipe page with ingredients and steps — not a video link. If a site blocks bots, you’ll get a device reload or manual entry next step." : {
-
-    },
     "Next action" : {
 
     },
@@ -570,6 +674,12 @@
         }
       }
     },
+    "No events in the last 7 days." : {
+
+    },
+    "No Flight Recorder activity yet. Cook a meal or dock supply to start recording." : {
+
+    },
     "No galley plans yet" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -580,6 +690,15 @@
           }
         }
       }
+    },
+    "No goals · Set targets" : {
+
+    },
+    "No intakes logged today" : {
+
+    },
+    "No intakes logged today. Tap to set or review your goals." : {
+
     },
     "No matches" : {
       "extractionState" : "manual",
@@ -627,11 +746,30 @@
     "No tags yet. Create one below or add tags when labeling cargo or meals." : {
 
     },
+    "Not medical advice. Goals and totals are planning aids only." : {
+
+    },
     "Nothing expiring soon" : {
+
+    },
+    "Nutrition" : {
+
+    },
+    "Nutrition unavailable for this meal." : {
 
     },
     "On Supply" : {
 
+    },
+    "Only %@ %@ in pantry — extras won’t deduct" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Only %1$@ %2$@ in pantry — extras won’t deduct"
+          }
+        }
+      }
     },
     "Only group owners and admins can change the planning horizon." : {
 
@@ -642,6 +780,12 @@
     "Original shows stored units. Metric and Imperial use shopping weights. Cooking uses cups and spoons when density is known." : {
 
     },
+    "P %@g" : {
+
+    },
+    "Pantry empty — snack will still appear on Manifest" : {
+
+    },
     "Permanently delete this group and all its data. You will return to the group picker immediately. This cannot be undone." : {
 
     },
@@ -649,6 +793,12 @@
 
     },
     "Planning 1 day" : {
+
+    },
+    "Portion" : {
+
+    },
+    "Provenance" : {
 
     },
     "Qty delta — dock %@ %@" : {
@@ -678,6 +828,19 @@
     },
     "Receipt only" : {
 
+    },
+    "Remaining" : {
+
+    },
+    "Remaining after: %@ %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Remaining after: %1$@ %2$@"
+          }
+        }
+      }
     },
     "Remove yourself from this group. You will return to the group picker. Owners must transfer ownership or delete the group instead." : {
 
@@ -781,6 +944,12 @@
     "Servings" : {
 
     },
+    "Set at least one target. Leave a field blank to skip it. Saving stores these goals to power your daily and weekly progress views." : {
+
+    },
+    "Set goals to track remaining fuel" : {
+
+    },
     "Settings" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -827,6 +996,9 @@
     "Start: %@" : {
 
     },
+    "Statement %@. Withdrawal and erasure are available in Privacy & AI settings." : {
+
+    },
     "Status" : {
 
     },
@@ -865,7 +1037,7 @@
     "Tags" : {
 
     },
-    "Tap edit to adjust name, quantity, tags, domain, or expiry" : {
+    "Tap edit to adjust name, quantity, tags, domain, expiry, or nutrition" : {
 
     },
     "Tap the link in the email we sent to %@. It opens Ration and signs you in." : {
@@ -874,7 +1046,16 @@
     "They will lose access to this group's cargo immediately." : {
 
     },
-    "This site blocked our servers. Trying again with your connection (uses 1 credit if extraction starts)." : {
+    "This cannot be undone. Withdrawing consent is a separate action." : {
+
+    },
+    "This meal has no nutrition profile yet — open it in Galley after nutrition resolve, or skip logging calories." : {
+
+    },
+    "This site blocked our servers. Trying again with your connection (uses %@ credits if extraction starts)." : {
+
+    },
+    "This week" : {
 
     },
     "Today" : {
@@ -915,6 +1096,9 @@
     "Up to 10 tags per cargo or meal item. Manage names, colors, and categories here." : {
 
     },
+    "USDA matches and AI estimates are labelled. Editing saves your override for this package." : {
+
+    },
     "Use Manage subscription below to change or cancel through Apple." : {
 
     },
@@ -941,6 +1125,12 @@
         }
       }
     },
+    "We saved the source link. Add ingredients later, or open the link for the full recipe." : {
+
+    },
+    "Weekly average" : {
+
+    },
     "Welcome credits" : {
 
     },
@@ -954,6 +1144,9 @@
 
     },
     "Why this happened" : {
+
+    },
+    "Withdrawal blocks future processing. It does not erase existing nutrition data." : {
 
     },
     "You don't have any groups yet." : {
@@ -985,16 +1178,25 @@
     "Your conversation stays below. Continue in a fresh chat and add what you still need help with." : {
 
     },
+    "Your Crew membership ends on %@. Manage renewal on the web at ration.mayutic.com → Settings." : {
+
+    },
     "Your Crew membership ends on %@. Use Manage subscription below to renew through Apple." : {
+
+    },
+    "Your Crew membership is set to end after the current period. Manage renewal on the web at ration.mayutic.com → Settings." : {
 
     },
     "Your Crew membership is set to end after the current period. Use Manage subscription below to renew through Apple." : {
 
     },
-    "Your existing web subscription is managed on the web. Open ration.mayutic.com on a browser to change or cancel that subscription — new iOS purchases use the App Store." : {
+    "Your logged servings are private. Withdrawal and erasure are available in Privacy & AI settings." : {
 
     },
     "Your personal group can't be deleted. To remove all your data, delete your account instead." : {
+
+    },
+    "Your subscription is managed on the web. Open ration.mayutic.com → Settings in a browser to change or cancel. New iOS purchases use the App Store." : {
 
     }
   },

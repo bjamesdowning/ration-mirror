@@ -181,7 +181,9 @@ export interface MealPlanEntryWithMeal {
 		proteinG: number;
 		carbsG: number;
 		fatG: number;
-		occurredAt: Date;
+		/** ISO-8601 string from serialize path. */
+		occurredAt: string;
+		notes?: string | null;
 	} | null;
 }
 

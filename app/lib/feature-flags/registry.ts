@@ -122,6 +122,13 @@ export const FLAG_REGISTRY: Record<string, FlagRegistryEntry> = {
 		clientVisible: true,
 		clientKey: "cargoQuickEat",
 	},
+	"nutrition-intake-notes": {
+		defaultEnabled: false,
+		description:
+			"Optional private notes (≤280 chars) on Manifest Eat / Quick Eat intake logs",
+		clientVisible: true,
+		clientKey: "nutritionIntakeNotes",
+	},
 	"nutrition-async-recompute": {
 		defaultEnabled: false,
 		description:

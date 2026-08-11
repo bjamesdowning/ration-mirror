@@ -1,0 +1,1 @@
+ALTER TABLE `nutrition_intake` ADD `notes` text;

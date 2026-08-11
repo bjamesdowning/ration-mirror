@@ -158,6 +158,42 @@ struct NutritionDayTotals: Codable, Sendable, Identifiable, Equatable {
             entryCount: 0
         )
     }
+
+    init(
+        date: String,
+        energyKcal: Double,
+        proteinG: Double,
+        carbsG: Double,
+        fatG: Double,
+        fiberG: Double? = nil,
+        coverageAvg: Double,
+        entryCount: Int
+    ) {
+        self.date = date
+        self.energyKcal = energyKcal
+        self.proteinG = proteinG
+        self.carbsG = carbsG
+        self.fatG = fatG
+        self.fiberG = fiberG
+        self.coverageAvg = coverageAvg
+        self.entryCount = entryCount
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        date = try c.decode(String.self, forKey: .date)
+        energyKcal = try c.decodeTolerantDouble(forKey: .energyKcal)
+        proteinG = try c.decodeTolerantDouble(forKey: .proteinG)
+        carbsG = try c.decodeTolerantDouble(forKey: .carbsG)
+        fatG = try c.decodeTolerantDouble(forKey: .fatG)
+        fiberG = try c.decodeTolerantOptionalDouble(forKey: .fiberG)
+        coverageAvg = try c.decodeTolerantDouble(forKey: .coverageAvg)
+        entryCount = try c.decodeTolerantInt(forKey: .entryCount)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case date, energyKcal, proteinG, carbsG, fatG, fiberG, coverageAvg, entryCount
+    }
 }
 
 struct NutritionSummary: Codable, Sendable, Equatable {
@@ -167,6 +203,33 @@ struct NutritionSummary: Codable, Sendable, Equatable {
         let carbsG: Double
         let fatG: Double
         var fiberG: Double? = nil
+
+        init(
+            energyKcal: Double,
+            proteinG: Double,
+            carbsG: Double,
+            fatG: Double,
+            fiberG: Double? = nil
+        ) {
+            self.energyKcal = energyKcal
+            self.proteinG = proteinG
+            self.carbsG = carbsG
+            self.fatG = fatG
+            self.fiberG = fiberG
+        }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            energyKcal = try c.decodeTolerantDouble(forKey: .energyKcal)
+            proteinG = try c.decodeTolerantDouble(forKey: .proteinG)
+            carbsG = try c.decodeTolerantDouble(forKey: .carbsG)
+            fatG = try c.decodeTolerantDouble(forKey: .fatG)
+            fiberG = try c.decodeTolerantOptionalDouble(forKey: .fiberG)
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case energyKcal, proteinG, carbsG, fatG, fiberG
+        }
     }
 
     /// Active goal snapshot as of the summary range.

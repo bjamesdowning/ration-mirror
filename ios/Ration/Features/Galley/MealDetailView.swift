@@ -186,8 +186,8 @@ struct MealDetailView: View {
             ManifestPlateUpSheet(
                 entry: entry,
                 hasIntakeConsent: intakeConsentGranted,
-                onSave: { servings in
-                    await logServing(entry: entry, servings: servings)
+                onSave: { servings, notes in
+                    await logServing(entry: entry, servings: servings, notes: notes)
                 }
             )
         }
@@ -417,12 +417,17 @@ struct MealDetailView: View {
     }
 
     @MainActor
-    private func logServing(entry: ManifestEntry, servings: Double) async -> String? {
+    private func logServing(
+        entry: ManifestEntry,
+        servings: Double,
+        notes: String? = nil
+    ) async -> String? {
         do {
             let result = try await env.api.upsertManifestIntake(
                 entryId: entry.id,
                 servings: servings,
-                idempotencyKey: UUID().uuidString
+                idempotencyKey: UUID().uuidString,
+                notes: notes
             )
             if result.intakeConsentGranted == true {
                 intakeConsentGranted = true

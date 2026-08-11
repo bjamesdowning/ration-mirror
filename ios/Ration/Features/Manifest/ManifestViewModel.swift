@@ -472,6 +472,7 @@ final class ManifestViewModel {
     func logServing(
         _ entry: ManifestEntry,
         servings: Double,
+        notes: String? = nil,
         idempotencyKey: String,
         api: RationAPI,
         nutrition: NutritionStore
@@ -480,7 +481,8 @@ final class ManifestViewModel {
             let result = try await api.upsertManifestIntake(
                 entryId: entry.id,
                 servings: servings,
-                idempotencyKey: idempotencyKey
+                idempotencyKey: idempotencyKey,
+                notes: notes
             )
             Haptics.success()
             setPersonalIntakeLocally(entryId: entry.id, intake: result.intake)

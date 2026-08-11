@@ -6,13 +6,14 @@ struct ManifestPlateUpSheet: View {
     let entry: ManifestEntry
     var hasIntakeConsent: Bool
     /// Returns an error message on failure, or `nil` on success.
-    let onSave: (_ servings: Double) async -> String?
+    let onSave: (_ servings: Double, _ notes: String?) async -> String?
     var onRemove: (() async -> Void)?
 
     @Environment(AppEnvironment.self) private var env
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
     @State private var servings: Double
+    @State private var notes: String
     @State private var hasConsent: Bool
     @State private var consentStatus: NutritionConsentStatus?
     @State private var isSaving = false
@@ -22,7 +23,7 @@ struct ManifestPlateUpSheet: View {
     init(
         entry: ManifestEntry,
         hasIntakeConsent: Bool,
-        onSave: @escaping (_ servings: Double) async -> String?,
+        onSave: @escaping (_ servings: Double, _ notes: String?) async -> String?,
         onRemove: (() async -> Void)? = nil
     ) {
         self.entry = entry
@@ -30,8 +31,11 @@ struct ManifestPlateUpSheet: View {
         self.onSave = onSave
         self.onRemove = onRemove
         _servings = State(initialValue: entry.personalIntake?.servings ?? 1.0)
+        _notes = State(initialValue: entry.personalIntake?.notes ?? "")
         _hasConsent = State(initialValue: hasIntakeConsent)
     }
+
+    private var notesEnabled: Bool { env.session.clientFlags.isNutritionIntakeNotesEnabled }
 
     private var estimatedEnergyKcal: Double? {
         guard let perServing = entry.mealEnergyKcalPerServing else { return nil }
@@ -94,40 +98,34 @@ struct ManifestPlateUpSheet: View {
                         }
                     }
                     if hasAnyNutritionEstimate {
-                        if let estimatedEnergyKcal {
-                            LabeledContent(
-                                "Calories",
-                                value: "\(Int(estimatedEnergyKcal.rounded())) kcal"
-                            )
-                        }
-                        if let estimatedProteinG {
-                            LabeledContent(
-                                "Protein",
-                                value: formatGrams(estimatedProteinG)
-                            )
-                        }
-                        if let estimatedCarbsG {
-                            LabeledContent(
-                                "Carbs",
-                                value: formatGrams(estimatedCarbsG)
-                            )
-                        }
-                        if let estimatedFatG {
-                            LabeledContent(
-                                "Fat",
-                                value: formatGrams(estimatedFatG)
-                            )
-                        }
+                        IntakeMacroPreview(
+                            energyKcal: estimatedEnergyKcal,
+                            proteinG: estimatedProteinG,
+                            carbsG: estimatedCarbsG,
+                            fatG: estimatedFatG
+                        )
                     } else {
-                        Text("Nutrition unavailable for this meal.")
-                            .rationCaption()
-                            .foregroundStyle(Theme.muted)
+                        IntakeMacroPreview(
+                            energyKcal: nil,
+                            proteinG: nil,
+                            carbsG: nil,
+                            fatG: nil,
+                            unavailableMessage: "Nutrition unavailable for this meal."
+                        )
                     }
                 } footer: {
                     if hasAnyNutritionEstimate {
                         Text("Estimates scale with portion. Saving logs these nutrients to your private intake.")
                     } else {
                         Text("This meal has no nutrition profile yet — open it in Galley after nutrition resolve, or skip logging calories.")
+                    }
+                }
+
+                if notesEnabled {
+                    Section {
+                        IntakeNotesField(notes: $notes)
+                    } header: {
+                        Text("Notes")
                     }
                 }
 
@@ -194,13 +192,6 @@ struct ManifestPlateUpSheet: View {
         }
     }
 
-    private func formatGrams(_ value: Double) -> String {
-        if value.truncatingRemainder(dividingBy: 1) == 0 {
-            return "\(Int(value)) g"
-        }
-        return String(format: "%.1f g", value)
-    }
-
     @MainActor
     private func save() async {
         isSaving = true
@@ -220,7 +211,8 @@ struct ManifestPlateUpSheet: View {
                     return
                 }
             }
-            if let failure = await onSave(servings) {
+            let notePayload = notesEnabled ? IntakeNotesField.payload(from: notes) : nil
+            if let failure = await onSave(servings, notePayload) {
                 errorMessage = failure
             } else {
                 Haptics.success()

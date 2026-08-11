@@ -60,7 +60,7 @@ struct Meal: Codable, Sendable, Identifiable {
         tags = c.decodeTolerantTags(forKey: .tags)
         ingredients = try c.decodeIfPresent([MealIngredient].self, forKey: .ingredients) ?? []
         nutrition = try c.decodeIfPresent(MealNutritionSnapshot.self, forKey: .nutrition)
-        customFields = try c.decodeIfPresent([String: String].self, forKey: .customFields)
+        customFields = c.decodeTolerantStringDictionary(forKey: .customFields)
     }
 
     enum CodingKeys: String, CodingKey {

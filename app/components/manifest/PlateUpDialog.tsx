@@ -23,10 +23,15 @@ interface PlateUpDialogProps {
 	mode?: "legacy" | "eat";
 	mealName: string;
 	defaultServings?: number;
+	/** Per-serving macros for live scaled preview (eat mode). */
+	energyKcalPerServing?: number | null;
+	proteinGPerServing?: number | null;
+	carbsGPerServing?: number | null;
+	fatGPerServing?: number | null;
 	/** legacy mode only. */
 	onConfirm?: (servings: number, logNutrition: boolean) => void;
 	/** eat mode only — consent is established through the privacy route first. */
-	onConfirmEat?: (servings: number) => void;
+	onConfirmEat?: (servings: number, notes: string | null) => void;
 	/** eat mode only — shown when hasExistingIntake. */
 	onRemoveLog?: () => void;
 	onClose: () => void;
@@ -34,12 +39,28 @@ interface PlateUpDialogProps {
 	intakeConsentGranted?: boolean;
 	/** eat mode only — surfaces "Remove my log" and edit copy. */
 	hasExistingIntake?: boolean;
+	/** eat mode only — optional private notes field when flag on. */
+	notesEnabled?: boolean;
+	defaultNotes?: string | null;
 	/** eat mode only — label for the dismiss button (defaults to "Not now"). */
 	notNowLabel?: string;
 }
 
 function formatServingsValue(value: number): string {
 	return value % 1 === 0 ? String(value) : value.toFixed(1);
+}
+
+function formatGrams(value: number): string {
+	return value % 1 === 0 ? `${value} g` : `${value.toFixed(1)} g`;
+}
+
+function scaleMacro(
+	perServing: number | null | undefined,
+	servings: number,
+): number | null {
+	if (perServing == null || !Number.isFinite(perServing)) return null;
+	if (!Number.isFinite(servings) || servings <= 0) return null;
+	return perServing * servings;
 }
 
 /**
@@ -51,17 +72,25 @@ export function PlateUpDialog({
 	mode = "legacy",
 	mealName,
 	defaultServings = 1,
+	energyKcalPerServing = null,
+	proteinGPerServing = null,
+	carbsGPerServing = null,
+	fatGPerServing = null,
 	onConfirm,
 	onConfirmEat,
 	onRemoveLog,
 	onClose,
 	intakeConsentGranted = false,
 	hasExistingIntake = false,
+	notesEnabled = false,
+	defaultNotes = null,
 	notNowLabel,
 }: PlateUpDialogProps) {
 	const [servings, setServings] = useState(defaultServings);
+	const [notes, setNotes] = useState(defaultNotes ?? "");
 	const [consentChecked, setConsentChecked] = useState(false);
 	const [pendingServings, setPendingServings] = useState<number | null>(null);
+	const [pendingNotes, setPendingNotes] = useState<string | null>(null);
 	const privacyFetcher = useFetcher<NutritionPrivacyResponse>();
 	const isEat = mode === "eat";
 	const intakeConsent = privacyFetcher.data?.consents?.find(
@@ -76,6 +105,19 @@ export function PlateUpDialog({
 		(!needsConsent || (consentChecked && intakeConsent != null)) &&
 		privacyFetcher.state === "idle";
 	const dismissLabel = notNowLabel ?? (isEat ? "Not now" : "Cancel");
+	const trimmedNotes = notes.trim();
+	const notesPayload =
+		notesEnabled && trimmedNotes.length > 0 ? trimmedNotes.slice(0, 280) : null;
+
+	const scaledEnergy = scaleMacro(energyKcalPerServing, servings);
+	const scaledProtein = scaleMacro(proteinGPerServing, servings);
+	const scaledCarbs = scaleMacro(carbsGPerServing, servings);
+	const scaledFat = scaleMacro(fatGPerServing, servings);
+	const hasMacroPreview =
+		scaledEnergy != null ||
+		scaledProtein != null ||
+		scaledCarbs != null ||
+		scaledFat != null;
 
 	useEffect(() => {
 		if (
@@ -95,19 +137,28 @@ export function PlateUpDialog({
 			intakeConsent?.state === "active"
 		) {
 			const confirmedServings = pendingServings;
+			const confirmedNotes = pendingNotes;
 			setPendingServings(null);
-			onConfirmEat?.(confirmedServings);
+			setPendingNotes(null);
+			onConfirmEat?.(confirmedServings, confirmedNotes);
 		}
-	}, [pendingServings, privacyFetcher.state, intakeConsent, onConfirmEat]);
+	}, [
+		pendingServings,
+		pendingNotes,
+		privacyFetcher.state,
+		intakeConsent,
+		onConfirmEat,
+	]);
 
 	const handleEatSave = () => {
 		if (!canSave) return;
 		if (!needsConsent) {
-			onConfirmEat?.(servings);
+			onConfirmEat?.(servings, notesPayload);
 			return;
 		}
 		if (!intakeConsent || !consentChecked) return;
 		setPendingServings(servings);
+		setPendingNotes(notesPayload);
 		privacyFetcher.submit(
 			JSON.stringify({
 				action: "grant",
@@ -182,6 +233,66 @@ export function PlateUpDialog({
 						className="w-full px-3 py-2.5 text-sm bg-transparent border border-platinum rounded-lg text-carbon font-mono focus:outline-none focus:border-hyper-green focus:ring-1 focus:ring-hyper-green"
 					/>
 				</label>
+
+				{isEat ? (
+					<div className="rounded-lg border border-platinum p-3 space-y-2">
+						{hasMacroPreview ? (
+							<>
+								{scaledEnergy != null ? (
+									<div className="flex justify-between text-xs font-mono text-carbon">
+										<span>Calories</span>
+										<span>{Math.round(scaledEnergy)} kcal</span>
+									</div>
+								) : null}
+								{scaledProtein != null ? (
+									<div className="flex justify-between text-xs font-mono text-carbon">
+										<span>Protein</span>
+										<span>{formatGrams(scaledProtein)}</span>
+									</div>
+								) : null}
+								{scaledCarbs != null ? (
+									<div className="flex justify-between text-xs font-mono text-carbon">
+										<span>Carbs</span>
+										<span>{formatGrams(scaledCarbs)}</span>
+									</div>
+								) : null}
+								{scaledFat != null ? (
+									<div className="flex justify-between text-xs font-mono text-carbon">
+										<span>Fat</span>
+										<span>{formatGrams(scaledFat)}</span>
+									</div>
+								) : null}
+								<p className="text-[10px] text-muted">
+									Estimates scale with portion. Saving logs these nutrients to
+									your private intake.
+								</p>
+							</>
+						) : (
+							<p className="text-xs text-muted">
+								Nutrition unavailable for this meal.
+							</p>
+						)}
+					</div>
+				) : null}
+
+				{isEat && notesEnabled ? (
+					<label className="block space-y-2">
+						<span className="text-xs font-mono text-muted uppercase tracking-wide">
+							Notes (optional)
+						</span>
+						<textarea
+							value={notes}
+							maxLength={280}
+							rows={3}
+							onChange={(e) => setNotes(e.target.value)}
+							placeholder="Private note for this log"
+							className="w-full px-3 py-2.5 text-sm bg-transparent border border-platinum rounded-lg text-carbon font-mono focus:outline-none focus:border-hyper-green focus:ring-1 focus:ring-hyper-green resize-none"
+						/>
+						<span className="text-[10px] font-mono text-muted">
+							{Math.min(notes.trim().length, 280)}/280
+						</span>
+					</label>
+				) : null}
 
 				{isEat && needsConsent && (
 					<div className="rounded-lg border border-platinum p-3">

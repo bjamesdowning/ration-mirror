@@ -138,8 +138,8 @@ struct CargoListView: View {
                 }
             }
             .sheet(item: $eatItem) { item in
-                CargoQuickEatSheet(item: item) { quantity in
-                    await model.quickEat(item, quantity: quantity, api: env.api)
+                CargoQuickEatSheet(item: item) { quantity, notes in
+                    await model.quickEat(item, quantity: quantity, notes: notes, api: env.api)
                 } onFinished: { _ in
                     env.notifyCargoDataChanged()
                     Task { await reload() }

@@ -1238,6 +1238,8 @@ export const nutritionIntake = sqliteTable(
 		voidedByUserId: text("voided_by_user_id").references(() => user.id, {
 			onDelete: "set null",
 		}),
+		/** Optional private Eat snippet (max 280 enforced at API). */
+		notes: text("notes"),
 		createdAt: integer("created_at", { mode: "timestamp" })
 			.notNull()
 			.default(sql`(unixepoch())`),

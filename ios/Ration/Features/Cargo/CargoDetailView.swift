@@ -132,8 +132,8 @@ struct CargoDetailView: View {
         }
         .sheet(isPresented: $showingQuickEat) {
             if let item = model.item {
-                CargoQuickEatSheet(item: item) { quantity in
-                    await model.quickEat(quantity: quantity, api: env.api)
+                CargoQuickEatSheet(item: item) { quantity, notes in
+                    await model.quickEat(quantity: quantity, notes: notes, api: env.api)
                 } onFinished: { _ in
                     env.notifyCargoDataChanged()
                 }

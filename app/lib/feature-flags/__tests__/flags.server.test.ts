@@ -19,7 +19,11 @@ const mockRegistry = vi.hoisted(() => ({
 vi.mock("../registry", () => mockRegistry);
 
 import { buildWebFlagContext } from "../context.server";
-import { getClientSafeFlags, isFeatureEnabled } from "../flags.server";
+import {
+	applyClientFlagDependencies,
+	getClientSafeFlags,
+	isFeatureEnabled,
+} from "../flags.server";
 
 describe("getClientSafeFlags", () => {
 	it("evaluates clientVisible flags once per key", async () => {
@@ -50,6 +54,43 @@ describe("getClientSafeFlags", () => {
 				environment: "production",
 			}),
 		);
+	});
+
+	it("projects nutrition children as effective capabilities", () => {
+		expect(
+			applyClientFlagDependencies({
+				nutritionEngine: false,
+				nutritionManifest: true,
+				nutritionCookLogSplit: true,
+				cargoQuickEat: true,
+				nutritionAiEstimate: true,
+				nutritionIntakeNotes: true,
+				nutritionGoals: true,
+			}),
+		).toEqual({
+			nutritionEngine: false,
+			nutritionManifest: false,
+			nutritionCookLogSplit: false,
+			cargoQuickEat: false,
+			nutritionAiEstimate: false,
+			nutritionIntakeNotes: false,
+			nutritionGoals: true,
+		});
+
+		expect(
+			applyClientFlagDependencies({
+				nutritionEngine: true,
+				nutritionManifest: true,
+				nutritionCookLogSplit: true,
+				cargoQuickEat: true,
+				nutritionIntakeNotes: true,
+			}),
+		).toMatchObject({
+			nutritionManifest: true,
+			nutritionCookLogSplit: true,
+			cargoQuickEat: true,
+			nutritionIntakeNotes: true,
+		});
 	});
 });
 

@@ -69,6 +69,76 @@ struct HubResponse: Codable, Sendable {
     let flightRecorderActivity: FlightRecorderActivity?
     let nutritionToday: NutritionSummary?
     let nutritionTrends: NutritionSummary?
+
+    init(
+        expiringItems: [CargoItem],
+        cargoStats: CargoStats,
+        latestSupplyList: SupplyList?,
+        manifestPreview: ManifestPreviewData?,
+        expirationAlertDays: Int,
+        hubProfile: HubProfile?,
+        hubLayout: HubLayoutPayload?,
+        availableMealTags: [String],
+        availableCargoTags: [String]?,
+        cargoTagIndex: [CargoTagIndexItem]?,
+        mealMatches: [MealMatch],
+        partialMealMatches: [MealMatch],
+        snackMatches: [MealMatch],
+        flightRecorderActivity: FlightRecorderActivity?,
+        nutritionToday: NutritionSummary?,
+        nutritionTrends: NutritionSummary?
+    ) {
+        self.expiringItems = expiringItems
+        self.cargoStats = cargoStats
+        self.latestSupplyList = latestSupplyList
+        self.manifestPreview = manifestPreview
+        self.expirationAlertDays = expirationAlertDays
+        self.hubProfile = hubProfile
+        self.hubLayout = hubLayout
+        self.availableMealTags = availableMealTags
+        self.availableCargoTags = availableCargoTags
+        self.cargoTagIndex = cargoTagIndex
+        self.mealMatches = mealMatches
+        self.partialMealMatches = partialMealMatches
+        self.snackMatches = snackMatches
+        self.flightRecorderActivity = flightRecorderActivity
+        self.nutritionToday = nutritionToday
+        self.nutritionTrends = nutritionTrends
+    }
+
+    /// A malformed optional widget must not make the complete Hub unusable.
+    /// The Worker validates its response too, but this protects cached and
+    /// rollback-era payloads during staggered client/server releases.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        expiringItems = (try? c.decode([CargoItem].self, forKey: .expiringItems)) ?? []
+        cargoStats = (try? c.decode(CargoStats.self, forKey: .cargoStats))
+            ?? CargoStats(totalItems: 0, expiringCount: 0, expiredCount: 0)
+        latestSupplyList = try? c.decode(SupplyList.self, forKey: .latestSupplyList)
+        manifestPreview = try? c.decode(ManifestPreviewData.self, forKey: .manifestPreview)
+        expirationAlertDays = (try? c.decode(Int.self, forKey: .expirationAlertDays)) ?? 7
+        hubProfile = try? c.decode(HubProfile.self, forKey: .hubProfile)
+        hubLayout = try? c.decode(HubLayoutPayload.self, forKey: .hubLayout)
+        availableMealTags = (try? c.decode([String].self, forKey: .availableMealTags)) ?? []
+        availableCargoTags = try? c.decode([String].self, forKey: .availableCargoTags)
+        cargoTagIndex = try? c.decode([CargoTagIndexItem].self, forKey: .cargoTagIndex)
+        mealMatches = (try? c.decode([MealMatch].self, forKey: .mealMatches)) ?? []
+        partialMealMatches = (try? c.decode([MealMatch].self, forKey: .partialMealMatches)) ?? []
+        snackMatches = (try? c.decode([MealMatch].self, forKey: .snackMatches)) ?? []
+        flightRecorderActivity = try? c.decode(
+            FlightRecorderActivity.self,
+            forKey: .flightRecorderActivity
+        )
+        nutritionToday = try? c.decode(NutritionSummary.self, forKey: .nutritionToday)
+        nutritionTrends = try? c.decode(NutritionSummary.self, forKey: .nutritionTrends)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case expiringItems, cargoStats, latestSupplyList, manifestPreview
+        case expirationAlertDays, hubProfile, hubLayout, availableMealTags
+        case availableCargoTags, cargoTagIndex, mealMatches, partialMealMatches
+        case snackMatches, flightRecorderActivity, nutritionToday, nutritionTrends
+    }
 }
 
 struct FlightRecorderTotals: Codable, Sendable {

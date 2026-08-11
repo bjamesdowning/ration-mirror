@@ -165,6 +165,8 @@ struct ManifestView: View {
                     LoadingView()
                 } else if let manifest = model.manifest, let organizationId {
                     content(manifest, organizationId: organizationId)
+                } else if let errorMessage = model.errorMessage {
+                    loadFailure(message: errorMessage)
                 } else {
                     emptyPrompt
                 }
@@ -314,6 +316,24 @@ struct ManifestView: View {
                 userId: userId,
                 nutrition: env.nutrition
             )
+        }
+    }
+
+    private func loadFailure(message: String) -> some View {
+        CopilotTrackableScrollSurface(tab: .manifest, isActive: isTabActive, hasTabAction: true) {
+            VStack(spacing: 16) {
+                EmptyStateView(
+                    icon: "exclamationmark.triangle",
+                    title: "Couldn't load Manifest",
+                    message: message
+                )
+                Button("Try again") {
+                    Task { await reload() }
+                }
+                .buttonStyle(SecondaryButtonStyle())
+                .disabled(!env.network.isOnline)
+            }
+            .padding(24)
         }
     }
 

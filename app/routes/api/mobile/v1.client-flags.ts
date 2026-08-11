@@ -1,7 +1,7 @@
 import { data } from "react-router";
 import { handleApiError } from "~/lib/error-handler";
 import {
-	buildFlagContext,
+	buildMobileFlagContext,
 	getClientSafeFlags,
 } from "~/lib/feature-flags/flags.server";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
@@ -35,7 +35,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 	}
 
 	try {
-		const flagContext = buildFlagContext(request, env);
+		const flagContext = buildMobileFlagContext(request, env);
 		const clientFlags = await getClientSafeFlags(env, flagContext);
 		return { clientFlags };
 	} catch (e) {

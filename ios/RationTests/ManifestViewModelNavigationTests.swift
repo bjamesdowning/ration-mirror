@@ -65,6 +65,53 @@ final class ManifestViewModelNavigationTests: XCTestCase {
         XCTAssertEqual(model.lastOrganizationId, "org-b")
     }
 
+    func testColdLoadDecodeFailureSurfacesAnErrorInsteadOfEmptyManifest() async {
+        let model = ManifestViewModel()
+        model.fetchManifestForTesting = { _, _ in
+            throw APIError.decoding("fractional Hub widget order")
+        }
+        let snapshots = SnapshotStore()
+        let nutrition = NutritionStore(snapshots: snapshots)
+        let api = RationAPI(client: APIClient(auth: AuthManager()))
+
+        await model.load(
+            api: api,
+            snapshots: snapshots,
+            online: true,
+            organizationId: "org-decode-\(UUID().uuidString)",
+            userId: "user-decode",
+            nutrition: nutrition
+        )
+
+        XCTAssertNil(model.manifest)
+        XCTAssertEqual(model.errorMessage, "Unexpected response from server.")
+    }
+
+    func testCancelledColdLoadSurfacesRetryMessageInsteadOfEmptyManifest() async {
+        let model = ManifestViewModel()
+        model.fetchManifestForTesting = { _, _ in
+            throw CancellationError()
+        }
+        let snapshots = SnapshotStore()
+        let nutrition = NutritionStore(snapshots: snapshots)
+        let api = RationAPI(client: APIClient(auth: AuthManager()))
+
+        await model.load(
+            api: api,
+            snapshots: snapshots,
+            online: true,
+            organizationId: "org-cancel-\(UUID().uuidString)",
+            userId: "user-cancel",
+            nutrition: nutrition
+        )
+
+        XCTAssertNil(model.manifest)
+        XCTAssertEqual(
+            model.errorMessage,
+            "Couldn't load Manifest. Pull to refresh or try again."
+        )
+    }
+
     func testOptimisticRangeStartUpdatesBeforeFetchCompletes() async {
         let model = ManifestViewModel()
         model.configureFromSettings(calendarSpan: 7, weekStartPref: "sunday")

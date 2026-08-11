@@ -2080,9 +2080,10 @@ export async function ensureProvisionFromCargo(
 			? await getMeal(env.DB, organizationId, created.provision.id)
 			: created.provision;
 
-	// Sync-heal blank meal.nutrition (async schedule may not have finished; older
-	// promotes never scheduled recompute at all).
-	if (provision && !mealNutritionHasEnergy(provision.nutrition)) {
+	// Sync-heal unresolved meal nutrition (async schedule may not have finished;
+	// older promotes never scheduled recompute at all). A zero kcal value alone
+	// is not evidence of a usable snapshot: unresolved aggregates are zero-filled.
+	if (provision && !mealNutritionIsUsable(provision.nutrition)) {
 		const { recomputeAndStoreMealNutrition } = await import(
 			"./nutrition/persist.server"
 		);
@@ -2104,12 +2105,35 @@ export async function ensureProvisionFromCargo(
 	};
 }
 
-export function mealNutritionHasEnergy(nutrition: unknown): boolean {
+export function mealNutritionIsUsable(nutrition: unknown): boolean {
 	const snap = nutrition as {
-		perServing?: { energyKcal?: number | null };
+		perServing?: {
+			energyKcal?: number | null;
+			proteinG?: number | null;
+			carbsG?: number | null;
+			fatG?: number | null;
+		};
+		coverage?: number | null;
+		attributions?: unknown;
 	} | null;
-	const kcal = snap?.perServing?.energyKcal;
-	return kcal != null && Number.isFinite(kcal);
+	const perServing = snap?.perServing;
+	const coverage = snap?.coverage;
+	return (
+		coverage != null &&
+		Number.isFinite(coverage) &&
+		coverage > 0 &&
+		coverage <= 1 &&
+		Array.isArray(snap?.attributions) &&
+		snap.attributions.length > 0 &&
+		perServing?.energyKcal != null &&
+		Number.isFinite(perServing.energyKcal) &&
+		perServing.proteinG != null &&
+		Number.isFinite(perServing.proteinG) &&
+		perServing.carbsG != null &&
+		Number.isFinite(perServing.carbsG) &&
+		perServing.fatG != null &&
+		Number.isFinite(perServing.fatG)
+	);
 }
 
 /**

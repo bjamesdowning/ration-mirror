@@ -9,7 +9,7 @@ const checkBalance = vi.fn();
 const getGroupTierLimits = vi.fn();
 const listMobileOrganizations = vi.fn();
 const getClientSafeFlags = vi.fn();
-const buildFlagContext = vi.fn();
+const buildMobileFlagContext = vi.fn();
 
 vi.mock("~/lib/mobile/auth.server", () => ({
 	requireMobileActiveGroup: (...args: unknown[]) =>
@@ -37,7 +37,8 @@ vi.mock("~/lib/capacity.server", async (importOriginal) => {
 });
 
 vi.mock("~/lib/feature-flags/flags.server", () => ({
-	buildFlagContext: (...args: unknown[]) => buildFlagContext(...args),
+	buildMobileFlagContext: (...args: unknown[]) =>
+		buildMobileFlagContext(...args),
 	getClientSafeFlags: (...args: unknown[]) => getClientSafeFlags(...args),
 }));
 
@@ -59,7 +60,7 @@ describe("GET /api/mobile/v1/session", () => {
 			getGroupTierLimits,
 			listMobileOrganizations,
 			getClientSafeFlags,
-			buildFlagContext,
+			buildMobileFlagContext,
 		]) {
 			m.mockReset();
 		}
@@ -90,7 +91,7 @@ describe("GET /api/mobile/v1/session", () => {
 			isExpired: false,
 		});
 		listMobileOrganizations.mockResolvedValue([]);
-		buildFlagContext.mockReturnValue({});
+		buildMobileFlagContext.mockReturnValue({});
 		getClientSafeFlags.mockResolvedValue({});
 	});
 
@@ -102,6 +103,7 @@ describe("GET /api/mobile/v1/session", () => {
 			params: {},
 		} as never);
 
+		expect(buildMobileFlagContext).toHaveBeenCalled();
 		expect(result).toMatchObject({
 			tier: "crew_member",
 			isTierExpired: false,

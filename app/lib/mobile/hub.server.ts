@@ -10,12 +10,18 @@ import { MEAL_MATCH_CANDIDATE_CAP } from "~/lib/matching.server";
 import { resolveNutritionCapabilities } from "~/lib/nutrition/feature-policy.server";
 import { loadHubNutritionData } from "~/lib/nutrition/hub-data.server";
 import { isNutritionHubWidgetsEnabled } from "~/lib/nutrition/hub-widgets";
+import { HubLayoutSchema } from "~/lib/schemas/hub";
+import {
+	MobileHubMealMatchSchema,
+	MobileHubResponseSchema,
+} from "~/lib/schemas/mobile/hub";
 import {
 	filterSupplyItemsByCargoTags,
 	getSupplyItemStats,
 	getSupplyList,
 } from "~/lib/supply.server";
 import { getCargoTagIndex, getOrganizationTagSlugs } from "~/lib/tags.server";
+import type { HubProfile } from "~/lib/types";
 
 /**
  * @deprecated Use `MEAL_MATCH_CANDIDATE_CAP` — kept as an alias so older
@@ -25,6 +31,107 @@ export const MOBILE_PRE_LIMIT = MEAL_MATCH_CANDIDATE_CAP;
 const MOBILE_MAX_WIDGET_LIMIT = 20;
 const MOBILE_MANIFEST_ENTRY_CAP = 50;
 export const MOBILE_SUPPLY_ITEMS_SLICE = 20;
+
+const DEFAULT_EXPIRATION_ALERT_DAYS = 7;
+const MAX_EXPIRATION_ALERT_DAYS = 90;
+const MOBILE_HUB_PROFILES = new Set<HubProfile>([
+	"cook",
+	"shop",
+	"minimal",
+	"full",
+	"custom",
+]);
+
+/**
+ * User settings are persisted JSON and may predate the current schema.
+ * Never echo a malformed custom layout to the strict mobile Codable contract.
+ */
+function sanitizeHubLayout(value: unknown) {
+	if (value == null) return undefined;
+	const parsed = HubLayoutSchema.safeParse(value);
+	if (parsed.success) return parsed.data;
+	log.warn("[hub] ignoring invalid persisted layout for mobile response", {
+		detail: parsed.error.issues[0]?.message ?? "invalid",
+	});
+	return undefined;
+}
+
+/** Mobile expects this preference as an Int; malformed legacy values use default. */
+function sanitizeExpirationAlertDays(value: unknown): number {
+	if (
+		typeof value === "number" &&
+		Number.isSafeInteger(value) &&
+		value >= 1 &&
+		value <= MAX_EXPIRATION_ALERT_DAYS
+	) {
+		return value;
+	}
+	return DEFAULT_EXPIRATION_ALERT_DAYS;
+}
+
+function sanitizeHubProfile(value: unknown): HubProfile | undefined {
+	if (typeof value !== "string") return undefined;
+	const candidate = value as HubProfile;
+	return MOBILE_HUB_PROFILES.has(candidate) ? candidate : undefined;
+}
+
+/**
+ * Drop an optional match card whose stored integer fields violate the mobile
+ * contract. A malformed historical meal must not break the whole Hub.
+ */
+function sanitizeMobileMealMatches<T>(matches: T[], label: string): T[] {
+	const valid: T[] = [];
+	let dropped = 0;
+	for (const match of matches) {
+		if (MobileHubMealMatchSchema.safeParse(match).success) {
+			valid.push(match);
+		} else {
+			dropped += 1;
+		}
+	}
+	if (dropped > 0) {
+		log.warn("[hub] omitted invalid mobile meal matches", {
+			detail: `${label}:${dropped}`,
+		});
+	}
+	return valid;
+}
+
+/**
+ * Validate the full response before it crosses the Worker boundary. If a
+ * legacy row violates an optional widget contract, omit widget data rather
+ * than failing the entire Hub. Log only the schema path, never response data.
+ */
+function validateMobileHubResponse(payload: unknown) {
+	const parsed = MobileHubResponseSchema.safeParse(payload);
+	if (parsed.success) return parsed.data;
+
+	log.warn("[hub] omitted invalid optional data from mobile response", {
+		detail: parsed.error.issues[0]?.path.join(".") || "unknown",
+	});
+	const response = payload as Record<string, unknown>;
+	const fallback = {
+		...response,
+		expiringItems: [],
+		cargoStats: { totalItems: 0, expiringCount: 0, expiredCount: 0 },
+		latestSupplyList: null,
+		manifestPreview: null,
+		hubLayout: undefined,
+		availableMealTags: [],
+		availableCargoTags: [],
+		cargoTagIndex: [],
+		mealMatches: [],
+		partialMealMatches: [],
+		snackMatches: [],
+		flightRecorderActivity: null,
+		nutritionToday: null,
+		nutritionTrends: null,
+	};
+	const fallbackParsed = MobileHubResponseSchema.safeParse(fallback);
+	if (fallbackParsed.success) return fallbackParsed.data;
+
+	throw new Error("Unable to create a valid mobile Hub response");
+}
 
 function clampWidgetLimit(value: number | undefined, fallback: number): number {
 	const base = value ?? fallback;
@@ -49,9 +156,11 @@ export async function getMobileHubData(
 ) {
 	const db = env.DB;
 	const settings = await getUserSettings(db, userId);
-	const expirationAlertDays = settings.expirationAlertDays ?? 7;
-	const hubProfile = settings.hubProfile;
-	const hubLayout = settings.hubLayout;
+	const expirationAlertDays = sanitizeExpirationAlertDays(
+		settings.expirationAlertDays,
+	);
+	const hubProfile = sanitizeHubProfile(settings.hubProfile);
+	const hubLayout = sanitizeHubLayout(settings.hubLayout);
 
 	const resolvedWidgets = resolveLayout(hubProfile, hubLayout);
 	const findWidget = (id: string) => resolvedWidgets.find((w) => w.id === id);
@@ -206,7 +315,18 @@ export async function getMobileHubData(
 		);
 	}
 
-	const { mealMatches, partialMealMatches, snackMatches } = hubMatches;
+	const mealMatches = sanitizeMobileMealMatches(
+		hubMatches.mealMatches,
+		"mealMatches",
+	);
+	const partialMealMatches = sanitizeMobileMealMatches(
+		hubMatches.partialMealMatches,
+		"partialMealMatches",
+	);
+	const snackMatches = sanitizeMobileMealMatches(
+		hubMatches.snackMatches,
+		"snackMatches",
+	);
 	// Only queried when the widget isn't tag-filtered — see supplyTagFilterActive above.
 	const supplyStats =
 		latestSupplyListRaw && !supplyTagFilterActive
@@ -264,7 +384,7 @@ export async function getMobileHubData(
 				}
 			: null;
 
-	return {
+	return validateMobileHubResponse({
 		expiringItems,
 		cargoStats,
 		latestSupplyList,
@@ -281,5 +401,5 @@ export async function getMobileHubData(
 		flightRecorderActivity,
 		nutritionToday: nutritionPayload.nutritionToday,
 		nutritionTrends: nutritionPayload.nutritionTrends,
-	};
+	});
 }

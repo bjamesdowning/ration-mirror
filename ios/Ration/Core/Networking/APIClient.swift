@@ -207,10 +207,61 @@ final class APIClient {
             #if DEBUG
             // Coding path only — never log response bodies (may contain PII).
             NSLog("[RationAPI] decode failed for %@: %@", path, "\(error)")
+            if path == "hub" || path.hasPrefix("manifest") {
+                let decimalPaths = Self.debugDecimalJSONPaths(in: data)
+                if !decimalPaths.isEmpty {
+                    // Paths and number kinds only; values may be personal nutrition data.
+                    NSLog(
+                        "[RationAPI] %@ non-integer JSON numbers at: %@",
+                        path,
+                        decimalPaths.joined(separator: ", ")
+                    )
+                }
+            }
             #endif
             throw APIError.decoding("\(error)")
         }
     }
+
+    #if DEBUG
+    /// Returns JSON paths whose values are non-integral numeric literals.
+    /// Diagnostic-only: it deliberately never includes response values.
+    nonisolated static func debugDecimalJSONPaths(in data: Data) -> [String] {
+        guard let root = try? JSONSerialization.jsonObject(with: data) else {
+            return []
+        }
+
+        var paths: [String] = []
+        func walk(_ value: Any, path: String) {
+            if let dictionary = value as? [String: Any] {
+                for (key, child) in dictionary {
+                    walk(child, path: path.isEmpty ? key : "\(path).\(key)")
+                }
+                return
+            }
+            if let array = value as? [Any] {
+                for (index, child) in array.enumerated() {
+                    walk(child, path: "\(path)[\(index)]")
+                }
+                return
+            }
+            guard let number = value as? NSNumber,
+                  CFGetTypeID(number) != CFBooleanGetTypeID()
+            else {
+                return
+            }
+
+            let numeric = number.doubleValue
+            guard numeric.isFinite, numeric.rounded(.towardZero) != numeric else {
+                return
+            }
+            paths.append(path.isEmpty ? "$" : path)
+        }
+
+        walk(root, path: "")
+        return paths.sorted()
+    }
+    #endif
 
     nonisolated static func normalizedTransportError(_ error: Error) -> Error {
         if error is CancellationError {

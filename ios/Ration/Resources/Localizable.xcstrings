@@ -161,6 +161,16 @@
         }
       }
     },
+    "%@/%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@/%2$@"
+          }
+        }
+      }
+    },
     "%@/%@ %@" : {
       "localizations" : {
         "en" : {
@@ -487,6 +497,9 @@
     "Erase nutrition data" : {
 
     },
+    "Estimates scale with amount. Saving logs nutrients to your private intake when available." : {
+
+    },
     "Estimates scale with portion. Saving logs these nutrients to your private intake." : {
 
     },
@@ -599,6 +612,9 @@
 
     },
     "JPEG, PNG, or WebP · max 5MB" : {
+
+    },
+    "Leave a field blank to skip it. Saving stores these goals to power your daily and weekly progress views." : {
 
     },
     "Light" : {
@@ -749,13 +765,13 @@
     "Not medical advice. Goals and totals are planning aids only." : {
 
     },
+    "Notes" : {
+
+    },
     "Nothing expiring soon" : {
 
     },
     "Nutrition" : {
-
-    },
-    "Nutrition unavailable for this meal." : {
 
     },
     "On Supply" : {
@@ -876,6 +892,9 @@
     "Review import" : {
 
     },
+    "Save" : {
+
+    },
     "Saving…" : {
 
     },
@@ -944,7 +963,7 @@
     "Servings" : {
 
     },
-    "Set at least one target. Leave a field blank to skip it. Saving stores these goals to power your daily and weekly progress views." : {
+    "Set at least one nutrient target to enable Save." : {
 
     },
     "Set goals to track remaining fuel" : {

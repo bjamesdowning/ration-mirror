@@ -75,6 +75,38 @@ export async function isFeatureEnabled(
 	return evaluateFlagBinding(env, flag, entry.defaultEnabled, context);
 }
 
+/**
+ * Client flags are UI capabilities, not the raw dashboard variations. Keep
+ * nutrition children fail-closed when their server-side parent is unavailable.
+ */
+export function applyClientFlagDependencies(
+	flags: Record<string, boolean>,
+): Record<string, boolean> {
+	const result = { ...flags };
+	const engine = result.nutritionEngine === true;
+	const manifest = engine && result.nutritionManifest === true;
+	const cookLogSplit = manifest && result.nutritionCookLogSplit === true;
+
+	if ("nutritionManifest" in result) {
+		result.nutritionManifest = manifest;
+	}
+	if ("nutritionCookLogSplit" in result) {
+		result.nutritionCookLogSplit = cookLogSplit;
+	}
+	if ("cargoQuickEat" in result) {
+		result.cargoQuickEat = cookLogSplit && result.cargoQuickEat === true;
+	}
+	if ("nutritionAiEstimate" in result) {
+		result.nutritionAiEstimate = engine && result.nutritionAiEstimate === true;
+	}
+	if ("nutritionIntakeNotes" in result) {
+		result.nutritionIntakeNotes =
+			cookLogSplit && result.nutritionIntakeNotes === true;
+	}
+
+	return result;
+}
+
 /** Evaluate all registry flags marked clientVisible — once per request. */
 export async function getClientSafeFlags(
 	env: Env,
@@ -92,7 +124,7 @@ export async function getClientSafeFlags(
 		}),
 	);
 
-	return result;
+	return applyClientFlagDependencies(result);
 }
 
 export type {

@@ -134,13 +134,38 @@ describe("clampIntakeServings", () => {
 	});
 });
 
-describe("mealNutritionHasEnergy", () => {
-	it("detects usable perServing energy", async () => {
-		const { mealNutritionHasEnergy } = await import("~/lib/meals.server");
-		expect(mealNutritionHasEnergy(null)).toBe(false);
-		expect(mealNutritionHasEnergy({ perServing: {} })).toBe(false);
-		expect(mealNutritionHasEnergy({ perServing: { energyKcal: 120 } })).toBe(
-			true,
-		);
+describe("mealNutritionIsUsable", () => {
+	it("requires a resolved aggregate instead of accepting zero-filled energy", async () => {
+		const { mealNutritionIsUsable } = await import("~/lib/meals.server");
+		expect(mealNutritionIsUsable(null)).toBe(false);
+		expect(
+			mealNutritionIsUsable({
+				perServing: { energyKcal: 0, proteinG: 0, carbsG: 0, fatG: 0 },
+				coverage: 0,
+				attributions: [],
+			}),
+		).toBe(false);
+	});
+
+	it("accepts a resolved zero-calorie food", async () => {
+		const { mealNutritionIsUsable } = await import("~/lib/meals.server");
+		expect(
+			mealNutritionIsUsable({
+				perServing: { energyKcal: 0, proteinG: 0, carbsG: 0, fatG: 0 },
+				coverage: 1,
+				attributions: [{ ingredientName: "sparkling water" }],
+			}),
+		).toBe(true);
+	});
+
+	it("accepts a covered provision with complete macros", async () => {
+		const { mealNutritionIsUsable } = await import("~/lib/meals.server");
+		expect(
+			mealNutritionIsUsable({
+				perServing: { energyKcal: 120, proteinG: 20, carbsG: 0, fatG: 4 },
+				coverage: 1,
+				attributions: [{ ingredientName: "steak" }],
+			}),
+		).toBe(true);
 	});
 });

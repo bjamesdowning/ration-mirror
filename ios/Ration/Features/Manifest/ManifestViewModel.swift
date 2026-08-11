@@ -157,7 +157,12 @@ final class ManifestViewModel {
         defer { isRefreshing = false }
 
         do {
-            let data = try await api.manifest(startDate: requestedStart, endDate: endDate)
+            let data: ManifestResponse
+            if let fetchManifestForTesting {
+                data = try await fetchManifestForTesting(requestedStart, endDate)
+            } else {
+                data = try await api.manifest(startDate: requestedStart, endDate: endDate)
+            }
             guard rangeStart == requestedStart else { return }
             manifest = data
             applySupplyDayInclusion(from: data)
@@ -179,7 +184,13 @@ final class ManifestViewModel {
             )
         } catch {
             guard rangeStart == requestedStart else { return }
-            if SnapshotRefreshPolicy.isIgnorableRefreshError(error) { return }
+            if SnapshotRefreshPolicy.isIgnorableRefreshError(error) {
+                // Cold load cancelled (e.g. org remount): don't land on empty-plan UX.
+                if !hadCache, manifest == nil {
+                    errorMessage = "Couldn't load Manifest. Pull to refresh or try again."
+                }
+                return
+            }
             if let refreshOutcomes {
                 SnapshotRefreshPolicy.recordRefreshFailure(
                     outcomes: refreshOutcomes,

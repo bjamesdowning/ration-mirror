@@ -193,6 +193,22 @@ final class NutritionModelsDecodingTests: XCTestCase {
         XCTAssertEqual(summary.totals.energyKcal, 90)
     }
 
+    func testRejectsFractionalNutritionEntryCount() {
+        let json = """
+        {
+          "date": "2026-08-11",
+          "energyKcal": 90,
+          "proteinG": 2,
+          "carbsG": 10,
+          "fatG": 1,
+          "coverageAvg": 0.9,
+          "entryCount": 1.4
+        }
+        """.data(using: .utf8)!
+
+        XCTAssertThrowsError(try JSON.decoder.decode(NutritionDayTotals.self, from: json))
+    }
+
     // MARK: - Cook
 
     func testDecodesCookEntriesResponseSuccess() throws {
@@ -342,7 +358,8 @@ final class NutritionModelsDecodingTests: XCTestCase {
           "mealFatGPerServing": 10,
           "personalIntake": {
             "id": "intake-9", "servings": 1, "energyKcal": 320, "proteinG": 20, "carbsG": 30, "fatG": 10,
-            "occurredAt": "2026-01-01T13:05:00Z"
+            "occurredAt": "2026-01-01T13:05:00Z",
+            "notes": "Lunch after training"
           }
         }
         """.data(using: .utf8)!
@@ -353,6 +370,7 @@ final class NutritionModelsDecodingTests: XCTestCase {
         XCTAssertEqual(entry.mealCarbsGPerServing, 30)
         XCTAssertEqual(entry.mealFatGPerServing, 10)
         XCTAssertEqual(entry.personalIntake?.id, "intake-9")
+        XCTAssertEqual(entry.personalIntake?.notes, "Lunch after training")
     }
 
     // MARK: - Cargo / Meal nutrition snapshots

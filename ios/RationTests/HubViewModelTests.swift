@@ -93,6 +93,33 @@ final class HubViewModelTests: XCTestCase {
         XCTAssertEqual(activity.recent.first?.subjectName, "Milk")
     }
 
+    func testMalformedOptionalHubLayoutDoesNotRejectEntireHub() throws {
+        let json = """
+        {
+          "expiringItems": [],
+          "cargoStats": { "totalItems": 10, "expiringCount": 0, "expiredCount": 0 },
+          "latestSupplyList": null,
+          "manifestPreview": null,
+          "expirationAlertDays": 7,
+          "hubProfile": "custom",
+          "hubLayout": {
+            "widgets": [
+              { "id": "hub-stats", "order": 1.4, "visible": true }
+            ]
+          },
+          "availableMealTags": [],
+          "mealMatches": [],
+          "partialMealMatches": [],
+          "snackMatches": []
+        }
+        """
+
+        let hub = try JSON.decoder.decode(HubResponse.self, from: Data(json.utf8))
+
+        XCTAssertNil(hub.hubLayout)
+        XCTAssertEqual(hub.cargoStats.totalItems, 10)
+    }
+
     private func makeHubResponse(profile: String) throws -> HubResponse {
         let json = """
         {

@@ -18,6 +18,18 @@ const getCargoTagIndex = vi.fn(async () => []);
 const matchMeals = vi.fn(async () => []);
 const getKitchenStats = vi.fn();
 const getKitchenEvents = vi.fn();
+type HubMatchWidgetsFixture = {
+	mealMatches: object[];
+	partialMealMatches: object[];
+	snackMatches: object[];
+};
+const getHubMealMatchWidgets = vi.fn<() => Promise<HubMatchWidgetsFixture>>(
+	async () => ({
+		mealMatches: [],
+		partialMealMatches: [],
+		snackMatches: [],
+	}),
+);
 
 vi.mock("~/components/hub/widgets/registry", () => ({
 	resolveLayout: () => resolveLayout(),
@@ -48,11 +60,7 @@ vi.mock("~/lib/matching.server", () => ({
 }));
 
 vi.mock("~/lib/hub-match.server", () => ({
-	getHubMealMatchWidgets: async () => ({
-		mealMatches: [],
-		partialMealMatches: [],
-		snackMatches: [],
-	}),
+	getHubMealMatchWidgets: () => getHubMealMatchWidgets(),
 }));
 
 vi.mock("~/lib/kitchen-events.server", () => ({
@@ -117,6 +125,12 @@ describe("getMobileHubData supply counts", () => {
 		getKitchenStats.mockResolvedValue(null);
 		getKitchenEvents.mockReset();
 		getKitchenEvents.mockResolvedValue({ events: [], nextCursor: null });
+		getHubMealMatchWidgets.mockReset();
+		getHubMealMatchWidgets.mockResolvedValue({
+			mealMatches: [],
+			partialMealMatches: [],
+			snackMatches: [],
+		});
 	});
 
 	it("untagged (common) case: fetches a bounded slice and gets counts from getSupplyItemStats", async () => {
@@ -173,6 +187,99 @@ describe("getMobileHubData supply counts", () => {
 
 		expect(result.latestSupplyList).toBeNull();
 		expect(getSupplyItemStats).not.toHaveBeenCalled();
+	});
+
+	it("omits malformed legacy layout data instead of returning decimal Int fields", async () => {
+		getUserSettings.mockResolvedValue({
+			expirationAlertDays: 1.4,
+			hubProfile: "custom",
+			hubLayout: {
+				widgets: [
+					{
+						id: "hub-stats",
+						order: 1.4,
+						size: "lg",
+						visible: true,
+					},
+				],
+			},
+		});
+		getSupplyList.mockResolvedValue(null);
+
+		const { getMobileHubData } = await import("~/lib/mobile/hub.server");
+		const result = await getMobileHubData(
+			{ DB: {} } as never,
+			"org_1",
+			"user_1",
+		);
+
+		expect(result.expirationAlertDays).toBe(7);
+		expect(result.hubLayout).toBeUndefined();
+	});
+
+	it("omits a meal match with fractional mobile Int fields", async () => {
+		getUserSettings.mockResolvedValue({
+			expirationAlertDays: 7,
+			hubProfile: "full",
+			hubLayout: null,
+		});
+		getSupplyList.mockResolvedValue(null);
+		getHubMealMatchWidgets.mockResolvedValue({
+			mealMatches: [
+				{
+					matchPercentage: 100,
+					canMake: true,
+					meal: {
+						id: "meal_bad",
+						name: "Fractional servings",
+						servings: 1.4,
+						ingredients: [],
+					},
+				},
+			],
+			partialMealMatches: [],
+			snackMatches: [],
+		});
+
+		const { getMobileHubData } = await import("~/lib/mobile/hub.server");
+		const result = await getMobileHubData(
+			{ DB: {} } as never,
+			"org_1",
+			"user_1",
+		);
+
+		expect(result.mealMatches).toEqual([]);
+	});
+
+	it("falls back safely when a nested widget count violates the wire contract", async () => {
+		getUserSettings.mockResolvedValue({
+			expirationAlertDays: 7,
+			hubProfile: "full",
+			hubLayout: null,
+		});
+		getSupplyList.mockResolvedValue({
+			id: "list_1",
+			name: "Supply",
+			items: [],
+		});
+		getSupplyItemStats.mockResolvedValue({
+			itemCount: 1.4,
+			purchasedCount: 0,
+		});
+
+		const { getMobileHubData } = await import("~/lib/mobile/hub.server");
+		const result = await getMobileHubData(
+			{ DB: {} } as never,
+			"org_1",
+			"user_1",
+		);
+
+		expect(result.latestSupplyList).toBeNull();
+		expect(result.cargoStats).toEqual({
+			totalItems: 0,
+			expiringCount: 0,
+			expiredCount: 0,
+		});
 	});
 
 	it("returns Hub payload with empty tag fields when tag enrichment fails", async () => {

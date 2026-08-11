@@ -1,7 +1,7 @@
 import { getEffectiveTier, getGroupTierLimits } from "~/lib/capacity.server";
 import { handleApiError } from "~/lib/error-handler";
 import {
-	buildFlagContext,
+	buildMobileFlagContext,
 	getClientSafeFlags,
 } from "~/lib/feature-flags/flags.server";
 import { AI_COSTS, checkBalance } from "~/lib/ledger.server";
@@ -21,7 +21,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 			request,
 		);
 		const env = context.cloudflare.env;
-		const flagContext = buildFlagContext(request, env, {
+		const flagContext = buildMobileFlagContext(request, env, {
 			user: { id: userId },
 		});
 

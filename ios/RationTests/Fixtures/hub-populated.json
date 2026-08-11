@@ -1,0 +1,219 @@
+{
+	"expiringItems": [],
+	"cargoStats": {
+		"totalItems": 12,
+		"expiringCount": 2,
+		"expiredCount": 0
+	},
+	"latestSupplyList": {
+		"id": "supply-1",
+		"name": "Supply",
+		"items": [
+			{
+				"id": "si-1",
+				"name": "Milk",
+				"quantity": 1,
+				"unit": "l",
+				"baseQuantity": 1,
+				"baseUnit": "l",
+				"domain": "food",
+				"isPurchased": false
+			}
+		],
+		"itemCount": 1,
+		"uncheckedCount": 1,
+		"purchasedCount": 0
+	},
+	"manifestPreview": {
+		"planId": "plan-1",
+		"entries": [
+			{
+				"entryId": "entry-1",
+				"date": "2026-08-11",
+				"slotType": "dinner",
+				"mealName": "Salmon bowl",
+				"mealId": "meal-1",
+				"mealType": "recipe",
+				"servingsOverride": 2
+			}
+		]
+	},
+	"expirationAlertDays": 7,
+	"hubProfile": "full",
+	"hubLayout": {
+		"widgets": [
+			{
+				"id": "hub-stats",
+				"order": 0,
+				"size": "md",
+				"visible": true
+			},
+			{
+				"id": "nutrition-today",
+				"order": 1,
+				"visible": true,
+				"filters": {
+					"nutritionRange": 7
+				}
+			}
+		]
+	},
+	"availableMealTags": ["dinner"],
+	"availableCargoTags": ["dairy"],
+	"cargoTagIndex": [
+		{
+			"id": "cargo-1",
+			"name": "Milk"
+		}
+	],
+	"mealMatches": [
+		{
+			"matchPercentage": 100,
+			"canMake": true,
+			"meal": {
+				"id": "meal-1",
+				"organizationId": "org-1",
+				"name": "Salmon bowl",
+				"domain": "food",
+				"type": "recipe",
+				"description": null,
+				"directions": null,
+				"equipment": null,
+				"servings": 2,
+				"prepTime": 10,
+				"cookTime": 20,
+				"createdAt": "2026-08-01T00:00:00.000Z",
+				"updatedAt": "2026-08-01T00:00:00.000Z",
+				"tags": [],
+				"ingredients": [
+					{
+						"id": "ing-1",
+						"mealId": "meal-1",
+						"cargoId": null,
+						"resolvedCargoId": null,
+						"ingredientName": "salmon",
+						"quantity": 1.4,
+						"unit": "lb",
+						"baseQuantity": 1.4,
+						"baseUnit": "lb",
+						"isOptional": false,
+						"orderIndex": 0
+					}
+				]
+			},
+			"availableIngredients": [],
+			"missingIngredients": []
+		}
+	],
+	"partialMealMatches": [],
+	"snackMatches": [
+		{
+			"matchPercentage": 100,
+			"canMake": true,
+			"meal": {
+				"id": "meal-snack-1",
+				"organizationId": "org-1",
+				"name": "Apple",
+				"domain": "food",
+				"type": "provision",
+				"description": null,
+				"directions": null,
+				"equipment": null,
+				"servings": 1,
+				"prepTime": null,
+				"cookTime": null,
+				"createdAt": "2026-08-01T00:00:00.000Z",
+				"updatedAt": "2026-08-01T00:00:00.000Z",
+				"tags": [],
+				"ingredients": [
+					{
+						"id": "ing-snack-1",
+						"mealId": "meal-snack-1",
+						"cargoId": "cargo-2",
+						"resolvedCargoId": "cargo-2",
+						"ingredientName": "Apple",
+						"quantity": 1,
+						"unit": "unit",
+						"baseQuantity": 1,
+						"baseUnit": "unit",
+						"isOptional": false,
+						"orderIndex": 0
+					}
+				]
+			},
+			"availableIngredients": [],
+			"missingIngredients": []
+		}
+	],
+	"flightRecorderActivity": {
+		"stats": {
+			"window": "7d",
+			"from": "2026-08-04T00:00:00.000Z",
+			"to": "2026-08-11T00:00:00.000Z",
+			"countsByType": {
+				"cargo_jettisoned": 1
+			},
+			"topCookedMeals": [],
+			"totals": {
+				"cooked": 2,
+				"docked": 1,
+				"expired": 0,
+				"jettisoned": 1
+			}
+		},
+		"recent": [
+			{
+				"id": "evt-1",
+				"eventType": "cargo_jettisoned",
+				"occurredAt": "2026-08-10T12:00:00.000Z",
+				"subjectName": "Milk",
+				"mealId": null,
+				"cargoId": null
+			}
+		]
+	},
+	"nutritionToday": {
+		"from": "2026-08-11",
+		"to": "2026-08-11",
+		"totals": {
+			"energyKcal": 630,
+			"proteinG": 48,
+			"carbsG": 42,
+			"fatG": 27
+		},
+		"days": [
+			{
+				"date": "2026-08-11",
+				"energyKcal": 630,
+				"proteinG": 48,
+				"carbsG": 42,
+				"fatG": 27,
+				"coverageAvg": 1,
+				"entryCount": 1
+			}
+		],
+		"goal": null
+	},
+	"nutritionTrends": {
+		"from": "2026-08-05",
+		"to": "2026-08-11",
+		"totals": {
+			"energyKcal": 4200,
+			"proteinG": 300,
+			"carbsG": 400,
+			"fatG": 150
+		},
+		"days": [
+			{
+				"date": "2026-08-11",
+				"energyKcal": 630,
+				"proteinG": 48,
+				"carbsG": 42,
+				"fatG": 27,
+				"coverageAvg": 1,
+				"entryCount": 1
+			}
+		],
+		"goal": null
+	}
+}

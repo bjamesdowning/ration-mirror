@@ -66,6 +66,16 @@ Recovery:
 - Metric blob: `nutrition_summary_duration` buckets `lt50` / `lt150` / `lt500` / `gte500`.
 - If elevated: confirm `nutrition_intake_user_history_idx` present; check range caps; avoid client polling loops.
 
+## Mobile Hub / Manifest decode incident
+
+1. Confirm the TestFlight build and deployed Worker version are the same release; Workers Builds can silently roll back after a failed deploy.
+2. Confirm main-D1 migrations are current before serving code that reads new nutrition columns: `bun run db:migrate:prod`.
+3. Reproduce from a **DEBUG** device build and collect only `[RationAPI]` decode diagnostics. Hub diagnostics list JSON paths and numeric kinds, never response values, authorization headers, or personal nutrition data.
+4. Treat a Foundation message such as `Number 1.4 is not representable in Swift` as a decimal reaching an iOS `Int` field, not invalid JSON. Inspect the reported path, then repair or omit the malformed optional Hub card/server value.
+5. Re-check the shared Hub wire contract after schema or model edits: `bunx vitest run app/lib/schemas/mobile/__tests__/hub-populated-contract.test.ts` and XCTest `HubPopulatedContractTests` against `hub-populated.json`.
+6. A cold Manifest decode failure must show its retry state. If it instead looks empty, do not add duplicate plan entries—first retry after verifying the deployed Worker and migration.
+7. Enable nutrition in dependency order for the same platform cohort: `nutrition-engine` → `nutrition-manifest` → `nutrition-cook-log-split`; `nutrition-intake-notes` is additive and does not enable Eat.
+
 ## Alerts (initial — configure in Cloudflare / Grafana)
 
 | Signal | Warn | Critical |

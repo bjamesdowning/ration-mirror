@@ -14,6 +14,52 @@ struct MealIngredient: Codable, Sendable, Identifiable {
     let baseUnit: String?
     let isOptional: Bool?
     let orderIndex: Int?
+
+    init(
+        id: String,
+        mealId: String,
+        cargoId: String?,
+        resolvedCargoId: String?,
+        ingredientName: String,
+        quantity: Double,
+        unit: String,
+        baseQuantity: Double?,
+        baseUnit: String?,
+        isOptional: Bool?,
+        orderIndex: Int?
+    ) {
+        self.id = id
+        self.mealId = mealId
+        self.cargoId = cargoId
+        self.resolvedCargoId = resolvedCargoId
+        self.ingredientName = ingredientName
+        self.quantity = quantity
+        self.unit = unit
+        self.baseQuantity = baseQuantity
+        self.baseUnit = baseUnit
+        self.isOptional = isOptional
+        self.orderIndex = orderIndex
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        mealId = try c.decode(String.self, forKey: .mealId)
+        cargoId = try c.decodeIfPresent(String.self, forKey: .cargoId)
+        resolvedCargoId = try c.decodeIfPresent(String.self, forKey: .resolvedCargoId)
+        ingredientName = try c.decode(String.self, forKey: .ingredientName)
+        quantity = try c.decode(Double.self, forKey: .quantity)
+        unit = try c.decode(String.self, forKey: .unit)
+        baseQuantity = try c.decodeIfPresent(Double.self, forKey: .baseQuantity)
+        baseUnit = try c.decodeIfPresent(String.self, forKey: .baseUnit)
+        isOptional = try c.decodeIfPresent(Bool.self, forKey: .isOptional)
+        orderIndex = try c.decodeTolerantOptionalInt(forKey: .orderIndex)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, mealId, cargoId, resolvedCargoId, ingredientName
+        case quantity, unit, baseQuantity, baseUnit, isOptional, orderIndex
+    }
 }
 
 struct Meal: Codable, Sendable, Identifiable {
@@ -52,9 +98,9 @@ struct Meal: Codable, Sendable, Identifiable {
         description = try c.decodeIfPresent(String.self, forKey: .description)
         directions = try c.decodeIfPresent(String.self, forKey: .directions)
         equipment = try c.decodeIfPresent([String].self, forKey: .equipment)
-        servings = try c.decodeIfPresent(Int.self, forKey: .servings)
-        prepTime = try c.decodeIfPresent(Int.self, forKey: .prepTime)
-        cookTime = try c.decodeIfPresent(Int.self, forKey: .cookTime)
+        servings = try c.decodeTolerantOptionalInt(forKey: .servings)
+        prepTime = try c.decodeTolerantOptionalInt(forKey: .prepTime)
+        cookTime = try c.decodeTolerantOptionalInt(forKey: .cookTime)
         createdAt = try c.decode(Date.self, forKey: .createdAt)
         updatedAt = try c.decode(Date.self, forKey: .updatedAt)
         tags = c.decodeTolerantTags(forKey: .tags)

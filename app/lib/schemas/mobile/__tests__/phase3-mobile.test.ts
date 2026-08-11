@@ -148,6 +148,89 @@ describe("MobileHubResponseSchema", () => {
 		expect(result.success).toBe(true);
 	});
 
+	it("rejects fractional values for iOS Int-backed Hub fields", () => {
+		const result = MobileHubResponseSchema.safeParse({
+			expiringItems: [],
+			cargoStats: { totalItems: 0, expiringCount: 0 },
+			latestSupplyList: null,
+			manifestPreview: null,
+			expirationAlertDays: 7,
+			hubLayout: {
+				widgets: [{ id: "hub-stats", order: 1.4, visible: true }],
+			},
+			availableMealTags: [],
+			mealMatches: [
+				{
+					matchPercentage: 100,
+					canMake: true,
+					meal: { id: "meal-1", servings: 1.4 },
+				},
+			],
+			partialMealMatches: [],
+			snackMatches: [],
+		});
+
+		expect(result.success).toBe(false);
+	});
+
+	it("rejects decimal counts in nested Hub preview widgets", () => {
+		const base = {
+			expiringItems: [],
+			cargoStats: { totalItems: 0, expiringCount: 0, expiredCount: 0 },
+			latestSupplyList: null,
+			manifestPreview: null,
+			expirationAlertDays: 7,
+			availableMealTags: [],
+			mealMatches: [],
+			partialMealMatches: [],
+			snackMatches: [],
+		};
+		const invalidPayloads = [
+			{
+				...base,
+				latestSupplyList: {
+					id: "supply-1",
+					items: [],
+					itemCount: 1.4,
+				},
+			},
+			{
+				...base,
+				manifestPreview: {
+					planId: "plan-1",
+					entries: [
+						{
+							entryId: "entry-1",
+							date: "2026-08-11",
+							slotType: "lunch",
+							mealName: "Soup",
+							mealId: "meal-1",
+							servingsOverride: 1.4,
+						},
+					],
+				},
+			},
+			{
+				...base,
+				flightRecorderActivity: {
+					stats: {
+						window: "7d",
+						from: "2026-08-10T00:00:00.000Z",
+						to: "2026-08-11T00:00:00.000Z",
+						countsByType: { cargo_jettisoned: 1.4 },
+						topCookedMeals: [],
+						totals: { cooked: 0, docked: 0, expired: 0, jettisoned: 0 },
+					},
+					recent: [],
+				},
+			},
+		];
+
+		for (const payload of invalidPayloads) {
+			expect(MobileHubResponseSchema.safeParse(payload).success).toBe(false);
+		}
+	});
+
 	it("accepts typed Flight Recorder activity", () => {
 		const result = MobileHubResponseSchema.safeParse({
 			expiringItems: [],

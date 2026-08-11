@@ -107,7 +107,13 @@ extension KeyedDecodingContainer {
     /// Int that tolerates JSON string numbers from D1 aggregates.
     func decodeTolerantInt(forKey key: Key) throws -> Int {
         if let v = try? decode(Int.self, forKey: key) { return v }
-        if let d = try? decode(Double.self, forKey: key) { return Int(d) }
+        if let d = try? decode(Double.self, forKey: key),
+           d.isFinite,
+           d.rounded(.towardZero) == d,
+           d >= Double(Int.min),
+           d <= Double(Int.max) {
+            return Int(d)
+        }
         if let s = try? decode(String.self, forKey: key), let v = Int(s) { return v }
         throw DecodingError.dataCorruptedError(
             forKey: key,
@@ -132,5 +138,12 @@ extension KeyedDecodingContainer {
             return nil
         }
         return try decodeTolerantDouble(forKey: key)
+    }
+
+    func decodeTolerantOptionalInt(forKey key: Key) throws -> Int? {
+        guard contains(key), (try? decodeNil(forKey: key)) != true else {
+            return nil
+        }
+        return try decodeTolerantInt(forKey: key)
     }
 }

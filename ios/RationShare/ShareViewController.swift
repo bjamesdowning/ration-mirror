@@ -199,8 +199,8 @@ final class ShareViewController: UIViewController {
     private func loadURLObject(from provider: NSItemProvider) async -> URL? {
         guard provider.canLoadObject(ofClass: URL.self) else { return nil }
         return await withCheckedContinuation { continuation in
-            _ = provider.loadObject(ofClass: URL.self) { object, _ in
-                continuation.resume(returning: object as? URL)
+            _ = provider.loadObject(ofClass: URL.self) { url, _ in
+                continuation.resume(returning: url)
             }
         }
     }

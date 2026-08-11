@@ -11,7 +11,10 @@ import type { FlagshipEvaluationContext } from "~/lib/feature-flags/context.serv
 import { isFeatureEnabled } from "~/lib/feature-flags/flags.server";
 import { cookMealFromGalley } from "~/lib/galley-cook-manifest.server";
 import { log } from "~/lib/logging.server";
-import { ensureProvisionFromCargo } from "~/lib/meals.server";
+import {
+	ensureProvisionFromCargo,
+	mealNutritionHasEnergy,
+} from "~/lib/meals.server";
 import {
 	logManifestIntakes,
 	type NutritionPrincipal,
@@ -271,6 +274,19 @@ export async function quickEatFromCargo(
 		const clamped = clampIntakeServings(cookServings);
 		intakeServings = clamped.servings;
 		try {
+			// Ensure meal.nutrition is current before plate-up (async schedule may lag).
+			if (!mealNutritionHasEnergy(ensured.provision.nutrition)) {
+				const { recomputeAndStoreMealNutrition } = await import(
+					"~/lib/nutrition/persist.server"
+				);
+				await recomputeAndStoreMealNutrition(
+					env,
+					env.DB,
+					ensured.provision.id,
+					organizationId,
+					flagContext,
+				);
+			}
 			await logManifestIntakes(env, principal, flagContext, {
 				operationKey: `${input.operationKey}:intake`,
 				planId: cookResult.planId,

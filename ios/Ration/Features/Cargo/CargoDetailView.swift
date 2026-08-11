@@ -55,12 +55,7 @@ struct CargoDetailView: View {
             IconFABMenuCore(systemImage: "ellipsis.circle.fill", accessibilityLabel: "Cargo actions") {
                 if env.session.clientFlags.isCargoQuickEatEnabled {
                     Button { showingQuickEat = true } label: {
-                        Label {
-                            Text("Eat")
-                        } icon: {
-                            Image("EatBite")
-                                .renderingMode(.template)
-                        }
+                        Label("Eat", systemImage: "carrot.fill")
                     }
                     .disabled(model.isQuickEating || !env.network.isOnline)
                 }

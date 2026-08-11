@@ -133,3 +133,14 @@ describe("clampIntakeServings", () => {
 		expect(clampIntakeServings(2)).toEqual({ servings: 2, clamped: false });
 	});
 });
+
+describe("mealNutritionHasEnergy", () => {
+	it("detects usable perServing energy", async () => {
+		const { mealNutritionHasEnergy } = await import("~/lib/meals.server");
+		expect(mealNutritionHasEnergy(null)).toBe(false);
+		expect(mealNutritionHasEnergy({ perServing: {} })).toBe(false);
+		expect(mealNutritionHasEnergy({ perServing: { energyKcal: 120 } })).toBe(
+			true,
+		);
+	});
+});

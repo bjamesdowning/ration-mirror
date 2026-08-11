@@ -1146,6 +1146,21 @@ export async function createProvision(
 	// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
 	await d1.batch(batch as [any, ...any[]]);
 
+	if (env) {
+		const flagContext = resolveMealNutritionFlagContext(env, options);
+		await scheduleMealNutritionRecompute(
+			env,
+			db,
+			mealId,
+			organizationId,
+			flagContext,
+			{
+				trigger: "meal_write",
+				origin: mealOriginFromFlagContext(flagContext, options?.userId),
+			},
+		);
+	}
+
 	return options?.skipReturnRead
 		? null
 		: await getMeal(db, organizationId, mealId);
@@ -1230,6 +1245,22 @@ export async function updateProvision(
 
 	// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
 	await d1.batch(batch as [any, ...any[]]);
+
+	const nutritionEnv = options?.env;
+	if (nutritionEnv) {
+		const flagContext = resolveMealNutritionFlagContext(nutritionEnv, options);
+		await scheduleMealNutritionRecompute(
+			nutritionEnv,
+			db,
+			mealId,
+			organizationId,
+			flagContext,
+			{
+				trigger: "meal_write",
+				origin: mealOriginFromFlagContext(flagContext, options?.userId),
+			},
+		);
+	}
 
 	return options?.skipReturnRead
 		? null
@@ -1794,6 +1825,7 @@ export async function createProvisionFromCargo(
 	organizationId: string,
 	cargoId: string,
 	env?: Env,
+	options?: Pick<MealWriteOptions, "flagContext" | "userId">,
 ): Promise<{
 	provision: Awaited<ReturnType<typeof getMeal>>;
 	alreadyExisted: boolean;
@@ -1894,6 +1926,21 @@ export async function createProvisionFromCargo(
 
 	// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
 	await d1.batch(batch as [any, ...any[]]);
+
+	if (env) {
+		const flagContext = resolveMealNutritionFlagContext(env, options);
+		await scheduleMealNutritionRecompute(
+			env,
+			db,
+			mealId,
+			organizationId,
+			flagContext,
+			{
+				trigger: "meal_write",
+				origin: mealOriginFromFlagContext(flagContext, options?.userId),
+			},
+		);
+	}
 
 	const provision = await getMeal(db, organizationId, mealId);
 	return { provision, alreadyExisted: false };
@@ -2007,6 +2054,7 @@ export async function ensureProvisionFromCargo(
 		organizationId,
 		cargoId,
 		env,
+		{ flagContext },
 	);
 	const d1 = drizzle(env.DB);
 	const [cargoItem] = await d1
@@ -2027,16 +2075,41 @@ export async function ensureProvisionFromCargo(
 		normalized = result.normalized;
 	}
 
-	const provision =
+	let provision =
 		normalized && created.provision
 			? await getMeal(env.DB, organizationId, created.provision.id)
 			: created.provision;
+
+	// Sync-heal blank meal.nutrition (async schedule may not have finished; older
+	// promotes never scheduled recompute at all).
+	if (provision && !mealNutritionHasEnergy(provision.nutrition)) {
+		const { recomputeAndStoreMealNutrition } = await import(
+			"./nutrition/persist.server"
+		);
+		const ctx = flagContext ?? buildSystemFlagContext(env);
+		await recomputeAndStoreMealNutrition(
+			env,
+			env.DB,
+			provision.id,
+			organizationId,
+			ctx,
+		);
+		provision = await getMeal(env.DB, organizationId, provision.id);
+	}
 
 	return {
 		provision,
 		alreadyExisted: created.alreadyExisted,
 		normalized,
 	};
+}
+
+export function mealNutritionHasEnergy(nutrition: unknown): boolean {
+	const snap = nutrition as {
+		perServing?: { energyKcal?: number | null };
+	} | null;
+	const kcal = snap?.perServing?.energyKcal;
+	return kcal != null && Number.isFinite(kcal);
 }
 
 /**

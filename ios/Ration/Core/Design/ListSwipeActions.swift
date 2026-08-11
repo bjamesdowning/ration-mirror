@@ -79,7 +79,8 @@ extension View {
         }
     }
 
-    /// Cargo: Eat (yellow, full-swipe, bite icon) + Delete (red). Always shows Eat when enabled (incl. qty 0).
+    /// Cargo: Eat (yellow, full-swipe) + Delete (red). Uses SF Symbol so tint matches Cook.
+    /// Always shows Eat when enabled (incl. qty 0).
     func cargoTrailingSwipeActions(
         showEat: Bool = true,
         onEat: @escaping () -> Void,
@@ -87,10 +88,7 @@ extension View {
     ) -> some View {
         inventorySoftHardTrailingSwipe(
             softLabel: "Eat",
-            softIcon: {
-                Image("EatBite")
-                    .renderingMode(.template)
-            },
+            softSystemImage: "carrot.fill",
             showSoft: showEat,
             onSoft: onEat,
             onDelete: onDelete

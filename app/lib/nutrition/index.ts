@@ -57,6 +57,8 @@ export {
 } from "./mass-resolution";
 export {
 	type CargoOverrideCandidate,
+	directNutrientsFromCountCargoOverride,
+	estimateGramsFromPerServingDensity,
 	nutrientsPer100gFromCargoOverride,
 	nutrientsPer100gFromPackageTotals,
 	pickBestCargoOverrideForIngredient,

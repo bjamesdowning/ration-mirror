@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+	directNutrientsFromCountCargoOverride,
+	estimateGramsFromPerServingDensity,
 	nutrientsPer100gFromCargoOverride,
 	nutrientsPer100gFromPackageTotals,
 	pickBestCargoOverrideForIngredient,
@@ -174,5 +176,75 @@ describe("pickBestCargoOverrideForIngredient", () => {
 		);
 		// Manual 500 kcal/L ≈ 48 kcal/100g, not chocolate ~466
 		expect(per100?.energyKcal).toBeLessThan(100);
+	});
+});
+
+describe("estimateGramsFromPerServingDensity", () => {
+	it("scales household energy against per100g density", () => {
+		const grams = estimateGramsFromPerServingDensity(
+			{ ...milkPackageTotals, energyKcal: 50 },
+			{ ...milkPackageTotals, energyKcal: 75 },
+			2,
+		);
+		// 75/50 * 100 = 150g per portion × 2
+		expect(grams).toBe(300);
+	});
+
+	it("returns null without positive energy", () => {
+		expect(
+			estimateGramsFromPerServingDensity(
+				{ ...milkPackageTotals, energyKcal: 0 },
+				milkPackageTotals,
+				1,
+			),
+		).toBeNull();
+	});
+});
+
+describe("directNutrientsFromCountCargoOverride", () => {
+	it("uses perServing as one count unit for USDA household", () => {
+		const snap: NutritionSnapshot = {
+			source: "usda",
+			confidence: 0.9,
+			verified: false,
+			per100g: { ...milkPackageTotals, energyKcal: 30 },
+			perServing: { ...milkPackageTotals, energyKcal: 90 },
+			fdcId: 1,
+			description: null,
+		};
+		const direct = directNutrientsFromCountCargoOverride(
+			snap,
+			1,
+			"unit",
+			3,
+			"unit",
+		);
+		expect(direct?.energyKcal).toBe(90);
+	});
+
+	it("divides user_override package totals by package quantity", () => {
+		const snap: NutritionSnapshot = {
+			source: "user_override",
+			confidence: 1,
+			verified: true,
+			per100g: null,
+			perServing: { ...milkPackageTotals, energyKcal: 300 },
+			fdcId: null,
+			description: null,
+		};
+		const direct = directNutrientsFromCountCargoOverride(
+			snap,
+			1,
+			"unit",
+			3,
+			"unit",
+		);
+		expect(direct?.energyKcal).toBe(100);
+	});
+
+	it("returns null for mass units", () => {
+		expect(
+			directNutrientsFromCountCargoOverride(milkOverride, 100, "g", 1, "g"),
+		).toBeNull();
 	});
 });

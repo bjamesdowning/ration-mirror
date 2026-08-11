@@ -55,19 +55,16 @@ struct CargoDetailView: View {
             IconFABMenuCore(systemImage: "ellipsis.circle.fill", accessibilityLabel: "Cargo actions") {
                 if env.session.clientFlags.isCargoQuickEatEnabled {
                     Button { showingQuickEat = true } label: {
-                        Label("Eat", systemImage: "carrot.fill")
+                        Label {
+                            Text("Eat")
+                        } icon: {
+                            Image(systemName: "carrot")
+                                .symbolRenderingMode(.monochrome)
+                        }
                     }
+                    .tint(Theme.warning)
                     .disabled(model.isQuickEating || !env.network.isOnline)
                 }
-                Button {
-                    Task { await handleSupplyToggle() }
-                } label: {
-                    Label(
-                        model.isSelectedForRestock ? "Remove from Supply" : "Add to Supply",
-                        systemImage: model.isSelectedForRestock ? "cart.fill.badge.minus" : "cart.badge.plus"
-                    )
-                }
-                .disabled(model.isTogglingRestock || !env.network.isOnline)
                 Button {
                     Task { await handlePromote() }
                 } label: {
@@ -91,6 +88,15 @@ struct CargoDetailView: View {
                     }
                     .disabled(model.isMarkingEmpty || !env.network.isOnline)
                 }
+                Button {
+                    Task { await handleSupplyToggle() }
+                } label: {
+                    Label(
+                        model.isSelectedForRestock ? "Remove from Supply" : "Add to Supply",
+                        systemImage: model.isSelectedForRestock ? "cart.fill.badge.minus" : "cart.badge.plus"
+                    )
+                }
+                .disabled(model.isTogglingRestock || !env.network.isOnline)
                 Button(role: .destructive) { showingDeleteConfirm = true } label: {
                     Label("Delete", systemImage: "trash")
                 }

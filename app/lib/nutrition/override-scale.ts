@@ -1,5 +1,5 @@
 import { normalizeForCargoDedup } from "~/lib/matching";
-import type { SupportedUnit } from "~/lib/units";
+import { getUnitFamily, type SupportedUnit } from "~/lib/units";
 import {
 	convertIngredientAmountToGrams,
 	scaleNutrientValues,
@@ -62,6 +62,73 @@ export function nutrientsPer100gFromCargoOverride(
 			: null;
 
 	return nutrientsPer100gFromPackageTotals(packageTotals, grams);
+}
+
+/**
+ * Infer portion mass from household `perServing` vs density `per100g` (energy ratio).
+ * Used when count units cannot convert to grams directly.
+ */
+export function estimateGramsFromPerServingDensity(
+	per100g: NutrientsPer100g,
+	perServing: NutrientValues,
+	portions: number,
+): number | null {
+	if (!Number.isFinite(portions) || portions <= 0) return null;
+	const e100 = per100g.energyKcal;
+	const eServ = perServing.energyKcal;
+	if (
+		e100 == null ||
+		eServ == null ||
+		!Number.isFinite(e100) ||
+		!Number.isFinite(eServ) ||
+		e100 <= 0 ||
+		eServ <= 0
+	) {
+		return null;
+	}
+	const gramsPerPortion = (eServ / e100) * 100;
+	if (!Number.isFinite(gramsPerPortion) || gramsPerPortion <= 0) return null;
+	return gramsPerPortion * portions;
+}
+
+/**
+ * Direct nutrients for a count-unit meal ingredient when mass is unknown.
+ * Treats cargo `perServing` as nutrients per package count unit; for
+ * user_override package totals without per100g, divides by package quantity.
+ */
+export function directNutrientsFromCountCargoOverride(
+	snapshot: NutritionSnapshot,
+	ingredientQuantity: number,
+	ingredientUnit: SupportedUnit | null | undefined,
+	packageQuantity: number,
+	packageUnit: SupportedUnit | null | undefined,
+): NutrientValues | null {
+	if (
+		!ingredientUnit ||
+		getUnitFamily(ingredientUnit) !== "count_unit" ||
+		!Number.isFinite(ingredientQuantity) ||
+		ingredientQuantity <= 0
+	) {
+		return null;
+	}
+	if (packageUnit && getUnitFamily(packageUnit) !== "count_unit") {
+		return null;
+	}
+
+	const perServing = snapshot.perServing;
+	if (!perServing) return null;
+	const energy = perServing.energyKcal;
+	if (energy == null || !Number.isFinite(energy)) return null;
+
+	const isPackageTotals =
+		snapshot.per100g == null &&
+		(snapshot.source === "user_override" ||
+			snapshot.source === "ai_estimate") &&
+		Number.isFinite(packageQuantity) &&
+		packageQuantity > 0;
+
+	const perUnitFactor = isPackageTotals ? 1 / packageQuantity : 1;
+	return scaleNutrientValues(perServing, ingredientQuantity * perUnitFactor);
 }
 
 /**

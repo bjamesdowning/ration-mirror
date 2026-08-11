@@ -20,7 +20,7 @@ import { isFeatureEnabled } from "~/lib/feature-flags/flags.server";
 import { normalizeForCargoDedup } from "~/lib/matching";
 import { chunkedQuery } from "~/lib/query-utils.server";
 import type { SupportedUnit } from "~/lib/units";
-import { toSupportedUnit } from "~/lib/units";
+import { getUnitFamily, toSupportedUnit } from "~/lib/units";
 import {
 	type ResolveCargoNutritionOptions,
 	resolveAndBuildCargoNutrition,
@@ -30,6 +30,7 @@ import {
 	NUTRITION_MEAL_RECOMPUTE_CONCURRENCY,
 	NUTRITION_RESOLVE_CONCURRENCY,
 } from "./constants";
+import { lookupFdcPortion } from "./fdc-portion.server";
 import {
 	isGoalEffectiveOnDate,
 	nutritionIntakeRetentionCutoff,
@@ -37,11 +38,16 @@ import {
 import { mapWithConcurrency } from "./map-concurrency";
 import {
 	type CargoOverrideCandidate,
+	directNutrientsFromCountCargoOverride,
+	estimateGramsFromPerServingDensity,
 	nutrientsPer100gFromCargoOverride,
 	pickBestCargoOverrideForIngredient,
 } from "./override-scale";
 import { resolveFoodName } from "./resolve-food.server";
-import { projectNullableValuesToLegacy } from "./scale-nutrients";
+import {
+	convertIngredientAmountToGrams,
+	projectNullableValuesToLegacy,
+} from "./scale-nutrients";
 import type {
 	MealNutritionSnapshot,
 	NutritionSnapshot,
@@ -287,15 +293,118 @@ export async function recomputeAndStoreMealNutrition(
 					packageUnit,
 					override.name,
 				);
+				const resolvedUnit = (unit ?? ing.unit) as SupportedUnit | null;
+				const source = (override.nutrition.source ??
+					"user_override") as NutritionSource;
+				const fdcId = override.nutrition.fdcId ?? null;
+
 				if (nutrientsPer100g) {
+					let grams: number | null | undefined;
+					const convertible =
+						ing.quantity != null && resolvedUnit
+							? convertIngredientAmountToGrams(
+									ing.quantity,
+									resolvedUnit,
+									ing.ingredientName,
+								)
+							: null;
+
+					if (convertible != null && convertible > 0) {
+						return {
+							name: ing.ingredientName,
+							quantity: ing.quantity,
+							unit: resolvedUnit,
+							nutrientsPer100g,
+							fdcId,
+							source,
+						};
+					}
+
+					if (
+						ing.quantity != null &&
+						resolvedUnit &&
+						getUnitFamily(resolvedUnit) === "count_unit"
+					) {
+						if (fdcId != null) {
+							const portion = await lookupFdcPortion(env, fdcId, resolvedUnit);
+							if (
+								portion.gramsPerUnit != null &&
+								Number.isFinite(portion.gramsPerUnit) &&
+								portion.gramsPerUnit > 0
+							) {
+								grams = portion.gramsPerUnit * ing.quantity;
+							}
+						}
+						if (
+							(grams == null || grams <= 0) &&
+							override.nutrition.perServing
+						) {
+							grams = estimateGramsFromPerServingDensity(
+								nutrientsPer100g,
+								override.nutrition.perServing,
+								ing.quantity,
+							);
+						}
+					}
+
+					if (grams != null && Number.isFinite(grams) && grams > 0) {
+						return {
+							name: ing.ingredientName,
+							quantity: ing.quantity,
+							unit: resolvedUnit,
+							nutrientsPer100g,
+							grams,
+							fdcId,
+							source,
+						};
+					}
+
+					// Count/mass unresolved: do not return density-only (compute skips it).
+					const directWithDensity = directNutrientsFromCountCargoOverride(
+						override.nutrition,
+						ing.quantity ?? 0,
+						resolvedUnit,
+						override.quantity,
+						packageUnit,
+					);
+					if (directWithDensity) {
+						return {
+							name: ing.ingredientName,
+							quantity: ing.quantity,
+							unit: resolvedUnit,
+							nutrientsPer100g: null,
+							directContribution: directWithDensity,
+							fdcId,
+							source,
+						};
+					}
+
 					return {
 						name: ing.ingredientName,
 						quantity: ing.quantity,
-						unit: (unit ?? ing.unit) as SupportedUnit | null,
+						unit: resolvedUnit,
 						nutrientsPer100g,
-						fdcId: override.nutrition.fdcId ?? null,
-						source: (override.nutrition.source ??
-							"user_override") as NutritionSource,
+						fdcId,
+						source,
+					};
+				}
+
+				const direct = directNutrientsFromCountCargoOverride(
+					override.nutrition,
+					ing.quantity ?? 0,
+					resolvedUnit,
+					override.quantity,
+					packageUnit,
+				);
+				if (direct) {
+					return {
+						name: ing.ingredientName,
+						quantity: ing.quantity,
+						unit: resolvedUnit,
+						nutrientsPer100g: null,
+						directContribution: direct,
+						fdcId,
+						source,
 					};
 				}
 			}

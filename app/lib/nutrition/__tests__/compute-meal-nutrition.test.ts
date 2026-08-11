@@ -119,4 +119,56 @@ describe("computeMealNutrition", () => {
 		expect(result.perServing.energyKcal).toBe(0);
 		expect(result.attributions).toEqual([]);
 	});
+
+	it("aggregates directContribution for count units without grams", () => {
+		const result = computeMealNutrition([
+			{
+				name: "mini watermelon",
+				quantity: 1,
+				unit: "unit",
+				nutrientsPer100g: null,
+				directContribution: {
+					energyKcal: 90,
+					proteinG: 2,
+					fatG: 0.5,
+					carbG: 22,
+					fiberG: 1,
+					sugarG: 18,
+					satFatG: 0,
+					sodiumMg: 5,
+					saltG: 0,
+				},
+			},
+		]);
+
+		expect(result.perServing.energyKcal).toBe(90);
+		expect(result.coverage).toBe(1);
+		expect(result.attributions).toHaveLength(1);
+		expect(result.attributions[0]?.grams).toBeNull();
+	});
+
+	it("uses directContribution when count unit has density but no grams", () => {
+		const result = computeMealNutrition([
+			{
+				name: "mini watermelon",
+				quantity: 1,
+				unit: "unit",
+				nutrientsPer100g: ONION,
+				directContribution: {
+					energyKcal: 90,
+					proteinG: 2,
+					fatG: 0.5,
+					carbG: 22,
+					fiberG: 1,
+					sugarG: 18,
+					satFatG: 0,
+					sodiumMg: 5,
+					saltG: 0,
+				},
+			},
+		]);
+
+		expect(result.perServing.energyKcal).toBe(90);
+		expect(result.coverage).toBe(1);
+	});
 });

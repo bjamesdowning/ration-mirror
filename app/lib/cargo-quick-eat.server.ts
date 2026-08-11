@@ -11,10 +11,7 @@ import type { FlagshipEvaluationContext } from "~/lib/feature-flags/context.serv
 import { isFeatureEnabled } from "~/lib/feature-flags/flags.server";
 import { cookMealFromGalley } from "~/lib/galley-cook-manifest.server";
 import { log } from "~/lib/logging.server";
-import {
-	ensureProvisionFromCargo,
-	mealNutritionHasEnergy,
-} from "~/lib/meals.server";
+import { ensureProvisionFromCargo } from "~/lib/meals.server";
 import {
 	logManifestIntakes,
 	type NutritionPrincipal,
@@ -274,8 +271,9 @@ export async function quickEatFromCargo(
 		const clamped = clampIntakeServings(cookServings);
 		intakeServings = clamped.servings;
 		try {
-			// Ensure meal.nutrition is current before plate-up (async schedule may lag).
-			if (!mealNutritionHasEnergy(ensured.provision.nutrition)) {
+			// Best-effort sync-recompute before plate-up. Failure must not block
+			// intake when meal.nutrition is already usable from a prior compute.
+			try {
 				const { recomputeAndStoreMealNutrition } = await import(
 					"~/lib/nutrition/persist.server"
 				);
@@ -286,6 +284,13 @@ export async function quickEatFromCargo(
 					organizationId,
 					flagContext,
 				);
+			} catch (recomputeErr) {
+				log.warn("quick eat recompute before intake failed", {
+					detail:
+						recomputeErr instanceof Error
+							? recomputeErr.message
+							: String(recomputeErr),
+				});
 			}
 			await logManifestIntakes(env, principal, flagContext, {
 				operationKey: `${input.operationKey}:intake`,

@@ -16,6 +16,9 @@ function requestWithCf(url: string, country: string): Request {
 }
 
 describe("buildWebFlagContext", () => {
+	// Root / Hub document loads must use this helper for clientFlags so Flagship
+	// `clientPlatform == web` rules match. Never evaluate Hub UI flags via
+	// buildFlagContext (browsers omit X-Ration-Client; header is also spoofable).
 	it("forces web + APP_VERSION even when header claims ios", () => {
 		const request = new Request("https://ration.mayutic.com/", {
 			headers: { "X-Ration-Client": "ios/1.3.17" },
@@ -24,6 +27,14 @@ describe("buildWebFlagContext", () => {
 		expect(context.clientPlatform).toBe("web");
 		expect(context.clientVersion).toBe(APP_VERSION);
 		expect(context.country).toBe("unknown");
+	});
+
+	it("sets web platform without a client header (Hub document load)", () => {
+		const request = new Request("https://ration.mayutic.com/");
+		const context = buildWebFlagContext(request, { RATION_ENV: "production" });
+		expect(context.clientPlatform).toBe("web");
+		expect(context.clientVersion).toBe(APP_VERSION);
+		expect(context.environment).toBe("production");
 	});
 });
 

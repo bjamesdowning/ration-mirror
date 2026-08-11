@@ -44,7 +44,7 @@ import { useConfirm } from "~/lib/confirm-context";
 import { toExpiryDate } from "~/lib/date-utils";
 import { getUserDisplayName } from "~/lib/display-name";
 import {
-	buildFlagContext,
+	buildWebFlagContext,
 	isFeatureEnabled,
 } from "~/lib/feature-flags/flags.server";
 import { log } from "~/lib/logging.server";
@@ -309,7 +309,7 @@ export async function loader(args: Route.LoaderArgs) {
 
 		const supplyContext = resolveSupplyContext(orgMetadata);
 
-		const flagContext = buildFlagContext(args.request, env, {
+		const flagContext = buildWebFlagContext(args.request, env, {
 			user: authUser,
 		});
 		const nutritionGoalsEnabled = await isFeatureEnabled(

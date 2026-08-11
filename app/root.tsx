@@ -22,7 +22,7 @@ import { hasAppleWebCredentials } from "./lib/apple-web-login.server";
 import { createAuth } from "./lib/auth.server";
 import { runRouteLoader } from "./lib/error-handler";
 import {
-	buildFlagContext,
+	buildWebFlagContext,
 	getClientSafeFlags,
 } from "./lib/feature-flags/flags.server";
 import { resolveAppTheme } from "./lib/theme";
@@ -65,7 +65,8 @@ export const loader = async ({ request, context }: Route.LoaderArgs) => {
 		const activeOrganizationId = session?.session?.activeOrganizationId ?? null;
 
 		const url = new URL(request.url);
-		const flagContext = buildFlagContext(request, env, session);
+		// Hub document loads: server-owned web platform — do not use buildFlagContext
+		const flagContext = buildWebFlagContext(request, env, session);
 		const clientFlags = await getClientSafeFlags(env, flagContext);
 		clientFlags.appleWebLogin =
 			clientFlags.appleWebLogin === true && hasAppleWebCredentials(env);

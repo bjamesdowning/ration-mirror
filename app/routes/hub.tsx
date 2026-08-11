@@ -28,7 +28,7 @@ import { isCopilotExhausted } from "~/lib/copilot/exhaustion";
 import { getCopilotStatus } from "~/lib/copilot/gate.server";
 import { runRouteLoader } from "~/lib/error-handler";
 import {
-	buildFlagContext,
+	buildWebFlagContext,
 	isFeatureEnabled,
 } from "~/lib/feature-flags/flags.server";
 import { AI_COSTS, checkBalance } from "~/lib/ledger.server";
@@ -117,7 +117,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		}
 
 		const tierInfo = await getGroupTierLimits(context.cloudflare.env, groupId);
-		const flagContext = buildFlagContext(
+		const flagContext = buildWebFlagContext(
 			request,
 			context.cloudflare.env,
 			session,

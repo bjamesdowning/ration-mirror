@@ -18,6 +18,7 @@ const mockRegistry = vi.hoisted(() => ({
 
 vi.mock("../registry", () => mockRegistry);
 
+import { buildWebFlagContext } from "../context.server";
 import { getClientSafeFlags, isFeatureEnabled } from "../flags.server";
 
 describe("getClientSafeFlags", () => {
@@ -30,6 +31,25 @@ describe("getClientSafeFlags", () => {
 		const result = await getClientSafeFlags(env, { userId: "u1" });
 		expect(result).toEqual({ smokeTest: true });
 		expect(getBooleanValue).toHaveBeenCalledTimes(1);
+	});
+
+	it("forwards web document context (clientPlatform web) to Flagship", async () => {
+		const getBooleanValue = vi.fn().mockResolvedValue(true);
+		const env = {
+			...createMockEnv(),
+			FLAGS: { getBooleanValue } as unknown as Flagship,
+		};
+		const request = new Request("https://ration.mayutic.com/");
+		const context = buildWebFlagContext(request, { RATION_ENV: "production" });
+		await getClientSafeFlags(env, context);
+		expect(getBooleanValue).toHaveBeenCalledWith(
+			"smoke-test",
+			false,
+			expect.objectContaining({
+				clientPlatform: "web",
+				environment: "production",
+			}),
+		);
 	});
 });
 

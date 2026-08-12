@@ -318,6 +318,13 @@ struct CargoQuickEatResponse: Codable, Sendable {
     let intakeServings: Double?
 }
 
+struct CargoNutritionRefreshResponse: Codable, Sendable {
+    let matched: Bool
+    let nutrition: NutritionSnapshot?
+    let message: String?
+    let item: CargoItem?
+}
+
 struct CargoPromoteResponse: Codable, Sendable {
     let provision: Meal
     let alreadyExisted: Bool

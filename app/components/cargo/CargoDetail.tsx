@@ -1,5 +1,10 @@
-import { useEffect, useState } from "react";
-import { Link, useFetcher, useRouteLoaderData } from "react-router";
+import { useEffect, useRef, useState } from "react";
+import {
+	Link,
+	useFetcher,
+	useRevalidator,
+	useRouteLoaderData,
+} from "react-router";
 import { CargoEditModal } from "~/components/cargo/CargoEditModal";
 import { CargoQuickEatDialog } from "~/components/cargo/CargoQuickEatDialog";
 import { RestockQuantityModal } from "~/components/cargo/RestockQuantityModal";
@@ -77,6 +82,7 @@ export function CargoDetail({
 	const [markEmptyError, setMarkEmptyError] = useState<string | null>(null);
 	const [lastIntent, setLastIntent] = useState<string | null>(null);
 	const { confirm } = useConfirm();
+	const revalidator = useRevalidator();
 	const tags = item.tags ?? [];
 	const currentIntent = fetcher.formData?.get("intent") as string | null;
 	const isUpdating = fetcher.state !== "idle" && currentIntent === "update";
@@ -97,6 +103,15 @@ export function CargoDetail({
 		rootData?.clientFlags?.nutritionIntakeNotes === true;
 	const [showQuickEat, setShowQuickEat] = useState(false);
 	const eatToast = useToast({ duration: 4000 });
+	const nutritionRefreshFetcher = useFetcher<{
+		matched?: boolean;
+		nutrition?: NutritionSnapshot | null;
+		message?: string;
+		error?: string;
+	}>();
+	const [refreshMessage, setRefreshMessage] = useState<string | null>(null);
+	const isRefreshingNutrition = nutritionRefreshFetcher.state !== "idle";
+	const wasRefreshingNutrition = useRef(false);
 
 	useEffect(() => {
 		if (fetcher.state === "idle") {
@@ -113,6 +128,27 @@ export function CargoDetail({
 	useEffect(() => {
 		setLocalQuantity(item.quantity);
 	}, [item.quantity]);
+
+	useEffect(() => {
+		if (nutritionRefreshFetcher.state !== "idle") {
+			wasRefreshingNutrition.current = true;
+			return;
+		}
+		if (!wasRefreshingNutrition.current) return;
+		wasRefreshingNutrition.current = false;
+		const data = nutritionRefreshFetcher.data;
+		if (!data) return;
+		if (data.error) {
+			setRefreshMessage(data.error);
+			return;
+		}
+		setRefreshMessage(data.matched ? null : (data.message ?? null));
+		revalidator.revalidate();
+	}, [
+		nutritionRefreshFetcher.state,
+		nutritionRefreshFetcher.data,
+		revalidator,
+	]);
 
 	useEffect(() => {
 		if (fetcher.state !== "idle" || lastIntent !== "mark-empty") return;
@@ -183,6 +219,25 @@ export function CargoDetail({
 			{ intent: "mark-empty", itemId: item.id },
 			{ method: "post" },
 		);
+	};
+
+	const handleRefreshNutrition = async () => {
+		if (isRefreshingNutrition) return;
+		const snap = item.nutrition as NutritionSnapshot | null | undefined;
+		if (snap?.source === "user_override") {
+			const ok = await confirm({
+				title: "Replace manual nutrients?",
+				message:
+					"This will look up USDA values for this item name and replace your override.",
+				confirmLabel: "Refresh",
+			});
+			if (!ok) return;
+		}
+		setRefreshMessage(null);
+		nutritionRefreshFetcher.submit(null, {
+			method: "post",
+			action: `/api/cargo/${item.id}/nutrition/refresh`,
+		});
 	};
 
 	return (
@@ -276,7 +331,13 @@ export function CargoDetail({
 			</div>
 
 			{nutritionEngine && (
-				<NutritionPanel mode="cargo" nutrition={item.nutrition ?? null} />
+				<NutritionPanel
+					mode="cargo"
+					nutrition={item.nutrition ?? null}
+					onRefresh={handleRefreshNutrition}
+					refreshing={isRefreshingNutrition}
+					refreshMessage={refreshMessage}
+				/>
 			)}
 
 			<button

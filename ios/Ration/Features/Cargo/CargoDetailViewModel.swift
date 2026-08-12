@@ -11,6 +11,8 @@ final class CargoDetailViewModel {
     private(set) var isTogglingRestock = false
     private(set) var isMarkingEmpty = false
     private(set) var isQuickEating = false
+    private(set) var isRefreshingNutrition = false
+    private(set) var nutritionRefreshMessage: String?
     private(set) var isPromoting = false
     private(set) var isPromoted = false
     var errorMessage: String?
@@ -25,6 +27,7 @@ final class CargoDetailViewModel {
     func load(id: String, api: RationAPI) async {
         isLoading = true
         errorMessage = nil
+        nutritionRefreshMessage = nil
         defer { isLoading = false }
         do {
             async let detailTask = api.cargoItem(id: id)
@@ -130,6 +133,42 @@ final class CargoDetailViewModel {
         } catch {
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
             return nil
+        }
+    }
+
+    /// USDA-only rematch for cargo macros. Replaces blank or override nutrition.
+    func refreshNutrition(api: RationAPI) async {
+        guard let item, !isRefreshingNutrition else { return }
+        isRefreshingNutrition = true
+        nutritionRefreshMessage = nil
+        defer { isRefreshingNutrition = false }
+        do {
+            let response = try await api.refreshCargoNutrition(id: item.id)
+            if let refreshed = response.item {
+                self.item = refreshed
+            } else {
+                let previous = item
+                self.item = CargoItem(
+                    id: previous.id,
+                    organizationId: previous.organizationId,
+                    name: previous.name,
+                    quantity: previous.quantity,
+                    unit: previous.unit,
+                    baseQuantity: previous.baseQuantity,
+                    baseUnit: previous.baseUnit,
+                    tags: previous.tags,
+                    domain: previous.domain,
+                    status: previous.status,
+                    expiresAt: previous.expiresAt,
+                    createdAt: previous.createdAt,
+                    updatedAt: previous.updatedAt,
+                    nutrition: response.nutrition
+                )
+            }
+            nutritionRefreshMessage = response.matched ? nil : (response.message ?? "No USDA match found. Enter nutrients manually.")
+            Haptics.light()
+        } catch {
+            errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
         }
     }
 

@@ -79,6 +79,10 @@ extension RationAPI {
         try await client.post("cargo/\(id)/quick-eat", body: body)
     }
 
+    func refreshCargoNutrition(id: String) async throws -> CargoNutritionRefreshResponse {
+        try await client.post("cargo/\(id)/nutrition/refresh", body: EmptyBody())
+    }
+
     func promoteCargoToProvision(id: String) async throws -> CargoPromoteResponse {
         try await client.post("cargo/\(id)/promote", body: EmptyBody())
     }

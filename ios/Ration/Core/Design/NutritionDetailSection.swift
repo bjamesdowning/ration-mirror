@@ -8,6 +8,9 @@ struct NutritionDetailSection: View {
     var coverage: Double? = nil
     var matchedDescription: String? = nil
     var emptyMessage: String = "No nutrition data yet for this item."
+    var refreshMessage: String? = nil
+    var isRefreshing: Bool = false
+    var onRefresh: (() -> Void)? = nil
 
     var body: some View {
         GlassCard {
@@ -21,6 +24,17 @@ struct NutritionDetailSection: View {
                         .padding(.vertical, 4)
                         .background(Theme.platinum.opacity(0.35))
                         .clipShape(RoundedRectangle(cornerRadius: 6))
+                    if let onRefresh {
+                        Button(action: onRefresh) {
+                            Image(systemName: "arrow.clockwise")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(Theme.muted)
+                                .symbolEffect(.rotate, isActive: isRefreshing)
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(isRefreshing)
+                        .accessibilityLabel("Refresh nutrition from USDA")
+                    }
                 }
 
                 if let matchedDescription, !matchedDescription.isEmpty {
@@ -28,6 +42,12 @@ struct NutritionDetailSection: View {
                         .rationCaption()
                         .foregroundStyle(Theme.muted)
                         .lineLimit(2)
+                }
+
+                if let refreshMessage, !refreshMessage.isEmpty {
+                    Text(refreshMessage)
+                        .rationCaption()
+                        .foregroundStyle(Theme.muted)
                 }
 
                 if let nutrients, nutrients.hasAnyMacro {
@@ -51,7 +71,7 @@ struct NutritionDetailSection: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: onRefresh == nil ? .combine : .contain)
         .accessibilityLabel(title)
     }
 

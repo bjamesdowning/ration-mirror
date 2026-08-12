@@ -7,6 +7,7 @@ import {
 } from "~/lib/cargo.server";
 import { getActiveCargoIds } from "~/lib/cargo-selection.server";
 import { handleApiError } from "~/lib/error-handler";
+import { buildMobileFlagContext } from "~/lib/feature-flags/context.server";
 import { decodeCursor, encodeCursor } from "~/lib/mcp/envelope";
 import { requireMobileActiveGroup } from "~/lib/mobile/auth.server";
 import { paginatedResponse } from "~/lib/mobile/responses.server";
@@ -117,6 +118,9 @@ export async function action({ request, context }: Route.ActionArgs) {
 					context.cloudflare.ctx,
 				),
 				userId,
+				flagContext: buildMobileFlagContext(request, context.cloudflare.env, {
+					user: { id: userId },
+				}),
 			},
 		);
 

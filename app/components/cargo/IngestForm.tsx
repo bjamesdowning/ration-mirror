@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { Link, useFetcher } from "react-router";
+import { Link, useFetcher, useRouteLoaderData } from "react-router";
+import { NutritionPanel } from "~/components/nutrition/NutritionPanel";
 import { TagChipEditor } from "~/components/shared/TagChipEditor";
 import { DOMAIN_LABELS, ITEM_DOMAINS } from "~/lib/domain";
+import type { NutritionSnapshot } from "~/lib/nutrition/types";
 import { presentQuantity } from "~/lib/present-quantity";
 
 type ItemDomain = (typeof ITEM_DOMAINS)[number];
@@ -28,6 +30,7 @@ interface PendingMergeState {
 		domain: ItemDomain;
 		tags: string;
 		expiresAt: string;
+		nutrition?: string;
 	};
 }
 
@@ -44,6 +47,12 @@ export function IngestForm({
 	const [pendingMerge, setPendingMerge] = useState<PendingMergeState | null>(
 		null,
 	);
+	const rootData = useRouteLoaderData("root") as
+		| { clientFlags?: { nutritionEngine?: boolean } }
+		| undefined;
+	const nutritionEngine = rootData?.clientFlags?.nutritionEngine === true;
+	const [nutrition, setNutrition] = useState<NutritionSnapshot | null>(null);
+	const [nutritionEdited, setNutritionEdited] = useState(false);
 
 	const nameInputRef = useRef<HTMLInputElement>(null);
 	const qtyInputRef = useRef<HTMLInputElement>(null);
@@ -80,6 +89,8 @@ export function IngestForm({
 		if (data.success) {
 			formRef.current?.reset();
 			setPendingMerge(null);
+			setNutrition(null);
+			setNutritionEdited(false);
 		}
 	}, [fetcher.state, fetcher.data, onUpgradeRequired]);
 
@@ -95,6 +106,9 @@ export function IngestForm({
 		formData.set("tags", pendingMerge.submittedInput.tags);
 		if (pendingMerge.submittedInput.expiresAt) {
 			formData.set("expiresAt", pendingMerge.submittedInput.expiresAt);
+		}
+		if (pendingMerge.submittedInput.nutrition) {
+			formData.set("nutrition", pendingMerge.submittedInput.nutrition);
 		}
 		formData.set("mergeChoice", choice);
 		if (choice === "merge") {
@@ -112,6 +126,13 @@ export function IngestForm({
 
 			<fetcher.Form method="post" ref={formRef} className="space-y-4">
 				<input type="hidden" name="intent" value="create" />
+				{nutritionEngine && nutritionEdited && (
+					<input
+						type="hidden"
+						name="nutrition"
+						value={nutrition ? JSON.stringify(nutrition) : "null"}
+					/>
+				)}
 
 				{/* Name */}
 				<div className="flex flex-col">
@@ -203,7 +224,8 @@ export function IngestForm({
 						) : (
 							<>
 								<span className="mr-1">+</span> Add Details (Tags, Domain,
-								Expiry)
+								Expiry
+								{nutritionEngine ? ", Nutrition" : ""})
 							</>
 						)}
 					</button>
@@ -260,6 +282,18 @@ export function IngestForm({
 							<span className="text-label text-muted mb-2">Tags</span>
 							<TagChipEditor suggestions={tagSuggestions} />
 						</div>
+
+						{nutritionEngine && (
+							<NutritionPanel
+								mode="cargo"
+								nutrition={nutrition}
+								editable
+								onChange={(snap) => {
+									setNutrition(snap);
+									setNutritionEdited(true);
+								}}
+							/>
+						)}
 					</div>
 				)}
 

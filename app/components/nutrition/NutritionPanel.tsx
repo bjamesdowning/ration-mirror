@@ -1,3 +1,4 @@
+import { RefreshCw } from "lucide-react";
 import { useState } from "react";
 import {
 	applyUserOverrideToSnapshot,
@@ -20,6 +21,10 @@ export type NutritionPanelProps = {
 	editable?: boolean;
 	onChange?: (snap: NutritionSnapshot) => void;
 	showAttribution?: boolean;
+	/** USDA rematch control (cargo detail only). */
+	onRefresh?: () => void;
+	refreshing?: boolean;
+	refreshMessage?: string | null;
 };
 
 function formatNum(n: number | null | undefined, digits = 1): string {
@@ -53,6 +58,9 @@ export function NutritionPanel({
 	editable = false,
 	onChange,
 	showAttribution = true,
+	onRefresh,
+	refreshing = false,
+	refreshMessage = null,
 }: NutritionPanelProps) {
 	const [attributionOpen, setAttributionOpen] = useState(false);
 	const values = getDisplayNutrients(nutrition, mode);
@@ -116,8 +124,28 @@ export function NutritionPanel({
 						</span>
 					)}
 					<ProvenanceChip label={label} />
+					{mode === "cargo" && onRefresh ? (
+						<button
+							type="button"
+							onClick={onRefresh}
+							disabled={refreshing}
+							aria-label="Refresh nutrition from USDA"
+							title="Refresh nutrition from USDA"
+							className="inline-flex items-center justify-center min-w-[32px] min-h-[32px] rounded-md text-muted hover:text-hyper-green hover:bg-hyper-green/10 transition-colors disabled:opacity-50"
+						>
+							<RefreshCw
+								className={`w-4 h-4 ${refreshing ? "animate-spin" : ""}`}
+							/>
+						</button>
+					) : null}
 				</div>
 			</div>
+
+			{refreshMessage ? (
+				<p className="text-xs text-muted" role="status">
+					{refreshMessage}
+				</p>
+			) : null}
 
 			{mode === "cargo" && cargoSnap?.description ? (
 				<p

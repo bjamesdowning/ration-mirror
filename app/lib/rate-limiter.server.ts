@@ -211,6 +211,16 @@ export const RATE_LIMITS: Record<string, RateLimitConfig> = {
 		keyPrefix: "rate:nutrition_resolve",
 		failClosed: true,
 	},
+	/**
+	 * Cargo detail USDA nutrition refresh (write path).
+	 * Stricter than batch resolve — each call persists cargo + may recompute meals.
+	 */
+	cargo_nutrition_refresh: {
+		windowMs: 60_000,
+		maxRequests: 10,
+		keyPrefix: "rate:cargo_nutrition_refresh",
+		failClosed: true,
+	},
 	/** Nutrition day summary reads. */
 	nutrition_summary: {
 		windowMs: 60_000,

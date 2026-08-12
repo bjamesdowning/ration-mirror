@@ -211,7 +211,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 		const expiresAtValue = formData.get("expiresAt");
 
 		// Construct object for validation
-		const rawData = {
+		const rawData: Record<string, unknown> = {
 			name: formData.get("name"),
 			quantity: formData.get("quantity"),
 			unit: formData.get("unit"),
@@ -221,6 +221,15 @@ export async function action({ request, context }: Route.ActionArgs) {
 				? new Date(expiresAtValue as string)
 				: undefined,
 		};
+
+		const nutritionRaw = formData.get("nutrition");
+		if (typeof nutritionRaw === "string" && nutritionRaw.length > 0) {
+			try {
+				rawData.nutrition = JSON.parse(nutritionRaw);
+			} catch {
+				return { success: false, error: "Invalid nutrition payload" };
+			}
+		}
 
 		const result = CargoItemSchema.safeParse(rawData);
 
@@ -247,6 +256,9 @@ export async function action({ request, context }: Route.ActionArgs) {
 		}
 
 		const { mergeChoice, mergeTargetId } = mergeMetaResult.data;
+		const flagContext = buildWebFlagContext(request, context.cloudflare.env, {
+			user,
+		});
 		let addResult: Awaited<ReturnType<typeof addOrMergeItem>>;
 		try {
 			addResult = await addOrMergeItem(
@@ -264,6 +276,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 						context.cloudflare.ctx,
 					),
 					userId: user.id,
+					flagContext,
 				},
 			);
 		} catch (error) {
@@ -302,6 +315,10 @@ export async function action({ request, context }: Route.ActionArgs) {
 					domain: result.data.domain,
 					tags: rawTags.join(", "),
 					expiresAt: expiresAtValue ? String(expiresAtValue) : "",
+					nutrition:
+						typeof nutritionRaw === "string" && nutritionRaw.length > 0
+							? nutritionRaw
+							: undefined,
 				},
 			};
 		}

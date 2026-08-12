@@ -10,6 +10,7 @@ struct CargoDetailView: View {
     @State private var showingDeleteConfirm = false
     @State private var showingRestockQuantity = false
     @State private var showingQuickEat = false
+    @State private var showingRefreshNutritionConfirm = false
     @State private var connectedMealsSort: ConnectedMealsSort = .alphabetical
     @State private var expandedMealIds: Set<String> = []
     @State private var showAllConnectedMeals = false
@@ -34,7 +35,21 @@ struct CargoDetailView: View {
                                 nutrients: item.nutrition?.displayNutrients,
                                 provenance: item.nutrition?.provenanceLabel ?? "Blank",
                                 matchedDescription: item.nutrition?.description,
-                                emptyMessage: "No nutrition data yet. Resolve from scan review or edit macros on this item."
+                                emptyMessage: "No nutrition data yet. Tap refresh to look up USDA values, or edit macros on this item.",
+                                refreshMessage: model.nutritionRefreshMessage,
+                                isRefreshing: model.isRefreshingNutrition,
+                                onRefresh: env.network.isOnline
+                                    ? {
+                                        if item.nutrition?.source == "user_override" {
+                                            showingRefreshNutritionConfirm = true
+                                        } else {
+                                            Task {
+                                                await model.refreshNutrition(api: env.api)
+                                                env.notifyCargoDataChanged()
+                                            }
+                                        }
+                                    }
+                                    : nil
                             )
                         }
                         connectedMealsSection(cargoItem: item)
@@ -148,6 +163,21 @@ struct CargoDetailView: View {
                     }
                 }
             }
+        }
+        .confirmationDialog(
+            "Replace manual nutrients?",
+            isPresented: $showingRefreshNutritionConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("Refresh") {
+                Task {
+                    await model.refreshNutrition(api: env.api)
+                    env.notifyCargoDataChanged()
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This will look up USDA values for this item name and replace your override.")
         }
     }
 

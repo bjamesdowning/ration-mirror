@@ -133,7 +133,7 @@ describe("POST /api/mobile/v1/cargo", () => {
 		checkRateLimit.mockResolvedValue({ allowed: true });
 	});
 
-	it("passes userId into addOrMergeItem for nutrition Flagship context", async () => {
+	it("passes userId and flagContext into addOrMergeItem for nutrition Flagship context", async () => {
 		addOrMergeItem.mockResolvedValue({
 			status: "created",
 			item: { id: "cargo_new", name: "oats" },
@@ -153,11 +153,35 @@ describe("POST /api/mobile/v1/cargo", () => {
 					unit: "kg",
 					domain: "food",
 					tags: [],
+					nutrition: {
+						source: "user_override",
+						confidence: 1,
+						verified: true,
+						per100g: null,
+						perServing: {
+							energyKcal: 100,
+							proteinG: 5,
+							fatG: 2,
+							carbG: 15,
+							fiberG: null,
+							sugarG: null,
+							satFatG: null,
+							sodiumMg: null,
+							saltG: null,
+						},
+						fdcId: null,
+						description: null,
+					},
 				}),
 			}),
 			context: {
 				cloudflare: {
-					env: { DB: {}, RATION_KV: {} },
+					env: {
+						DB: {},
+						RATION_KV: {},
+						FLAGSHIP_ENV: "dev",
+						CLOUDFLARE_ENV: "dev",
+					},
 					ctx: { waitUntil: vi.fn() },
 				},
 			} as never,
@@ -167,8 +191,16 @@ describe("POST /api/mobile/v1/cargo", () => {
 		expect(addOrMergeItem).toHaveBeenCalledWith(
 			expect.anything(),
 			"org_1",
-			expect.objectContaining({ name: "oats" }),
-			expect.objectContaining({ userId: "user_1" }),
+			expect.objectContaining({
+				name: "oats",
+				nutrition: expect.objectContaining({ source: "user_override" }),
+			}),
+			expect.objectContaining({
+				userId: "user_1",
+				flagContext: expect.objectContaining({
+					clientPlatform: "ios",
+				}),
+			}),
 		);
 	});
 });

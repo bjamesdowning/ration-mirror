@@ -1250,6 +1250,11 @@ export async function updateItem(
 	options?: {
 		userId?: string | null;
 		flagContext?: FlagshipEvaluationContext;
+		/**
+		 * Server-trusted nutrition replacement (e.g. USDA refresh).
+		 * Bypasses client override schema — never accept this from request body.
+		 */
+		setNutrition?: NutritionSnapshot | null;
 	},
 ) {
 	const d1 = drizzle(env.DB);
@@ -1287,6 +1292,7 @@ export async function updateItem(
 	const nutritionTouched =
 		nutritionEngineOn &&
 		(data.nutrition !== undefined ||
+			options?.setNutrition !== undefined ||
 			(data.name !== undefined && data.name !== existing.name) ||
 			data.quantity !== undefined ||
 			data.unit !== undefined);
@@ -1295,6 +1301,8 @@ export async function updateItem(
 	if (!nutritionEngineOn) {
 		// Ignore client nutrition overrides and rename re-resolve when flag off.
 		nextNutrition = existing.nutrition ?? null;
+	} else if (options?.setNutrition !== undefined) {
+		nextNutrition = options.setNutrition;
 	} else if (data.nutrition === null) {
 		nextNutrition = null;
 	} else if (data.nutrition !== undefined) {
@@ -1391,6 +1399,7 @@ export async function updateItem(
 	const shouldRecomputeMeals =
 		nutritionEngineOn &&
 		(data.nutrition !== undefined ||
+			options?.setNutrition !== undefined ||
 			(nutritionTouched &&
 				(nextNutrition?.source === "user_override" ||
 					existing.nutrition?.source === "user_override")));

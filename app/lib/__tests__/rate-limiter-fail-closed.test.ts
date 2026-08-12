@@ -24,6 +24,7 @@ describe("RATE_LIMITS failClosed flags", () => {
 			"mcp_supply_sync",
 			"inventory_batch",
 			"nutrition_resolve",
+			"cargo_nutrition_refresh",
 		] as const;
 
 		for (const bucket of failClosedBuckets) {

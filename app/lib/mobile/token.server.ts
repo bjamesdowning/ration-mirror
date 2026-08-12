@@ -1,13 +1,14 @@
-import { eq } from "drizzle-orm";
+import { and, eq, gt, isNull } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { jwtVerify, SignJWT } from "jose";
 import * as schema from "~/db/schema";
 import { recordLastActiveBillingOrg } from "~/lib/billing-idempotency.server";
 import {
 	MOBILE_ACCESS_TTL_SEC,
-	MOBILE_AUTH_CODE_KV_PREFIX,
 	MOBILE_AUTH_CODE_TTL_SEC,
 	MOBILE_JWT_AUDIENCE,
+	MOBILE_REFRESH_GRACE_KV_PREFIX,
+	MOBILE_REFRESH_GRACE_TTL_SEC,
 	MOBILE_REFRESH_TTL_SEC,
 } from "~/lib/mobile/constants";
 import { RATION_ORG_CLAIM } from "~/lib/oauth.constants";
@@ -103,6 +104,53 @@ export async function issueMobileTokenPair(
 	};
 }
 
+function refreshGraceKey(tokenHash: string): string {
+	return `${MOBILE_REFRESH_GRACE_KV_PREFIX}${tokenHash}`;
+}
+
+async function storeRefreshGracePair(
+	kv: KVNamespace,
+	oldTokenHash: string,
+	pair: MobileTokenPair,
+): Promise<void> {
+	try {
+		await kv.put(refreshGraceKey(oldTokenHash), JSON.stringify(pair), {
+			expirationTtl: MOBILE_REFRESH_GRACE_TTL_SEC,
+		});
+	} catch {
+		// Grace is best-effort; rotation already succeeded.
+	}
+}
+
+async function readRefreshGracePair(
+	kv: KVNamespace,
+	oldTokenHash: string,
+): Promise<MobileTokenPair | null> {
+	try {
+		const raw = await kv.get(refreshGraceKey(oldTokenHash));
+		if (!raw) return null;
+		const parsed = JSON.parse(raw) as Partial<MobileTokenPair>;
+		if (
+			typeof parsed.accessToken !== "string" ||
+			typeof parsed.refreshToken !== "string" ||
+			typeof parsed.expiresIn !== "number"
+		) {
+			return null;
+		}
+		return {
+			accessToken: parsed.accessToken,
+			refreshToken: parsed.refreshToken,
+			expiresIn: parsed.expiresIn,
+		};
+	} catch {
+		return null;
+	}
+}
+
+/**
+ * Rotate a refresh token with an atomic claim so concurrent refreshers cannot
+ * mint two valid family members (RFC 9700 public-client rotation).
+ */
 export async function rotateMobileRefreshToken(
 	env: Cloudflare.Env,
 	refreshToken: string,
@@ -113,33 +161,65 @@ export async function rotateMobileRefreshToken(
 		where: eq(schema.mobileRefreshToken.tokenHash, tokenHash),
 	});
 
-	if (!row || row.revokedAt || row.expiresAt < new Date()) {
-		if (row?.familyId) {
-			await db
-				.update(schema.mobileRefreshToken)
-				.set({ revokedAt: new Date() })
-				.where(eq(schema.mobileRefreshToken.familyId, row.familyId));
-		}
+	if (!row) {
+		throw new Error("invalid_refresh_token");
+	}
+
+	if (row.expiresAt < new Date()) {
+		await db
+			.update(schema.mobileRefreshToken)
+			.set({ revokedAt: new Date() })
+			.where(eq(schema.mobileRefreshToken.familyId, row.familyId));
+		throw new Error("invalid_refresh_token");
+	}
+
+	if (row.revokedAt) {
+		const grace = await readRefreshGracePair(env.RATION_KV, tokenHash);
+		if (grace) return grace;
+		await db
+			.update(schema.mobileRefreshToken)
+			.set({ revokedAt: new Date() })
+			.where(eq(schema.mobileRefreshToken.familyId, row.familyId));
+		throw new Error("invalid_refresh_token");
+	}
+
+	const claimedAt = new Date();
+	const claim = await env.DB.prepare(
+		"UPDATE mobile_refresh_token SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL",
+	)
+		.bind(Math.floor(claimedAt.getTime() / 1000), row.id)
+		.run();
+
+	if ((claim.meta.changes ?? 0) === 0) {
+		const grace = await readRefreshGracePair(env.RATION_KV, tokenHash);
+		if (grace) return grace;
+		await db
+			.update(schema.mobileRefreshToken)
+			.set({ revokedAt: new Date() })
+			.where(eq(schema.mobileRefreshToken.familyId, row.familyId));
 		throw new Error("invalid_refresh_token");
 	}
 
 	await assertMobileOrgMembership(env, row.userId, row.organizationId);
 
-	// Issue the new pair before revoking the old row. Revoke-then-issue left
-	// clients stranded when D1 failed mid-rotation under load.
-	const pair = await issueMobileTokenPair(
-		env,
-		row.userId,
-		row.organizationId,
-		row.familyId,
-	);
-
-	await db
-		.update(schema.mobileRefreshToken)
-		.set({ revokedAt: new Date() })
-		.where(eq(schema.mobileRefreshToken.id, row.id));
-
-	return pair;
+	try {
+		const pair = await issueMobileTokenPair(
+			env,
+			row.userId,
+			row.organizationId,
+			row.familyId,
+		);
+		await storeRefreshGracePair(env.RATION_KV, tokenHash, pair);
+		return pair;
+	} catch (error) {
+		// Un-claim so a transient D1 failure does not strand the client.
+		await env.DB.prepare(
+			"UPDATE mobile_refresh_token SET revoked_at = NULL WHERE id = ? AND revoked_at = ?",
+		)
+			.bind(row.id, Math.floor(claimedAt.getTime() / 1000))
+			.run();
+		throw error;
+	}
 }
 
 export async function revokeMobileRefreshFamilies(
@@ -159,61 +239,52 @@ export interface MobileAuthCodeRecord extends MobileAccessClaims {
 }
 
 export async function storeMobileAuthCode(
-	kv: KVNamespace,
+	env: Cloudflare.Env,
 	userId: string,
 	organizationId: string,
 	codeChallenge: string,
 ): Promise<string> {
+	const db = drizzle(env.DB, { schema });
 	const code = crypto.randomUUID();
-	await kv.put(
-		`${MOBILE_AUTH_CODE_KV_PREFIX}${code}`,
-		JSON.stringify({ userId, organizationId, codeChallenge }),
-		{ expirationTtl: MOBILE_AUTH_CODE_TTL_SEC },
-	);
+	const expiresAt = new Date(Date.now() + MOBILE_AUTH_CODE_TTL_SEC * 1000);
+	await db.insert(schema.mobileAuthCode).values({
+		code,
+		userId,
+		organizationId,
+		codeChallenge,
+		expiresAt,
+	});
 	return code;
 }
 
-export async function readMobileAuthCode(
-	kv: KVNamespace,
-	code: string,
-): Promise<MobileAuthCodeRecord | null> {
-	const key = `${MOBILE_AUTH_CODE_KV_PREFIX}${code}`;
-	const raw = await kv.get(key);
-	if (!raw) return null;
-	const parsed = JSON.parse(raw) as {
-		userId?: string;
-		organizationId?: string;
-		codeChallenge?: string;
-	};
-	if (
-		typeof parsed.userId !== "string" ||
-		typeof parsed.organizationId !== "string" ||
-		typeof parsed.codeChallenge !== "string"
-	) {
-		return null;
-	}
-	return {
-		userId: parsed.userId,
-		organizationId: parsed.organizationId,
-		codeChallenge: parsed.codeChallenge,
-	};
-}
-
-export async function deleteMobileAuthCode(
-	kv: KVNamespace,
-	code: string,
-): Promise<void> {
-	await kv.delete(`${MOBILE_AUTH_CODE_KV_PREFIX}${code}`);
-}
-
+/**
+ * Atomically consume a single-use auth code. Only one concurrent redeemer wins.
+ */
 export async function consumeMobileAuthCode(
-	kv: KVNamespace,
+	env: Cloudflare.Env,
 	code: string,
 ): Promise<MobileAuthCodeRecord | null> {
-	const claims = await readMobileAuthCode(kv, code);
-	if (!claims) return null;
-	await deleteMobileAuthCode(kv, code);
-	return claims;
+	const db = drizzle(env.DB, { schema });
+	const now = new Date();
+	const rows = await db
+		.update(schema.mobileAuthCode)
+		.set({ consumedAt: now })
+		.where(
+			and(
+				eq(schema.mobileAuthCode.code, code),
+				isNull(schema.mobileAuthCode.consumedAt),
+				gt(schema.mobileAuthCode.expiresAt, now),
+			),
+		)
+		.returning({
+			userId: schema.mobileAuthCode.userId,
+			organizationId: schema.mobileAuthCode.organizationId,
+			codeChallenge: schema.mobileAuthCode.codeChallenge,
+		});
+
+	const claimed = rows[0];
+	if (!claimed) return null;
+	return claimed;
 }
 
 export async function assertMobileOrgMembership(

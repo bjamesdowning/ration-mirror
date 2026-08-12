@@ -11,6 +11,7 @@ import {
 	clearUserPurgePending,
 	listFailedPurgeJobs,
 	markPurgeJobFailed,
+	PURGE_JOB_MAX_ATTEMPTS,
 	type PurgeJobRecord,
 } from "~/lib/purge-pending.server";
 import { purgeUserAccount } from "~/lib/user-purge.server";
@@ -35,12 +36,21 @@ export async function retryFailedPurgeJobs(env: Cloudflare.Env): Promise<void> {
 		} catch (error) {
 			const errorMessage =
 				error instanceof Error ? error.message : String(error);
-			await markPurgeJobFailed(env.RATION_KV, job.id, errorMessage);
+			const updated = await markPurgeJobFailed(
+				env.RATION_KV,
+				job.id,
+				errorMessage,
+			);
+			const attempts = updated?.attemptCount ?? (job.attemptCount ?? 0) + 1;
+			const escalated = attempts >= PURGE_JOB_MAX_ATTEMPTS;
 			await notifyPurgeFailure(env, {
 				kind: job.kind,
 				resourceId: job.id,
-				errorMessage: `cron retry failed: ${errorMessage}`,
+				errorMessage: escalated
+					? `cron retry exhausted (${attempts} attempts): ${errorMessage}`
+					: `cron retry failed: ${errorMessage}`,
 			});
+			// Never clear purge-pending on failure — Apple/GDPR require wipe to finish.
 		}
 	}
 }

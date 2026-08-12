@@ -105,6 +105,7 @@ final class AppEnvironment {
             deepLinkRouter.reset()
             nextActionDismiss.clearAll()
             AuthImageLoader.shared.clearAll()
+            SharedImportHandoff.clear()
         }
     }
 

@@ -17,11 +17,7 @@ enum SharedImportHandoff {
     /// Reads and clears a pending share payload. Prefer App Group URL as source of truth.
     static func consumePending() -> PendingImport? {
         guard let defaults = UserDefaults(suiteName: appGroupId) else { return nil }
-        defer {
-            defaults.removeObject(forKey: pendingURLKey)
-            defaults.removeObject(forKey: pendingAtKey)
-            defaults.removeObject(forKey: pendingAutoStartKey)
-        }
+        defer { clear() }
         guard let url = defaults.string(forKey: pendingURLKey), !url.isEmpty else {
             return nil
         }
@@ -31,6 +27,15 @@ enum SharedImportHandoff {
         }
         let autoStart = defaults.object(forKey: pendingAutoStartKey) as? Bool ?? false
         return PendingImport(url: url, autoStart: autoStart)
+    }
+
+    /// Clears any pending share handoff (call on logout so the next account cannot inherit it).
+    static func clear() {
+        guard let defaults = UserDefaults(suiteName: appGroupId) else { return }
+        defaults.removeObject(forKey: pendingURLKey)
+        defaults.removeObject(forKey: pendingAtKey)
+        defaults.removeObject(forKey: pendingAutoStartKey)
+        defaults.synchronize()
     }
 
     /// Test / debug helper — write a payload without going through the Share Extension.
@@ -43,10 +48,6 @@ enum SharedImportHandoff {
     }
 
     static func clearForTesting() {
-        guard let defaults = UserDefaults(suiteName: appGroupId) else { return }
-        defaults.removeObject(forKey: pendingURLKey)
-        defaults.removeObject(forKey: pendingAtKey)
-        defaults.removeObject(forKey: pendingAutoStartKey)
-        defaults.synchronize()
+        clear()
     }
 }

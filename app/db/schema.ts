@@ -990,6 +990,30 @@ export const mobileRefreshToken = sqliteTable(
 	],
 );
 
+/**
+ * Single-use mobile auth codes (PKCE handoff). Stored in D1 so consume can be
+ * atomic (`UPDATE … WHERE consumed_at IS NULL`) — KV get-then-delete is not.
+ */
+export const mobileAuthCode = sqliteTable(
+	"mobile_auth_code",
+	{
+		code: text("code").primaryKey(),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id, { onDelete: "cascade" }),
+		codeChallenge: text("code_challenge").notNull(),
+		expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
+		consumedAt: integer("consumed_at", { mode: "timestamp" }),
+		createdAt: integer("created_at", { mode: "timestamp" })
+			.notNull()
+			.default(sql`(unixepoch())`),
+	},
+	(table) => [index("mobile_auth_code_expires_idx").on(table.expiresAt)],
+);
+
 // Pre-launch interest signup (temporary — remove when no longer needed)
 export const interestSignup = sqliteTable(
 	"interest_signup",

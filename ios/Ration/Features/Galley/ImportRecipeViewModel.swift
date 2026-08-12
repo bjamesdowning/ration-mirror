@@ -41,13 +41,13 @@ final class ImportRecipeViewModel {
         var errorDescription: String? {
             switch self {
             case .unreadable: return "Could not read the selected image."
-            case .tooLarge: return "Image must be 5MB or smaller."
+            case .tooLarge: return "Image must be 3MB or smaller."
             case .unsupportedFormat: return "Use JPEG, PNG, or WebP."
             }
         }
     }
 
-    private static let photoMaxBytes = 5 * 1024 * 1024
+	private static let photoMaxBytes = 3 * 1024 * 1024
 
     private(set) var state: State = .idle
     var url = ""

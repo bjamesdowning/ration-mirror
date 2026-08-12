@@ -3,11 +3,11 @@ import { IMPORT_COMPLETENESS } from "~/lib/import/import-completeness";
 import { normalizeUnitAlias } from "../units";
 
 /** Max client-supplied HTML size (matches consumer MAX_HTML_BYTES). */
-export const RECIPE_IMPORT_PAGE_HTML_MAX = 1_000_000;
+export const RECIPE_IMPORT_PAGE_HTML_MAX = 512_000;
 export const RECIPE_IMPORT_PAGE_HTML_MIN = 200;
 
-/** Photo / screenshot import limits. */
-export const RECIPE_IMPORT_PHOTO_MAX_BYTES = 5 * 1024 * 1024;
+/** Photo / screenshot import limits (sync AI path — keep Worker-safe). */
+export const RECIPE_IMPORT_PHOTO_MAX_BYTES = 3 * 1024 * 1024;
 export const RECIPE_IMPORT_PHOTO_MIME = [
 	"image/jpeg",
 	"image/png",
@@ -40,7 +40,7 @@ export const RecipeImportRequestSchema = z
 		/** Optional caption / share text (Instagram). */
 		userText: z.string().max(8_000).optional(),
 		/** Base64-encoded recipe photo / screenshot (no data: prefix). */
-		photoBase64: z.string().min(32).max(7_000_000).optional(),
+		photoBase64: z.string().min(32).max(4_200_000).optional(),
 		photoMimeType: z.enum(RECIPE_IMPORT_PHOTO_MIME).optional(),
 	})
 	.superRefine((data, ctx) => {
@@ -65,7 +65,7 @@ export const RecipeImportRequestSchema = z
 			if (approxBytes > RECIPE_IMPORT_PHOTO_MAX_BYTES) {
 				ctx.addIssue({
 					code: z.ZodIssueCode.custom,
-					message: "Photo is too large (Max 5MB)",
+					message: "Photo is too large (Max 3MB)",
 					path: ["photoBase64"],
 				});
 			}

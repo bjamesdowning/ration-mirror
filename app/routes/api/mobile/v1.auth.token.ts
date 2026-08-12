@@ -37,7 +37,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 		const env = context.cloudflare.env;
 
 		if (input.grantType === "authorization_code") {
-			const claims = await consumeMobileAuthCode(env.RATION_KV, input.code);
+			const claims = await consumeMobileAuthCode(env, input.code);
 			if (!claims) {
 				throw data(
 					{ error: "Invalid or expired code", code: "invalid_code" },

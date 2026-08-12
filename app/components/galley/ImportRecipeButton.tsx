@@ -535,9 +535,9 @@ export const ImportRecipeButton = forwardRef<
 		if (!trimmedUrl || trimmedHtml.length < 200 || importInFlight.current)
 			return;
 		const bytes = new TextEncoder().encode(trimmedHtml).byteLength;
-		if (bytes > 1_000_000) {
+		if (bytes > 512_000) {
 			setErrorToastMessage(
-				"Paste is too large (over 1MB). Copy only the recipe section or View Source excerpt.",
+				"Paste is too large (over 512KB). Copy only the recipe section or View Source excerpt.",
 			);
 			setShowErrorToast(true);
 			return;

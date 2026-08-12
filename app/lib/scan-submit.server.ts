@@ -42,8 +42,8 @@ export async function submitVisualScan(
 		);
 	}
 
-	if (imageFile.size > 5 * 1024 * 1024) {
-		throw data({ error: "File too large (Max 5MB)" }, { status: 400 });
+	if (imageFile.size > 3 * 1024 * 1024) {
+		throw data({ error: "File too large (Max 3MB)" }, { status: 400 });
 	}
 
 	const SCAN_QUEUE = env.SCAN_QUEUE;

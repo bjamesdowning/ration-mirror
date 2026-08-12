@@ -151,7 +151,7 @@ export async function submitRecipeImport(
 		try {
 			const buf = decodeBase64Photo(photoBase64);
 			if (buf.byteLength > RECIPE_IMPORT_PHOTO_MAX_BYTES) {
-				throw data({ error: "Photo is too large (Max 5MB)" }, { status: 400 });
+				throw data({ error: "Photo is too large (Max 3MB)" }, { status: 400 });
 			}
 		} catch (err) {
 			if (err && typeof err === "object" && "type" in err) throw err;

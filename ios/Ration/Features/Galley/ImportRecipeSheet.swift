@@ -226,7 +226,7 @@ struct ImportRecipeSheet: View {
                 Label("Choose photo", systemImage: "photo.on.rectangle.angled")
             }
             .buttonStyle(SecondaryButtonStyle())
-            Text("JPEG, PNG, or WebP · max 5MB")
+            Text("JPEG, PNG, or WebP · max 3MB")
                 .rationCaption()
                 .foregroundStyle(Theme.muted)
                 .frame(maxWidth: .infinity, alignment: .leading)

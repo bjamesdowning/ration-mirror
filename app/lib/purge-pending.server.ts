@@ -10,6 +10,8 @@ const JOB_PREFIX = "purge:job:";
 /** Keep pending denylist long enough for ops to finish a stuck purge. */
 const PENDING_TTL_SEC = 60 * 60 * 24 * 7;
 const JOB_TTL_SEC = 60 * 60 * 24 * 14;
+/** Soft ceiling for cron retries before escalated alerting (pending stays until wipe succeeds). */
+export const PURGE_JOB_MAX_ATTEMPTS = 20;
 
 export type PurgeJobKind = "account" | "group";
 
@@ -22,6 +24,7 @@ export type PurgeJobRecord = {
 	stripeCustomerId?: string | null;
 	organizationId?: string;
 	errorMessage?: string;
+	attemptCount: number;
 	createdAt: string;
 	updatedAt: string;
 };
@@ -60,14 +63,19 @@ export async function isUserPurgePending(
 
 export async function putPurgeJob(
 	kv: KVNamespace,
-	job: Omit<PurgeJobRecord, "createdAt" | "updatedAt" | "status"> & {
+	job: Omit<
+		PurgeJobRecord,
+		"createdAt" | "updatedAt" | "status" | "attemptCount"
+	> & {
 		status?: PurgeJobRecord["status"];
+		attemptCount?: number;
 	},
 ): Promise<PurgeJobRecord> {
 	const now = new Date().toISOString();
 	const record: PurgeJobRecord = {
 		...job,
 		status: job.status ?? "pending",
+		attemptCount: job.attemptCount ?? 0,
 		createdAt: now,
 		updatedAt: now,
 	};
@@ -81,24 +89,26 @@ export async function markPurgeJobFailed(
 	kv: KVNamespace,
 	jobId: string,
 	errorMessage: string,
-): Promise<void> {
+): Promise<PurgeJobRecord | null> {
 	const raw = await kv.get(purgeJobKey(jobId));
 	if (!raw) {
 		log.warn("[Purge] markPurgeJobFailed missing job", {
 			jobId: redactId(jobId),
 		});
-		return;
+		return null;
 	}
 	const existing = JSON.parse(raw) as PurgeJobRecord;
 	const updated: PurgeJobRecord = {
 		...existing,
 		status: "failed",
 		errorMessage,
+		attemptCount: (existing.attemptCount ?? 0) + 1,
 		updatedAt: new Date().toISOString(),
 	};
 	await kv.put(purgeJobKey(jobId), JSON.stringify(updated), {
 		expirationTtl: JOB_TTL_SEC,
 	});
+	return updated;
 }
 
 export async function clearPurgeJob(

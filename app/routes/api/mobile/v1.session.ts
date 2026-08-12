@@ -11,6 +11,7 @@ import {
 	requireMobileActiveGroup,
 } from "~/lib/mobile/auth.server";
 import { getOrganizationRecord } from "~/lib/mobile/dashboard.server";
+import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import type { TierSlug } from "~/lib/tiers";
 import type { Route } from "./+types/v1.session";
 
@@ -21,6 +22,19 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 			request,
 		);
 		const env = context.cloudflare.env;
+
+		const rateLimitResult = await checkRateLimit(
+			env.RATION_KV,
+			"session_read",
+			userId,
+		);
+		if (!rateLimitResult.allowed) {
+			throw rateLimitResponse(
+				rateLimitResult,
+				"Too many session requests. Please try again later.",
+			);
+		}
+
 		const flagContext = buildMobileFlagContext(request, env, {
 			user: { id: userId },
 		});

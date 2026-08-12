@@ -46,7 +46,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 			throw redirect("/auth/verify?error=invalid_request");
 		}
 		const code = await storeMobileAuthCode(
-			context.cloudflare.env.RATION_KV,
+			context.cloudflare.env,
 			activeSession.user.id,
 			organizationId,
 			codeChallenge,

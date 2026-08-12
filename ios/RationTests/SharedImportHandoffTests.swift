@@ -40,4 +40,13 @@ final class SharedImportHandoffTests: XCTestCase {
         )
         XCTAssertNil(SharedImportHandoff.consumePending())
     }
+
+    func testClearRemovesPendingWithoutConsume() {
+        SharedImportHandoff.writePendingForTesting(
+            url: "https://example.com/pending",
+            autoStart: true
+        )
+        SharedImportHandoff.clear()
+        XCTAssertNil(SharedImportHandoff.consumePending())
+    }
 }

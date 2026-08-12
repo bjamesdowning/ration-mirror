@@ -41,7 +41,7 @@ type ScanApiResponse =
 	  })
 	| { status: "processing"; requestId: string };
 
-const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB — matches server limit
+const MAX_FILE_SIZE = 3 * 1024 * 1024; // 3 MB — matches server sync AI limit
 
 export const CameraInput = forwardRef<CameraInputHandle, CameraInputProps>(
 	(
@@ -100,7 +100,7 @@ export const CameraInput = forwardRef<CameraInputHandle, CameraInputProps>(
 			setIsAnalyzing(true);
 
 			if (file.size > MAX_FILE_SIZE) {
-				showError("File too large. Maximum size is 5MB.");
+				showError("File too large. Maximum size is 3MB.");
 				return;
 			}
 

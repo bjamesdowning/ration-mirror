@@ -107,7 +107,7 @@ Rules:
 - Only extract what is visible — do not invent ingredients or steps
 - tags should describe cuisine/dietary info when visible`;
 
-const MAX_HTML_BYTES = 1_000_000;
+const MAX_HTML_BYTES = 512_000;
 const MAX_HTML_CHARS = 15_000;
 const FETCH_TIMEOUT_MS = 10_000;
 const USER_AGENT =

@@ -226,18 +226,21 @@ export const RATE_LIMITS: Record<string, RateLimitConfig> = {
 		windowMs: 60_000, // 1 minute
 		maxRequests: 20,
 		keyPrefix: "rate:auth_public",
+		failClosed: true,
 	},
 	/** App Review password login — stricter than magic-link/social. */
 	auth_review_login: {
 		windowMs: 60_000,
 		maxRequests: 5,
 		keyPrefix: "rate:auth_review_login",
+		failClosed: true,
 	},
 	/** Cross-IP cap for the single review account (identifier = normalized email). */
 	auth_review_login_account: {
 		windowMs: 60_000,
 		maxRequests: 20,
 		keyPrefix: "rate:auth_review_login_acct",
+		failClosed: true,
 	},
 	oauth_authorize: {
 		windowMs: 60_000,
@@ -248,6 +251,7 @@ export const RATE_LIMITS: Record<string, RateLimitConfig> = {
 		windowMs: 60_000,
 		maxRequests: 60,
 		keyPrefix: "rate:oauth_token",
+		failClosed: true,
 	},
 	oauth_register: {
 		windowMs: 60_000,
@@ -360,6 +364,26 @@ export const RATE_LIMITS: Record<string, RateLimitConfig> = {
 		windowMs: 60_000, // 1 minute
 		maxRequests: 60,
 		keyPrefix: "rate:hub_read",
+		failClosed: true,
+	},
+	/** Mobile `/session` bootstrap — multi-query fan-out; fail closed under KV blips. */
+	session_read: {
+		windowMs: 60_000,
+		maxRequests: 60,
+		keyPrefix: "rate:session_read",
+		failClosed: true,
+	},
+	/** Mobile org listing / billing status — authenticated hot reads. */
+	orgs_read: {
+		windowMs: 60_000,
+		maxRequests: 60,
+		keyPrefix: "rate:orgs_read",
+		failClosed: true,
+	},
+	billing_read: {
+		windowMs: 60_000,
+		maxRequests: 60,
+		keyPrefix: "rate:billing_read",
 		failClosed: true,
 	},
 	/** Mobile `/supply` — read-only, same tier class as cargo_list (see H-4). */

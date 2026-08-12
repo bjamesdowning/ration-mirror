@@ -6,6 +6,7 @@ import { getEffectiveTier, getGroupTierLimits } from "~/lib/capacity.server";
 import { handleApiError } from "~/lib/error-handler";
 import { checkBalance } from "~/lib/ledger.server";
 import { requireMobileActiveGroup } from "~/lib/mobile/auth.server";
+import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import { MobileBillingStatusSchema } from "~/lib/schemas/mobile/billing";
 import type { TierSlug } from "~/lib/tiers";
 import type { Route } from "./+types/v1.billing.status";
@@ -17,6 +18,19 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 			request,
 		);
 		const env = context.cloudflare.env;
+
+		const rateLimitResult = await checkRateLimit(
+			env.RATION_KV,
+			"billing_read",
+			userId,
+		);
+		if (!rateLimitResult.allowed) {
+			throw rateLimitResponse(
+				rateLimitResult,
+				"Too many billing requests. Please try again later.",
+			);
+		}
+
 		const db = drizzle(env.DB, { schema });
 
 		const [credits, tierInfo, userRow] = await Promise.all([

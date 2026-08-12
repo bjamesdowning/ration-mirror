@@ -61,6 +61,15 @@ describe("RecipeImportRequestSchema", () => {
 		const result = RecipeImportRequestSchema.safeParse({});
 		expect(result.success).toBe(false);
 	});
+
+	it("rejects oversized photo over 3MB", () => {
+		const oversized = "a".repeat(Math.ceil((3 * 1024 * 1024 * 4) / 3) + 16);
+		const result = RecipeImportRequestSchema.safeParse({
+			photoBase64: oversized,
+			photoMimeType: "image/jpeg",
+		});
+		expect(result.success).toBe(false);
+	});
 });
 
 describe("ImportConfirmRequestSchema", () => {

@@ -134,7 +134,13 @@ export async function action({ request, context }: Route.ActionArgs) {
 			stripeCustomerId,
 		});
 
-		return { success: true, deleted: true };
+		return {
+			success: true,
+			deleted: true,
+			status: "pending",
+			message:
+				"Account deletion has started. Sign-in is blocked while we finish removing your data. This usually completes within a few minutes; you will not be able to use the account once deletion starts.",
+		};
 	} catch (e) {
 		if (e instanceof AccountDeletionBlockedError) {
 			throw data(

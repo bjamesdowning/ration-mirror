@@ -51,7 +51,7 @@ enum RecipePageCaptureError: LocalizedError {
 
 /// Prefers JSON-LD Recipe blocks and trims to a safe upload size (UTF-8 bytes).
 enum RecipePageHtmlTrimmer {
-    static let maxBytes = 1_000_000
+    static let maxBytes = 512_000
 
     static func prepareForUpload(_ html: String) throws -> String {
         if let jsonLd = extractJsonLdRecipe(html) {

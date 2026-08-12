@@ -78,7 +78,7 @@ describe("POST /api/mobile/v1/auth/token", () => {
 		} as never)) as { accessToken: string };
 
 		expect(result.accessToken).toBe("access");
-		expect(consumeMobileAuthCode).toHaveBeenCalledWith(env.RATION_KV, code);
+		expect(consumeMobileAuthCode).toHaveBeenCalledWith(env, code);
 	});
 
 	it("does not issue tokens when PKCE verification fails", async () => {
@@ -95,7 +95,7 @@ describe("POST /api/mobile/v1/auth/token", () => {
 				params: {},
 			} as never),
 		).rejects.toMatchObject({ init: { status: 400 } });
-		expect(consumeMobileAuthCode).toHaveBeenCalledWith(env.RATION_KV, code);
+		expect(consumeMobileAuthCode).toHaveBeenCalledWith(env, code);
 		expect(issueMobileTokenPair).not.toHaveBeenCalled();
 	});
 });

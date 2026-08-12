@@ -299,6 +299,21 @@ export async function purgeUserAccount(
 			db
 				.delete(schema.mobileRefreshToken)
 				.where(eq(schema.mobileRefreshToken.userId, userId)),
+			db
+				.delete(schema.mobileAuthCode)
+				.where(eq(schema.mobileAuthCode.userId, userId)),
+			db
+				.delete(schema.oauthAccessToken)
+				.where(eq(schema.oauthAccessToken.userId, userId)),
+			db
+				.delete(schema.oauthRefreshToken)
+				.where(eq(schema.oauthRefreshToken.userId, userId)),
+			db
+				.delete(schema.oauthConsent)
+				.where(eq(schema.oauthConsent.userId, userId)),
+			db
+				.delete(schema.oauthClient)
+				.where(eq(schema.oauthClient.userId, userId)),
 			// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
 		] as [any, ...any[]]);
 

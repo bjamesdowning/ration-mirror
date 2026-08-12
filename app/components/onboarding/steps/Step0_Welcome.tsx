@@ -3,43 +3,18 @@ interface Step0Props {
 	onSkip: () => void;
 }
 
-const nomenclature = [
-	{
-		term: "Hub",
-		def: "Your mission control — stats, widgets, and quick actions.",
-	},
-	{
-		term: "Cargo",
-		def: "Your pantry. Everything you stock, tracked in real time.",
-	},
-	{
-		term: "Galley",
-		def: "Your recipe book. Meals mapped to Cargo ingredients.",
-	},
-	{
-		term: "Manifest",
-		def: "Your weekly meal plan. The source of truth for Supply.",
-	},
-	{
-		term: "Supply",
-		def: "Your auto-generated shopping list based on your Manifest.",
-	},
-];
+const capabilities = [
+	"Scan receipts, fridge photos, and PDFs straight into your pantry",
+	"Import meals from TikTok, YouTube, websites, or a photo",
+	"Run multiple kitchens and invite others to join them",
+	"Set nutrient goals and log intake privately — even in a shared kitchen",
+	"Ask Copilot with full context on your kitchen",
+] as const;
 
 /**
  * Step 0 — Full-screen welcome modal.
- * Introduces the mission, nomenclature, and workflow chain.
+ * Brand-led promise (pantry · recipes · shopping · macros) + capability differentiators.
  */
-const WORKFLOW_STEPS = [
-	{ id: "cargo-label", item: "Cargo" },
-	{ id: "arrow-1", item: "→" },
-	{ id: "galley-label", item: "Galley" },
-	{ id: "arrow-2", item: "→" },
-	{ id: "manifest-label", item: "Manifest" },
-	{ id: "arrow-3", item: "→" },
-	{ id: "supply-label", item: "Supply" },
-];
-
 export function Step0_Welcome({ onBegin, onSkip }: Step0Props) {
 	return (
 		// biome-ignore lint/a11y/noStaticElementInteractions: modal card stops backdrop click-through; keyboard nav is handled globally in OnboardingTour
@@ -52,73 +27,42 @@ export function Step0_Welcome({ onBegin, onSkip }: Step0Props) {
 			<div className="h-1 w-full bg-hyper-green" />
 
 			<div className="p-6 md:p-8">
-				{/* Logo mark + headline */}
-				<div className="flex items-center gap-3 mb-5">
-					<div className="w-10 h-10 rounded-full bg-hyper-green/20 flex items-center justify-center">
-						<svg
-							className="w-5 h-5 text-hyper-green"
-							fill="none"
-							stroke="currentColor"
-							viewBox="0 0 24 24"
-							aria-hidden="true"
-						>
-							<path
-								strokeLinecap="round"
-								strokeLinejoin="round"
-								strokeWidth={2}
-								d="M13 10V3L4 14h7v7l9-11h-7z"
-							/>
-						</svg>
-					</div>
-					<div>
-						<h2 className="text-xl font-bold text-carbon dark:text-white leading-tight">
-							Welcome to Ration.
-						</h2>
-						<p className="text-xs text-muted mt-0.5">Orbital Supply Chain</p>
-					</div>
-				</div>
-
-				{/* Pitch */}
-				<p className="text-sm text-carbon/80 dark:text-white/80 mb-5">
-					Ration connects your pantry, recipes, and weekly meal plan into one
-					intelligent system — so you always know what you have, what you can
-					cook, and exactly what to buy.
-				</p>
-
-				{/* Nomenclature */}
-				<div className="space-y-2 mb-5">
-					{nomenclature.map(({ term, def }) => (
-						<div key={term} className="flex items-start gap-2.5">
-							<span className="shrink-0 mt-0.5 w-16 text-[11px] font-bold text-hyper-green uppercase tracking-wider">
-								{term}
-							</span>
-							<span className="text-xs text-muted">{def}</span>
-						</div>
-					))}
-				</div>
-
-				{/* Workflow chain */}
-				<div className="bg-platinum/40 dark:bg-white/5 rounded-xl px-4 py-3 mb-5">
-					<p className="text-[11px] text-muted font-medium mb-1.5">
-						Example workflow
+				{/* Brand mark + title */}
+				<div className="flex flex-col items-center text-center mb-5">
+					<img
+						src="/static/ration-logo.png"
+						alt=""
+						width={56}
+						height={56}
+						className="w-14 h-14 mb-3"
+						decoding="async"
+					/>
+					<h2 className="text-2xl font-bold text-carbon dark:text-white tracking-tight leading-tight">
+						Ration
+					</h2>
+					<p className="text-xs font-semibold text-hyper-green mt-1.5">
+						Waste less. Shop the delta.
 					</p>
-					<div className="flex items-center gap-1.5 flex-wrap text-xs font-semibold text-carbon dark:text-white">
-						{WORKFLOW_STEPS.map(({ id, item }) => (
-							<span
-								key={id}
-								className={item === "→" ? "text-muted" : "text-hyper-green"}
-							>
-								{item}
-							</span>
-						))}
-					</div>
 				</div>
 
-				{/* Tech insight */}
-				<p className="text-[11px] text-muted italic border-l-2 border-hyper-green/40 pl-2.5 mb-6">
-					Ration runs at the edge — every action is instant, every
-					recommendation is AI-powered.
+				{/* Core loop pitch — macros as a pillar */}
+				<p className="text-sm text-carbon/80 dark:text-white/80 text-center mb-5">
+					Pantry, recipes, shopping, and macros in one loop — grounded in what
+					you have and eat.
 				</p>
+
+				{/* Capabilities */}
+				<ul className="space-y-2.5 mb-6 text-left">
+					{capabilities.map((line) => (
+						<li key={line} className="flex items-start gap-2.5">
+							<span
+								className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-hyper-green"
+								aria-hidden="true"
+							/>
+							<span className="text-xs text-muted leading-snug">{line}</span>
+						</li>
+					))}
+				</ul>
 
 				{/* CTAs */}
 				<div className="flex items-center justify-between gap-3">

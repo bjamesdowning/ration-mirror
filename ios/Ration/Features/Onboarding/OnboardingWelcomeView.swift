@@ -1,34 +1,49 @@
 import SwiftUI
 
-/// First onboarding screen — branded welcome before feature enablement.
+/// First onboarding screen — brand-led promise before feature enablement.
 struct OnboardingWelcomeView: View {
     let onContinue: () -> Void
+
+    private static let capabilities = [
+        "Scan receipts, fridge photos, and PDFs straight into your pantry",
+        "Import meals from TikTok, YouTube, websites, or a photo",
+        "Run multiple kitchens and invite others to join them",
+        "Set nutrient goals and log intake privately — even in a shared kitchen",
+        "Ask Copilot with full context on your kitchen",
+    ]
 
     var body: some View {
         VStack(spacing: 0) {
             ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    Text("Welcome to Ration")
+                VStack(alignment: .center, spacing: 16) {
+                    Image("RationMark")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 56, height: 56)
+                        .accessibilityHidden(true)
+
+                    Text("Ration")
                         .font(.title.bold())
                         .foregroundStyle(Theme.carbon)
 
-                    Text("Orbital Supply Chain")
+                    Text("Waste less. Shop the delta.")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(Theme.hyperGreen)
 
                     Text(
-                        "Ration connects your pantry, recipes, and weekly meal plan so you always know what you have, what you can cook, and exactly what to buy."
+                        "Pantry, recipes, shopping, and macros in one loop — grounded in what you have and eat."
                     )
                     .font(.body)
                     .foregroundStyle(Theme.muted)
+                    .multilineTextAlignment(.center)
 
-                    VStack(alignment: .leading, spacing: 10) {
-                        nomenclatureRow("Cargo", "Your pantry, tracked in real time.")
-                        nomenclatureRow("Galley", "Recipes mapped to what you stock.")
-                        nomenclatureRow("Manifest", "Your weekly meal plan.")
-                        nomenclatureRow("Supply", "Shopping list from your Manifest.")
+                    VStack(alignment: .leading, spacing: 12) {
+                        ForEach(Self.capabilities, id: \.self) { line in
+                            capabilityRow(line)
+                        }
                     }
-                    .padding(.top, 4)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.top, 8)
                 }
                 .padding(24)
             }
@@ -38,17 +53,19 @@ struct OnboardingWelcomeView: View {
                 .padding(24)
         }
         .background(Theme.ceramic)
+        .accessibilityElement(children: .contain)
     }
 
-    private func nomenclatureRow(_ term: String, _ def: String) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            Text(term)
-                .font(.caption.weight(.bold))
-                .foregroundStyle(Theme.hyperGreen)
-                .frame(width: 72, alignment: .leading)
-            Text(def)
+    private func capabilityRow(_ line: String) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Circle()
+                .fill(Theme.hyperGreen)
+                .frame(width: 6, height: 6)
+                .padding(.top, 5)
+            Text(line)
                 .font(.caption)
                 .foregroundStyle(Theme.muted)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 }

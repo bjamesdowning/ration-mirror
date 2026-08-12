@@ -90,8 +90,28 @@ export function CargoQuickEatDialog({
 		if (fetcher.data === handledSuccess.current) return;
 		handledSuccess.current = fetcher.data;
 		onSuccess?.(fetcher.data);
-		onClose();
+		// Only auto-close when private intake actually landed (or was not requested).
+		if (fetcher.data.intakeLogged !== false) {
+			onClose();
+		}
 	}, [fetcher.state, fetcher.data, onClose, onSuccess]);
+
+	const skipMessage = (() => {
+		if (fetcher.state !== "idle" || !fetcher.data?.entry?.id) return null;
+		if (fetcher.data.intakeLogged !== false) return null;
+		switch (fetcher.data.intakeSkipReason) {
+			case "consent":
+				return "Snack is Prepared — open Manifest and accept privacy consent to log macros.";
+			case "nutrition_unavailable":
+				return "Snack is Prepared, but nutrition isn’t ready yet. Open Manifest → Log my serving in a moment.";
+			case "flag_off":
+				return "Snack is Prepared. Personal macro logging isn’t available right now.";
+			case "error":
+				return "Snack is Prepared, but logging your serving failed. Try Log my serving on Manifest.";
+			default:
+				return "Snack is Prepared. Macros weren’t logged — try Log my serving on Manifest.";
+		}
+	})();
 
 	const handleSubmit = () => {
 		if (!(amount > 0) || isSaving) return;
@@ -228,13 +248,17 @@ export function CargoQuickEatDialog({
 					<p className="text-xs text-danger">{errorMessage}</p>
 				) : null}
 
+				{skipMessage ? (
+					<p className="text-xs text-warning">{skipMessage}</p>
+				) : null}
+
 				<button
 					type="button"
-					onClick={handleSubmit}
-					disabled={isSaving || !(amount > 0)}
+					onClick={skipMessage ? onClose : handleSubmit}
+					disabled={isSaving || (!(amount > 0) && !skipMessage)}
 					className="w-full py-3 rounded-xl bg-hyper-green text-on-hyper-green font-bold disabled:opacity-60"
 				>
-					{isSaving ? "Saving…" : "Eat"}
+					{isSaving ? "Saving…" : skipMessage ? "Done" : "Eat"}
 				</button>
 				<button
 					type="button"
@@ -242,7 +266,7 @@ export function CargoQuickEatDialog({
 					disabled={isSaving}
 					className="w-full py-2 text-sm text-muted hover:text-carbon"
 				>
-					Cancel
+					{skipMessage ? "Close" : "Cancel"}
 				</button>
 			</div>
 		</div>

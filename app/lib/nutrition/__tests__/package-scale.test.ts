@@ -94,6 +94,28 @@ describe("scaleCargoNutritionToPackage", () => {
 		expect(next.perServing).toBeNull();
 	});
 
+	it("keeps household perServing when count package stays massless", () => {
+		const withHousehold: NutritionSnapshot = {
+			...usdaMilk,
+			perServing: {
+				...milkPer100g,
+				energyKcal: 15,
+			},
+		};
+		const next = scaleCargoNutritionToPackage(
+			withHousehold,
+			3,
+			"unit",
+			"pickles",
+			{
+				previousQuantity: 1,
+				previousUnit: "unit",
+			},
+		);
+		expect(next.per100g?.energyKcal).toBe(42);
+		expect(next.perServing?.energyKcal).toBe(15);
+	});
+
 	it("keeps override package totals when correcting unit→liter without prior mass", () => {
 		const override: NutritionSnapshot = {
 			source: "user_override",

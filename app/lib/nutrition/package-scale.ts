@@ -101,10 +101,16 @@ export function scaleCargoNutritionToPackage(
 	}
 
 	if (per100g && (newGrams == null || newGrams <= 0)) {
+		// Count/can/pack packages have no mass. Keep an existing household
+		// perServing (USDA cup/serving) when the prior package was also massless —
+		// wiping it forces density-only cargo and breaks provision Eat macros.
+		// Still clear when shrinking from a known mass package (e.g. 1 L → 1 unit)
+		// so liter package totals are never treated as per-count nutrients.
+		const priorMassUnknown = oldGrams == null || oldGrams <= 0;
 		return {
 			...snapshot,
 			per100g,
-			perServing: null,
+			perServing: priorMassUnknown ? (snapshot.perServing ?? null) : null,
 		};
 	}
 

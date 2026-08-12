@@ -126,10 +126,30 @@ struct CargoQuickEatSheet: View {
         defer { isSaving = false }
         let notePayload = notesEnabled ? IntakeNotesField.payload(from: notes) : nil
         if let result = await onConfirm(quantity, notePayload) {
-            onFinished(result)
-            dismiss()
+            if result.intakeLogged {
+                onFinished(result)
+                dismiss()
+            } else {
+                errorMessage = Self.intakeSkipMessage(result.intakeSkipReason)
+                onFinished(result)
+            }
         } else {
             errorMessage = "Couldn't log this snack. Try again."
+        }
+    }
+
+    private static func intakeSkipMessage(_ reason: String?) -> String {
+        switch reason {
+        case "consent":
+            return "Snack is Prepared — open Manifest and accept privacy consent to log macros."
+        case "nutrition_unavailable":
+            return "Snack is Prepared, but nutrition isn’t ready yet. Open Manifest → Log my serving in a moment."
+        case "flag_off":
+            return "Snack is Prepared. Personal macro logging isn’t available right now."
+        case "error":
+            return "Snack is Prepared, but logging your serving failed. Try Log my serving on Manifest."
+        default:
+            return "Snack is Prepared. Macros weren’t logged — try Log my serving on Manifest."
         }
     }
 }

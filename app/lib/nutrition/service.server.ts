@@ -19,6 +19,7 @@ import {
 	listNutritionIntakesForRange,
 	type NutritionSummaryResult,
 	getNutritionSummary as readNutritionSummary,
+	recomputeAndStoreMealNutrition,
 } from "~/lib/nutrition/persist.server";
 import {
 	scaleNutrientValues,
@@ -86,6 +87,54 @@ export class NutritionUnavailableError extends Error {
 		super(message);
 		this.name = "NutritionUnavailableError";
 	}
+}
+
+/**
+ * True when a meal snapshot can honestly back a private intake row.
+ * Rejects unresolved aggregates (coverage 0 / no attributions) that zero-fill
+ * energy — those used to soft-log 0 kcal and look like a successful Eat.
+ */
+export function mealSnapshotAllowsIntake(
+	snapshot: MealNutritionSnapshot | null | undefined,
+): boolean {
+	const perServing = snapshot?.perServing;
+	if (
+		!perServing ||
+		perServing.energyKcal == null ||
+		!Number.isFinite(perServing.energyKcal)
+	) {
+		return false;
+	}
+	const coverage = snapshot?.coverage;
+	if (
+		coverage == null ||
+		!Number.isFinite(coverage) ||
+		coverage <= 0 ||
+		coverage > 1
+	) {
+		return false;
+	}
+	return (
+		Array.isArray(snapshot?.attributions) && snapshot.attributions.length > 0
+	);
+}
+
+function entryNutritionNeedsHeal(entry: {
+	nutritionStatus: string | null;
+	nutritionRevision: number;
+	nutritionComputedRevision: number;
+	mealNutrition: unknown;
+}): boolean {
+	if (
+		entry.nutritionStatus === "pending" ||
+		entry.nutritionStatus === "failed" ||
+		entry.nutritionComputedRevision < entry.nutritionRevision
+	) {
+		return true;
+	}
+	return !mealSnapshotAllowsIntake(
+		entry.mealNutrition as MealNutritionSnapshot | null,
+	);
 }
 
 /** Meal nutrition snapshot is stale/pending async recompute — do not log obsolete totals. */
@@ -887,6 +936,40 @@ export async function logManifestIntakes(
 		}
 	}
 
+	// Best-effort sync heal before plate-up — async recompute / density-only
+	// count cargo often leave pending or empty snapshots that block Eat.
+	const mealsToHeal = [
+		...new Set(
+			[...entries.values()]
+				.filter(entryNutritionNeedsHeal)
+				.map((entry) => entry.mealId),
+		),
+	];
+	if (mealsToHeal.length > 0) {
+		for (const mealId of mealsToHeal) {
+			try {
+				await recomputeAndStoreMealNutrition(
+					env,
+					env.DB,
+					mealId,
+					principal.organizationId,
+					flags,
+				);
+			} catch {
+				// Fall through to the strict readiness checks below.
+			}
+		}
+		const refreshed = await loadEntries(
+			db,
+			principal,
+			input.planId,
+			normalizedItems.map((item) => item.entryId),
+		);
+		for (const [id, row] of refreshed) {
+			entries.set(id, row);
+		}
+	}
+
 	const operationId = crypto.randomUUID();
 	const committedAt = new Date();
 	const stableIntakeIds = new Map(
@@ -940,12 +1023,11 @@ export async function logManifestIntakes(
 				throw new NutritionUpdatingError();
 			}
 			const snapshot = entry.mealNutrition as MealNutritionSnapshot | null;
+			if (!mealSnapshotAllowsIntake(snapshot)) {
+				throw new NutritionUnavailableError();
+			}
 			const perServing = snapshot?.perServing;
-			if (
-				!perServing ||
-				perServing.energyKcal == null ||
-				!Number.isFinite(perServing.energyKcal)
-			) {
+			if (!perServing) {
 				throw new NutritionUnavailableError();
 			}
 			const scaled = scaleNutrientValues(perServing, item.servings);

@@ -161,6 +161,26 @@ function setup() {
 		confidence: 1,
 		verified: true,
 		coverage: 1,
+		attributions: [
+			{
+				ingredientIndex: 0,
+				ingredientName: "Fixture meal",
+				fdcId: 1,
+				source: "usda",
+				grams: 100,
+				contribution: {
+					energyKcal: 500,
+					proteinG: 20,
+					fatG: 15,
+					carbG: 60,
+					fiberG: 8,
+					sugarG: null,
+					satFatG: null,
+					sodiumMg: null,
+					saltG: null,
+				},
+			},
+		],
 		per100g: null,
 		perServing: {
 			energyKcal: 500,

@@ -34,7 +34,10 @@ import {
 	NUTRITION_MEAL_RECOMPUTE_CONCURRENCY,
 	NUTRITION_RESOLVE_CONCURRENCY,
 } from "./constants";
-import { lookupFdcPortion } from "./fdc-portion.server";
+import {
+	lookupFdcPortion,
+	resolveHouseholdServingGrams,
+} from "./fdc-portion.server";
 import {
 	isGoalEffectiveOnDate,
 	nutritionIntakeRetentionCutoff,
@@ -337,6 +340,21 @@ export async function recomputeAndStoreMealNutrition(
 								portion.gramsPerUnit > 0
 							) {
 								grams = portion.gramsPerUnit * ing.quantity;
+							}
+							// Unit hint often misses ("unit" vs FDC "cup, sliced").
+							// Household cup/serving is the same mass cargo resolve uses.
+							if ((grams == null || grams <= 0) && Number.isFinite(fdcId)) {
+								const household = await resolveHouseholdServingGrams(
+									env,
+									fdcId,
+								);
+								if (
+									household.grams != null &&
+									Number.isFinite(household.grams) &&
+									household.grams > 0
+								) {
+									grams = household.grams * ing.quantity;
+								}
 							}
 						}
 						if (

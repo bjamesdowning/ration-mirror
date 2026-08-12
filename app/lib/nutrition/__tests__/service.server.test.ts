@@ -7,10 +7,12 @@ import {
 	hashNutritionRequest,
 	logManifestIntakes,
 	MAX_NUTRITION_OPERATION_ITEMS,
+	mealSnapshotAllowsIntake,
 	NutritionOperationValidationError,
 	NutritionScopeError,
 	resolveHttpOperationKey,
 } from "../service.server";
+import type { MealNutritionSnapshot } from "../types";
 
 const env = {} as Env;
 const flags = {};
@@ -65,6 +67,67 @@ describe("canonical nutrition operation requests", () => {
 				key,
 			),
 		).toThrow(NutritionOperationValidationError);
+	});
+});
+
+describe("mealSnapshotAllowsIntake", () => {
+	const usable: MealNutritionSnapshot = {
+		perServing: {
+			energyKcal: 0,
+			proteinG: 0,
+			fatG: 0,
+			carbG: 0,
+			fiberG: 0,
+			sugarG: 0,
+			satFatG: 0,
+			sodiumMg: 0,
+			saltG: 0,
+		},
+		coverage: 1,
+		attributions: [
+			{
+				ingredientIndex: 0,
+				ingredientName: "diet soda",
+				fdcId: null,
+				source: "user_override",
+				grams: 100,
+				contribution: {
+					energyKcal: 0,
+					proteinG: 0,
+					fatG: 0,
+					carbG: 0,
+					fiberG: 0,
+					sugarG: 0,
+					satFatG: 0,
+					sodiumMg: 0,
+					saltG: 0,
+				},
+			},
+		],
+		computedAt: "2026-08-12T00:00:00.000Z",
+	};
+
+	it("allows zero-kcal foods with real coverage", () => {
+		expect(mealSnapshotAllowsIntake(usable)).toBe(true);
+	});
+
+	it("rejects unresolved zero-filled aggregates", () => {
+		expect(
+			mealSnapshotAllowsIntake({
+				...usable,
+				coverage: 0,
+				attributions: [],
+			}),
+		).toBe(false);
+	});
+
+	it("rejects null energy", () => {
+		expect(
+			mealSnapshotAllowsIntake({
+				...usable,
+				perServing: { ...usable.perServing, energyKcal: null as never },
+			}),
+		).toBe(false);
 	});
 });
 

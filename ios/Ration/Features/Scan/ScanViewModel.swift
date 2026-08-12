@@ -280,12 +280,11 @@ final class ScanViewModel {
             if let ctx = CapacityUpgrade.context(fromBatchErrors: result.errors) {
                 paywallContext = ctx
                 shouldShowPaywall = true
-                if result.added + result.updated > 0 {
-                    Haptics.success()
-                    state = .confirmed(added: result.added, updated: result.updated)
-                } else {
-                    state = .failed(ctx.reasonTitle ?? "Cargo capacity reached")
-                }
+                // All-or-nothing: capacity means zero creates; never treat as confirmed.
+                state = .failed(
+                    ctx.reasonTitle
+                        ?? "Cargo capacity exceeded. Nothing was added."
+                )
                 return
             }
             Haptics.success()
@@ -294,7 +293,9 @@ final class ScanViewModel {
             if let ctx = CapacityUpgrade.context(from: error) {
                 paywallContext = ctx
                 shouldShowPaywall = true
-                state = .failed(ctx.reasonTitle ?? "Capacity limit reached")
+                state = .failed(
+                    ctx.reasonTitle ?? "Cargo capacity exceeded. Nothing was added."
+                )
             } else {
                 state = .failed(error.errorDescription ?? error.localizedDescription)
             }

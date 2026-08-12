@@ -5,6 +5,7 @@ type UpgradePromptProps = {
 	onClose: () => void;
 	title?: string;
 	description?: string;
+	ctaLabel?: string;
 };
 
 export function UpgradePrompt({
@@ -12,6 +13,7 @@ export function UpgradePrompt({
 	onClose,
 	title = "Capacity limit reached",
 	description = "Upgrade to Crew Member to unlock unlimited capacity and member invites.",
+	ctaLabel = "Upgrade to Crew",
 }: UpgradePromptProps) {
 	if (!open) return null;
 
@@ -25,7 +27,7 @@ export function UpgradePrompt({
 						to="/hub/pricing"
 						className="px-4 py-2 rounded-lg bg-hyper-green text-on-hyper-green font-bold"
 					>
-						View Pricing
+						{ctaLabel}
 					</Link>
 					<button
 						type="button"

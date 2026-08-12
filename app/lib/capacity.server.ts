@@ -37,6 +37,31 @@ export class CapacityExceededError extends Error {
 	}
 }
 
+/**
+ * All-or-nothing cargo ingest: if any item hit capacity_exceeded, throw before
+ * callers reconcile supply, write ledger, or return a soft docked:0 success.
+ */
+export function assertCargoIngestCapacity(
+	ingestResults: Array<{ status: string }>,
+	capacity: {
+		current: number;
+		limit: number;
+		tier: TierSlug;
+		isExpired: boolean;
+		canAdd: number;
+	},
+): void {
+	if (!ingestResults.some((r) => r.status === "capacity_exceeded")) return;
+	throw new CapacityExceededError({
+		resource: "cargo",
+		current: capacity.current,
+		limit: capacity.limit,
+		tier: capacity.tier,
+		isExpired: capacity.isExpired,
+		canAdd: capacity.canAdd,
+	});
+}
+
 export function getEffectiveTier(
 	tier: TierSlug,
 	tierExpiresAt: Date | number | string | null | undefined,

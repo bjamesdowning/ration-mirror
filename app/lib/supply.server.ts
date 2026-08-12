@@ -13,6 +13,7 @@ import {
 	user,
 } from "../db/schema";
 import { computeBaseFields, effectiveBaseFields } from "./base-quantity";
+import { assertCargoIngestCapacity, checkCapacity } from "./capacity.server";
 import { dockSupplyItems, ingestCargoItems } from "./cargo.server";
 import { type CargoIndexRow, fetchOrgCargoIndex } from "./cargo-index.server";
 import {
@@ -2551,6 +2552,20 @@ export async function completeSupplyFromScan(
 			allowAiNutritionEstimate: true,
 		},
 	);
+
+	// All-or-nothing: never soft-succeed with docked:0 or clear supply on capacity miss.
+	const hasCapacityError = ingestResults.some(
+		(r) => r.status === "capacity_exceeded",
+	);
+	if (hasCapacityError) {
+		const capacity = await checkCapacity(
+			env,
+			organizationId,
+			"cargo",
+			dockInputs.length,
+		);
+		assertCargoIngestCapacity(ingestResults, capacity);
+	}
 
 	let updated = 0;
 	let created = 0;

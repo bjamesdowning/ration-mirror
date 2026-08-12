@@ -40,6 +40,26 @@ final class CapacityUpgradeTests: XCTestCase {
         XCTAssertFalse(error.isCapacityExceeded)
     }
 
+    func testContextFromCargoCapacityErrorForDockFromReceipt() {
+        let error = APIError.server(
+            status: 403,
+            message: "Capacity exceeded for cargo",
+            code: "capacity_exceeded",
+            errorCode: "capacity_exceeded",
+            limit: 35,
+            resource: "cargo",
+            current: 30,
+            tier: "free"
+        )
+        let ctx = CapacityUpgrade.context(from: error, isCrewMember: false)
+        XCTAssertEqual(ctx?.trigger, .capacity)
+        XCTAssertEqual(ctx?.resource, "cargo")
+        XCTAssertEqual(ctx?.current, 30)
+        XCTAssertEqual(ctx?.limit, 35)
+        XCTAssertEqual(ctx?.reasonTitle, "Cargo capacity reached — 30/35")
+        XCTAssertTrue(ctx?.reasonDetail?.contains("Crew") == true)
+    }
+
     func testContextFromCapacityError() {
         let error = APIError.server(
             status: 403,

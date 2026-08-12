@@ -263,6 +263,18 @@ final class SupplyScanReviewViewModel {
                 requestId: requestId,
                 pairs: pairs
             )
+            // Defensive: never treat docked:0 as success (pre-fix soft capacity path).
+            if result.docked <= 0 {
+                errorMessage =
+                    "Nothing was docked. Your Cargo may be at capacity — upgrade to Crew or remove items."
+                paywallContext = PaywallContext(
+                    trigger: .capacity,
+                    resource: "cargo",
+                    current: nil,
+                    limit: TierLimits.freeMaxInventoryItems
+                )
+                return nil
+            }
             Haptics.success()
             return result
         } catch let error as APIError {
@@ -271,7 +283,10 @@ final class SupplyScanReviewViewModel {
                 isCrewMember: isCrewMember
             ) {
                 paywallContext = ctx
-                errorMessage = nil
+                // Keep review open with an inline explanation; paywall is the upgrade CTA.
+                errorMessage =
+                    ctx.reasonTitle
+                    ?? "Cargo capacity exceeded. Nothing was docked."
             } else {
                 errorMessage = error.errorDescription
             }

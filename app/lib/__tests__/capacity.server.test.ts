@@ -15,7 +15,9 @@ vi.mock("drizzle-orm/d1", () => ({
 }));
 
 import {
+	assertCargoIngestCapacity,
 	buildRecipientCapacityExceededPayload,
+	CapacityExceededError,
 	checkCapacityWithTier,
 } from "~/lib/capacity.server";
 
@@ -129,6 +131,46 @@ describe("checkCapacityWithTier", () => {
 		expect(result.allowed).toBe(false);
 		expect(result.current).toBe(35);
 		expect(result.canAdd).toBe(0);
+	});
+});
+
+describe("assertCargoIngestCapacity", () => {
+	const capacity = {
+		current: 30,
+		limit: 35,
+		tier: "free" as const,
+		isExpired: false,
+		canAdd: 5,
+	};
+
+	it("is a no-op when ingest has no capacity_exceeded results", () => {
+		expect(() =>
+			assertCargoIngestCapacity(
+				[{ status: "created" }, { status: "merged" }],
+				capacity,
+			),
+		).not.toThrow();
+	});
+
+	it("throws CapacityExceededError when any result is capacity_exceeded", () => {
+		expect(() =>
+			assertCargoIngestCapacity(
+				[{ status: "capacity_exceeded" }, { status: "capacity_exceeded" }],
+				capacity,
+			),
+		).toThrow(CapacityExceededError);
+
+		try {
+			assertCargoIngestCapacity([{ status: "capacity_exceeded" }], capacity);
+		} catch (e) {
+			expect(e).toBeInstanceOf(CapacityExceededError);
+			const err = e as CapacityExceededError;
+			expect(err.resource).toBe("cargo");
+			expect(err.current).toBe(30);
+			expect(err.limit).toBe(35);
+			expect(err.canAdd).toBe(5);
+			expect(err.tier).toBe("free");
+		}
 	});
 });
 

@@ -86,7 +86,8 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 			throw data({ error: e.message, code: e.code }, { status });
 		}
 		if (e instanceof CapacityExceededError) {
-			throw data(
+			// Return (not throw) so useFetcher receives the payload instead of ErrorBoundary
+			return data(
 				{
 					error: "capacity_exceeded",
 					resource: e.resource,

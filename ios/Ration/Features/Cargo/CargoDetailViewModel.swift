@@ -184,10 +184,9 @@ final class CargoDetailViewModel {
             Haptics.light()
             return response.alreadyExisted ? .alreadyExisted : .created
         } catch let error as APIError {
-            if case let .server(status, _, code, errorCode, _, _, _, _, _, _) = error,
-               status == 403,
-               code == "capacity_exceeded" || errorCode == "capacity_exceeded" {
-                errorMessage = "Meal capacity reached. Upgrade to add more Galley items."
+            if let ctx = CapacityUpgrade.context(from: error, defaultResource: "meals") {
+                errorMessage = ctx.reasonTitle
+                    ?? "Meal capacity reached. Upgrade to add more Galley items."
                 return .capacityExceeded
             }
             errorMessage = error.errorDescription ?? "Couldn’t add to Galley"

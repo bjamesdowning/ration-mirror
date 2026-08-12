@@ -15,7 +15,11 @@ import {
 import { drizzle } from "drizzle-orm/d1";
 import { z } from "zod";
 import { cargo, cargoTag, ledger, type supplyItem } from "../db/schema";
-import { CapacityExceededError, checkCapacity } from "./capacity.server";
+import {
+	assertCargoIngestCapacity,
+	CapacityExceededError,
+	checkCapacity,
+} from "./capacity.server";
 import { clearSupplyItemCargoRefs } from "./cargo-delete.server";
 import { type CargoIndexRow, fetchOrgCargoIndex } from "./cargo-index.server";
 import { isExpiredOnUtcCalendar } from "./cargo-utils";
@@ -2105,14 +2109,7 @@ export async function dockSupplyItems(
 			"cargo",
 			items.length,
 		);
-		throw new CapacityExceededError({
-			resource: "cargo",
-			current: capacity.current,
-			limit: capacity.limit,
-			tier: capacity.tier,
-			isExpired: capacity.isExpired,
-			canAdd: capacity.canAdd,
-		});
+		assertCargoIngestCapacity(ingestResults, capacity);
 	}
 
 	const ledgerOps = items.map((it) =>

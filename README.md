@@ -1518,8 +1518,8 @@ The tier system controls resource limits per organization. Limits are determined
 ```mermaid
 flowchart TB
     subgraph FreeTier["Free Tier"]
-        F1["50 Inventory Items"]
-        F2["20 Meals"]
+        F1["35 Inventory Items"]
+        F2["15 Meals"]
         F3["3 Supply Lists"]
         F4["1 Owned Group"]
         F5["No Invitations"]
@@ -1552,7 +1552,8 @@ flowchart TB
 1. `getGroupTierLimits()` checks KV for a cached tier result (key `tier:<orgId>`, 60s TTL). Cache miss → DB query for the org owner's `user.tier` + `tierExpiresAt`.
 2. `getEffectiveTier()` checks expiry: a `crew_member` with an expired `tierExpiresAt` is treated as `free`.
 3. `checkCapacity()` compares the current count against the tier limit. Throws `CapacityExceededError` with `resource`, `current`, `limit`, `tier`, `isExpired`, and `canAdd` fields — surfaced on web via `UpgradePrompt` and on iOS via contextual `PaywallView` (plus soft `CapacityMeter` cues near the Free limit).
-4. After a Stripe webhook processes a subscription, `invalidateTierCache()` deletes the KV key so the next request picks up the new tier immediately.
+4. **Cargo batch ingest** (photo scan confirm, dock-from-receipt, supply complete) is **all-or-nothing** for new creates: if the batch would exceed remaining slots, nothing is written and both web and iOS show a capacity explanation plus **Upgrade to Crew**. Dock-from-receipt must not clear supply rows on capacity failure.
+5. After a Stripe webhook processes a subscription, `invalidateTierCache()` deletes the KV key so the next request picks up the new tier immediately.
 
 **Tier-gated features beyond capacity limits:**
 - `canInviteMembers` — creating group invitations requires Crew Member

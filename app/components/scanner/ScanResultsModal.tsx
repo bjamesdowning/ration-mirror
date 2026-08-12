@@ -1,6 +1,7 @@
 import { AlertTriangle, Calendar, Check, Edit2, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useFetcher, useRouteLoaderData } from "react-router";
+import { Link, useFetcher, useRouteLoaderData } from "react-router";
+import { UpgradePrompt } from "~/components/shell/UpgradePrompt";
 import { DOMAIN_LABELS, type ITEM_DOMAINS } from "~/lib/domain";
 import { normalizeForMatch, tokenMatchScore } from "~/lib/matching";
 import { projectNutritionSnapshotToLegacy } from "~/lib/nutrition/adapters";
@@ -58,6 +59,7 @@ export function ScanResultsModal({
 	const [editingId, setEditingId] = useState<string | null>(null);
 	const [bulkEditMode, setBulkEditMode] = useState(false);
 	const [bulkExpiryDate, setBulkExpiryDate] = useState("");
+	const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
 	const [dismissedMerges, setDismissedMerges] = useState<Set<string>>(
 		new Set(),
 	);
@@ -318,11 +320,12 @@ export function ScanResultsModal({
 				canAdd?: number;
 		  }
 		| undefined;
-	const hasCapacityError = batchResponse?.errors?.some(
-		(e) => e.error === "capacity_exceeded",
-	);
+	const hasCapacityError =
+		batchResponse?.error === "capacity_exceeded" ||
+		batchResponse?.errors?.some((e) => e.error === "capacity_exceeded");
 	const allSucceeded =
 		batchResponse?.success &&
+		!hasCapacityError &&
 		(batchResponse.added ?? 0) + (batchResponse.updated ?? 0) ===
 			(batchResponse.total ?? 0);
 
@@ -335,207 +338,219 @@ export function ScanResultsModal({
 	}, [fetcher.state, batchResponse?.success, allSucceeded, onSuccess, onClose]);
 
 	return (
-		<div className="fixed inset-0 z-[60] flex items-center justify-center p-4 modal-scrim-heavy">
-			<div className="bg-ceramic dark:bg-[#1A1A1A] border-2 border-hyper-green rounded-xl shadow-glow w-full md:max-w-4xl max-h-[90vh] md:max-h-[85vh] overflow-hidden flex flex-col">
-				{/* Header */}
-				<div className="flex items-center justify-between p-6 border-b border-hyper-green/30">
-					<div>
-						<h2 className="text-2xl font-bold text-hyper-green">
-							Scan Results
-						</h2>
-						<p className="text-sm text-muted mt-1">
-							{items.length} items detected • {selectedItems.length} selected
-						</p>
-						<p className="text-xs text-muted mt-0.5">
-							Tap edit to fix names, quantities, or units
-						</p>
-						{nutritionEngine ? (
-							<div className="mt-1">
-								<NutritionLookupBanner status={nutritionLookupStatus} />
-							</div>
-						) : null}
-					</div>
-					<button
-						type="button"
-						onClick={onClose}
-						className="text-muted hover:text-hyper-green transition-colors"
-						aria-label="Close modal"
-					>
-						<X className="w-6 h-6" />
-					</button>
-				</div>
-
-				{/* truncationWarning: set when CSV import hit row limit (e.g. 500); see ScanResultSchema */}
-				{result.metadata?.truncationWarning && (
-					<div className="mx-4 mt-4 p-4 bg-platinum/20 dark:bg-white/10 border border-platinum dark:border-white/20 rounded-xl text-sm text-muted">
-						{result.metadata.truncationWarning}
-					</div>
-				)}
-
-				{/* Bulk Controls */}
-				<div className="p-4 border-b border-hyper-green/30 bg-platinum/30 dark:bg-white/5">
-					<div className="flex flex-wrap gap-3 items-center">
-						<button
-							type="button"
-							onClick={toggleAll}
-							className="px-4 py-2 bg-platinum/10 hover:bg-platinum/20 text-sm text-muted hover:text-hyper-green rounded-lg transition-colors font-medium"
-						>
-							{items.every((item) => item.selected)
-								? "Deselect All"
-								: "Select All"}
-						</button>
-
-						<button
-							type="button"
-							onClick={() => setBulkEditMode(!bulkEditMode)}
-							disabled={selectedItems.length === 0}
-							className="px-4 py-2 bg-platinum/10 hover:bg-platinum/20 text-sm text-muted hover:text-hyper-green rounded-lg transition-colors font-medium disabled:opacity-30 disabled:cursor-not-allowed flex items-center gap-2"
-						>
-							<Calendar className="w-4 h-4" />
-							Set Expiry Date
-						</button>
-
-						{bulkEditMode && (
-							<div className="flex items-center gap-2 flex-1">
-								<input
-									type="date"
-									value={bulkExpiryDate}
-									onChange={(e) => setBulkExpiryDate(e.target.value)}
-									className="bg-platinum/10 border border-hyper-green/30 rounded-lg px-3 py-2 text-sm text-carbon focus:ring-2 focus:ring-hyper-green/50 focus:outline-none"
-								/>
-								<button
-									type="button"
-									onClick={applyBulkExpiry}
-									disabled={!bulkExpiryDate}
-									className="px-4 py-2 bg-hyper-green text-on-hyper-green font-semibold rounded-lg hover:bg-hyper-green/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-								>
-									Apply to Selected
-								</button>
-								<button
-									type="button"
-									onClick={() => {
-										setBulkEditMode(false);
-										setBulkExpiryDate("");
-									}}
-									className="px-4 py-2 text-sm text-muted hover:text-hyper-green"
-								>
-									Cancel
-								</button>
-							</div>
-						)}
-					</div>
-				</div>
-
-				{/* Capacity exceeded banner — stays in modal so user can deselect and retry */}
-				{hasCapacityError && fetcher.state === "idle" && (
-					<div className="mx-4 mt-4 p-4 rounded-lg bg-amber-500/15 border border-amber-500/40 flex items-start gap-3">
-						<AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
+		<>
+			<div className="fixed inset-0 z-[60] flex items-center justify-center p-4 modal-scrim-heavy">
+				<div className="bg-ceramic dark:bg-[#1A1A1A] border-2 border-hyper-green rounded-xl shadow-glow w-full md:max-w-4xl max-h-[90vh] md:max-h-[85vh] overflow-hidden flex flex-col">
+					{/* Header */}
+					<div className="flex items-center justify-between p-6 border-b border-hyper-green/30">
 						<div>
-							<p className="font-medium text-amber-700 dark:text-amber-400">
-								Inventory limit reached
-							</p>
+							<h2 className="text-2xl font-bold text-hyper-green">
+								Scan Results
+							</h2>
 							<p className="text-sm text-muted mt-1">
-								{batchResponse &&
-								(batchResponse.added ?? 0) + (batchResponse.updated ?? 0) >
-									0 ? (
-									<>
-										{(batchResponse.added ?? 0) + (batchResponse.updated ?? 0)}{" "}
-										added.{" "}
-										{typeof batchResponse.canAdd === "number"
-											? `You have ${batchResponse.canAdd} slots left. Deselect ${batchResponse.errors?.length ?? 0} items to add within your limit.`
-											: `${batchResponse.errors?.length ?? 0} could not be added. Deselect items and try again.`}
-									</>
-								) : (
-									<>
-										You selected {batchResponse?.total ?? selectedItems.length}{" "}
-										items.{" "}
-										{typeof batchResponse?.canAdd === "number"
-											? `Deselect ${(batchResponse?.total ?? selectedItems.length) - batchResponse.canAdd} items to add within your limit.`
-											: "Your plan allows a limited number. Deselect some items to add within your limit."}
-									</>
-								)}
+								{items.length} items detected • {selectedItems.length} selected
 							</p>
+							<p className="text-xs text-muted mt-0.5">
+								Tap edit to fix names, quantities, or units
+							</p>
+							{nutritionEngine ? (
+								<div className="mt-1">
+									<NutritionLookupBanner status={nutritionLookupStatus} />
+								</div>
+							) : null}
 						</div>
+						<button
+							type="button"
+							onClick={onClose}
+							className="text-muted hover:text-hyper-green transition-colors"
+							aria-label="Close modal"
+						>
+							<X className="w-6 h-6" />
+						</button>
 					</div>
-				)}
 
-				{/* Items List */}
-				<div className="flex-1 overflow-y-auto p-4 space-y-2">
-					{items.map((item) => {
-						const mergeMatch = mergeMatches.get(item.id);
-						return (
-							<ScanResultItemRow
-								key={item.id}
-								item={item}
-								mergeMatch={mergeMatch ?? null}
-								isEditing={editingId === item.id}
-								nutritionEngine={nutritionEngine}
-								nutritionLookupStatus={nutritionLookupStatus}
-								onToggleSelection={toggleSelection}
-								onStartEdit={(id) => setEditingId(id)}
-								onCancelEdit={() => setEditingId(null)}
-								onUpdate={(updates) => {
-									const nextName = updates.name ?? item.name;
-									const shouldReresolve =
-										nutritionEngine &&
-										shouldReresolveNutritionAfterNameChange({
-											previousName: item.name,
-											nextName,
-											nutritionSource:
-												updates.nutrition?.source ?? item.nutrition?.source,
-										});
-									if (shouldReresolve) {
-										updateItem(item.id, {
-											...updates,
-											nutrition: undefined,
-										});
-										setEditingId(null);
-										void reresolveItemNutrition(item.id, nextName);
-									} else {
-										updateItem(item.id, updates);
-										setEditingId(null);
-									}
-								}}
-								onDismissMerge={dismissMerge}
-							/>
-						);
-					})}
-
-					{items.length === 0 && (
-						<div className="text-center py-12 text-muted">
-							No items detected in scan
+					{/* truncationWarning: set when CSV import hit row limit (e.g. 500); see ScanResultSchema */}
+					{result.metadata?.truncationWarning && (
+						<div className="mx-4 mt-4 p-4 bg-platinum/20 dark:bg-white/10 border border-platinum dark:border-white/20 rounded-xl text-sm text-muted">
+							{result.metadata.truncationWarning}
 						</div>
 					)}
-				</div>
 
-				{/* Footer Actions */}
-				<div className="p-6 border-t border-hyper-green/30 flex justify-between items-center">
-					<button
-						type="button"
-						onClick={onClose}
-						className="px-6 py-3 text-muted hover:text-hyper-green font-medium transition-colors"
-					>
-						Cancel
-					</button>
-					<button
-						type="button"
-						onClick={handleSubmit}
-						disabled={selectedItems.length === 0 || isSubmitting}
-						className="px-8 py-3 bg-hyper-green text-on-hyper-green font-bold rounded-lg shadow-glow-sm hover:shadow-glow transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-					>
-						{isSubmitting ? (
-							<>Processing...</>
-						) : (
-							<>
-								<Check className="w-5 h-5" />
-								Add {selectedItems.length} Item
-								{selectedItems.length !== 1 ? "s" : ""} to Cargo
-							</>
+					{/* Bulk Controls */}
+					<div className="p-4 border-b border-hyper-green/30 bg-platinum/30 dark:bg-white/5">
+						<div className="flex flex-wrap gap-3 items-center">
+							<button
+								type="button"
+								onClick={toggleAll}
+								className="px-4 py-2 bg-platinum/10 hover:bg-platinum/20 text-sm text-muted hover:text-hyper-green rounded-lg transition-colors font-medium"
+							>
+								{items.every((item) => item.selected)
+									? "Deselect All"
+									: "Select All"}
+							</button>
+
+							<button
+								type="button"
+								onClick={() => setBulkEditMode(!bulkEditMode)}
+								disabled={selectedItems.length === 0}
+								className="px-4 py-2 bg-platinum/10 hover:bg-platinum/20 text-sm text-muted hover:text-hyper-green rounded-lg transition-colors font-medium disabled:opacity-30 disabled:cursor-not-allowed flex items-center gap-2"
+							>
+								<Calendar className="w-4 h-4" />
+								Set Expiry Date
+							</button>
+
+							{bulkEditMode && (
+								<div className="flex items-center gap-2 flex-1">
+									<input
+										type="date"
+										value={bulkExpiryDate}
+										onChange={(e) => setBulkExpiryDate(e.target.value)}
+										className="bg-platinum/10 border border-hyper-green/30 rounded-lg px-3 py-2 text-sm text-carbon focus:ring-2 focus:ring-hyper-green/50 focus:outline-none"
+									/>
+									<button
+										type="button"
+										onClick={applyBulkExpiry}
+										disabled={!bulkExpiryDate}
+										className="px-4 py-2 bg-hyper-green text-on-hyper-green font-semibold rounded-lg hover:bg-hyper-green/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+									>
+										Apply to Selected
+									</button>
+									<button
+										type="button"
+										onClick={() => {
+											setBulkEditMode(false);
+											setBulkExpiryDate("");
+										}}
+										className="px-4 py-2 text-sm text-muted hover:text-hyper-green"
+									>
+										Cancel
+									</button>
+								</div>
+							)}
+						</div>
+					</div>
+
+					{/* Capacity exceeded banner — all-or-nothing; stay open to deselect or upgrade */}
+					{hasCapacityError && fetcher.state === "idle" && (
+						<div className="mx-4 mt-4 p-4 rounded-lg bg-amber-500/15 border border-amber-500/40 flex items-start gap-3">
+							<AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
+							<div className="flex-1 min-w-0">
+								<p className="font-medium text-amber-700 dark:text-amber-400">
+									Cargo capacity exceeded
+								</p>
+								<p className="text-sm text-muted mt-1">
+									Nothing was added. Free plans allow a limited number of Cargo
+									items
+									{typeof batchResponse?.canAdd === "number" &&
+									typeof batchResponse.total === "number"
+										? ` (${batchResponse.canAdd} slot${batchResponse.canAdd === 1 ? "" : "s"} left; you selected ${batchResponse.total})`
+										: ""}
+									. Deselect items to fit your limit, or upgrade to Crew for
+									unlimited capacity.
+								</p>
+								<div className="mt-3 flex flex-wrap gap-2">
+									<button
+										type="button"
+										onClick={() => setShowUpgradePrompt(true)}
+										className="px-3 py-1.5 rounded-lg bg-hyper-green text-on-hyper-green text-sm font-bold"
+									>
+										Upgrade to Crew
+									</button>
+									<Link
+										to="/hub/pricing"
+										className="px-3 py-1.5 rounded-lg btn-secondary text-sm font-medium"
+									>
+										View pricing
+									</Link>
+								</div>
+							</div>
+						</div>
+					)}
+
+					{/* Items List */}
+					<div className="flex-1 overflow-y-auto p-4 space-y-2">
+						{items.map((item) => {
+							const mergeMatch = mergeMatches.get(item.id);
+							return (
+								<ScanResultItemRow
+									key={item.id}
+									item={item}
+									mergeMatch={mergeMatch ?? null}
+									isEditing={editingId === item.id}
+									nutritionEngine={nutritionEngine}
+									nutritionLookupStatus={nutritionLookupStatus}
+									onToggleSelection={toggleSelection}
+									onStartEdit={(id) => setEditingId(id)}
+									onCancelEdit={() => setEditingId(null)}
+									onUpdate={(updates) => {
+										const nextName = updates.name ?? item.name;
+										const shouldReresolve =
+											nutritionEngine &&
+											shouldReresolveNutritionAfterNameChange({
+												previousName: item.name,
+												nextName,
+												nutritionSource:
+													updates.nutrition?.source ?? item.nutrition?.source,
+											});
+										if (shouldReresolve) {
+											updateItem(item.id, {
+												...updates,
+												nutrition: undefined,
+											});
+											setEditingId(null);
+											void reresolveItemNutrition(item.id, nextName);
+										} else {
+											updateItem(item.id, updates);
+											setEditingId(null);
+										}
+									}}
+									onDismissMerge={dismissMerge}
+								/>
+							);
+						})}
+
+						{items.length === 0 && (
+							<div className="text-center py-12 text-muted">
+								No items detected in scan
+							</div>
 						)}
-					</button>
+					</div>
+
+					{/* Footer Actions */}
+					<div className="p-6 border-t border-hyper-green/30 flex justify-between items-center">
+						<button
+							type="button"
+							onClick={onClose}
+							className="px-6 py-3 text-muted hover:text-hyper-green font-medium transition-colors"
+						>
+							Cancel
+						</button>
+						<button
+							type="button"
+							onClick={handleSubmit}
+							disabled={selectedItems.length === 0 || isSubmitting}
+							className="px-8 py-3 bg-hyper-green text-on-hyper-green font-bold rounded-lg shadow-glow-sm hover:shadow-glow transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+						>
+							{isSubmitting ? (
+								<>Processing...</>
+							) : (
+								<>
+									<Check className="w-5 h-5" />
+									Add {selectedItems.length} Item
+									{selectedItems.length !== 1 ? "s" : ""} to Cargo
+								</>
+							)}
+						</button>
+					</div>
 				</div>
 			</div>
-		</div>
+			<UpgradePrompt
+				open={showUpgradePrompt}
+				onClose={() => setShowUpgradePrompt(false)}
+				title="Cargo capacity exceeded"
+				description="Upgrade to Crew Member for unlimited Cargo items, meals, and supply lists."
+			/>
+		</>
 	);
 }
 

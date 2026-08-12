@@ -45,6 +45,8 @@ Cancel through the **Stripe Customer Portal** via **Manage billing** from **Hub 
 
 When you hit a cap, the app should show an **upgrade** path with the resource name and current counts.
 
+Cargo **scan confirm** and **dock-from-receipt** are **all-or-nothing**: if the batch would create more new Cargo SKUs than remaining free-tier slots, **nothing is written** (supply rows are not cleared). Web and iOS both explain the limit and offer **Upgrade to Crew** (`UpgradePrompt` / RevenueCat `PaywallView`). Users can deselect items and retry within remaining capacity, or upgrade.
+
 - **Web:** `UpgradePrompt` → Hub Pricing, plus soft `CapacityIndicator` meters near ~80% usage.
 - **iOS:** Contextual `PaywallView` (RevenueCat) opens on `capacity_exceeded` / feature gates for cargo, meals, scan/supply dock, groups, and share. Soft `CapacityMeter` cues appear on Cargo and Galley list headers for Free tier. Paywall copy explains Crew benefits (unlimited capacity, groups & invites, share links) vs credit packs (AI features on both tiers).
 

@@ -14,7 +14,7 @@ struct CargoDetailView: View {
     @State private var connectedMealsSort: ConnectedMealsSort = .alphabetical
     @State private var expandedMealIds: Set<String> = []
     @State private var showAllConnectedMeals = false
-
+    @State private var paywallContext: PaywallContext?
     var body: some View {
         Group {
             if model.isLoading && model.item == nil {
@@ -154,6 +154,9 @@ struct CargoDetailView: View {
                 }
             }
         }
+        .sheet(item: $paywallContext) { ctx in
+            PaywallView(context: ctx)
+        }
         .confirmationDialog("Delete this cargo item?", isPresented: $showingDeleteConfirm, titleVisibility: .visible) {
             Button("Delete", role: .destructive) {
                 Task {
@@ -192,11 +195,15 @@ struct CargoDetailView: View {
     private func handlePromote() async {
         let result = await model.promoteToGalley(api: env.api)
         if result == .capacityExceeded {
-            // Paywall is handled via error banner; no extra sheet here.
+            paywallContext = PaywallContext(
+                trigger: .capacity,
+                resource: "meals",
+                current: nil,
+                limit: TierLimits.freeMaxMeals
+            )
         }
         env.notifyCargoDataChanged()
     }
-
     private var cargoLoadFailureView: some View {
         VStack(spacing: 16) {
             EmptyStateView(

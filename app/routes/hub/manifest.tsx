@@ -1197,9 +1197,13 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 					servings: r.servings,
 					energyKcal: r.energyKcal,
 					mealName: r.mealName,
+					organizationName: r.organizationName,
 				})),
 		[dayIntakeRows, activeDay],
 	);
+
+	const showDayView =
+		hasEntries || (nutritionManifestFlag && activeDayIntakes.length > 0);
 
 	// Mobile filter sheet — date range + share
 	const filterContent = (
@@ -1364,7 +1368,7 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 						plannedDates={plannedDates}
 					/>
 					<div className="mt-4">
-						{!hasEntries ? (
+						{!showDayView ? (
 							<EmptyManifest onAdd={handleAdd} activeDate={activeDay} />
 						) : (
 							<DayView

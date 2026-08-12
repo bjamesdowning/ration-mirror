@@ -478,72 +478,73 @@ struct ManifestView: View {
                         }
                     }
                 }
+            }
 
-                if entryActionFlags.isCookLogSplitEnabled,
-                   entryActionFlags.isNutritionManifestEnabled
-                {
-                    let intakeRows: [(id: String, name: String, organizationName: String?, intake: ManifestPersonalIntake)] = {
-                        let diary = (manifest.dayIntakeRows ?? []).filter { $0.manifestDate == model.selectedDay }
-                        if !diary.isEmpty {
-                            return diary.map { row in
-                                (
-                                    row.id,
-                                    row.mealName ?? "Meal",
-                                    row.organizationName,
-                                    ManifestPersonalIntake(
-                                        id: row.id,
-                                        servings: row.servings,
-                                        energyKcal: row.energyKcal,
-                                        proteinG: row.proteinG,
-                                        carbsG: row.carbsG,
-                                        fatG: row.fatG,
-                                        occurredAt: Date(),
-                                        notes: nil
+            // Personal diary (incl. cross-kitchen rows) — independent of planned meals today.
+            if entryActionFlags.isCookLogSplitEnabled,
+               entryActionFlags.isNutritionManifestEnabled
+            {
+                let intakeRows: [(id: String, name: String, organizationName: String?, intake: ManifestPersonalIntake)] = {
+                    let diary = (manifest.dayIntakeRows ?? []).filter { $0.manifestDate == model.selectedDay }
+                    if !diary.isEmpty {
+                        return diary.map { row in
+                            (
+                                row.id,
+                                row.mealName ?? "Meal",
+                                row.organizationName,
+                                ManifestPersonalIntake(
+                                    id: row.id,
+                                    servings: row.servings,
+                                    energyKcal: row.energyKcal,
+                                    proteinG: row.proteinG,
+                                    carbsG: row.carbsG,
+                                    fatG: row.fatG,
+                                    occurredAt: Date(),
+                                    notes: nil
+                                )
+                            )
+                        }
+                    }
+                    return dayEntries.compactMap { entry -> (id: String, name: String, organizationName: String?, intake: ManifestPersonalIntake)? in
+                        guard let intake = entry.personalIntake else { return nil }
+                        return (entry.id, entry.mealName, nil, intake)
+                    }
+                }()
+                if !intakeRows.isEmpty {
+                    Section {
+                        ForEach(intakeRows, id: \.id) { row in
+                            VStack(alignment: .leading, spacing: 4) {
+                                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                                    Text(row.name)
+                                        .rationBody()
+                                        .foregroundStyle(Theme.carbon)
+                                    if let kitchen = row.organizationName, !kitchen.isEmpty {
+                                        Text("· \(kitchen)")
+                                            .rationCaption()
+                                            .foregroundStyle(Theme.muted)
+                                    }
+                                }
+                                Text(
+                                    String(
+                                        format: "%.1f serving%@ · %.0f kcal · P %.0fg · C %.0fg · F %.0fg",
+                                        row.intake.servings,
+                                        row.intake.servings == 1 ? "" : "s",
+                                        row.intake.energyKcal,
+                                        row.intake.proteinG,
+                                        row.intake.carbsG,
+                                        row.intake.fatG
                                     )
                                 )
-                            }
-                        }
-                        return dayEntries.compactMap { entry -> (id: String, name: String, organizationName: String?, intake: ManifestPersonalIntake)? in
-                            guard let intake = entry.personalIntake else { return nil }
-                            return (entry.id, entry.mealName, nil, intake)
-                        }
-                    }()
-                    if !intakeRows.isEmpty {
-                        Section {
-                            ForEach(intakeRows, id: \.id) { row in
-                                VStack(alignment: .leading, spacing: 4) {
-                                    HStack(alignment: .firstTextBaseline, spacing: 6) {
-                                        Text(row.name)
-                                            .rationBody()
-                                            .foregroundStyle(Theme.carbon)
-                                        if let kitchen = row.organizationName, !kitchen.isEmpty {
-                                            Text("· \(kitchen)")
-                                                .rationCaption()
-                                                .foregroundStyle(Theme.muted)
-                                        }
-                                    }
-                                    Text(
-                                        String(
-                                            format: "%.1f serving%@ · %.0f kcal · P %.0fg · C %.0fg · F %.0fg",
-                                            row.intake.servings,
-                                            row.intake.servings == 1 ? "" : "s",
-                                            row.intake.energyKcal,
-                                            row.intake.proteinG,
-                                            row.intake.carbsG,
-                                            row.intake.fatG
-                                        )
-                                    )
-                                    .rationCaption()
-                                    .foregroundStyle(Theme.muted)
-                                }
-                                .listRowBackground(Theme.surface)
-                            }
-                        } header: {
-                            Text("Intake log")
                                 .rationCaption()
-                                .textCase(.uppercase)
                                 .foregroundStyle(Theme.muted)
+                            }
+                            .listRowBackground(Theme.surface)
                         }
+                    } header: {
+                        Text("Intake log")
+                            .rationCaption()
+                            .textCase(.uppercase)
+                            .foregroundStyle(Theme.muted)
                     }
                 }
             }

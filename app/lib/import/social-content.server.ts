@@ -1,5 +1,5 @@
 /**
- * Acquire social post evidence (metadata → optional Supadata transcript).
+ * Acquire social post evidence (platform meta → Supadata metadata → optional native transcript).
  */
 
 import {
@@ -9,6 +9,7 @@ import {
 } from "~/lib/import/classify-import-url";
 import { hasStrongRecipeSignal } from "~/lib/import/recipe-signal";
 import {
+	fetchMetadata,
 	fetchTranscript,
 	isSupadataUnavailable,
 	SupadataError,
@@ -22,6 +23,7 @@ import {
 export type SocialEvidence =
 	| "oembed"
 	| "description"
+	| "supadata_metadata"
 	| "supadata"
 	| "user_text";
 
@@ -159,6 +161,25 @@ function mergeText(parts: Array<string | undefined>): string {
 		.join("\n\n");
 }
 
+/** Prefer the longer non-empty string when merging metadata sources. */
+function preferLonger(
+	current: string | undefined,
+	incoming: string | undefined,
+): string | undefined {
+	const a = current?.trim();
+	const b = incoming?.trim();
+	if (!b) return a || undefined;
+	if (!a) return b;
+	return b.length > a.length ? b : a;
+}
+
+function isTranscriptProductMiss(err: unknown): boolean {
+	if (!(err instanceof SupadataError)) return false;
+	if (err.code === "empty") return true;
+	const status = err.status;
+	return status === 206 || status === 404;
+}
+
 export function socialContentToPromptText(content: SocialContent): string {
 	const blocks: string[] = [
 		`platform: ${content.platform}`,
@@ -178,7 +199,8 @@ export type AcquireSocialOptions = {
 };
 
 /**
- * Hybrid acquire: platform metadata first; Supadata transcript when thin.
+ * Hybrid acquire: free platform meta → Supadata metadata → native transcript when thin.
+ * Both metadata and transcript (when present) feed Gemini via socialContentToPromptText.
  */
 export async function acquireSocialContent(
 	env: SocialEnv,
@@ -198,9 +220,10 @@ export async function acquireSocialContent(
 	let caption: string | undefined;
 	let description: string | undefined;
 	let canonicalUrl = url;
+	const hasUserText = Boolean(options?.userText?.trim());
 
-	if (options?.userText?.trim()) {
-		caption = options.userText.trim();
+	if (hasUserText) {
+		caption = options?.userText?.trim();
 		evidence.push("user_text");
 	}
 
@@ -210,7 +233,7 @@ export async function acquireSocialContent(
 			canonicalUrl = oembed.canonicalUrl;
 			if (oembed.title) {
 				title = oembed.title;
-				if (!caption) caption = oembed.title;
+				if (!hasUserText) caption = oembed.title;
 				evidence.push("oembed");
 			}
 		} else if (kind === "youtube") {
@@ -220,7 +243,7 @@ export async function acquireSocialContent(
 			description = yt.description;
 			if (yt.title || yt.description) evidence.push("description");
 		} else if (kind === "instagram") {
-			// No Meta oEmbed persistence — user text or Supadata only.
+			// No Meta oEmbed — user text or Supadata metadata/transcript.
 			canonicalUrl = url;
 		}
 	} catch (err) {
@@ -230,13 +253,31 @@ export async function acquireSocialContent(
 		});
 	}
 
+	// Supadata unified metadata (title + description) — critical for TikTok/IG captions.
+	try {
+		const meta = await fetchMetadata(env, canonicalUrl);
+		if (meta.url) canonicalUrl = meta.url;
+		const hadTitleOrDescription = Boolean(meta.title || meta.description);
+		if (hadTitleOrDescription) {
+			title = preferLonger(title, meta.title);
+			description = preferLonger(description, meta.description);
+			evidence.push("supadata_metadata");
+		}
+	} catch (err) {
+		log.warn("social_supadata_metadata_failed", {
+			platform: kind,
+			error: err instanceof Error ? err.message : "unknown",
+			unavailable: isSupadataUnavailable(err),
+		});
+	}
+
 	const signalText = mergeText([title, caption, description]);
 	let transcript: string | undefined;
 
 	if (!hasStrongRecipeSignal(signalText)) {
 		try {
 			const result = await fetchTranscript(env, canonicalUrl, {
-				mode: "auto",
+				mode: "native",
 			});
 			transcript = result.text;
 			evidence.push("supadata");
@@ -248,24 +289,27 @@ export async function acquireSocialContent(
 				error: err instanceof Error ? err.message : "unknown",
 				unavailable: isSupadataUnavailable(err),
 			});
-			// Needed transcript escalation failed — refund path (do not burn Gemini on thin captions).
-			if (isSupadataUnavailable(err)) {
+
+			// Native miss — continue; CONTENT_TOO_SHORT gate decides if metadata is enough.
+			if (!isTranscriptProductMiss(err)) {
+				if (isSupadataUnavailable(err)) {
+					return {
+						ok: false,
+						error: IMPORT_PROVIDER_UNAVAILABLE_MESSAGE,
+						code: IMPORT_PROVIDER_UNAVAILABLE_CODE,
+						softFailToPhoto: true,
+					};
+				}
 				return {
 					ok: false,
-					error: IMPORT_PROVIDER_UNAVAILABLE_MESSAGE,
-					code: IMPORT_PROVIDER_UNAVAILABLE_CODE,
+					error:
+						kind === "instagram"
+							? "Could not read this Instagram post. Try a screenshot of the recipe."
+							: "Could not extract recipe text from this video. Try a screenshot or a different link.",
+					code: "SOCIAL_CONTENT_EMPTY",
 					softFailToPhoto: true,
 				};
 			}
-			return {
-				ok: false,
-				error:
-					kind === "instagram"
-						? "Could not read this Instagram post. Try a screenshot of the recipe."
-						: "Could not extract recipe text from this video. Try a screenshot or a different link.",
-				code: "SOCIAL_CONTENT_EMPTY",
-				softFailToPhoto: true,
-			};
 		}
 	}
 

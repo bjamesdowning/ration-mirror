@@ -13,7 +13,7 @@ Each import costs **3 AI credits** (premium — external fetch/transcript plus G
 ## Supported sources
 
 - **Recipe websites** — HTTPS pages with ingredients and directions. If a publisher blocks bots, Ration still saves a link-holder meal you can open later; you can also paste page HTML (web) or reload on-device (iOS).
-- **Social posts** — TikTok, Instagram, and YouTube (including Shorts). Ration uses captions, descriptions, and transcripts when needed. On iOS, use **Share → Ration** from the social app to open Import with the URL prefilled.
+- **Social posts** — TikTok, Instagram, and YouTube (including Shorts). Ration pulls platform metadata (including Supadata title/description), then uses a native video transcript only when the caption is still too thin for a recipe. On iOS, use **Share → Ration** from the social app to open Import with the URL prefilled.
 - **Photos / screenshots** — Upload a clear image of a recipe card, cookbook page, or caption.
 
 Manual Galley entry always remains available.

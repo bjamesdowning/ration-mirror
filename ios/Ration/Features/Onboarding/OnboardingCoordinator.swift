@@ -3,10 +3,12 @@ import Observation
 
 enum OnboardingPhase: Equatable {
     case inactive
+    case welcome
+    case featureEnablement
     case askBriefing
 }
 
-/// Drives Ask-first onboarding: Copilot intro + optional starter seed, then Get Started.
+/// Drives onboarding: Welcome → Feature enablement → Copilot briefing → Get Started.
 @MainActor
 @Observable
 final class OnboardingCoordinator {
@@ -14,19 +16,20 @@ final class OnboardingCoordinator {
     var settingsPatchHandler: ((SettingsPatch) async throws -> UserSettings)?
 
     private(set) var isActive = false
-    /// Settings tutorial replay — static markdown only, no LLM grant.
+    private(set) var phase: OnboardingPhase = .inactive
+    /// Settings tutorial replay — static markdown only, no LLM grant; skips Welcome/Features.
     private(set) var isStaticReplay = false
+    /// When true after feature enablement, Copilot uses static briefing (AI Features off).
+    private(set) var preferStaticAfterFeatures = false
     var unitDisplayMode = "metric"
     var isSaving = false
     var errorMessage: String?
 
-    var phase: OnboardingPhase {
-        isActive ? .askBriefing : .inactive
-    }
-
     func reset() {
         isActive = false
+        phase = .inactive
         isStaticReplay = false
+        preferStaticAfterFeatures = false
         isSaving = false
         errorMessage = nil
         unitDisplayMode = Self.defaultUnitDisplayMode()
@@ -36,20 +39,43 @@ final class OnboardingCoordinator {
     func startIfNeeded(completedAt: String?, settings: UserSettings? = nil) {
         guard completedAt == nil || completedAt?.isEmpty == true else {
             isActive = false
+            phase = .inactive
             isStaticReplay = false
             return
         }
         isActive = true
         isStaticReplay = false
+        preferStaticAfterFeatures = false
+        phase = .welcome
         unitDisplayMode = Self.defaultUnitDisplayMode()
         if let mode = settings?.unitDisplayMode, !mode.isEmpty {
             unitDisplayMode = mode
         }
     }
 
+    /// When Feature enablement Flagship is off, skip consent collection after Welcome.
+    func skipFeatureEnablementIfDisabled(flagEnabled: Bool) {
+        guard isActive, phase == .welcome || phase == .featureEnablement else { return }
+        if !flagEnabled, phase == .featureEnablement {
+            phase = .askBriefing
+        }
+    }
+
+    func advanceFromWelcome(featureEnablementEnabled: Bool) {
+        guard isActive, phase == .welcome else { return }
+        if featureEnablementEnabled {
+            phase = .featureEnablement
+        } else {
+            phase = .askBriefing
+        }
+    }
+
     func restart(staticReplay: Bool = true) {
         isActive = true
         isStaticReplay = staticReplay
+        preferStaticAfterFeatures = false
+        // Tutorial replay skips consent collection.
+        phase = .askBriefing
         errorMessage = nil
     }
 
@@ -57,6 +83,20 @@ final class OnboardingCoordinator {
     func preferStaticBriefing() {
         guard isActive else { return }
         isStaticReplay = true
+    }
+
+    /// After feature enablement Agree. `aiEnabled` controls live vs static Copilot.
+    func advanceFromFeatureEnablement(aiEnabled: Bool) {
+        guard isActive, phase == .featureEnablement else { return }
+        preferStaticAfterFeatures = !aiEnabled
+        if !aiEnabled {
+            isStaticReplay = true
+        }
+        phase = .askBriefing
+    }
+
+    var shouldUseStaticBriefing: Bool {
+        isStaticReplay || preferStaticAfterFeatures
     }
 
     func complete(api: RationAPI) async -> UserSettings? {
@@ -84,7 +124,9 @@ final class OnboardingCoordinator {
 
     private func finishLocally() {
         isActive = false
+        phase = .inactive
         isStaticReplay = false
+        preferStaticAfterFeatures = false
         errorMessage = nil
     }
 

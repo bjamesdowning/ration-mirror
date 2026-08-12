@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { MessageCircle } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
 	data,
 	Form,
@@ -13,6 +13,7 @@ import {
 	useRevalidator,
 	useRouteLoaderData,
 } from "react-router";
+import { FeatureEnablementForm } from "~/components/feature-enablement/FeatureEnablementForm";
 import { CheckIcon, SettingsIcon } from "~/components/icons/PageIcons";
 import { AllergenSelector } from "~/components/settings/AllergenSelector";
 import { DeveloperSection } from "~/components/settings/developer/DeveloperSection";
@@ -648,7 +649,8 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 		if (typeof window !== "undefined") {
 			const hash = window.location.hash.replace("#", "");
 			if (hash === "api" || hash === "connected-agents") return "developer";
-			if (hash === "nutrition-goals") return "preferences";
+			if (hash === "nutrition-goals" || hash === "feature-enablement")
+				return "preferences";
 			const valid: SectionId[] = [
 				"account",
 				"group",
@@ -668,8 +670,9 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 
 	useEffect(() => {
 		if (typeof window === "undefined") return;
-		if (window.location.hash !== "#nutrition-goals") return;
-		const el = document.getElementById("nutrition-goals");
+		const hash = window.location.hash;
+		if (hash !== "#nutrition-goals" && hash !== "#feature-enablement") return;
+		const el = document.getElementById(hash.slice(1));
 		el?.scrollIntoView({ behavior: "smooth", block: "start" });
 	}, []);
 
@@ -1521,28 +1524,6 @@ function parseOptionalNutrient(raw: string): number | null {
 	return Number.isFinite(value) ? value : null;
 }
 
-type NutritionConsentPurpose = "goals" | "intake" | "agent_processing";
-type NutritionConsentStatus = {
-	purpose: NutritionConsentPurpose;
-	state: "active" | "not_granted" | "withdrawn" | "reconsent_required";
-	consentId: string | null;
-	grantedAt: string | null;
-	withdrawnAt: string | null;
-	statement: {
-		purpose: NutritionConsentPurpose;
-		policyVersion: string;
-		statementVersion: string;
-		text: string;
-		sha256: string;
-		privacyNoticeVersion: string;
-	};
-};
-type NutritionPrivacyResponse = {
-	ok?: boolean;
-	consents?: NutritionConsentStatus[];
-	error?: string;
-};
-
 function NutritionGoalsSection({
 	initialGoal,
 }: {
@@ -1560,19 +1541,11 @@ function NutritionGoalsSection({
 		cleared?: number;
 		error?: string;
 	}>();
-	const privacyFetcher = useFetcher<NutritionPrivacyResponse>();
+	const featuresFetcher = useFetcher<{
+		macroTracking?: boolean;
+		error?: string;
+	}>();
 	const revalidator = useRevalidator();
-	const [consent, setConsent] = useState(false);
-	const [pendingGoalSave, setPendingGoalSave] = useState(false);
-	const [privacyAffirmations, setPrivacyAffirmations] = useState<
-		Partial<Record<NutritionConsentPurpose, boolean>>
-	>({});
-	const [privacyStatuses, setPrivacyStatuses] = useState<
-		NutritionConsentStatus[]
-	>([]);
-	const [pendingPrivacyAction, setPendingPrivacyAction] = useState<
-		"erase" | null
-	>(null);
 	const [dailyEnergyKcal, setDailyEnergyKcal] = useState(
 		initialGoal?.dailyEnergyKcal != null
 			? String(initialGoal.dailyEnergyKcal)
@@ -1590,11 +1563,9 @@ function NutritionGoalsSection({
 	const [fiberG, setFiberG] = useState(
 		initialGoal?.fiberG != null ? String(initialGoal.fiberG) : "",
 	);
-	const isSaving = fetcher.state !== "idle" || privacyFetcher.state !== "idle";
-	const goalConsent = privacyStatuses.find(
-		(status) => status.purpose === "goals",
-	);
-	const hasActiveGoalConsent = goalConsent?.state === "active";
+	const isSaving = fetcher.state !== "idle";
+	const macroTracking = featuresFetcher.data?.macroTracking === true;
+	const featuresLoaded = featuresFetcher.data != null;
 
 	const nutrientPayload = {
 		dailyEnergyKcal: parseOptionalNutrient(dailyEnergyKcal),
@@ -1606,27 +1577,13 @@ function NutritionGoalsSection({
 	const hasAtLeastOneNutrient = Object.values(nutrientPayload).some(
 		(v) => v != null,
 	);
-	const canSave =
-		hasAtLeastOneNutrient && (hasActiveGoalConsent || consent) && !isSaving;
+	const canSave = hasAtLeastOneNutrient && macroTracking && !isSaving;
 
 	useEffect(() => {
-		if (privacyFetcher.state === "idle" && privacyFetcher.data == null) {
-			privacyFetcher.load("/api/privacy/nutrition");
+		if (featuresFetcher.state === "idle" && featuresFetcher.data == null) {
+			featuresFetcher.load("/api/privacy/features");
 		}
-	}, [privacyFetcher]);
-
-	useEffect(() => {
-		if (privacyFetcher.data?.consents) {
-			setPrivacyStatuses(privacyFetcher.data.consents);
-		}
-		if (
-			pendingGoalSave &&
-			privacyFetcher.state === "idle" &&
-			privacyFetcher.data?.error
-		) {
-			setPendingGoalSave(false);
-		}
-	}, [privacyFetcher.data, privacyFetcher.state, pendingGoalSave]);
+	}, [featuresFetcher]);
 
 	useEffect(() => {
 		if (fetcher.state === "idle" && fetcher.data && !fetcher.data.error) {
@@ -1634,7 +1591,8 @@ function NutritionGoalsSection({
 		}
 	}, [fetcher.state, fetcher.data, revalidator]);
 
-	const submitGoal = useCallback(() => {
+	const handleSave = () => {
+		if (!canSave) return;
 		fetcher.submit(
 			JSON.stringify({
 				dailyEnergyKcal: parseOptionalNutrient(dailyEnergyKcal),
@@ -1651,120 +1609,12 @@ function NutritionGoalsSection({
 				encType: "application/json",
 			},
 		);
-	}, [dailyEnergyKcal, proteinG, carbsG, fatG, fiberG, fetcher]);
-
-	useEffect(() => {
-		const active = privacyFetcher.data?.consents?.some(
-			(status) => status.purpose === "goals" && status.state === "active",
-		);
-		if (pendingGoalSave && privacyFetcher.state === "idle" && active) {
-			setPendingGoalSave(false);
-			setConsent(false);
-			submitGoal();
-		}
-	}, [pendingGoalSave, privacyFetcher.state, privacyFetcher.data, submitGoal]);
-
-	useEffect(() => {
-		if (
-			pendingPrivacyAction === "erase" &&
-			privacyFetcher.state === "idle" &&
-			privacyFetcher.data?.ok
-		) {
-			setPendingPrivacyAction(null);
-			revalidator.revalidate();
-		}
-	}, [
-		pendingPrivacyAction,
-		privacyFetcher.state,
-		privacyFetcher.data,
-		revalidator,
-	]);
-
-	const handleSave = () => {
-		if (!canSave) return;
-		if (hasActiveGoalConsent) {
-			submitGoal();
-			return;
-		}
-		if (!goalConsent || !consent) return;
-		setPendingGoalSave(true);
-		privacyFetcher.submit(
-			JSON.stringify({
-				action: "grant",
-				purpose: "goals",
-				policyVersion: goalConsent.statement.policyVersion,
-				statementVersion: goalConsent.statement.statementVersion,
-				statementSha256: goalConsent.statement.sha256,
-				affirmed: true,
-				requestId: crypto.randomUUID(),
-			}),
-			{
-				method: "POST",
-				action: "/api/privacy/nutrition",
-				encType: "application/json",
-			},
-		);
 	};
 
 	const handleClear = () => {
 		fetcher.submit(null, {
 			method: "DELETE",
 			action: `/api/nutrition/goals?operationKey=${crypto.randomUUID()}`,
-		});
-	};
-
-	const submitPrivacyAction = (payload: Record<string, unknown>) => {
-		privacyFetcher.submit(JSON.stringify(payload), {
-			method: "POST",
-			action: "/api/privacy/nutrition",
-			encType: "application/json",
-		});
-	};
-
-	const handleGrantPurpose = (status: NutritionConsentStatus) => {
-		if (!privacyAffirmations[status.purpose]) return;
-		submitPrivacyAction({
-			action: "grant",
-			purpose: status.purpose,
-			policyVersion: status.statement.policyVersion,
-			statementVersion: status.statement.statementVersion,
-			statementSha256: status.statement.sha256,
-			affirmed: true,
-			requestId: crypto.randomUUID(),
-		});
-		setPrivacyAffirmations((current) => ({
-			...current,
-			[status.purpose]: false,
-		}));
-	};
-
-	const handleWithdrawPurpose = (purpose: NutritionConsentPurpose) => {
-		submitPrivacyAction({
-			action: "withdraw",
-			purpose,
-			requestId: crypto.randomUUID(),
-		});
-		if (purpose === "goals") {
-			setConsent(false);
-			setPendingGoalSave(false);
-		}
-	};
-
-	const handleErase = (dataset: "goals" | "intake" | "all") => {
-		const label =
-			dataset === "all" ? "all nutrition goals and intake" : dataset;
-		if (
-			!window.confirm(
-				`Permanently erase ${label}? This cannot be undone. Consent records are retained as evidence but do not contain nutrition values.`,
-			)
-		) {
-			return;
-		}
-		setPendingPrivacyAction("erase");
-		submitPrivacyAction({
-			action: "erase",
-			dataset,
-			requestId: crypto.randomUUID(),
 		});
 	};
 
@@ -1798,11 +1648,20 @@ function NutritionGoalsSection({
 			<p className="text-sm text-muted mb-2">
 				Set only the nutrients you care about. Manifest shows those targets as
 				consumed / goal (adherence-neutral). Leave a field empty to hide it.
-				Health-related data requires explicit consent.
 			</p>
 			<p className="text-xs text-muted mb-4">
-				Not medical advice. Goals and totals are planning aids only.
+				Not medical advice. Goals and totals are planning aids only. Requires
+				Macro Tracking in Feature enablement.
 			</p>
+			{featuresLoaded && !macroTracking && (
+				<div className="mb-4 rounded-lg border border-platinum p-3 text-xs text-muted">
+					Macro Tracking is off —{" "}
+					<a href="#feature-enablement" className="underline text-hyper-green">
+						enable it in Feature enablement
+					</a>{" "}
+					to set goals and log meals.
+				</div>
+			)}
 			<div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
 				<label className="block space-y-1">
 					<span className="text-[10px] font-mono uppercase text-muted">
@@ -1871,30 +1730,6 @@ function NutritionGoalsSection({
 					className="w-full px-2 py-2 text-sm border border-platinum rounded-lg bg-transparent font-mono"
 				/>
 			</label>
-			{goalConsent && !hasActiveGoalConsent && (
-				<div className="mt-4 rounded-lg border border-platinum p-3">
-					<p className="text-xs leading-relaxed text-muted">
-						{goalConsent.statement.text}
-					</p>
-					<label className="flex items-start gap-2 mt-3 cursor-pointer">
-						<input
-							type="checkbox"
-							checked={consent}
-							onChange={(event) => setConsent(event.target.checked)}
-							className="mt-1 accent-hyper-green"
-						/>
-						<span className="text-xs text-carbon">
-							I have read this statement and explicitly consent.
-						</span>
-					</label>
-					<p className="mt-2 text-[10px] font-mono text-muted">
-						Statement {goalConsent.statement.statementVersion} ·{" "}
-						<Link to="/legal/privacy" className="underline">
-							Privacy Policy
-						</Link>
-					</p>
-				</div>
-			)}
 			<div className="flex flex-wrap gap-2 mt-4">
 				<button
 					type="button"
@@ -1927,121 +1762,22 @@ function NutritionGoalsSection({
 					at least one nutrient.
 				</p>
 			)}
-			<div className="mt-6 border-t border-platinum pt-5">
-				<h4 className="text-xs font-semibold text-carbon">Nutrition privacy</h4>
-				<p className="mt-1 text-xs text-muted">
-					Consent is separate for goals, private intake, and connected-agent
-					processing. Withdrawal blocks future processing; it does not erase
-					existing data.
-				</p>
-				{privacyFetcher.data?.error && (
-					<p className="mt-2 text-xs text-error">{privacyFetcher.data.error}</p>
-				)}
-				<div className="mt-3 space-y-3">
-					{privacyStatuses.map((status) => {
-						const label =
-							status.purpose === "agent_processing"
-								? "Connected-agent nutrition processing"
-								: status.purpose === "intake"
-									? "Private nutrition intake"
-									: "Nutrition goals";
-						return (
-							<div
-								key={status.purpose}
-								className="rounded-lg border border-platinum p-3"
-							>
-								<div className="flex flex-wrap items-center justify-between gap-2">
-									<div>
-										<p className="text-xs font-medium text-carbon">{label}</p>
-										<p className="text-[10px] font-mono uppercase text-muted">
-											{status.state.replaceAll("_", " ")}
-										</p>
-									</div>
-									{status.state === "active" && (
-										<button
-											type="button"
-											disabled={isSaving}
-											onClick={() => handleWithdrawPurpose(status.purpose)}
-											className="rounded-lg border border-platinum px-3 py-1.5 text-xs text-muted hover:text-carbon disabled:opacity-40"
-										>
-											Withdraw
-										</button>
-									)}
-								</div>
-								<details className="mt-2">
-									<summary className="cursor-pointer text-xs text-muted underline">
-										Review consent statement
-									</summary>
-									<p className="mt-2 text-xs leading-relaxed text-muted">
-										{status.statement.text}
-									</p>
-									<p className="mt-2 text-[10px] font-mono text-muted">
-										{status.statement.statementVersion}
-									</p>
-								</details>
-								{status.state !== "active" && status.purpose !== "goals" && (
-									<>
-										<label className="mt-3 flex items-start gap-2 text-xs text-carbon">
-											<input
-												type="checkbox"
-												checked={privacyAffirmations[status.purpose] === true}
-												onChange={(event) =>
-													setPrivacyAffirmations((current) => ({
-														...current,
-														[status.purpose]: event.target.checked,
-													}))
-												}
-												className="mt-0.5 accent-hyper-green"
-											/>
-											I have read this statement and explicitly consent.
-										</label>
-										<button
-											type="button"
-											disabled={
-												isSaving || privacyAffirmations[status.purpose] !== true
-											}
-											onClick={() => handleGrantPurpose(status)}
-											className="mt-3 rounded-lg bg-hyper-green px-3 py-1.5 text-xs font-semibold text-on-hyper-green disabled:opacity-40"
-										>
-											Record consent
-										</button>
-									</>
-								)}
-							</div>
-						);
-					})}
-				</div>
-				<div className="mt-4 flex flex-wrap gap-2">
-					<button
-						type="button"
-						disabled={isSaving}
-						onClick={() => handleErase("goals")}
-						className="rounded-lg border border-error/40 px-3 py-1.5 text-xs text-error disabled:opacity-40"
-					>
-						Erase goals
-					</button>
-					<button
-						type="button"
-						disabled={isSaving}
-						onClick={() => handleErase("intake")}
-						className="rounded-lg border border-error/40 px-3 py-1.5 text-xs text-error disabled:opacity-40"
-					>
-						Erase intake
-					</button>
-					<button
-						type="button"
-						disabled={isSaving}
-						onClick={() => handleErase("all")}
-						className="rounded-lg border border-error/40 px-3 py-1.5 text-xs text-error disabled:opacity-40"
-					>
-						Erase all nutrition data
-					</button>
-				</div>
-				<p className="mt-3 text-[10px] text-muted">
-					Erasure permanently deletes selected nutrition values. Consent ledger
-					records contain policy evidence only and are retained separately.
-				</p>
-			</div>
+		</div>
+	);
+}
+
+function FeatureEnablementSection() {
+	return (
+		<div
+			id="feature-enablement"
+			className="glass-panel rounded-xl p-6 scroll-mt-24"
+		>
+			<h3 className="text-xs text-label text-muted mb-1">Feature enablement</h3>
+			<p className="text-sm text-muted mb-4">
+				One place to turn AI Features and Macro Tracking on or off, and erase
+				nutrition data.
+			</p>
+			<FeatureEnablementForm variant="settings" />
 		</div>
 	);
 }
@@ -2079,6 +1815,8 @@ function PreferencesSection({
 
 			{/* Dietary Restrictions */}
 			<AllergenSection settings={settings} />
+
+			<FeatureEnablementSection />
 
 			{nutritionGoalsEnabled && (
 				<NutritionGoalsSection initialGoal={nutritionGoal} />

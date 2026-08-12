@@ -851,6 +851,16 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 						endTurn({ persist: true, focus: false, clearApproval: true });
 						return;
 					}
+					if (
+						typeof event.error === "object" &&
+						event.error?.code === "ai_consent_required"
+					) {
+						setError(
+							"AI Features are off — enable them in Settings → Feature enablement.",
+						);
+						endTurn({ clearApproval: true });
+						return;
+					}
 					setError(
 						typeof event.error === "object"
 							? event.error.message
@@ -1537,7 +1547,15 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 						<p className="font-semibold">Use credits for Copilot?</p>
 						<p className="text-muted">
 							Your Crew allowance is used. Future Copilot chats can use the
-							normal credit pool after confirmation.
+							normal credit pool after confirmation. You can also enable AI
+							Features (including auto credit use) in{" "}
+							<a
+								href="/hub/settings#feature-enablement"
+								className="underline text-hyper-green"
+							>
+								Feature enablement
+							</a>
+							.
 						</p>
 						<button
 							type="button"

@@ -35,6 +35,8 @@ final class AIConsentCoordinator {
         _ = try? await api.patchSettings(
             SettingsPatch(aiConsentAt: ISO8601DateFormatter().string(from: Date()))
         )
+        // Match AI Features bundle: enable Copilot auto-deduct with processing consent.
+        _ = try? await api.updateCopilotConsent(autoDeductConsent: true)
         session.markAIConsentGranted()
         isPresenting = false
         runPendingAction()

@@ -1000,7 +1000,16 @@ export default {
 
 		try {
 			const identity = await authenticateCopilot(env, request);
-			if (identity.source === "mobile") {
+			const flagContext = buildFlagContext(request, env, {
+				user: { id: identity.userId },
+			});
+			const featureEnablementOn = await isFeatureEnabled(
+				env,
+				"feature-enablement-consent",
+				flagContext,
+			);
+			// Mobile always requires AI consent; web only when feature-enablement-consent is on.
+			if (identity.source === "mobile" || featureEnablementOn) {
 				const settings = await getUserSettings(env.DB, identity.userId);
 				const consentAt = settings.aiConsentAt;
 				if (typeof consentAt !== "string" || consentAt.trim().length === 0) {
@@ -1012,9 +1021,6 @@ export default {
 					);
 				}
 			}
-			const flagContext = buildFlagContext(request, env, {
-				user: { id: identity.userId },
-			});
 			const enabled = await isFeatureEnabled(
 				env,
 				"ration-copilot",

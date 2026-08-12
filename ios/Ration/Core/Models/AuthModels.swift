@@ -96,6 +96,8 @@ struct ClientFlags: Codable, Sendable, Equatable {
     var nutritionIntakeNotes: Bool?
     /// Personal diary aggregates across kitchens (additive).
     var nutritionCrossOrgDiary: Bool?
+    /// Feature enablement onboarding + web AI consent parity (additive).
+    var featureEnablementConsent: Bool?
 
     static let disabled = ClientFlags()
 
@@ -121,6 +123,7 @@ struct ClientFlags: Codable, Sendable, Equatable {
     }
     var isNutritionIntakeNotesEnabled: Bool { nutritionIntakeNotes == true }
     var isNutritionCrossOrgDiaryEnabled: Bool { nutritionCrossOrgDiary == true }
+    var isFeatureEnablementConsentEnabled: Bool { featureEnablementConsent == true }
 }
 
 /// `GET /api/mobile/v1/client-flags` (unsigned)

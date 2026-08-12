@@ -1,22 +1,5 @@
-import { useEffect, useState } from "react";
-import { Link, useFetcher } from "react-router";
-
-type IntakeConsentStatus = {
-	purpose: "goals" | "intake" | "agent_processing";
-	state: "active" | "not_granted" | "withdrawn" | "reconsent_required";
-	statement: {
-		policyVersion: string;
-		statementVersion: string;
-		sha256: string;
-		text: string;
-	};
-};
-
-type NutritionPrivacyResponse = {
-	ok?: boolean;
-	consents?: IntakeConsentStatus[];
-	error?: string;
-};
+import { useState } from "react";
+import { Link } from "react-router";
 
 interface PlateUpDialogProps {
 	/** legacy: existing Eat/consume plate-up. eat: private Cook/Log-split serving log. */
@@ -30,12 +13,12 @@ interface PlateUpDialogProps {
 	fatGPerServing?: number | null;
 	/** legacy mode only. */
 	onConfirm?: (servings: number, logNutrition: boolean) => void;
-	/** eat mode only — consent is established through the privacy route first. */
+	/** eat mode only — Macro Tracking must already be enabled. */
 	onConfirmEat?: (servings: number, notes: string | null) => void;
 	/** eat mode only — shown when hasExistingIntake. */
 	onRemoveLog?: () => void;
 	onClose: () => void;
-	/** eat mode only — hides the consent checkbox when already granted. */
+	/** eat mode only — true when Macro Tracking / intake consent is active. */
 	intakeConsentGranted?: boolean;
 	/** eat mode only — surfaces "Remove my log" and edit copy. */
 	hasExistingIntake?: boolean;
@@ -88,22 +71,9 @@ export function PlateUpDialog({
 }: PlateUpDialogProps) {
 	const [servings, setServings] = useState(defaultServings);
 	const [notes, setNotes] = useState(defaultNotes ?? "");
-	const [consentChecked, setConsentChecked] = useState(false);
-	const [pendingServings, setPendingServings] = useState<number | null>(null);
-	const [pendingNotes, setPendingNotes] = useState<string | null>(null);
-	const privacyFetcher = useFetcher<NutritionPrivacyResponse>();
 	const isEat = mode === "eat";
-	const intakeConsent = privacyFetcher.data?.consents?.find(
-		(status) => status.purpose === "intake",
-	);
-	const activeConsent =
-		intakeConsentGranted || intakeConsent?.state === "active";
-	const needsConsent = isEat && !activeConsent;
 	const validServings = Number.isFinite(servings) && servings > 0;
-	const canSave =
-		validServings &&
-		(!needsConsent || (consentChecked && intakeConsent != null)) &&
-		privacyFetcher.state === "idle";
+	const canSave = validServings && (!isEat || intakeConsentGranted);
 	const dismissLabel = notNowLabel ?? (isEat ? "Not now" : "Cancel");
 	const trimmedNotes = notes.trim();
 	const notesPayload =
@@ -118,64 +88,6 @@ export function PlateUpDialog({
 		scaledProtein != null ||
 		scaledCarbs != null ||
 		scaledFat != null;
-
-	useEffect(() => {
-		if (
-			isEat &&
-			!intakeConsentGranted &&
-			privacyFetcher.state === "idle" &&
-			privacyFetcher.data == null
-		) {
-			privacyFetcher.load("/api/privacy/nutrition");
-		}
-	}, [isEat, intakeConsentGranted, privacyFetcher]);
-
-	useEffect(() => {
-		if (
-			pendingServings != null &&
-			privacyFetcher.state === "idle" &&
-			intakeConsent?.state === "active"
-		) {
-			const confirmedServings = pendingServings;
-			const confirmedNotes = pendingNotes;
-			setPendingServings(null);
-			setPendingNotes(null);
-			onConfirmEat?.(confirmedServings, confirmedNotes);
-		}
-	}, [
-		pendingServings,
-		pendingNotes,
-		privacyFetcher.state,
-		intakeConsent,
-		onConfirmEat,
-	]);
-
-	const handleEatSave = () => {
-		if (!canSave) return;
-		if (!needsConsent) {
-			onConfirmEat?.(servings, notesPayload);
-			return;
-		}
-		if (!intakeConsent || !consentChecked) return;
-		setPendingServings(servings);
-		setPendingNotes(notesPayload);
-		privacyFetcher.submit(
-			JSON.stringify({
-				action: "grant",
-				purpose: "intake",
-				policyVersion: intakeConsent.statement.policyVersion,
-				statementVersion: intakeConsent.statement.statementVersion,
-				statementSha256: intakeConsent.statement.sha256,
-				affirmed: true,
-				requestId: crypto.randomUUID(),
-			}),
-			{
-				method: "POST",
-				action: "/api/privacy/nutrition",
-				encType: "application/json",
-			},
-		);
-	};
 
 	return (
 		<div
@@ -215,6 +127,21 @@ export function PlateUpDialog({
 						</p>
 					) : null}
 				</div>
+
+				{isEat && !intakeConsentGranted ? (
+					<div className="rounded-lg border border-platinum p-3 space-y-2">
+						<p className="text-xs text-muted">
+							Macro Tracking is off — enable it in Settings to log meals.
+						</p>
+						<Link
+							to="/hub/settings#feature-enablement"
+							className="inline-block text-xs font-semibold text-hyper-green underline"
+							onClick={onClose}
+						>
+							Open Feature enablement
+						</Link>
+					</div>
+				) : null}
 
 				<label className="block space-y-2">
 					<span className="text-xs font-mono text-muted uppercase tracking-wide">
@@ -294,51 +221,12 @@ export function PlateUpDialog({
 					</label>
 				) : null}
 
-				{isEat && needsConsent && (
-					<div className="rounded-lg border border-platinum p-3">
-						{intakeConsent ? (
-							<>
-								<p className="text-xs leading-relaxed text-muted">
-									{intakeConsent.statement.text}
-								</p>
-								<label className="mt-3 flex items-start gap-2 text-xs text-carbon cursor-pointer">
-									<input
-										type="checkbox"
-										checked={consentChecked}
-										onChange={(event) =>
-											setConsentChecked(event.target.checked)
-										}
-										className="mt-0.5 accent-hyper-green"
-									/>
-									<span>
-										I have read this statement and explicitly consent.
-									</span>
-								</label>
-								<p className="mt-2 text-[10px] font-mono text-muted">
-									{intakeConsent.statement.statementVersion} ·{" "}
-									<Link to="/legal/privacy" className="underline">
-										Privacy Policy
-									</Link>
-								</p>
-							</>
-						) : (
-							<p className="text-xs text-muted">
-								Loading the current privacy statement…
-							</p>
-						)}
-					</div>
-				)}
-
-				{privacyFetcher.data?.error && (
-					<p className="text-xs text-error">{privacyFetcher.data.error}</p>
-				)}
-
 				<div className="flex flex-col gap-2">
 					{isEat ? (
 						<>
 							<button
 								type="button"
-								onClick={handleEatSave}
+								onClick={() => onConfirmEat?.(servings, notesPayload)}
 								disabled={!canSave}
 								className="w-full px-4 py-2.5 text-sm font-semibold rounded-lg bg-hyper-green text-on-hyper-green hover:shadow-glow disabled:opacity-40 disabled:cursor-not-allowed transition-all"
 							>
@@ -365,7 +253,6 @@ export function PlateUpDialog({
 						</>
 					) : (
 						<>
-							{/* Personal intake is Eat-only (cook-log-split); Consume never writes nutrition_intake. */}
 							<button
 								type="button"
 								onClick={() => onConfirm?.(servings > 0 ? servings : 1, false)}

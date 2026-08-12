@@ -108,6 +108,51 @@ struct NutritionPrivacyResponse: Codable, Sendable {
     let consents: [NutritionConsentStatus]
 }
 
+// MARK: - Feature enablement (AI Features + Macro Tracking)
+
+struct FeatureEnablementStatusResponse: Codable, Sendable {
+    let ok: Bool?
+    let aiFeatures: Bool
+    let macroTracking: Bool
+    let autoDeductConsent: Bool
+    let aiConsentAt: String?
+    let consents: [NutritionConsentStatus]
+}
+
+struct FeatureEnablementSetRequest: Encodable, Sendable {
+    let action = "set"
+    let aiFeatures: Bool
+    let macroTracking: Bool
+    let requestId: String
+
+    init(aiFeatures: Bool, macroTracking: Bool, requestId: String = UUID().uuidString) {
+        self.aiFeatures = aiFeatures
+        self.macroTracking = macroTracking
+        self.requestId = requestId
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(action, forKey: .action)
+        try container.encode(aiFeatures, forKey: .aiFeatures)
+        try container.encode(macroTracking, forKey: .macroTracking)
+        try container.encode(requestId, forKey: .requestId)
+        if aiFeatures || macroTracking {
+            try container.encode(true, forKey: .affirmed)
+        }
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case action, aiFeatures, macroTracking, affirmed, requestId
+    }
+}
+
+struct FeatureEnablementEraseRequest: Encodable, Sendable {
+    let action = "erase"
+    let dataset: String
+    let requestId: String
+}
+
 struct NutritionConsentGrantRequest: Encodable, Sendable {
     let action = "grant"
     let purpose: NutritionConsentPurpose

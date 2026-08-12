@@ -15,7 +15,7 @@ Typical categories include:
 
 - **Account**: email, name, optional avatar image, auth-related records.
 - **Organization data**: pantry items (including optional nutrition snapshots), recipes, meal plans, supply lists, credit balance, ledger entries.
-- **Nutrition (when enabled)**: personal daily goals (consent on save), logged intake from Manifest Eat / plate-up, and self-hosted USDA reference lookups (no third-party USDA API call for composition). Intake history is retained about **13 months (~396 days)** then purged; goals and intake are erased with account purge.
+- **Nutrition (when enabled)**: personal daily goals and logged intake from Manifest Eat / plate-up after **Macro Tracking** is enabled in Feature enablement; self-hosted USDA reference lookups (no third-party USDA API call for composition). Intake history is retained about **13 months (~396 days)** then purged; goals and intake are erased with account purge or Feature enablement erase actions.
 - **Shared kitchen delete** does **not** erase your personal intake history; kitchen labels may fall back to saved snapshots. Account purge and retention still erase intake.
 - **AI features**: receipt images may be stored temporarily for processing; embeddings may be stored in a vector index scoped to your organization.
 - **Billing**: Stripe customer and subscription metadata as needed to fulfill purchases.

@@ -216,6 +216,7 @@ export default [
 	route("api/nutrition/summary", "routes/api/nutrition.summary.ts"),
 	route("api/nutrition/goals", "routes/api/nutrition.goals.ts"),
 	route("api/privacy/nutrition", "routes/api/privacy.nutrition.ts"),
+	route("api/privacy/features", "routes/api/privacy.features.ts"),
 	route("api/undo", "routes/api/undo.ts"),
 
 	// API - Supply Lists
@@ -521,6 +522,10 @@ export default [
 	route(
 		"api/mobile/v1/privacy/nutrition",
 		"routes/api/mobile/v1.privacy.nutrition.ts",
+	),
+	route(
+		"api/mobile/v1/privacy/features",
+		"routes/api/mobile/v1.privacy.features.ts",
 	),
 	route(
 		"api/mobile/v1/meals/:id/cook",

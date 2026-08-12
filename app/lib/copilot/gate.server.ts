@@ -148,7 +148,7 @@ async function incrementAllowanceUsed(
 }
 
 export async function getCopilotAutoDeductConsent(
-	env: Env,
+	env: Pick<Env, "RATION_KV">,
 	identity: Pick<CopilotGateIdentity, "organizationId" | "userId">,
 ): Promise<boolean> {
 	const value = await env.RATION_KV.get(
@@ -158,7 +158,7 @@ export async function getCopilotAutoDeductConsent(
 }
 
 export async function setCopilotAutoDeductConsent(
-	env: Env,
+	env: Pick<Env, "RATION_KV">,
 	identity: Pick<CopilotGateIdentity, "organizationId" | "userId">,
 	enabled: boolean,
 ): Promise<void> {

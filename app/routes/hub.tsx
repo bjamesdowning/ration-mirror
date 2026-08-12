@@ -45,7 +45,10 @@ const AskPanel = lazy(() =>
 
 type RootLoaderHeaderSlice = {
 	user?: { id: string } | null;
-	clientFlags?: { rationCopilot?: boolean };
+	clientFlags?: {
+		rationCopilot?: boolean;
+		featureEnablementConsent?: boolean;
+	};
 };
 
 export function shouldRevalidate({
@@ -303,6 +306,9 @@ export default function DashboardLayout({ loaderData }: Route.ComponentProps) {
 				<OnboardingTour
 					initialStep={onboardingStep}
 					isCompleted={Boolean(onboardingCompletedAt)}
+					featureEnablementEnabled={
+						root?.clientFlags?.featureEnablementConsent === true
+					}
 				/>
 				{hasAskMounted ? (
 					<Suspense fallback={null}>

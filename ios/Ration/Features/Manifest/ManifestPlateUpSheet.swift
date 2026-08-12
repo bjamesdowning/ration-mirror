@@ -11,14 +11,12 @@ struct ManifestPlateUpSheet: View {
 
     @Environment(AppEnvironment.self) private var env
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.openURL) private var openURL
     @State private var servings: Double
     @State private var notes: String
-    @State private var hasConsent: Bool
-    @State private var consentStatus: NutritionConsentStatus?
     @State private var isSaving = false
     @State private var isRemoving = false
     @State private var errorMessage: String?
+    @State private var showingFeatureEnablement = false
 
     init(
         entry: ManifestEntry,
@@ -32,7 +30,6 @@ struct ManifestPlateUpSheet: View {
         self.onRemove = onRemove
         _servings = State(initialValue: entry.personalIntake?.servings ?? 1.0)
         _notes = State(initialValue: entry.personalIntake?.notes ?? "")
-        _hasConsent = State(initialValue: hasIntakeConsent)
     }
 
     private var notesEnabled: Bool { env.session.clientFlags.isNutritionIntakeNotesEnabled }
@@ -71,9 +68,7 @@ struct ManifestPlateUpSheet: View {
     }
 
     private var canSave: Bool {
-        !isSaving
-            && !isRemoving
-            && (hasIntakeConsent || consentStatus?.state == .active || hasConsent)
+        !isSaving && !isRemoving && hasIntakeConsent
     }
 
     var body: some View {
@@ -86,6 +81,18 @@ struct ManifestPlateUpSheet: View {
                         .rationCaption()
                 } header: {
                     Text("Log my serving")
+                }
+
+                if !hasIntakeConsent {
+                    Section {
+                        Text("Macro Tracking is off — enable it in Settings to log meals.")
+                            .font(Typography.caption())
+                            .foregroundStyle(Theme.muted)
+                        Button("Open Feature enablement") {
+                            showingFeatureEnablement = true
+                        }
+                        .foregroundStyle(Theme.hyperGreen)
+                    }
                 }
 
                 Section {
@@ -129,30 +136,6 @@ struct ManifestPlateUpSheet: View {
                     }
                 }
 
-                if !hasIntakeConsent {
-                    Section {
-                        if let consentStatus {
-                            Text(consentStatus.statement.text)
-                                .font(Typography.caption())
-                            if consentStatus.state != .active {
-                                Toggle(
-                                    "I have read this statement and explicitly consent",
-                                    isOn: $hasConsent
-                                )
-                                .tint(Theme.hyperGreen)
-                            }
-                            Button("Privacy Policy") {
-                                openURL(AppConfig.privacyURL)
-                            }
-                        } else {
-                            ProgressView("Loading privacy statement…")
-                                .tint(Theme.hyperGreen)
-                        }
-                    } footer: {
-                        Text("Your logged servings are private. Withdrawal and erasure are available in Privacy & AI settings.")
-                    }
-                }
-
                 if let errorMessage {
                     Section {
                         ErrorBanner(message: errorMessage)
@@ -180,47 +163,27 @@ struct ManifestPlateUpSheet: View {
                         .accessibilityIdentifier("manifest.eat.save")
                 }
             }
-        }
-        .task {
-            guard !hasIntakeConsent else { return }
-            do {
-                consentStatus = try await env.api.nutritionPrivacy().consents.first {
-                    $0.purpose == .intake
-                }
-            } catch {
-                errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+            .sheet(isPresented: $showingFeatureEnablement) {
+                PrivacySettingsView()
             }
         }
     }
 
     @MainActor
     private func save() async {
+        guard hasIntakeConsent else {
+            errorMessage = "Macro Tracking is off — enable it in Settings to log meals."
+            return
+        }
         isSaving = true
         errorMessage = nil
         defer { isSaving = false }
-        do {
-            if !hasIntakeConsent && consentStatus?.state != .active {
-                guard hasConsent, let consentStatus else {
-                    errorMessage = "Review and accept the current intake consent statement."
-                    return
-                }
-                let response = try await env.api.grantNutritionConsent(consentStatus)
-                guard response.consents.contains(where: {
-                    $0.purpose == .intake && $0.state == .active
-                }) else {
-                    errorMessage = "Consent could not be recorded. Try again."
-                    return
-                }
-            }
-            let notePayload = notesEnabled ? IntakeNotesField.payload(from: notes) : nil
-            if let failure = await onSave(servings, notePayload) {
-                errorMessage = failure
-            } else {
-                Haptics.success()
-                dismiss()
-            }
-        } catch {
-            errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+        let notePayload = notesEnabled ? IntakeNotesField.payload(from: notes) : nil
+        if let failure = await onSave(servings, notePayload) {
+            errorMessage = failure
+        } else {
+            Haptics.success()
+            dismiss()
         }
     }
 

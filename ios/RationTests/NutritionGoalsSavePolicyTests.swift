@@ -2,86 +2,84 @@ import XCTest
 @testable import Ration
 
 final class NutritionGoalsSavePolicyTests: XCTestCase {
-    func testCanEnableSaveRequiresTargetAndConsentAffirmation() {
+    func testCanEnableSaveRequiresMacroTrackingAndValue() {
+        XCTAssertTrue(
+            NutritionGoalsSavePolicy.canEnableSave(
+                isSaving: false,
+                isUnavailable: false,
+                hasAnyValue: true,
+                macroTrackingEnabled: true
+            )
+        )
+        XCTAssertFalse(
+            NutritionGoalsSavePolicy.canEnableSave(
+                isSaving: false,
+                isUnavailable: false,
+                hasAnyValue: true,
+                macroTrackingEnabled: false
+            )
+        )
+        XCTAssertFalse(
+            NutritionGoalsSavePolicy.canEnableSave(
+                isSaving: true,
+                isUnavailable: false,
+                hasAnyValue: true,
+                macroTrackingEnabled: true
+            )
+        )
         XCTAssertFalse(
             NutritionGoalsSavePolicy.canEnableSave(
                 isSaving: false,
                 isUnavailable: false,
                 hasAnyValue: false,
-                hasActiveGoalsConsent: false,
-                affirmedGoalsConsent: true
-            )
-        )
-        XCTAssertFalse(
-            NutritionGoalsSavePolicy.canEnableSave(
-                isSaving: false,
-                isUnavailable: false,
-                hasAnyValue: true,
-                hasActiveGoalsConsent: false,
-                affirmedGoalsConsent: false
-            )
-        )
-        XCTAssertTrue(
-            NutritionGoalsSavePolicy.canEnableSave(
-                isSaving: false,
-                isUnavailable: false,
-                hasAnyValue: true,
-                hasActiveGoalsConsent: false,
-                affirmedGoalsConsent: true
-            )
-        )
-        XCTAssertTrue(
-            NutritionGoalsSavePolicy.canEnableSave(
-                isSaving: false,
-                isUnavailable: false,
-                hasAnyValue: true,
-                hasActiveGoalsConsent: true,
-                affirmedGoalsConsent: false
+                macroTrackingEnabled: true
             )
         )
     }
 
-    func testHasActiveGoalsConsentRequiresPurposeAndState() {
-        let statement = NutritionConsentStatement(
-            purpose: .goals,
-            policyVersion: "goals-2026-08-09.1",
-            statementVersion: "1",
-            text: "Statement",
-            sha256: "abc",
-            privacyNoticeVersion: "1"
+    func testIsMacroTrackingEnabledRequiresAllPurposes() {
+        let goals = status(purpose: .goals, state: .active)
+        let intake = status(purpose: .intake, state: .active)
+        let agent = status(purpose: .agentProcessing, state: .active)
+        let inactive = status(purpose: .goals, state: .notGranted)
+
+        XCTAssertTrue(
+            NutritionGoalsSavePolicy.isMacroTrackingEnabled(in: [goals, intake, agent])
         )
-        let inactive = NutritionConsentStatus(
-            purpose: .goals,
-            state: .notGranted,
-            consentId: nil,
-            grantedAt: nil,
-            withdrawnAt: nil,
-            statement: statement
+        XCTAssertFalse(
+            NutritionGoalsSavePolicy.isMacroTrackingEnabled(in: [goals, intake])
         )
-        let active = NutritionConsentStatus(
-            purpose: .goals,
-            state: .active,
-            consentId: "c1",
-            grantedAt: nil,
-            withdrawnAt: nil,
-            statement: statement
+        XCTAssertFalse(
+            NutritionGoalsSavePolicy.isMacroTrackingEnabled(in: [inactive, intake, agent])
         )
-        let intakeActive = NutritionConsentStatus(
-            purpose: .intake,
-            state: .active,
-            consentId: "c2",
+    }
+
+    func testHasActiveGoalsConsent() {
+        let inactive = status(purpose: .goals, state: .notGranted)
+        let intakeActive = status(purpose: .intake, state: .active)
+        let active = status(purpose: .goals, state: .active)
+        XCTAssertFalse(NutritionGoalsSavePolicy.hasActiveGoalsConsent(in: [inactive, intakeActive]))
+        XCTAssertTrue(NutritionGoalsSavePolicy.hasActiveGoalsConsent(in: [active]))
+    }
+
+    private func status(
+        purpose: NutritionConsentPurpose,
+        state: NutritionConsentState
+    ) -> NutritionConsentStatus {
+        NutritionConsentStatus(
+            purpose: purpose,
+            state: state,
+            consentId: state == .active ? "id" : nil,
             grantedAt: nil,
             withdrawnAt: nil,
             statement: NutritionConsentStatement(
-                purpose: .intake,
-                policyVersion: "intake-1",
-                statementVersion: "1",
-                text: "Statement",
-                sha256: "abc",
-                privacyNoticeVersion: "1"
+                purpose: purpose,
+                policyVersion: "2026-08-09",
+                statementVersion: "v1",
+                text: "statement",
+                sha256: String(repeating: "a", count: 64),
+                privacyNoticeVersion: "2026-08-09"
             )
         )
-        XCTAssertFalse(NutritionGoalsSavePolicy.hasActiveGoalsConsent(in: [inactive, intakeActive]))
-        XCTAssertTrue(NutritionGoalsSavePolicy.hasActiveGoalsConsent(in: [active]))
     }
 }

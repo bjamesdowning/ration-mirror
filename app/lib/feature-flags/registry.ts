@@ -141,6 +141,13 @@ export const FLAG_REGISTRY: Record<string, FlagRegistryEntry> = {
 		description:
 			"Async queue-backed meal nutrition recompute (requires NUTRITION_RECOMPUTE_QUEUE)",
 	},
+	"feature-enablement-consent": {
+		defaultEnabled: false,
+		description:
+			"Feature enablement onboarding (AI + Macro Tracking) and web AI consent parity gate",
+		clientVisible: true,
+		clientKey: "featureEnablementConsent",
+	},
 };
 
 /** Registry keys — narrows as entries are added to FLAG_REGISTRY. */

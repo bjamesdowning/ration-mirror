@@ -1,6 +1,7 @@
 import { data } from "react-router";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { handleApiError } from "~/lib/error-handler";
+import { requireWebAIConsentIfEnabled } from "~/lib/feature-enablement-gate.server";
 import { buildFlagContext } from "~/lib/feature-flags/flags.server";
 import {
 	mapMealGenerateSubmitError,
@@ -16,6 +17,9 @@ export async function action({ request, context }: Route.ActionArgs) {
 		groupId,
 	} = await requireActiveGroup(context, request);
 	const env = context.cloudflare.env;
+	const flagContext = buildFlagContext(request, env, { user });
+
+	await requireWebAIConsentIfEnabled(env, user.id, flagContext);
 
 	const rateLimitResult = await checkRateLimit(
 		env.RATION_KV,
@@ -66,7 +70,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 			userId: user.id,
 			organizationId: groupId,
 			customization,
-			flagContext: buildFlagContext(request, env, { user }),
+			flagContext,
 		});
 	} catch (error) {
 		mapMealGenerateSubmitError(error);

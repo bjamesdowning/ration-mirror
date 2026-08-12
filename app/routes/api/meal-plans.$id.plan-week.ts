@@ -1,5 +1,6 @@
 import { data } from "react-router";
 import { requireActiveGroup } from "~/lib/auth.server";
+import { requireWebAIConsentIfEnabled } from "~/lib/feature-enablement-gate.server";
 import { buildFlagContext } from "~/lib/feature-flags/flags.server";
 import {
 	mapPlanWeekSubmitError,
@@ -24,6 +25,9 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 		groupId,
 	} = await requireActiveGroup(context, request);
 	const env = context.cloudflare.env;
+	const flagContext = buildFlagContext(request, env, { user });
+
+	await requireWebAIConsentIfEnabled(env, user.id, flagContext);
 
 	const planId = params.id;
 	if (!planId) {
@@ -63,7 +67,7 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 			organizationId: groupId,
 			planId,
 			config: parseResult.data,
-			flagContext: buildFlagContext(request, env, { user }),
+			flagContext,
 		});
 	} catch (error) {
 		mapPlanWeekSubmitError(error);

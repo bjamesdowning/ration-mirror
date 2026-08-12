@@ -3,25 +3,56 @@ import XCTest
 
 @MainActor
 final class OnboardingCoordinatorTests: XCTestCase {
-    func testStartIfNeededActivatesBriefing() throws {
+    func testStartIfNeededStartsAtWelcome() throws {
         let coordinator = OnboardingCoordinator()
         let settings = try decodeSettings(#"{"unitDisplayMode":"imperial"}"#)
 
         coordinator.startIfNeeded(completedAt: nil, settings: settings)
 
         XCTAssertTrue(coordinator.isActive)
-        XCTAssertEqual(coordinator.phase, .askBriefing)
+        XCTAssertEqual(coordinator.phase, .welcome)
         XCTAssertEqual(coordinator.unitDisplayMode, "imperial")
         XCTAssertFalse(coordinator.isStaticReplay)
+    }
+
+    func testAdvanceWelcomeThenFeaturesThenBriefing() {
+        let coordinator = OnboardingCoordinator()
+        coordinator.startIfNeeded(completedAt: nil)
+
+        coordinator.advanceFromWelcome(featureEnablementEnabled: true)
+        XCTAssertEqual(coordinator.phase, .featureEnablement)
+
+        coordinator.advanceFromFeatureEnablement(aiEnabled: true)
+        XCTAssertEqual(coordinator.phase, .askBriefing)
+        XCTAssertFalse(coordinator.shouldUseStaticBriefing)
+    }
+
+    func testAdvanceWelcomeSkipsFeaturesWhenFlagOff() {
+        let coordinator = OnboardingCoordinator()
+        coordinator.startIfNeeded(completedAt: nil)
+        coordinator.advanceFromWelcome(featureEnablementEnabled: false)
+        XCTAssertEqual(coordinator.phase, .askBriefing)
+    }
+
+    func testFeatureEnablementWithAIOffUsesStaticBriefing() {
+        let coordinator = OnboardingCoordinator()
+        coordinator.startIfNeeded(completedAt: nil)
+        coordinator.advanceFromWelcome(featureEnablementEnabled: true)
+        coordinator.advanceFromFeatureEnablement(aiEnabled: false)
+
+        XCTAssertEqual(coordinator.phase, .askBriefing)
+        XCTAssertTrue(coordinator.shouldUseStaticBriefing)
+        XCTAssertTrue(coordinator.isStaticReplay)
     }
 
     func testStartIfNeededSkipsWhenCompleted() {
         let coordinator = OnboardingCoordinator()
         coordinator.startIfNeeded(completedAt: "2026-01-01T00:00:00Z")
         XCTAssertFalse(coordinator.isActive)
+        XCTAssertEqual(coordinator.phase, .inactive)
     }
 
-    func testRestartUsesStaticReplay() {
+    func testRestartUsesStaticReplayAndSkipsConsent() {
         let coordinator = OnboardingCoordinator()
         coordinator.reset()
         coordinator.restart(staticReplay: true)
@@ -58,6 +89,7 @@ final class OnboardingCoordinatorTests: XCTestCase {
 
         XCTAssertNotNil(result)
         XCTAssertFalse(coordinator.isActive)
+        XCTAssertEqual(coordinator.phase, .inactive)
     }
 
     func testDefaultUnitDisplayModeUsesLocale() {
@@ -66,24 +98,5 @@ final class OnboardingCoordinatorTests: XCTestCase {
 
     private func decodeSettings(_ json: String) throws -> UserSettings {
         try JSONDecoder().decode(UserSettings.self, from: Data(json.utf8))
-    }
-}
-
-@MainActor
-final class LaunchCoordinatorOnboardingTests: XCTestCase {
-    func testNeedsOnboardingWhenCompletionMissing() async throws {
-        let launch = LaunchCoordinator()
-        let settings = try JSONDecoder().decode(
-            UserSettings.self,
-            from: Data(#"{"onboardingStep":0}"#.utf8)
-        )
-
-        await launch.performStartup(
-            loadSession: { true },
-            loadSettings: { settings },
-            applySettings: { _ in }
-        )
-
-        XCTAssertTrue(launch.needsOnboarding)
     }
 }

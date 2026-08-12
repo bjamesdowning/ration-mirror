@@ -113,11 +113,11 @@ struct SettingsView: View {
             }
 
             Section("Privacy") {
-                Button("Privacy & AI") { showingPrivacy = true }
+                Button("Feature enablement") { showingPrivacy = true }
                 Button("Privacy Policy") { openURL(AppConfig.privacyURL) }
                 Button("Terms of Service") { openURL(AppConfig.termsURL) }
                 if let consent = model.settings?.aiConsentAt, !consent.isEmpty {
-                    LabeledContent("AI consent", value: "Granted")
+                    LabeledContent("AI Features", value: "On")
                 }
             }
 

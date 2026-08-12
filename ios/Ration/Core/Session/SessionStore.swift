@@ -73,6 +73,11 @@ final class SessionStore {
         hasAIConsent = true
     }
 
+    /// Clears in-memory AI consent after Feature enablement withdraw.
+    func markAIConsentWithdrawn() {
+        hasAIConsent = false
+    }
+
     /// Clears the in-memory session cache — called on forced logout (H-2).
     /// Unlike org switch, a forced 401 has no valid token left to re-fetch
     /// with, so this must be an explicit clear rather than a re-fetch.

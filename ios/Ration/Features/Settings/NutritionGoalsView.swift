@@ -88,27 +88,19 @@ final class NutritionGoalsViewModel {
         return Double(trimmed)
     }
 
-    func save(api: RationAPI, affirmed: Bool) async -> Bool {
+    func save(api: RationAPI) async -> Bool {
         guard hasAnyValue else {
             errorMessage = "Set at least one nutrient target."
+            return false
+        }
+        guard hasActiveGoalsConsent else {
+            errorMessage = "Macro Tracking is off — enable it in Settings to set goals."
             return false
         }
         isSaving = true
         errorMessage = nil
         defer { isSaving = false }
         do {
-            if !hasActiveGoalsConsent {
-                guard affirmed, let goalsConsent else {
-                    errorMessage = "Review and accept the current nutrition goals consent statement."
-                    return false
-                }
-                let response = try await api.grantNutritionConsent(goalsConsent)
-                consentStatuses = response.consents
-                guard NutritionGoalsSavePolicy.hasActiveGoalsConsent(in: response.consents) else {
-                    errorMessage = "Consent could not be recorded. Try again."
-                    return false
-                }
-            }
             let body = NutritionGoalUpsertRequest(
                 dailyEnergyKcal: Self.parseOptional(dailyEnergyKcal),
                 proteinG: Self.parseOptional(proteinG),
@@ -149,13 +141,16 @@ final class NutritionGoalsViewModel {
 struct NutritionGoalsView: View {
     @Environment(AppEnvironment.self) private var env
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.openURL) private var openURL
     @State private var model = NutritionGoalsViewModel()
-    @State private var affirmedGoalsConsent = false
+    @State private var showingFeatureEnablement = false
     @FocusState private var focusedField: Field?
 
     private enum Field: Hashable {
         case energy, protein, carbs, fat, fiber
+    }
+
+    private var macroTrackingEnabled: Bool {
+        NutritionGoalsSavePolicy.isMacroTrackingEnabled(in: model.consentStatuses)
     }
 
     private var canSave: Bool {
@@ -163,8 +158,7 @@ struct NutritionGoalsView: View {
             isSaving: model.isSaving,
             isUnavailable: model.isUnavailable,
             hasAnyValue: model.hasAnyValue,
-            hasActiveGoalsConsent: model.hasActiveGoalsConsent,
-            affirmedGoalsConsent: affirmedGoalsConsent
+            macroTrackingEnabled: macroTrackingEnabled
         )
     }
 
@@ -191,6 +185,9 @@ struct NutritionGoalsView: View {
                 }
             }
             .background(Theme.ceramic)
+            .sheet(isPresented: $showingFeatureEnablement) {
+                PrivacySettingsView()
+            }
         }
         .task { await model.load(api: env.api) }
     }
@@ -218,29 +215,15 @@ struct NutritionGoalsView: View {
                 }
             }
 
-            if !model.hasActiveGoalsConsent, let consent = model.goalsConsent {
+            if !macroTrackingEnabled {
                 Section {
-                    Text(consent.statement.text)
+                    Text("Macro Tracking is off — enable it in Settings to set goals and log meals.")
                         .font(Typography.caption())
-                    Toggle(
-                        "I have read this statement and explicitly consent",
-                        isOn: $affirmedGoalsConsent
-                    )
-                    .tint(Theme.hyperGreen)
-                    .accessibilityIdentifier("nutrition.goals.consent.toggle")
-                    .onChange(of: affirmedGoalsConsent) { _, _ in
-                        // Clear stale consent banner when the user toggles affirmation.
-                        if model.errorMessage?.localizedCaseInsensitiveContains("consent") == true {
-                            model.errorMessage = nil
-                        }
+                        .foregroundStyle(Theme.muted)
+                    Button("Open Feature enablement") {
+                        showingFeatureEnablement = true
                     }
-                    Button("Privacy Policy") {
-                        openURL(AppConfig.privacyURL)
-                    }
-                } header: {
-                    Text("Explicit consent")
-                } footer: {
-                    Text("Statement \(consent.statement.statementVersion). Withdrawal and erasure are available in Privacy & AI settings.")
+                    .foregroundStyle(Theme.hyperGreen)
                 }
             }
 
@@ -254,7 +237,7 @@ struct NutritionGoalsView: View {
                 Button {
                     Task {
                         focusedField = nil
-                        if await model.save(api: env.api, affirmed: affirmedGoalsConsent) {
+                        if await model.save(api: env.api) {
                             Haptics.light()
                             dismiss()
                         }

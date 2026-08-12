@@ -62,6 +62,35 @@ extension RationAPI {
         )
     }
 
+    func featureEnablement() async throws -> FeatureEnablementStatusResponse {
+        try await client.get("privacy/features")
+    }
+
+    func setFeatureEnablement(
+        aiFeatures: Bool,
+        macroTracking: Bool,
+        affirmed: Bool = true
+    ) async throws -> FeatureEnablementStatusResponse {
+        _ = affirmed
+        return try await client.post(
+            "privacy/features",
+            body: FeatureEnablementSetRequest(
+                aiFeatures: aiFeatures,
+                macroTracking: macroTracking
+            )
+        )
+    }
+
+    func eraseFeatureNutritionData(dataset: String) async throws -> FeatureEnablementStatusResponse {
+        try await client.post(
+            "privacy/features",
+            body: FeatureEnablementEraseRequest(
+                dataset: dataset,
+                requestId: UUID().uuidString
+            )
+        )
+    }
+
     // Nutrition summary — gated by `nutrition-goals` OR `nutrition-manifest`.
     func nutritionSummary(from: String, to: String) async throws -> NutritionSummary {
         try await client.get(

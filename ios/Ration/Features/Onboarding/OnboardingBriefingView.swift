@@ -33,7 +33,7 @@ struct OnboardingBriefingView: View {
     }
 
     private var phase: OnboardingBriefingPhase {
-        if env.onboarding.isStaticReplay { return .staticReplay }
+        if env.onboarding.shouldUseStaticBriefing { return .staticReplay }
         if model.seedComplete { return .seedComplete }
         if model.isTurnActive, model.seedTurnStarted { return .seeding }
         if model.introSucceeded, model.liveBriefingActive, !model.seedComplete {
@@ -48,7 +48,7 @@ struct OnboardingBriefingView: View {
     private var canGetStarted: Bool {
         // Escape hatch after any progress, error, or static replay — including mid-seed / intro timeout.
         if env.onboarding.isSaving { return false }
-        if env.onboarding.isStaticReplay || model.introComplete || !model.messages.isEmpty {
+        if env.onboarding.shouldUseStaticBriefing || model.introComplete || !model.messages.isEmpty {
             return true
         }
         if case .error = model.state { return true }
@@ -142,7 +142,7 @@ struct OnboardingBriefingView: View {
 
     private var bootstrapTaskKey: String {
         let org = env.session.activeOrganizationId ?? "nil"
-        return "\(org)-\(env.onboarding.isStaticReplay)-\(env.launch.startupGeneration)"
+        return "\(org)-\(env.onboarding.shouldUseStaticBriefing)-\(env.launch.startupGeneration)"
     }
 
     private var activityDisplay: CopilotActivityDisplay {
@@ -197,7 +197,7 @@ struct OnboardingBriefingView: View {
                         connectingCard
                             .padding(.top, 32)
                             .transition(.opacity)
-                    } else if model.messages.isEmpty, !env.onboarding.isStaticReplay {
+                    } else if model.messages.isEmpty, !env.onboarding.shouldUseStaticBriefing {
                         EmptyStateView(
                             icon: "sparkles",
                             title: OnboardingBriefingCopy.emptyStateTitle,
@@ -385,7 +385,7 @@ struct OnboardingBriefingView: View {
         )
         // Hit-test only while a turn is active so Stop works; otherwise lock the exhausted composer.
         .allowsHitTesting(model.isTurnActive)
-        .opacity(model.introComplete || env.onboarding.isStaticReplay || model.isTurnActive ? 1 : 0.6)
+        .opacity(model.introComplete || env.onboarding.shouldUseStaticBriefing || model.isTurnActive ? 1 : 0.6)
     }
 
     private func scheduleSeedPromptReveal() {
@@ -419,7 +419,7 @@ struct OnboardingBriefingView: View {
         guard !didBootstrap else { return }
         guard let organizationId = env.session.activeOrganizationId else { return }
 
-        if env.onboarding.isStaticReplay {
+        if env.onboarding.shouldUseStaticBriefing {
             didBootstrap = true
             model.showStaticBriefing(OnboardingBriefingCopy.staticReplayMarkdown)
             return

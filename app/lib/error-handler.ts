@@ -1,6 +1,8 @@
 import { data } from "react-router";
 import { z } from "zod";
+import { AIConsentRequiredError } from "./ai-consent.server";
 import { CapacityExceededError } from "./capacity.server";
+import { FeatureEnablementAffirmationError } from "./feature-enablement.server";
 import { GroupMembershipError } from "./group-membership.server";
 import { log } from "./logging.server";
 import { NutritionConsentError } from "./nutrition/consent.server";
@@ -261,6 +263,26 @@ export function handleApiError(error: unknown) {
 				error: error.message,
 				code: error.code,
 				statement: error.statement,
+			},
+			{ status: error.status },
+		);
+	}
+
+	if (error instanceof AIConsentRequiredError) {
+		return data(
+			{
+				error: error.message,
+				code: error.code,
+			},
+			{ status: error.status },
+		);
+	}
+
+	if (error instanceof FeatureEnablementAffirmationError) {
+		return data(
+			{
+				error: error.message,
+				code: error.code,
 			},
 			{ status: error.status },
 		);

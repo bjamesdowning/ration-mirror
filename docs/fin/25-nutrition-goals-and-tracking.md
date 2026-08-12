@@ -6,7 +6,7 @@ When nutrition goals and Manifest nutrition are enabled for your account, Ration
 
 ## Personal goals
 
-Open **Hub → Settings → Preferences** (nutrition goals section when the flag is on). Set **only the nutrients you care about** — energy (kcal) and/or any macros (protein, carbs, fat, fiber). Empty fields stay unset and are **not** shown on Manifest. At least one nutrient is required to save. Saving requires **explicit consent** to store health-related personal data. Clear removes the active goal.
+Open **Hub → Settings → Preferences** (nutrition goals section when the flag is on). Set **only the nutrients you care about** — energy (kcal) and/or any macros (protein, carbs, fat, fiber). Empty fields stay unset and are **not** shown on Manifest. At least one nutrient is required to save. Saving requires **Macro Tracking** enabled under Feature enablement. Clear removes the active goal.
 
 Goals are **personal to the signed-in user** (not shared with kitchen members). Each person in the same group can set different targets.
 
@@ -28,7 +28,7 @@ Flags off: Manifest nutrition chrome is unchanged (no preference strip).
 
 - **Cook** — Shared household action: deducts Cargo once and marks the plan entry *Prepared*. Does **not** write personal nutrition.
 - **Log my serving** / **Edit serving** — Private to you. Opens plate-up for how many servings **you** ate; records intake from the meal’s nutrition snapshot scaled to portions.
-- **Explicit intake consent** — First personal log requires reviewing the full versioned statement and granting intake consent through Ration's privacy controls. Consent is **not** an inline Eat field and is not implied by Cook, Prepared status, or saving goals.
+- **Explicit Macro Tracking** — First personal log requires Macro Tracking to be enabled in Settings → Feature enablement (versioned nutrition purposes under the hood). Consent is **not** an inline Eat field and is not implied by Cook, Prepared status, or saving goals.
 - **Remove my log** — Clears your personal intake for that entry without undoing Cook/Prepared.
 
 You can Cook without ever logging a personal serving.

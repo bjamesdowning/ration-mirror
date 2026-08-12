@@ -35,7 +35,7 @@ struct RootView: View {
                 case .ready:
                     Group {
                         if env.launch.needsOnboarding, !env.session.needsOrgSelection {
-                            OnboardingBriefingView()
+                            OnboardingFlowView()
                                 .environment(env.ask)
                                 .transition(onboardingTransition)
                         } else {

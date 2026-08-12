@@ -374,6 +374,7 @@ export async function beginAccountPurge(
 					errorMessage,
 				});
 				await markPurgeJobFailed(env.RATION_KV, jobId, errorMessage);
+				await markUserPurgePending(env.RATION_KV, input.userId);
 				await notifyPurgeFailure(env, {
 					kind: "account",
 					resourceId: `${input.userId}:${jobId}`,

@@ -11,6 +11,7 @@ import {
 	clearUserPurgePending,
 	listFailedPurgeJobs,
 	markPurgeJobFailed,
+	markUserPurgePending,
 	PURGE_JOB_MAX_ATTEMPTS,
 	type PurgeJobRecord,
 } from "~/lib/purge-pending.server";
@@ -41,6 +42,10 @@ export async function retryFailedPurgeJobs(env: Cloudflare.Env): Promise<void> {
 				job.id,
 				errorMessage,
 			);
+			if (job.kind === "account" && job.userId) {
+				// Refresh tombstone TTL so pending cannot expire while retries continue.
+				await markUserPurgePending(env.RATION_KV, job.userId);
+			}
 			const attempts = updated?.attemptCount ?? (job.attemptCount ?? 0) + 1;
 			const escalated = attempts >= PURGE_JOB_MAX_ATTEMPTS;
 			await notifyPurgeFailure(env, {

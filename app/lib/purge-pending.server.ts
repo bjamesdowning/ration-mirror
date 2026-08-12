@@ -7,8 +7,8 @@ import { log, redactId } from "~/lib/logging.server";
 
 const USER_PENDING_PREFIX = "purge:pending:user:";
 const JOB_PREFIX = "purge:job:";
-/** Keep pending denylist long enough for ops to finish a stuck purge. */
-const PENDING_TTL_SEC = 60 * 60 * 24 * 7;
+/** Keep pending denylist aligned with durable job TTL so tombstones outlive retries. */
+const PENDING_TTL_SEC = 60 * 60 * 24 * 14;
 const JOB_TTL_SEC = 60 * 60 * 24 * 14;
 /** Soft ceiling for cron retries before escalated alerting (pending stays until wipe succeeds). */
 export const PURGE_JOB_MAX_ATTEMPTS = 20;

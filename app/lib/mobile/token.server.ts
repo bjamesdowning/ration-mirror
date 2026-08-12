@@ -183,6 +183,9 @@ export async function rotateMobileRefreshToken(
 		throw new Error("invalid_refresh_token");
 	}
 
+	// Membership before claim so a transient D1 blip cannot strand a claimed token.
+	await assertMobileOrgMembership(env, row.userId, row.organizationId);
+
 	const claimedAt = new Date();
 	const claim = await env.DB.prepare(
 		"UPDATE mobile_refresh_token SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL",
@@ -199,8 +202,6 @@ export async function rotateMobileRefreshToken(
 			.where(eq(schema.mobileRefreshToken.familyId, row.familyId));
 		throw new Error("invalid_refresh_token");
 	}
-
-	await assertMobileOrgMembership(env, row.userId, row.organizationId);
 
 	try {
 		const pair = await issueMobileTokenPair(

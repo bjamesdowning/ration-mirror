@@ -11,7 +11,10 @@ import {
 	type NutritionConsentSource,
 } from "~/lib/nutrition/consent.server";
 import { NUTRITION_COVERAGE_THRESHOLD } from "~/lib/nutrition/constants";
-import { toIsoDateString } from "~/lib/nutrition/dto.server";
+import {
+	coerceFiniteNumber,
+	toIsoDateString,
+} from "~/lib/nutrition/dto.server";
 import { previousUtcCalendarDay } from "~/lib/nutrition/goal-effective";
 import {
 	getActiveNutritionGoal,
@@ -1864,11 +1867,11 @@ export async function attachPersonalIntakeToEntries(
 			personalIntake: intake
 				? {
 						id: intake.id,
-						servings: intake.servings,
-						energyKcal: intake.energyKcal,
-						proteinG: intake.proteinG,
-						carbsG: intake.carbsG,
-						fatG: intake.fatG,
+						servings: coerceFiniteNumber(intake.servings),
+						energyKcal: coerceFiniteNumber(intake.energyKcal),
+						proteinG: coerceFiniteNumber(intake.proteinG),
+						carbsG: coerceFiniteNumber(intake.carbsG),
+						fatG: coerceFiniteNumber(intake.fatG),
 						occurredAt: toIsoDateString(intake.occurredAt),
 						notes: intake.notes ?? null,
 					}

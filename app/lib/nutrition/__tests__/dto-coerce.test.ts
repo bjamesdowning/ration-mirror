@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+	coerceFiniteInt,
 	coerceFiniteNumber,
 	serializeNutritionSummary,
 	toIsoDateString,
@@ -19,6 +20,14 @@ describe("coerceFiniteNumber", () => {
 	it("falls back for invalid values", () => {
 		expect(coerceFiniteNumber("nope", 0)).toBe(0);
 		expect(coerceFiniteNumber(Number.NaN, 7)).toBe(7);
+	});
+});
+
+describe("coerceFiniteInt", () => {
+	it("truncates fractional and string values", () => {
+		expect(coerceFiniteInt(1.9)).toBe(1);
+		expect(coerceFiniteInt("3")).toBe(3);
+		expect(coerceFiniteInt("nope", 2)).toBe(2);
 	});
 });
 

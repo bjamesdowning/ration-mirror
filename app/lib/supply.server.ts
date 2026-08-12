@@ -647,8 +647,8 @@ export async function getSupplyItemStats(
 		.where(eq(supplyItem.listId, listId));
 
 	return {
-		itemCount: row?.itemCount ?? 0,
-		purchasedCount: row?.purchasedCount ?? 0,
+		itemCount: Math.trunc(Number(row?.itemCount ?? 0)) || 0,
+		purchasedCount: Math.trunc(Number(row?.purchasedCount ?? 0)) || 0,
 	};
 }
 

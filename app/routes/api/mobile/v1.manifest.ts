@@ -12,6 +12,10 @@ import {
 } from "~/lib/manifest.server";
 import { getCalendarDates } from "~/lib/manifest-dates";
 import { getExcludedManifestDates } from "~/lib/manifest-supply.server";
+import {
+	serializeManifestEntriesForWire,
+	serializeManifestEntryForWire,
+} from "~/lib/manifest-wire.server";
 import { requireMobileActiveGroup } from "~/lib/mobile/auth.server";
 import { getNutritionConsentStatus } from "~/lib/nutrition/consent.server";
 import { attachPersonalIntakeToEntries } from "~/lib/nutrition/service.server";
@@ -130,7 +134,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 			},
 			startDate: parsed.data.startDate,
 			endDate: parsed.data.endDate,
-			entries,
+			entries: serializeManifestEntriesForWire(entries),
 			supplyDayInclusion,
 			...(intakeConsentGranted !== undefined ? { intakeConsentGranted } : {}),
 		};
@@ -174,7 +178,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 			plan.id,
 			input,
 		);
-		return { entry };
+		return { entry: serializeManifestEntryForWire(entry) };
 	} catch (e) {
 		return handleApiError(e);
 	}

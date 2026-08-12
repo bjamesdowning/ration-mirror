@@ -1900,7 +1900,8 @@ Bearer-authenticated REST surface for the **iOS app** at `/api/mobile/v1/*`. Web
 | `GET` | `/api/mobile/v1/supply` | Active supply list + items |
 | `POST` / `DELETE` | `/api/mobile/v1/supply/items` / `.../:id` | Add / remove supply items; `POST .../:id` snoozes item (`{ duration: "24h" \| "3d" \| "1w" }`) |
 | `GET` / `DELETE` | `/api/mobile/v1/supply/snoozes` / `.../:snoozeId` | List active snoozes / unsnooze |
-| `GET` | `/api/mobile/v1/hub` | Hub widgets; `latestSupplyList` includes `itemCount`, `uncheckedCount`, `purchasedCount` before sliced `items` |
+| `GET` | `/api/mobile/v1/hub` | Hub widgets; `latestSupplyList` includes `itemCount`, `uncheckedCount`, `purchasedCount` before sliced `items`. Aggregates are coerced to Ints; a malformed optional widget is omitted without zeroing the rest of Hub. |
+| `GET` / `POST` | `/api/mobile/v1/manifest` | Meal plan week / add entry. Entries serialize ISO timestamps + numeric macros/`personalIntake` for iOS Codable. |
 | `POST` | `/api/mobile/v1/supply/sync` | Rebuild supply from selected meals |
 | `POST` | `/api/mobile/v1/supply/complete` | Dock purchased items to cargo |
 | `GET` / `POST` / `DELETE` | `/api/mobile/v1/manifest/share` | Share state / create / revoke manifest link (Crew) |

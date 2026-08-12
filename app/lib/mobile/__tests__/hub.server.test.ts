@@ -113,6 +113,12 @@ describe("getMobileHubData supply counts", () => {
 	beforeEach(() => {
 		getSupplyList.mockReset();
 		getSupplyItemStats.mockReset();
+		getCargoStats.mockReset();
+		getCargoStats.mockResolvedValue({
+			totalItems: 0,
+			expiringCount: 0,
+			expiredCount: 0,
+		});
 		getDistinctMealTags.mockReset();
 		getDistinctMealTags.mockResolvedValue([]);
 		getOrganizationTagSlugs.mockReset();
@@ -251,11 +257,16 @@ describe("getMobileHubData supply counts", () => {
 		expect(result.mealMatches).toEqual([]);
 	});
 
-	it("falls back safely when a nested widget count violates the wire contract", async () => {
+	it("omits only the bad widget when a nested count violates the wire contract", async () => {
 		getUserSettings.mockResolvedValue({
 			expirationAlertDays: 7,
 			hubProfile: "full",
 			hubLayout: null,
+		});
+		getCargoStats.mockResolvedValue({
+			totalItems: 12,
+			expiringCount: 2,
+			expiredCount: 1,
 		});
 		getSupplyList.mockResolvedValue({
 			id: "list_1",
@@ -276,9 +287,9 @@ describe("getMobileHubData supply counts", () => {
 
 		expect(result.latestSupplyList).toBeNull();
 		expect(result.cargoStats).toEqual({
-			totalItems: 0,
-			expiringCount: 0,
-			expiredCount: 0,
+			totalItems: 12,
+			expiringCount: 2,
+			expiredCount: 1,
 		});
 	});
 

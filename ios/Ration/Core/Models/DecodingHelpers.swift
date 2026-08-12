@@ -122,6 +122,28 @@ extension KeyedDecodingContainer {
         )
     }
 
+    /// Int that truncates fractional JSON numbers (mobile Int wire fields).
+    func decodeTolerantTruncatingInt(forKey key: Key) throws -> Int {
+        if let v = try? decode(Int.self, forKey: key) { return v }
+        if let d = try? decode(Double.self, forKey: key),
+           d.isFinite,
+           d >= Double(Int.min),
+           d <= Double(Int.max) {
+            return Int(d.rounded(.towardZero))
+        }
+        if let s = try? decode(String.self, forKey: key) {
+            if let v = Int(s) { return v }
+            if let d = Double(s), d.isFinite {
+                return Int(d.rounded(.towardZero))
+            }
+        }
+        throw DecodingError.dataCorruptedError(
+            forKey: key,
+            in: self,
+            debugDescription: "Expected Int-compatible value"
+        )
+    }
+
     /// Double that tolerates JSON string numbers from D1 aggregates.
     func decodeTolerantDouble(forKey key: Key) throws -> Double {
         if let v = try? decode(Double.self, forKey: key) { return v }
@@ -145,5 +167,36 @@ extension KeyedDecodingContainer {
             return nil
         }
         return try decodeTolerantInt(forKey: key)
+    }
+
+    func decodeTolerantOptionalTruncatingInt(forKey key: Key) throws -> Int? {
+        guard contains(key), (try? decodeNil(forKey: key)) != true else {
+            return nil
+        }
+        return try decodeTolerantTruncatingInt(forKey: key)
+    }
+
+    /// ISO-8601 date (string strategy). Used when Worker may emit odd Date shapes.
+    func decodeTolerantDate(forKey key: Key) throws -> Date {
+        if let date = try? decode(Date.self, forKey: key) { return date }
+        if let s = try? decode(String.self, forKey: key) {
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            if let d = formatter.date(from: s) { return d }
+            formatter.formatOptions = [.withInternetDateTime]
+            if let d = formatter.date(from: s) { return d }
+        }
+        throw DecodingError.dataCorruptedError(
+            forKey: key,
+            in: self,
+            debugDescription: "Expected ISO-8601 date string"
+        )
+    }
+
+    func decodeTolerantOptionalDate(forKey key: Key) throws -> Date? {
+        guard contains(key), (try? decodeNil(forKey: key)) != true else {
+            return nil
+        }
+        return try decodeTolerantDate(forKey: key)
     }
 }

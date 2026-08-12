@@ -99,36 +99,51 @@ function sanitizeMobileMealMatches<T>(matches: T[], label: string): T[] {
 
 /**
  * Validate the full response before it crosses the Worker boundary. If a
- * legacy row violates an optional widget contract, omit widget data rather
- * than failing the entire Hub. Log only the schema path, never response data.
+ * legacy row violates an optional widget contract, omit only that widget
+ * rather than zeroing healthy Hub data. Log only the schema path, never PII.
  */
-function validateMobileHubResponse(payload: unknown) {
-	const parsed = MobileHubResponseSchema.safeParse(payload);
-	if (parsed.success) return parsed.data;
+const HUB_OPTIONAL_WIDGET_DEFAULTS: Record<string, unknown> = {
+	expiringItems: [],
+	cargoStats: { totalItems: 0, expiringCount: 0, expiredCount: 0 },
+	latestSupplyList: null,
+	manifestPreview: null,
+	hubLayout: undefined,
+	availableMealTags: [],
+	availableCargoTags: [],
+	cargoTagIndex: [],
+	mealMatches: [],
+	partialMealMatches: [],
+	snackMatches: [],
+	flightRecorderActivity: null,
+	nutritionToday: null,
+	nutritionTrends: null,
+};
 
-	log.warn("[hub] omitted invalid optional data from mobile response", {
-		detail: parsed.error.issues[0]?.path.join(".") || "unknown",
-	});
-	const response = payload as Record<string, unknown>;
-	const fallback = {
-		...response,
-		expiringItems: [],
-		cargoStats: { totalItems: 0, expiringCount: 0, expiredCount: 0 },
-		latestSupplyList: null,
-		manifestPreview: null,
-		hubLayout: undefined,
-		availableMealTags: [],
-		availableCargoTags: [],
-		cargoTagIndex: [],
-		mealMatches: [],
-		partialMealMatches: [],
-		snackMatches: [],
-		flightRecorderActivity: null,
-		nutritionToday: null,
-		nutritionTrends: null,
-	};
-	const fallbackParsed = MobileHubResponseSchema.safeParse(fallback);
-	if (fallbackParsed.success) return fallbackParsed.data;
+function validateMobileHubResponse(payload: unknown) {
+	let candidate: unknown = payload;
+	for (let attempt = 0; attempt < 16; attempt += 1) {
+		const parsed = MobileHubResponseSchema.safeParse(candidate);
+		if (parsed.success) return parsed.data;
+
+		const rootKey = parsed.error.issues[0]?.path[0];
+		if (
+			typeof rootKey !== "string" ||
+			!(rootKey in HUB_OPTIONAL_WIDGET_DEFAULTS)
+		) {
+			log.warn("[hub] unable to sanitize mobile Hub response", {
+				detail: parsed.error.issues[0]?.path.join(".") || "unknown",
+			});
+			throw new Error("Unable to create a valid mobile Hub response");
+		}
+
+		log.warn("[hub] omitted invalid optional data from mobile response", {
+			detail: parsed.error.issues[0]?.path.join(".") || rootKey,
+		});
+		candidate = {
+			...(candidate as Record<string, unknown>),
+			[rootKey]: HUB_OPTIONAL_WIDGET_DEFAULTS[rootKey],
+		};
+	}
 
 	throw new Error("Unable to create a valid mobile Hub response");
 }
@@ -366,7 +381,18 @@ export async function getMobileHubData(
 	const manifestPreview = manifestPreviewRaw
 		? {
 				...manifestPreviewRaw,
-				entries: manifestPreviewRaw.entries.slice(0, MOBILE_MANIFEST_ENTRY_CAP),
+				entries: manifestPreviewRaw.entries
+					.slice(0, MOBILE_MANIFEST_ENTRY_CAP)
+					.map((entry) => ({
+						...entry,
+						servingsOverride:
+							entry.servingsOverride == null
+								? null
+								: (() => {
+										const n = Math.trunc(Number(entry.servingsOverride));
+										return Number.isFinite(n) ? n : null;
+									})(),
+					})),
 			}
 		: null;
 

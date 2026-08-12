@@ -390,7 +390,7 @@ export async function getKitchenStats(
 		countsByType[t] = 0;
 	}
 	for (const row of countRows) {
-		countsByType[row.eventType] = row.total;
+		countsByType[row.eventType] = Math.trunc(Number(row.total)) || 0;
 	}
 
 	const topRows = await d1
@@ -429,7 +429,7 @@ export async function getKitchenStats(
 		topCookedMeals: topRows.map((r) => ({
 			subjectName: r.subjectName,
 			mealId: r.mealId,
-			count: r.total,
+			count: Math.trunc(Number(r.total)) || 0,
 		})),
 		totals: {
 			cooked,

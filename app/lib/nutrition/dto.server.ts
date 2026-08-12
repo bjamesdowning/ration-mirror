@@ -60,6 +60,18 @@ export function coerceOptionalFiniteNumber(
 	return undefined;
 }
 
+/** Truncate to Int for mobile Codable fields (`orderIndex`, `servings`, counts). */
+export function coerceFiniteInt(value: unknown, fallback = 0): number {
+	return Math.trunc(coerceFiniteNumber(value, fallback));
+}
+
+export function coerceOptionalFiniteInt(value: unknown): number | null {
+	if (value == null) return null;
+	const n = coerceOptionalFiniteNumber(value);
+	if (n == null || !Number.isFinite(n)) return null;
+	return Math.trunc(n);
+}
+
 /** Always emit an ISO-8601 string for iOS date decoding (string-only strategy). */
 export function toIsoDateString(value: Date | string | number): string {
 	if (value instanceof Date) return value.toISOString();

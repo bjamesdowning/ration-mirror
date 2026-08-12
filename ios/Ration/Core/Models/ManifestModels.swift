@@ -37,6 +37,110 @@ struct ManifestEntry: Codable, Sendable, Identifiable {
     var isConsumed: Bool { consumedAt != nil }
     /// Effective prepared state — checks `cookedAt` first, then legacy `consumedAt`.
     var isCooked: Bool { cookedAt != nil || consumedAt != nil }
+
+    enum CodingKeys: String, CodingKey {
+        case id, planId, mealId, date, slotType, orderIndex, servingsOverride, notes
+        case consumedAt, cookedAt, createdAt, mealName, mealServings, mealType
+        case mealPrepTime, mealCookTime
+        case mealEnergyKcalPerServing, mealProteinGPerServing, mealCarbsGPerServing, mealFatGPerServing
+        case personalIntake
+    }
+
+    init(
+        id: String,
+        planId: String,
+        mealId: String,
+        date: String,
+        slotType: String,
+        orderIndex: Int,
+        servingsOverride: Int?,
+        notes: String?,
+        consumedAt: Date?,
+        cookedAt: Date? = nil,
+        createdAt: Date,
+        mealName: String,
+        mealServings: Int,
+        mealType: String,
+        mealPrepTime: Int?,
+        mealCookTime: Int?,
+        mealEnergyKcalPerServing: Double? = nil,
+        mealProteinGPerServing: Double? = nil,
+        mealCarbsGPerServing: Double? = nil,
+        mealFatGPerServing: Double? = nil,
+        personalIntake: ManifestPersonalIntake? = nil
+    ) {
+        self.id = id
+        self.planId = planId
+        self.mealId = mealId
+        self.date = date
+        self.slotType = slotType
+        self.orderIndex = orderIndex
+        self.servingsOverride = servingsOverride
+        self.notes = notes
+        self.consumedAt = consumedAt
+        self.cookedAt = cookedAt
+        self.createdAt = createdAt
+        self.mealName = mealName
+        self.mealServings = mealServings
+        self.mealType = mealType
+        self.mealPrepTime = mealPrepTime
+        self.mealCookTime = mealCookTime
+        self.mealEnergyKcalPerServing = mealEnergyKcalPerServing
+        self.mealProteinGPerServing = mealProteinGPerServing
+        self.mealCarbsGPerServing = mealCarbsGPerServing
+        self.mealFatGPerServing = mealFatGPerServing
+        self.personalIntake = personalIntake
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        planId = try c.decode(String.self, forKey: .planId)
+        mealId = try c.decode(String.self, forKey: .mealId)
+        date = try c.decode(String.self, forKey: .date)
+        slotType = try c.decode(String.self, forKey: .slotType)
+        orderIndex = try c.decodeTolerantTruncatingInt(forKey: .orderIndex)
+        servingsOverride = try c.decodeTolerantOptionalTruncatingInt(forKey: .servingsOverride)
+        notes = try c.decodeIfPresent(String.self, forKey: .notes)
+        consumedAt = try c.decodeTolerantOptionalDate(forKey: .consumedAt)
+        cookedAt = try c.decodeTolerantOptionalDate(forKey: .cookedAt)
+        createdAt = try c.decodeTolerantDate(forKey: .createdAt)
+        mealName = try c.decode(String.self, forKey: .mealName)
+        mealServings = try c.decodeTolerantTruncatingInt(forKey: .mealServings)
+        mealType = try c.decode(String.self, forKey: .mealType)
+        mealPrepTime = try c.decodeTolerantOptionalTruncatingInt(forKey: .mealPrepTime)
+        mealCookTime = try c.decodeTolerantOptionalTruncatingInt(forKey: .mealCookTime)
+        mealEnergyKcalPerServing = try c.decodeTolerantOptionalDouble(forKey: .mealEnergyKcalPerServing)
+        mealProteinGPerServing = try c.decodeTolerantOptionalDouble(forKey: .mealProteinGPerServing)
+        mealCarbsGPerServing = try c.decodeTolerantOptionalDouble(forKey: .mealCarbsGPerServing)
+        mealFatGPerServing = try c.decodeTolerantOptionalDouble(forKey: .mealFatGPerServing)
+        personalIntake = try c.decodeIfPresent(ManifestPersonalIntake.self, forKey: .personalIntake)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(planId, forKey: .planId)
+        try c.encode(mealId, forKey: .mealId)
+        try c.encode(date, forKey: .date)
+        try c.encode(slotType, forKey: .slotType)
+        try c.encode(orderIndex, forKey: .orderIndex)
+        try c.encodeIfPresent(servingsOverride, forKey: .servingsOverride)
+        try c.encodeIfPresent(notes, forKey: .notes)
+        try c.encodeIfPresent(consumedAt, forKey: .consumedAt)
+        try c.encodeIfPresent(cookedAt, forKey: .cookedAt)
+        try c.encode(createdAt, forKey: .createdAt)
+        try c.encode(mealName, forKey: .mealName)
+        try c.encode(mealServings, forKey: .mealServings)
+        try c.encode(mealType, forKey: .mealType)
+        try c.encodeIfPresent(mealPrepTime, forKey: .mealPrepTime)
+        try c.encodeIfPresent(mealCookTime, forKey: .mealCookTime)
+        try c.encodeIfPresent(mealEnergyKcalPerServing, forKey: .mealEnergyKcalPerServing)
+        try c.encodeIfPresent(mealProteinGPerServing, forKey: .mealProteinGPerServing)
+        try c.encodeIfPresent(mealCarbsGPerServing, forKey: .mealCarbsGPerServing)
+        try c.encodeIfPresent(mealFatGPerServing, forKey: .mealFatGPerServing)
+        try c.encodeIfPresent(personalIntake, forKey: .personalIntake)
+    }
 }
 
 struct ManifestResponse: Codable, Sendable {
@@ -200,6 +304,54 @@ struct ManifestPersonalIntake: Codable, Sendable, Equatable {
     let fatG: Double
     let occurredAt: Date
     var notes: String? = nil
+
+    enum CodingKeys: String, CodingKey {
+        case id, servings, energyKcal, proteinG, carbsG, fatG, occurredAt, notes
+    }
+
+    init(
+        id: String,
+        servings: Double,
+        energyKcal: Double,
+        proteinG: Double,
+        carbsG: Double,
+        fatG: Double,
+        occurredAt: Date,
+        notes: String? = nil
+    ) {
+        self.id = id
+        self.servings = servings
+        self.energyKcal = energyKcal
+        self.proteinG = proteinG
+        self.carbsG = carbsG
+        self.fatG = fatG
+        self.occurredAt = occurredAt
+        self.notes = notes
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        servings = try c.decodeTolerantDouble(forKey: .servings)
+        energyKcal = try c.decodeTolerantDouble(forKey: .energyKcal)
+        proteinG = try c.decodeTolerantDouble(forKey: .proteinG)
+        carbsG = try c.decodeTolerantDouble(forKey: .carbsG)
+        fatG = try c.decodeTolerantDouble(forKey: .fatG)
+        occurredAt = try c.decodeTolerantDate(forKey: .occurredAt)
+        notes = try c.decodeIfPresent(String.self, forKey: .notes)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(servings, forKey: .servings)
+        try c.encode(energyKcal, forKey: .energyKcal)
+        try c.encode(proteinG, forKey: .proteinG)
+        try c.encode(carbsG, forKey: .carbsG)
+        try c.encode(fatG, forKey: .fatG)
+        try c.encode(occurredAt, forKey: .occurredAt)
+        try c.encodeIfPresent(notes, forKey: .notes)
+    }
 }
 
 struct ManifestIntakeUpsertRequest: Encodable, Sendable {

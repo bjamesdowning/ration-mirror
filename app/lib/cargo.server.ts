@@ -1599,9 +1599,9 @@ export async function getCargoStats(
 	]);
 
 	return {
-		totalItems: totalResult[0]?.count ?? 0,
-		expiringCount: expiringResult[0]?.count ?? 0,
-		expiredCount: expiredResult[0]?.count ?? 0,
+		totalItems: Math.trunc(Number(totalResult[0]?.count ?? 0)) || 0,
+		expiringCount: Math.trunc(Number(expiringResult[0]?.count ?? 0)) || 0,
+		expiredCount: Math.trunc(Number(expiredResult[0]?.count ?? 0)) || 0,
 	};
 }
 

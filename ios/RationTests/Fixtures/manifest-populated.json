@@ -1,0 +1,41 @@
+{
+	"plan": { "id": "plan-1", "name": "Household" },
+	"startDate": "2026-08-10",
+	"endDate": "2026-08-16",
+	"supplyDayInclusion": {},
+	"intakeConsentGranted": true,
+	"entries": [
+		{
+			"id": "entry-1",
+			"planId": "plan-1",
+			"mealId": "meal-1",
+			"date": "2026-08-12",
+			"slotType": "snack",
+			"orderIndex": 0,
+			"servingsOverride": null,
+			"notes": null,
+			"consumedAt": null,
+			"cookedAt": "2026-08-12T12:00:00.000Z",
+			"createdAt": "2026-08-12T11:00:00.000Z",
+			"mealName": "Almonds",
+			"mealServings": 1,
+			"mealType": "provision",
+			"mealPrepTime": null,
+			"mealCookTime": null,
+			"mealEnergyKcalPerServing": 90,
+			"mealProteinGPerServing": 3.5,
+			"mealCarbsGPerServing": 2,
+			"mealFatGPerServing": 8,
+			"personalIntake": {
+				"id": "intake-1",
+				"servings": 1,
+				"energyKcal": 90,
+				"proteinG": 3.5,
+				"carbsG": 2,
+				"fatG": 8,
+				"occurredAt": "2026-08-12T12:05:00.000Z",
+				"notes": null
+			}
+		}
+	]
+}

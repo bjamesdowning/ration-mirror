@@ -78,6 +78,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 			organizationId,
 			from,
 			to,
+			{ crossOrgDiary: caps.crossOrgDiary },
 		);
 		return serializePlannedDatesResponse({ from, to, dates, consumedDates });
 	} catch (e) {

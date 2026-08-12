@@ -359,11 +359,11 @@ export function SupplyScanReviewModal({
 	}, [fetcher.state, fetcher.data, onSuccess]);
 
 	return (
-		<div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-carbon/40 backdrop-blur-sm p-0 md:p-4">
-			<div className="bg-ceramic dark:bg-carbon w-full md:max-w-2xl md:rounded-2xl shadow-xl max-h-[92vh] flex flex-col">
+		<div className="fixed inset-0 z-50 flex items-end md:items-center justify-center modal-scrim p-0 md:p-4">
+			<div className="modal-surface w-full md:max-w-2xl md:rounded-2xl shadow-xl max-h-[92vh] flex flex-col">
 				<div className="flex items-center justify-between px-4 py-3 border-b border-platinum dark:border-white/10">
 					<div>
-						<h2 className="text-lg font-bold text-carbon dark:text-ceramic">
+						<h2 className="text-lg font-bold text-carbon">
 							Review receipt matches
 						</h2>
 						<p className="text-xs text-muted">
@@ -520,7 +520,7 @@ export function SupplyScanReviewModal({
 											</div>
 
 											{pair.supplyItem && (
-												<div className="rounded-lg bg-white/60 dark:bg-carbon/20 px-2 py-1.5">
+												<div className="rounded-lg bg-white/60 dark:bg-white/10 px-2 py-1.5">
 													<p className="text-sm capitalize">
 														{pair.supplyItem.name}
 													</p>
@@ -581,7 +581,7 @@ export function SupplyScanReviewModal({
 																		Choose supply item to link
 																	</span>
 																	<select
-																		className="w-full text-xs rounded-lg border border-platinum dark:border-white/10 bg-ceramic dark:bg-carbon px-2 py-1.5"
+																		className="w-full text-xs rounded-lg border border-platinum dark:border-white/10 modal-surface px-2 py-1.5"
 																		value=""
 																		onChange={(e) => {
 																			const supplyId = e.target.value;

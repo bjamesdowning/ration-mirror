@@ -18,6 +18,7 @@ Use this skill when:
 
 ### 1. Plan the Feature
 
+- Pick **Kitchen / Person / Person-in-context** tenancy before scaffolding (see `docs/dev/tenancy-classes.md`)
 - Identify the route path (e.g., `/dashboard/new-feature`)
 - Determine if it needs API endpoints (`/api/new-feature`)
 - List required components

@@ -217,7 +217,7 @@ export function WeekView({
 									? "border-hyper-green/20 bg-hyper-green/5"
 									: allConsumed
 										? "border-hyper-green/15 bg-hyper-green/5"
-										: "border-platinum bg-white/30"
+										: "border-platinum bg-platinum/40 dark:bg-white/5"
 							}`}
 						>
 							{slots.map((slot) => (

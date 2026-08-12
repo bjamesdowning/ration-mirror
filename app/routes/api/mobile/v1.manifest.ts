@@ -18,7 +18,10 @@ import {
 } from "~/lib/manifest-wire.server";
 import { requireMobileActiveGroup } from "~/lib/mobile/auth.server";
 import { getNutritionConsentStatus } from "~/lib/nutrition/consent.server";
-import { attachPersonalIntakeToEntries } from "~/lib/nutrition/service.server";
+import {
+	attachPersonalIntakeToEntries,
+	getHistory,
+} from "~/lib/nutrition/service.server";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import {
 	MealPlanEntryCreateSchema,
@@ -92,6 +95,20 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		]);
 
 		let intakeConsentGranted: boolean | undefined;
+		let dayIntakeRows:
+			| Array<{
+					id: string;
+					manifestDate: string;
+					slotType: string | null;
+					servings: number;
+					energyKcal: number;
+					proteinG: number;
+					carbsG: number;
+					fatG: number;
+					mealName: string | null;
+					organizationName: string | null;
+			  }>
+			| undefined;
 		if (cookLogSplit && nutritionManifest) {
 			const consent = await getNutritionConsentStatus(
 				context.cloudflare.env.DB,
@@ -100,19 +117,42 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 			);
 			intakeConsentGranted = consent.state === "active";
 			if (intakeConsentGranted) {
-				entries = await attachPersonalIntakeToEntries(
-					context.cloudflare.env,
-					{
-						userId,
-						organizationId,
-						surface: "mobile",
-						authMethod: "mobile_bearer",
-						scopes: ["nutrition:read"],
-						requestId: request.headers.get("cf-ray") ?? crypto.randomUUID(),
-					},
-					flagContext,
-					entries,
-				);
+				const principal = {
+					userId,
+					organizationId,
+					surface: "mobile" as const,
+					authMethod: "mobile_bearer",
+					scopes: ["nutrition:read"],
+					requestId: request.headers.get("cf-ray") ?? crypto.randomUUID(),
+				};
+				const [withIntake, history] = await Promise.all([
+					attachPersonalIntakeToEntries(
+						context.cloudflare.env,
+						principal,
+						flagContext,
+						entries,
+					),
+					getHistory(
+						context.cloudflare.env,
+						principal,
+						flagContext,
+						parsed.data.startDate,
+						parsed.data.endDate,
+					),
+				]);
+				entries = withIntake;
+				dayIntakeRows = history.items.map((r) => ({
+					id: r.id,
+					manifestDate: r.manifestDate,
+					slotType: r.slotType,
+					servings: r.servings,
+					energyKcal: r.energyKcal,
+					proteinG: r.proteinG,
+					carbsG: r.carbsG,
+					fatG: r.fatG,
+					mealName: r.mealName,
+					organizationName: r.organizationName,
+				}));
 			}
 		}
 
@@ -137,6 +177,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 			entries: serializeManifestEntriesForWire(entries),
 			supplyDayInclusion,
 			...(intakeConsentGranted !== undefined ? { intakeConsentGranted } : {}),
+			...(dayIntakeRows !== undefined ? { dayIntakeRows } : {}),
 		};
 	} catch (e) {
 		return handleApiError(e);

@@ -50,9 +50,16 @@ enum AIFeature: String {
 struct AIProcessingView: View {
     let feature: AIFeature
     var creditCost: Int?
+    /// Optional title when the wait state differs from the feature default (e.g. confirm).
+    var titleOverride: String? = nil
+    /// Optional body copy paired with `titleOverride`.
+    var messageOverride: String? = nil
 
     @State private var pulse = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var title: String { titleOverride ?? feature.title }
+    private var message: String { messageOverride ?? feature.message }
 
     var body: some View {
         VStack(spacing: 24) {
@@ -67,8 +74,8 @@ struct AIProcessingView: View {
                     .foregroundStyle(Theme.hyperGreen)
             }
             VStack(spacing: 8) {
-                Text(feature.title).rationHeadline()
-                Text(feature.message)
+                Text(title).rationHeadline()
+                Text(message)
                     .rationCaption()
                     .multilineTextAlignment(.center)
                     .foregroundStyle(Theme.muted)

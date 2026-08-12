@@ -25,7 +25,7 @@ export type DockItemDraft = {
 };
 
 const inputClassName =
-	"w-full bg-platinum/10 border border-hyper-green/30 rounded px-3 py-2 text-sm text-carbon dark:text-ceramic focus:ring-2 focus:ring-hyper-green/50 focus:outline-none";
+	"w-full bg-platinum/10 border border-hyper-green/30 rounded px-3 py-2 text-sm text-carbon focus:ring-2 focus:ring-hyper-green/50 focus:outline-none";
 
 type DockItemFieldsProps = {
 	value: DockItemDraft;

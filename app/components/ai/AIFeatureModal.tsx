@@ -40,7 +40,7 @@ export function AIFeatureModal({
 
 	return (
 		<div
-			className="fixed inset-0 z-[60] flex items-center justify-center bg-carbon/80 backdrop-blur-sm animate-fade-in"
+			className="fixed inset-0 z-[60] flex items-center justify-center modal-scrim-heavy animate-fade-in"
 			role="dialog"
 			aria-modal="true"
 			aria-labelledby={id}

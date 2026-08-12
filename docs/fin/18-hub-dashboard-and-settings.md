@@ -4,6 +4,8 @@
 
 The **hub dashboard** shows configurable **widgets**: inventory stats, cookable meals, partial matches, expiring cargo, supply preview, manifest preview, **Daily Fuel** / **Fuel Trends** (nutrition goal progress — when nutrition flags are on), and **Flight Recorder** (recent shared kitchen activity — logistics only, not personal kcal). You can change **layout presets** and per-widget visibility, size, and filters where the UI allows.
 
+**Daily Fuel / Fuel Trends** are **your** personal progress (not a household sum). With cross-kitchen diary enabled, they use intake from every kitchen you log in—not only the active group. Flight Recorder stays shared logistics only.
+
 ## Main areas
 
 | Area | Purpose |

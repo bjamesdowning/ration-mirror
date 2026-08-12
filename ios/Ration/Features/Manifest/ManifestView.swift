@@ -482,17 +482,46 @@ struct ManifestView: View {
                 if entryActionFlags.isCookLogSplitEnabled,
                    entryActionFlags.isNutritionManifestEnabled
                 {
-                    let intakeRows = dayEntries.compactMap { entry -> (id: String, name: String, intake: ManifestPersonalIntake)? in
-                        guard let intake = entry.personalIntake else { return nil }
-                        return (entry.id, entry.mealName, intake)
-                    }
+                    let intakeRows: [(id: String, name: String, organizationName: String?, intake: ManifestPersonalIntake)] = {
+                        let diary = (manifest.dayIntakeRows ?? []).filter { $0.manifestDate == model.selectedDay }
+                        if !diary.isEmpty {
+                            return diary.map { row in
+                                (
+                                    row.id,
+                                    row.mealName ?? "Meal",
+                                    row.organizationName,
+                                    ManifestPersonalIntake(
+                                        id: row.id,
+                                        servings: row.servings,
+                                        energyKcal: row.energyKcal,
+                                        proteinG: row.proteinG,
+                                        carbsG: row.carbsG,
+                                        fatG: row.fatG,
+                                        occurredAt: Date(),
+                                        notes: nil
+                                    )
+                                )
+                            }
+                        }
+                        return dayEntries.compactMap { entry -> (id: String, name: String, organizationName: String?, intake: ManifestPersonalIntake)? in
+                            guard let intake = entry.personalIntake else { return nil }
+                            return (entry.id, entry.mealName, nil, intake)
+                        }
+                    }()
                     if !intakeRows.isEmpty {
                         Section {
                             ForEach(intakeRows, id: \.id) { row in
                                 VStack(alignment: .leading, spacing: 4) {
-                                    Text(row.name)
-                                        .rationBody()
-                                        .foregroundStyle(Theme.carbon)
+                                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                                        Text(row.name)
+                                            .rationBody()
+                                            .foregroundStyle(Theme.carbon)
+                                        if let kitchen = row.organizationName, !kitchen.isEmpty {
+                                            Text("· \(kitchen)")
+                                                .rationCaption()
+                                                .foregroundStyle(Theme.muted)
+                                        }
+                                    }
                                     Text(
                                         String(
                                             format: "%.1f serving%@ · %.0f kcal · P %.0fg · C %.0fg · F %.0fg",

@@ -37,6 +37,10 @@ function setup() {
 	const { database, sqlite } = createSqliteD1();
 	databases.push(sqlite);
 	sqlite.exec(`
+		create table organization (
+			id text primary key,
+			name text not null
+		);
 		create table meal_plan (
 			id text primary key,
 			organization_id text not null
@@ -44,6 +48,7 @@ function setup() {
 		create table meal (
 			id text primary key,
 			organization_id text not null,
+			name text not null default 'Meal',
 			nutrition text,
 			nutrition_revision integer not null default 0,
 			nutrition_computed_revision integer not null default 0,
@@ -61,11 +66,13 @@ function setup() {
 		);
 		create table nutrition_intake (
 			id text primary key,
-			organization_id text not null,
+			organization_id text,
 			user_id text not null,
 			plan_id text,
 			entry_id text,
 			meal_id text,
+			organization_name_snapshot text,
+			meal_name_snapshot text,
 			manifest_date text not null,
 			slot_type text,
 			servings real not null,
@@ -98,7 +105,7 @@ function setup() {
 			where idempotency_key is not null;
 		create unique index nutrition_intake_user_org_entry_active_uidx
 			on nutrition_intake(user_id, organization_id, entry_id)
-			where entry_id is not null and voided_at is null;
+			where entry_id is not null and organization_id is not null and voided_at is null;
 		create table nutrition_operation (
 			id text primary key,
 			user_id text not null,
@@ -154,6 +161,7 @@ function setup() {
 		create unique index nutrition_goal_user_open_uidx
 			on nutrition_goal(user_id)
 			where effective_to is null;
+		insert into organization values ('org-1', 'Test Kitchen');
 		insert into meal_plan values ('plan-1', 'org-1');
 	`);
 	const nutrition = JSON.stringify({
@@ -197,8 +205,8 @@ function setup() {
 		description: "Fixture meal",
 	}).replaceAll("'", "''");
 	sqlite.exec(`
-		insert into meal (id, organization_id, nutrition, nutrition_revision, nutrition_computed_revision, nutrition_status)
-		values ('meal-1', 'org-1', '${nutrition}', 0, 0, 'current');
+		insert into meal (id, organization_id, name, nutrition, nutrition_revision, nutrition_computed_revision, nutrition_status)
+		values ('meal-1', 'org-1', 'Fixture meal', '${nutrition}', 0, 0, 'current');
 		insert into meal_plan_entry values
 			('11111111-1111-4111-8111-111111111111', 'plan-1', 'meal-1', '2026-08-09', 'dinner', 1786291200, null),
 			('22222222-2222-4222-8222-222222222222', 'plan-1', 'meal-1', '2026-08-09', 'dinner', 1786291200, null);
@@ -380,7 +388,8 @@ describe("canonical nutrition service with transactional SQLite", () => {
 						.prepare(
 							`insert into nutrition_intake
 							 select 'competing-intake', organization_id, user_id, plan_id,
-							 entry_id, meal_id, manifest_date, slot_type, 1.5, energy_kcal,
+							 entry_id, meal_id, organization_name_snapshot, meal_name_snapshot,
+							 manifest_date, slot_type, 1.5, energy_kcal,
 							 protein_g, carbs_g, fat_g, coverage, source, confidence, verified,
 							 occurred_at, kitchen_event_id, schema_version, nutrients_json,
 							 coverage_json, fiber_g, consent_id, '99999999-9999-4999-8999-999999999999',

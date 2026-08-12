@@ -52,7 +52,7 @@ export function FilterSheet({
 			<button
 				type="button"
 				tabIndex={-1}
-				className="fixed inset-0 bg-carbon/40 backdrop-blur-sm z-40 animate-fade-in border-none cursor-default"
+				className="fixed inset-0 modal-scrim z-40 animate-fade-in border-none cursor-default"
 				onClick={onClose}
 			/>
 

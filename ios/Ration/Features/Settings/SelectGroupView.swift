@@ -48,6 +48,7 @@ struct SelectGroupView: View {
             .overlay {
                 if isWorking || env.session.isSwitchingOrg {
                     ProgressView("Switching…")
+                        .tint(Theme.hyperGreen)
                         .padding()
                         .background {
                             RationAdaptiveMaterial(

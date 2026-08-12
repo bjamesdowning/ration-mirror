@@ -37,6 +37,7 @@ Clearing nutrition (when the UI allows) removes the snapshot until the next reso
 - Prefer editing on **scan review** so Cargo starts accurate.
 - Treat **Estimated** rows as suggestions until you confirm or override.
 - Goals and day totals only reflect what is stored on items/meals and what you log on Manifest Eat—see *Nutrition goals and tracking*.
+- Editing Cargo/Galley nutrition changes the **kitchen** snapshot used for future cooks/logs; it does not rewrite past personal intake diary rows.
 
 ## Related
 

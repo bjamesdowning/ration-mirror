@@ -88,7 +88,7 @@ export function ApiKeysPanel({
 								type="text"
 								readOnly
 								value={newKeyDisplay}
-								className="flex-1 min-w-[200px] bg-white/50 border border-carbon/10 rounded px-3 py-1 text-sm font-mono text-carbon"
+								className="flex-1 min-w-[200px] bg-platinum/50 dark:bg-white/5 border border-platinum dark:border-white/10 rounded px-3 py-1 text-sm font-mono text-carbon"
 								onClick={(e) => e.currentTarget.select()}
 							/>
 							<button

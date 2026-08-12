@@ -25,8 +25,8 @@ export function ReplenishModal({
 	if (!open) return null;
 
 	return (
-		<div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-carbon/40 backdrop-blur-sm p-0 md:p-4">
-			<div className="bg-ceramic dark:bg-carbon w-full md:max-w-md md:rounded-2xl shadow-xl">
+		<div className="fixed inset-0 z-50 flex items-end md:items-center justify-center modal-scrim p-0 md:p-4">
+			<div className="modal-surface w-full md:max-w-md md:rounded-2xl shadow-xl">
 				<div className="flex items-center justify-between px-4 py-3 border-b border-platinum dark:border-white/10">
 					<h2 className="text-lg font-bold">Replenish Cargo</h2>
 					<button

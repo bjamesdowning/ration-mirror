@@ -23,7 +23,7 @@ One production API serves everyone. Safety comes from **flags default off** + **
 ### Phase A — Backend ready, flags still off (safe for `1.3.17`)
 
 1. Create Cloudflare Queues + DLQ for `NUTRITION_RECOMPUTE_QUEUE` (prod/dev as needed); leave `nutrition-async-recompute` **off** until consumer smoke passes.
-2. Apply main D1 migrations **`0045`–`0050`** (`bun run db:migrate:prod`) **before or with** Worker deploy — meal queries select new columns.
+2. Apply main D1 migrations **`0045`–`0052`** (`bun run db:migrate:prod`) **before or with** Worker deploy — meal queries select new columns; `0052` rebuilds `nutrition_intake` (nullable org SET NULL + name snapshots).
 3. Deploy Workers (web + mobile API) at web **`≥ 1.8.10`**. Confirm App Store `1.3.17` smoke: login, Manifest Consume, Galley Cook, **undo toast**.
 4. Pin / promote verified FDC nutrition DB (never App Review on `seed-minimal.sql`). Optional until `nutrition-engine` dogfood.
 
@@ -40,7 +40,10 @@ One production API serves everyone. Safety comes from **flags default off** + **
    3. `nutrition-manifest`
    4. `nutrition-cook-log-split`
    5. `nutrition-goals`
-   6. `nutrition-ai-estimate` (last; scan-review AI only)
+   6. `nutrition-cross-org-diary` (after manifest/goals; user-global diary — see [tenancy-classes.md](tenancy-classes.md))
+   7. `nutrition-ai-estimate` (last; scan-review AI only)
+
+After fin help edits for cross-org diary, sync Copilot AI Search ([copilot-ai-search.md](copilot-ai-search.md)) so Ask Ration matches product copy.
 
 **Hub widgets:** Once `nutrition-manifest` and/or `nutrition-goals` are on, Hub exposes **Daily Fuel** (`nutrition-today`) and **Fuel Trends** (`nutrition-trends`) on `full`/`cook` presets (flag-gated out of layout when both flags are off). Tapping either opens Nutrition Goals in Preferences (goals flag required on Hub).
 

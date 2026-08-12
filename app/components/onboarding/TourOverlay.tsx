@@ -22,7 +22,7 @@ export function TourOverlay({
 		<div
 			className={`fixed inset-0 z-[100] animate-fade-in ${
 				fullscreen
-					? "flex items-center justify-center bg-carbon/70 backdrop-blur-sm"
+					? "flex items-center justify-center modal-scrim-heavy"
 					: "bg-carbon/10 pointer-events-none"
 			}`}
 			role="dialog"

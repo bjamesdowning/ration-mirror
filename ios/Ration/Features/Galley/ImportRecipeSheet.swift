@@ -45,8 +45,12 @@ struct ImportRecipeSheet: View {
                 case let .verification(extracted, requestId):
                     verificationContent(extracted, requestId: requestId)
                 case .confirming:
-                    ProgressView("Adding to Galley…")
-                        .tint(Theme.hyperGreen)
+                    AIProcessingView(
+                        feature: .importRecipe,
+                        creditCost: nil,
+                        titleOverride: "Adding to Galley…",
+                        messageOverride: "Saving the imported recipe to your Galley."
+                    )
                 case let .duplicate(existingId, existingName):
                     duplicateContent(existingId: existingId, existingName: existingName)
                 case let .completed(meal):

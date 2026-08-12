@@ -4,6 +4,10 @@
 
 An **organization** is Ration’s workspace: inventory, recipes, meal plan, supply list, and **AI credit balance** all belong to that group. You can belong to more than one organization; you pick an **active** one to work in (see *Switching groups*).
 
+## Shared kitchen vs personal tracking
+
+**Kitchen** data (Cargo, Galley, Manifest plan, Supply, credits) is always per organization and never merges when you switch groups. **Personal nutrition** (goals and logged intake) belongs to you as a person. When cross-kitchen diary is enabled for your account, day totals and history can include intake you logged in any kitchen you use — roommates still only see shared kitchen logistics, not your calories. See *Nutrition goals and tracking* and *Switching groups*.
+
 ## Cargo
 
 **Cargo** is your **pantry inventory**: items with quantity, unit, optional expiry, domain (food, household, alcohol), and tags. Adding items can trigger a **merge suggestion** when Ration thinks two names are the same product.

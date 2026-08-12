@@ -140,7 +140,7 @@ export function CargoQuickEatDialog({
 			<button
 				type="button"
 				aria-label="Close"
-				className="absolute inset-0 bg-carbon/50"
+				className="absolute inset-0 bg-black/50"
 				onClick={onClose}
 				disabled={isSaving}
 			/>

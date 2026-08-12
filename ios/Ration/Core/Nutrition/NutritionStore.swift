@@ -47,11 +47,13 @@ final class NutritionStore {
         self.snapshots = snapshots
     }
 
-    func configure(userId: String, organizationId: String) {
-        if self.userId != userId || self.organizationId != organizationId {
+    func configure(userId: String, organizationId: String, crossOrgDiary: Bool = false) {
+        // Cross-org diary shares one personal cache across kitchen switches.
+        let scopeOrganizationId = crossOrgDiary ? "_cross_org_diary_" : organizationId
+        if self.userId != userId || self.organizationId != scopeOrganizationId {
             bumpGeneration()
             self.userId = userId
-            self.organizationId = organizationId
+            self.organizationId = scopeOrganizationId
         }
     }
 

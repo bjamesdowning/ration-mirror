@@ -144,7 +144,7 @@ export function SupplyHorizonPicker({
 								}}
 								className="flex-1 accent-hyper-green"
 							/>
-							<span className="text-sm font-mono text-carbon dark:text-ceramic min-w-[2ch]">
+							<span className="text-sm font-mono text-carbon min-w-[2ch]">
 								{sliderDraft}
 							</span>
 						</div>

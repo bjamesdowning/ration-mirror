@@ -69,7 +69,7 @@ export function MealPicker({
 			{/* Backdrop */}
 			<button
 				type="button"
-				className="fixed inset-0 bg-carbon/40 backdrop-blur-sm z-[70] cursor-default"
+				className="fixed inset-0 modal-scrim z-[70] cursor-default"
 				onClick={onClose}
 				aria-label="Close picker"
 			/>

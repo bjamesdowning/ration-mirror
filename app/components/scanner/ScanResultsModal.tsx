@@ -335,7 +335,7 @@ export function ScanResultsModal({
 	}, [fetcher.state, batchResponse?.success, allSucceeded, onSuccess, onClose]);
 
 	return (
-		<div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-carbon/80 backdrop-blur-sm">
+		<div className="fixed inset-0 z-[60] flex items-center justify-center p-4 modal-scrim-heavy">
 			<div className="bg-ceramic dark:bg-[#1A1A1A] border-2 border-hyper-green rounded-xl shadow-glow w-full md:max-w-4xl max-h-[90vh] md:max-h-[85vh] overflow-hidden flex flex-col">
 				{/* Header */}
 				<div className="flex items-center justify-between p-6 border-b border-hyper-green/30">
@@ -373,7 +373,7 @@ export function ScanResultsModal({
 				)}
 
 				{/* Bulk Controls */}
-				<div className="p-4 border-b border-hyper-green/30 bg-carbon/20">
+				<div className="p-4 border-b border-hyper-green/30 bg-platinum/30 dark:bg-white/5">
 					<div className="flex flex-wrap gap-3 items-center">
 						<button
 							type="button"
@@ -573,7 +573,7 @@ function ScanResultItemRow({
 
 	if (isEditing) {
 		return (
-			<div className="bg-carbon/30 border border-hyper-green/50 rounded-lg p-4 space-y-3">
+			<div className="bg-platinum/40 dark:bg-white/10 border border-hyper-green/50 rounded-lg p-4 space-y-3">
 				<DockItemFields
 					key={`cargo-${item.id}`}
 					idPrefix={`cargo-${item.id}`}
@@ -631,7 +631,7 @@ function ScanResultItemRow({
 
 	return (
 		<div
-			className={`bg-carbon/20 border rounded-lg p-4 hover:border-hyper-green/30 transition-colors ${
+			className={`bg-platinum/30 dark:bg-white/5 border rounded-lg p-4 hover:border-hyper-green/30 transition-colors ${
 				isLowConfidence ? "border-amber-500/30" : "border-platinum/10"
 			}`}
 		>

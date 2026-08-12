@@ -1,0 +1,17 @@
+---
+description: Kitchen / Person / Person-in-context tenancy rules. Always apply when adding tables, APIs, or nutrition/org-scoped features.
+alwaysApply: true
+---
+
+# Tenancy classes
+
+Canonical guide: `docs/dev/tenancy-classes.md`.
+
+## Rules
+
+- Before scaffolding a new table or API, **declare its tenancy class**: **Kitchen** (org-owned), **Person** (user-global), or **Person-in-context** (user-owned + kitchen provenance).
+- **Kitchen** — scope writes/reads with `organizationId` from `requireActiveGroup()` / verified membership; typically `ON DELETE CASCADE` with the org.
+- **Person** — anchor on session `userId` only (e.g. nutrition goals, consent). No org tenancy.
+- **Person-in-context** — owner is `userId`; `organizationId` is provenance. Writers set non-null org + name snapshots; org FK uses `ON DELETE SET NULL`. Cross-kitchen diary reads require flag `nutrition-cross-org-diary` (server-enforced).
+- Never trust client-supplied `organizationId` / `userId` as the tenancy anchor.
+- Do not merge Kitchen data across orgs; do not expose Person / Person-in-context nutrition to other household members.

@@ -21,6 +21,7 @@ export type DayIntakeRow = {
 	servings: number;
 	energyKcal: number;
 	mealName: string | null;
+	organizationName?: string | null;
 };
 
 interface DayViewProps {
@@ -195,6 +196,12 @@ export function DayView({
 								>
 									<span className="text-carbon truncate min-w-0">
 										{row.mealName ?? "Meal"}
+										{row.organizationName ? (
+											<span className="text-muted">
+												{" "}
+												· {row.organizationName}
+											</span>
+										) : null}
 										{slotLabel ? (
 											<span className="text-muted"> · {slotLabel}</span>
 										) : null}

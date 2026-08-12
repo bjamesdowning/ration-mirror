@@ -8,6 +8,8 @@ export type NutritionCapabilities = {
 	goals: boolean;
 	aiEstimate: boolean;
 	asyncRecompute: boolean;
+	/** Personal diary aggregates across kitchens (requires manifest or goals parent). */
+	crossOrgDiary: boolean;
 };
 
 export type ResolveNutritionCapabilitiesOptions = {
@@ -26,21 +28,30 @@ export async function resolveNutritionCapabilities(
 	flagContext: FlagshipEvaluationContext,
 	options: ResolveNutritionCapabilitiesOptions = {},
 ): Promise<NutritionCapabilities> {
-	const [engine, manifestFlag, cookLogFlag, goals, aiFlag, asyncFlag] =
-		await Promise.all([
-			isFeatureEnabled(env, "nutrition-engine", flagContext),
-			isFeatureEnabled(env, "nutrition-manifest", flagContext),
-			isFeatureEnabled(env, "nutrition-cook-log-split", flagContext),
-			isFeatureEnabled(env, "nutrition-goals", flagContext),
-			isFeatureEnabled(env, "nutrition-ai-estimate", flagContext),
-			isFeatureEnabled(env, "nutrition-async-recompute", flagContext),
-		]);
+	const [
+		engine,
+		manifestFlag,
+		cookLogFlag,
+		goals,
+		aiFlag,
+		asyncFlag,
+		crossOrgFlag,
+	] = await Promise.all([
+		isFeatureEnabled(env, "nutrition-engine", flagContext),
+		isFeatureEnabled(env, "nutrition-manifest", flagContext),
+		isFeatureEnabled(env, "nutrition-cook-log-split", flagContext),
+		isFeatureEnabled(env, "nutrition-goals", flagContext),
+		isFeatureEnabled(env, "nutrition-ai-estimate", flagContext),
+		isFeatureEnabled(env, "nutrition-async-recompute", flagContext),
+		isFeatureEnabled(env, "nutrition-cross-org-diary", flagContext),
+	]);
 
 	const manifest = engine && manifestFlag;
 	const cookLogSplit = manifest && cookLogFlag;
 	const aiEstimate = engine && aiFlag && (options.serverEligibleAi ?? false);
 	const asyncRecompute =
 		engine && asyncFlag && (options.queueConfigured ?? false);
+	const crossOrgDiary = crossOrgFlag && (manifest || (engine && goals));
 
 	return {
 		engine,
@@ -49,5 +60,6 @@ export async function resolveNutritionCapabilities(
 		goals,
 		aiEstimate,
 		asyncRecompute,
+		crossOrgDiary,
 	};
 }

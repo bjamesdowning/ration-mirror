@@ -27,6 +27,7 @@ Ask each in Ask Ration (with `search_docs`) and optionally open the matching `/h
 | 10 | Paid but credits missing? | `61`, `21` |
 | 11 | Where do nutrients come from? USDA vs estimate? | `24`, `26` |
 | 12 | How do nutrition goals and Eat / plate-up work? | `25`, `15` |
+| 12b | Two kitchens same day → one personal total; housemate cannot see logs; delete shared kitchen keeps diary | `25`, `05`, `02` |
 
 ## `/help` surface
 

@@ -75,7 +75,7 @@ export function CargoEditModal({
 	};
 
 	return (
-		<div className="fixed inset-0 bg-carbon/30 backdrop-blur-sm flex items-end md:items-center md:justify-center z-[80]">
+		<div className="fixed inset-0 modal-scrim flex items-end md:items-center md:justify-center z-[80]">
 			<div className="bg-ceramic rounded-t-2xl md:rounded-2xl shadow-xl p-6 w-full md:max-w-md md:mx-4 max-h-[90vh] overflow-y-auto safe-area-pb">
 				<div className="flex justify-between items-center mb-6">
 					<h2 className="text-xl font-bold text-carbon">Edit Item</h2>

@@ -13,6 +13,29 @@ final class ShareViewController: UIViewController {
     private static let pendingAtKey = "pendingImportURLAt"
     private static let pendingAutoStartKey = "pendingImportAutoStart"
 
+    /// Ceramic background — mirrors Theme.ceramic (light #F8F9FA / dark #0D0D0D).
+    private static let ceramicBackground = UIColor { traits in
+        if traits.userInterfaceStyle == .dark {
+            return UIColor(red: 0.051, green: 0.051, blue: 0.051, alpha: 1)
+        }
+        return UIColor(red: 0.973, green: 0.976, blue: 0.980, alpha: 1)
+    }
+
+    /// Carbon text — mirrors Theme.carbon (light #111 / dark #F8F9FA).
+    private static let carbonForeground = UIColor { traits in
+        if traits.userInterfaceStyle == .dark {
+            return UIColor(red: 0.973, green: 0.976, blue: 0.980, alpha: 1)
+        }
+        return UIColor(white: 0.067, alpha: 1)
+    }
+
+    private static let mutedForeground = UIColor { traits in
+        if traits.userInterfaceStyle == .dark {
+            return UIColor(red: 0.612, green: 0.639, blue: 0.686, alpha: 1) // #9CA3AF
+        }
+        return UIColor(red: 0.420, green: 0.447, blue: 0.502, alpha: 1) // #6B7280
+    }
+
     private var didStart = false
     private var statusLabel: UILabel?
     private var openButton: UIButton?
@@ -21,7 +44,7 @@ final class ShareViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = UIColor(red: 0.973, green: 0.976, blue: 0.980, alpha: 1) // Ceramic
+        view.backgroundColor = Self.ceramicBackground
         buildChrome()
     }
 
@@ -43,7 +66,7 @@ final class ShareViewController: UIViewController {
         let label = UILabel()
         label.text = "Sending to Ration…"
         label.font = UIFont.monospacedSystemFont(ofSize: 15, weight: .medium)
-        label.textColor = UIColor(white: 0.067, alpha: 1) // Carbon
+        label.textColor = Self.carbonForeground
         label.textAlignment = .center
         label.numberOfLines = 0
         statusLabel = label
@@ -51,7 +74,7 @@ final class ShareViewController: UIViewController {
 
         var config = UIButton.Configuration.filled()
         config.baseBackgroundColor = UIColor(red: 0, green: 0.878, blue: 0.533, alpha: 1) // Hyper-Green
-        config.baseForegroundColor = UIColor(white: 0.067, alpha: 1)
+        config.baseForegroundColor = UIColor(white: 0.067, alpha: 1) // on-hyper-green
         config.title = "Open Ration"
         config.cornerStyle = .medium
         let button = UIButton(configuration: config)
@@ -62,7 +85,7 @@ final class ShareViewController: UIViewController {
 
         var doneConfig = UIButton.Configuration.plain()
         doneConfig.title = "Done"
-        doneConfig.baseForegroundColor = UIColor(white: 0.067, alpha: 0.55)
+        doneConfig.baseForegroundColor = Self.mutedForeground
         let done = UIButton(configuration: doneConfig)
         done.isHidden = true
         done.addTarget(self, action: #selector(finish), for: .touchUpInside)

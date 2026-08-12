@@ -17,7 +17,7 @@ To **switch** which group is active while you work, see *Switching groups*. Invi
 - **Leave group** — **Admins and members** leave the active group from Settings → Danger Zone (or iOS Group Settings). **Owners cannot leave** — transfer ownership first, then leave, or delete the group. You cannot leave a **personal** group.
 - **Transfer credits between orgs** — An **owner** moves credits from a group they own to another group they belong to. Amounts are capped by the source balance.
 - **Org supply planning horizon** — Owners and admins set how many days ahead Manifest meals feed Supply (**1–30**, default **7**) via Supply options or Group Settings. Members see the active window read-only. See *Supply (shopping list)*.
-- **Delete group** — Owners can delete a non-personal group (with confirmation). **Personal** groups are not deleted standalone; removing them requires **account purge**. Deletion removes that group’s kitchen data.
+- **Delete group** — Owners can delete a non-personal group (with confirmation). **Personal** groups are not deleted standalone; removing them requires **account purge**. Deletion removes that group’s kitchen data; members’ **personal nutrition intake** is retained (see *Nutrition goals and tracking*).
 
 ## Membership exit
 
@@ -26,4 +26,4 @@ To **switch** which group is active while you work, see *Switching groups*. Invi
 | **Member / Admin** | **Leave group** (self), or owner **Remove member** |
 | **Owner** | **Transfer ownership** then leave as a member, **Delete group**, or **Account purge** |
 
-Leaving or being removed clears that user’s active session for the group (and default-group preference if it pointed at that org). Group kitchen data is not deleted.
+Leaving or being removed clears that user’s active session for the group (and default-group preference if it pointed at that org). Group kitchen data is not deleted. **Personal nutrition intake** you logged while in that group stays on your account (day history and totals); deleting a shared group removes that kitchen’s Cargo/Galley/plan data but keeps your private intake rows with a remembered kitchen/meal label where possible.

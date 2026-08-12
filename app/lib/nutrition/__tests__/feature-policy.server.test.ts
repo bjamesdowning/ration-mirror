@@ -28,6 +28,7 @@ describe("resolveNutritionCapabilities", () => {
 			goals: true,
 			aiEstimate: false,
 			asyncRecompute: false,
+			crossOrgDiary: false,
 		});
 
 		const withEligibility = await resolveNutritionCapabilities(
@@ -40,6 +41,18 @@ describe("resolveNutritionCapabilities", () => {
 		);
 		expect(withEligibility.aiEstimate).toBe(true);
 		expect(withEligibility.asyncRecompute).toBe(true);
+	});
+
+	it("enables crossOrgDiary when diary flag and manifest parent are on", async () => {
+		vi.mocked(isFeatureEnabled).mockImplementation(async (_env, key) => {
+			return (
+				key === "nutrition-engine" ||
+				key === "nutrition-manifest" ||
+				key === "nutrition-cross-org-diary"
+			);
+		});
+		const caps = await resolveNutritionCapabilities({} as Env, {});
+		expect(caps.crossOrgDiary).toBe(true);
 	});
 
 	it("disables dependents when engine is off", async () => {

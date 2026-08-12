@@ -35,3 +35,7 @@ There are **no MCP tools** that replace those flows. The principle is: if the ag
 MCP **reads and writes do not debit** the organization’s AI credit balance. They still change **real data**—confirm destructive actions in your assistant.
 
 When product marketing or Pricing lists features, **those lists override** this summary if they conflict.
+
+## Nutrition diary scope
+
+MCP nutrition **reads** mirror the signed-in user’s personal diary (cross-kitchen when `nutrition-cross-org-diary` is on), matching Hub/Manifest totals—not a household aggregate.

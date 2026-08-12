@@ -47,6 +47,9 @@ Flags off: Galley Cook does not touch Manifest; Add to Manifest is not shown.
 
 - **Day view** — Lists intake rows for the active day (energy and macros when present).
 - **Month calendar** — Tap the Manifest date-range control to open an overlay: green dots for planned meals, markers for days with logged intake. Dates older than about **13 months** are muted with a note that history is kept for 13 months.
+- **Cross-kitchen diary** (when enabled for your account) — Day totals and history include intake you logged in **any** of your kitchens, not only the active group. Rows may show a kitchen name chip so you can tell Shared Home breakfast from a personal-kitchen snack. Other members still never see your kcal.
+- **Privacy** — Goals and intake are private to the signed-in user. Shared Flight Recorder and kitchen events stay logistics-only.
+- **Org delete / leave** — Leaving or deleting a shared kitchen does **not** erase your personal intake; labels may fall back to saved snapshots after the kitchen is gone.
 
 Intake rows older than roughly **396 days (~13 months)** are purged on the same schedule as other kitchen-event cleanup. Account purge removes goals and intake with your data.
 

@@ -89,7 +89,7 @@ export function MealSlotCard({
 			className={`group relative flex items-start justify-between rounded-xl border px-3 py-2.5 transition-all ${
 				showDoneStyling
 					? "bg-hyper-green/5 border-hyper-green/20"
-					: "bg-white/60 dark:bg-carbon/5 border-platinum hover:border-platinum/80 hover:shadow-sm"
+					: "bg-white/60 dark:bg-white/5 border-platinum hover:border-platinum/80 hover:shadow-sm"
 			} ${isRemoving ? "opacity-40 scale-95" : ""}`}
 		>
 			<div className="flex-1 min-w-0 pr-2">

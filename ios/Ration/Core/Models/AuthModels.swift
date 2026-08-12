@@ -94,6 +94,8 @@ struct ClientFlags: Codable, Sendable, Equatable {
     var cargoQuickEat: Bool?
     /// Optional private notes on Eat / Quick Eat intake logs (additive).
     var nutritionIntakeNotes: Bool?
+    /// Personal diary aggregates across kitchens (additive).
+    var nutritionCrossOrgDiary: Bool?
 
     static let disabled = ClientFlags()
 
@@ -118,6 +120,7 @@ struct ClientFlags: Codable, Sendable, Equatable {
         cargoQuickEat == true && nutritionCookLogSplit == true
     }
     var isNutritionIntakeNotesEnabled: Bool { nutritionIntakeNotes == true }
+    var isNutritionCrossOrgDiaryEnabled: Bool { nutritionCrossOrgDiary == true }
 }
 
 /// `GET /api/mobile/v1/client-flags` (unsigned)

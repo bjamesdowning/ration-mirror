@@ -124,8 +124,8 @@ All tools are scoped to the authorized household. **MCP calls do not consume Rat
 | `get_supply_list` | `mcp:read` | Active shopping list with item ids for updates and purchase toggles. |
 | `get_user_preferences` | `mcp:read` | Allergens, expiration alert days, theme, manifest defaults, and other user settings. |
 | `update_user_preferences` | `mcp:preferences:write` | Patch user settings (allergens, alerts, theme). Only provided fields change. |
-| `get_nutrition_summary` | `mcp:nutrition:read` | Daily intake totals (energy/macros/optional fiber) for a UTC `from`/`to` range (requires `nutrition-goals` or `nutrition-manifest`). Agent reads audited. |
-| `list_nutrition_intakes` | `mcp:nutrition:read` | Row-level personal intake history for a UTC range (cursor-paginated). Agent reads audited. |
+| `get_nutrition_summary` | `mcp:nutrition:read` | Caller’s personal daily intake totals (energy/macros/optional fiber) for a UTC `from`/`to` range (requires `nutrition-goals` or `nutrition-manifest`). When `nutrition-cross-org-diary` is on, includes every kitchen the user logged—not household nutrition. Agent reads audited. |
+| `list_nutrition_intakes` | `mcp:nutrition:read` | Caller’s personal intake rows for a UTC range (cursor-paginated; kitchen labels when present). Cross-org when `nutrition-cross-org-diary` is on. Agent reads audited. |
 | `set_nutrition_goal` | `mcp:nutrition:write` | Idempotently upsert personal daily energy/macro/fiber goals using `operationKey`; consent must already be active in Ration. Not medical advice. |
 | `clear_nutrition_goal` | `mcp:nutrition:write` | Idempotently close open-ended goals using `operationKey`. **Requires `confirm: true` + host approval.** |
 | `log_manifest_intake` | `mcp:nutrition:write` | Atomic private Eat for 1–50 prepared entries (`operationKey` + per-item `idempotencyKey`). Multi-entry calls need host approval. Consent must already be active in Ration. |

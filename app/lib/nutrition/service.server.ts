@@ -15,6 +15,7 @@ import {
 	coerceFiniteNumber,
 	toIsoDateString,
 } from "~/lib/nutrition/dto.server";
+import { resolveNutritionCapabilities } from "~/lib/nutrition/feature-policy.server";
 import { previousUtcCalendarDay } from "~/lib/nutrition/goal-effective";
 import {
 	getActiveNutritionGoal,
@@ -32,6 +33,14 @@ import type { MealNutritionSnapshot } from "~/lib/nutrition/types";
 import { UNDO_TOKEN_TTL_SECONDS } from "~/lib/undo-token.server";
 
 export const MAX_NUTRITION_OPERATION_ITEMS = 50;
+
+async function resolveCrossOrgDiary(
+	env: Env,
+	flags: FlagshipEvaluationContext,
+): Promise<boolean> {
+	const caps = await resolveNutritionCapabilities(env, flags);
+	return caps.crossOrgDiary;
+}
 
 /**
  * Resolve notes for a new intake row.
@@ -594,6 +603,7 @@ export function buildNutritionOperationResultJson(
 	principal: NutritionPrincipal,
 	dates: Iterable<string>,
 	summaryGeneratedAt: string,
+	options: { crossOrgDiary?: boolean } = {},
 ) {
 	const uniqueDates = [...new Set(dates)].sort();
 	if (uniqueDates.length === 0) {
@@ -604,6 +614,9 @@ export function buildNutritionOperationResultJson(
 		sql` union all `,
 	);
 	const knownFiber = sql`coalesce(${schema.nutritionIntake.fiberG}, json_extract(${schema.nutritionIntake.nutrientsJson}, '$.fiberG'))`;
+	const orgJoin = options.crossOrgDiary
+		? sql``
+		: sql`and ${schema.nutritionIntake.organizationId} = ${principal.organizationId}`;
 	return sql`json_object(
 		'summaryGeneratedAt', ${summaryGeneratedAt},
 		'dayTotals',
@@ -627,7 +640,7 @@ export function buildNutritionOperationResultJson(
 				left join ${schema.nutritionIntake}
 					on ${schema.nutritionIntake.manifestDate} = dates.date
 					and ${schema.nutritionIntake.userId} = ${principal.userId}
-					and ${schema.nutritionIntake.organizationId} = ${principal.organizationId}
+					${orgJoin}
 					and ${schema.nutritionIntake.voidedAt} is null
 				group by dates.date
 				order by dates.date
@@ -666,6 +679,7 @@ async function loadEntries(
 		.select({
 			id: schema.mealPlanEntry.id,
 			mealId: schema.mealPlanEntry.mealId,
+			mealName: schema.meal.name,
 			date: schema.mealPlanEntry.date,
 			slotType: schema.mealPlanEntry.slotType,
 			cookedAt: schema.mealPlanEntry.cookedAt,
@@ -750,6 +764,7 @@ async function dayTotalsForDates(
 	db: D1Database,
 	principal: NutritionPrincipal,
 	dates: Iterable<string>,
+	options: { crossOrgDiary?: boolean } = {},
 ): Promise<NutritionDayTotals[]> {
 	const uniqueDates = [...new Set(dates)].sort();
 	if (uniqueDates.length === 0) return [];
@@ -762,6 +777,7 @@ async function dayTotalsForDates(
 		principal.organizationId,
 		firstDate,
 		lastDate,
+		{ crossOrgDiary: options.crossOrgDiary },
 	);
 	const expected = new Set(uniqueDates);
 	const byDate = new Map(summary.days.map((day) => [day.date, day]));
@@ -790,6 +806,7 @@ async function reconstructLogResult(
 		servings: number;
 		idempotencyKey: string;
 	}[],
+	options: { crossOrgDiary?: boolean } = {},
 ): Promise<LogManifestIntakesResult> {
 	const db = drizzle(env.DB, { schema });
 	const byKey = await loadRowsByItemKeys(
@@ -831,6 +848,7 @@ async function reconstructLogResult(
 				env.DB,
 				principal,
 				results.map((result) => result.intake.manifestDate),
+				{ crossOrgDiary: options.crossOrgDiary },
 			)),
 	};
 }
@@ -875,6 +893,7 @@ export async function logManifestIntakes(
 		"nutrition-intake-notes",
 		flags,
 	);
+	const crossOrgDiary = await resolveCrossOrgDiary(env, flags);
 	const normalizedItems = input.items.map((item) => ({
 		...item,
 		/** Client-requested notes; ignored when flag off (preserve prior at write). */
@@ -896,6 +915,11 @@ export async function logManifestIntakes(
 	};
 	const requestHash = await hashNutritionRequest(canonicalInput);
 	const db = drizzle(env.DB, { schema });
+	const orgRow = await db.query.organization.findFirst({
+		where: eq(schema.organization.id, principal.organizationId),
+		columns: { name: true },
+	});
+	const organizationNameSnapshot = orgRow?.name?.trim() || "Kitchen";
 	const existingOperation = await loadOperation(
 		db,
 		principal,
@@ -913,6 +937,7 @@ export async function logManifestIntakes(
 			principal,
 			existingOperation,
 			normalizedItems,
+			{ crossOrgDiary },
 		);
 	}
 
@@ -1052,6 +1077,8 @@ export async function logManifestIntakes(
 				planId: input.planId,
 				entryId: item.entryId,
 				mealId: entry.mealId,
+				organizationNameSnapshot,
+				mealNameSnapshot: entry.mealName?.trim() || "Meal",
 				manifestDate: entry.date,
 				slotType: entry.slotType ?? null,
 				servings: item.servings,
@@ -1144,6 +1171,7 @@ export async function logManifestIntakes(
 						principal,
 						results.map((result) => result.intake.manifestDate),
 						committedAt.toISOString(),
+						{ crossOrgDiary },
 					),
 				})
 				.where(
@@ -1187,6 +1215,7 @@ export async function logManifestIntakes(
 					principal,
 					racedOperation,
 					normalizedItems,
+					{ crossOrgDiary },
 				);
 			}
 			if (
@@ -1237,6 +1266,7 @@ export async function logManifestIntakes(
 					env.DB,
 					principal,
 					results.map((result) => result.intake.manifestDate),
+					{ crossOrgDiary },
 				)),
 		};
 	}
@@ -1248,6 +1278,7 @@ async function reconstructClearResult(
 	principal: NutritionPrincipal,
 	operation: OperationRow,
 	entryIds: string[],
+	options: { crossOrgDiary?: boolean } = {},
 ): Promise<ClearManifestIntakesResult> {
 	const db = drizzle(env.DB, { schema });
 	const rows = await db
@@ -1284,6 +1315,7 @@ async function reconstructClearResult(
 				env.DB,
 				principal,
 				rows.map((row) => row.manifestDate),
+				{ crossOrgDiary: options.crossOrgDiary },
 			)),
 	};
 }
@@ -1306,6 +1338,7 @@ export async function clearManifestIntakes(
 	);
 	await assertFeatureEnabled(env, "nutrition-cook-log-split", flags);
 	await assertFeatureEnabled(env, "nutrition-manifest", flags);
+	const crossOrgDiary = await resolveCrossOrgDiary(env, flags);
 	let consentPolicyVersion = "not_required";
 	if (principal.surface === "mcp" || principal.surface === "copilot") {
 		await assertAgentProcessingConsent(env.DB, principal);
@@ -1340,6 +1373,7 @@ export async function clearManifestIntakes(
 			principal,
 			existingOperation,
 			input.entryIds,
+			{ crossOrgDiary },
 		);
 	}
 	const entries = await loadEntries(
@@ -1396,6 +1430,7 @@ export async function clearManifestIntakes(
 					principal,
 					[...entries.values()].map((entry) => entry.date),
 					committedAt.toISOString(),
+					{ crossOrgDiary },
 				),
 			})
 			.where(
@@ -1438,6 +1473,7 @@ export async function clearManifestIntakes(
 				principal,
 				racedOperation,
 				input.entryIds,
+				{ crossOrgDiary },
 			);
 		}
 		throw error;
@@ -1455,6 +1491,7 @@ export async function clearManifestIntakes(
 		principal,
 		committedOperation,
 		input.entryIds,
+		{ crossOrgDiary },
 	);
 	return {
 		...committedResult,
@@ -1775,6 +1812,7 @@ export async function getSummary(
 		? await getNutritionConsentStatus(env.DB, principal.userId, "goals")
 		: null;
 	const includeGoal = goalsConsent?.state === "active";
+	const crossOrgDiary = await resolveCrossOrgDiary(env, flags);
 	const started = Date.now();
 	const summary = await readNutritionSummary(
 		env.DB,
@@ -1782,6 +1820,7 @@ export async function getSummary(
 		principal.organizationId,
 		from,
 		to,
+		{ crossOrgDiary },
 	);
 	const gatedSummary = includeGoal ? summary : { ...summary, goal: null };
 	const { emitNutritionSummaryDuration } = await import(
@@ -1824,13 +1863,14 @@ export async function getHistory(
 		principal.userId,
 		"intake",
 	);
+	const crossOrgDiary = await resolveCrossOrgDiary(env, flags);
 	const history = await listNutritionIntakesForRange(
 		env.DB,
 		principal.userId,
 		principal.organizationId,
 		from,
 		to,
-		options,
+		{ ...options, crossOrgDiary },
 	);
 	await auditAgentNutritionRead(env, principal, {
 		eventType: "nutrition_intake_read",
@@ -1961,6 +2001,7 @@ export async function undoIntake(
 		principal.userId,
 		"intake",
 	);
+	const crossOrgDiary = await resolveCrossOrgDiary(env, flags);
 	if (
 		!["log_manifest_intakes", "clear_manifest_intakes"].includes(
 			operation.operationType,
@@ -1977,7 +2018,9 @@ export async function undoIntake(
 			undone: true,
 			replayed: true,
 			summaryGeneratedAt: operation.undoneAt.toISOString(),
-			dayTotals: await dayTotalsForDates(env.DB, principal, operationDates),
+			dayTotals: await dayTotalsForDates(env.DB, principal, operationDates, {
+				crossOrgDiary,
+			}),
 		};
 	}
 	const completedAt = operation.completedAt ?? operation.createdAt;
@@ -2101,7 +2144,9 @@ export async function undoIntake(
 			undone: true,
 			replayed: true,
 			summaryGeneratedAt: committed.undoneAt.toISOString(),
-			dayTotals: await dayTotalsForDates(env.DB, principal, dates),
+			dayTotals: await dayTotalsForDates(env.DB, principal, dates, {
+				crossOrgDiary,
+			}),
 		};
 	}
 	await db.insert(schema.nutritionAccessAudit).values(
@@ -2120,7 +2165,9 @@ export async function undoIntake(
 		undone: true,
 		replayed: false,
 		summaryGeneratedAt: now.toISOString(),
-		dayTotals: await dayTotalsForDates(env.DB, principal, dates),
+		dayTotals: await dayTotalsForDates(env.DB, principal, dates, {
+			crossOrgDiary,
+		}),
 	};
 }
 

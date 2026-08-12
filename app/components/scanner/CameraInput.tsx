@@ -437,7 +437,7 @@ export const CameraInput = forwardRef<CameraInputHandle, CameraInputProps>(
 				{/* Scan in progress modal (blocking; rendered outside hidden wrapper so it is visible) */}
 				{(isAnalyzing || isLoadingSupplyMatch) && (
 					<div
-						className="fixed inset-0 z-[60] flex items-center justify-center bg-carbon/80 backdrop-blur-sm animate-fade-in"
+						className="fixed inset-0 z-[60] flex items-center justify-center modal-scrim-heavy animate-fade-in"
 						role="dialog"
 						aria-modal="true"
 						aria-labelledby="scan-progress-title"

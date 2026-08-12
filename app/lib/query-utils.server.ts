@@ -19,15 +19,15 @@ const SQLITE_SAFE_VARIABLE_LIMIT = D1_SAFE_BOUND_PARAMS;
 
 /**
  * Max nutrition_intake rows per INSERT (v2 Eat path).
- * Columns bound when set explicitly: id, organizationId, userId, planId,
- * entryId, mealId, manifestDate, slotType, servings, energyKcal, proteinG,
+ * Columns bound when set explicitly on the canonical Eat insert: id,
+ * organizationId, userId, planId, entryId, mealId, organizationNameSnapshot,
+ * mealNameSnapshot, manifestDate, slotType, servings, energyKcal, proteinG,
  * carbsG, fatG, coverage, source, confidence, verified, occurredAt,
- * kitchenEventId, schemaVersion, nutrientsJson, coverageJson, idempotencyKey,
- * operationId, replacesIntakeId, fiberG, consentId, voidOperationId, voidedAt,
- * voidedByUserId, createdAt = 31. The canonical bulk service sets all fields
- * explicitly so retries return the exact committed row.
+ * kitchenEventId, schemaVersion, nutrientsJson, coverageJson, fiberG,
+ * consentId, idempotencyKey, operationId, replacesIntakeId, voidOperationId,
+ * voidedAt, voidedByUserId, notes, createdAt = 34.
  */
-export const NUTRITION_INTAKE_INSERT_COLUMNS = 31;
+export const NUTRITION_INTAKE_INSERT_COLUMNS = 34;
 
 export const D1_MAX_NUTRITION_INTAKE_ROWS_PER_STATEMENT = Math.floor(
 	D1_MAX_BOUND_PARAMS / NUTRITION_INTAKE_INSERT_COLUMNS,

@@ -143,6 +143,19 @@ struct ManifestEntry: Codable, Sendable, Identifiable {
     }
 }
 
+struct ManifestDayIntakeRow: Codable, Sendable, Equatable, Identifiable {
+    let id: String
+    let manifestDate: String
+    let slotType: String?
+    let servings: Double
+    let energyKcal: Double
+    let proteinG: Double
+    let carbsG: Double
+    let fatG: Double
+    let mealName: String?
+    let organizationName: String?
+}
+
 struct ManifestResponse: Codable, Sendable {
     let plan: MealPlanSummary
     let startDate: String
@@ -152,6 +165,8 @@ struct ManifestResponse: Codable, Sendable {
     let supplyDayInclusion: [String: Bool]?
     /// Only present when `nutrition-cook-log-split` + `nutrition-manifest` are both on.
     var intakeConsentGranted: Bool? = nil
+    /// Personal diary rows for the loaded date range (cross-org when Flagship allows).
+    var dayIntakeRows: [ManifestDayIntakeRow]? = nil
 }
 
 struct ManifestEntryCreate: Encodable, Sendable {

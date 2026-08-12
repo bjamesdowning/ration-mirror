@@ -190,6 +190,7 @@ struct GroupSettingsView: View {
         .overlay {
             if env.session.isSwitchingOrg {
                 ProgressView("Switching…")
+                    .tint(Theme.hyperGreen)
                     .padding()
                     .background {
                         RationAdaptiveMaterial(

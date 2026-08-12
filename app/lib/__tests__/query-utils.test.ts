@@ -41,9 +41,9 @@ describe("constants", () => {
 		expect(D1_MAX_SUPPLY_ROWS_PER_STATEMENT).toBe(7);
 	});
 
-	it("caps full nutrition intake inserts at 3 rows", () => {
-		expect(NUTRITION_INTAKE_INSERT_COLUMNS).toBe(31);
-		expect(D1_MAX_NUTRITION_INTAKE_ROWS_PER_STATEMENT).toBe(3);
+	it("caps full nutrition intake inserts at 2 rows", () => {
+		expect(NUTRITION_INTAKE_INSERT_COLUMNS).toBe(34);
+		expect(D1_MAX_NUTRITION_INTAKE_ROWS_PER_STATEMENT).toBe(2);
 	});
 });
 
@@ -271,7 +271,7 @@ describe("supply_item Drizzle insert bind counts", () => {
 });
 
 describe("nutrition_intake Drizzle insert bind counts", () => {
-	it("canonical 3-row insert stays within D1's 100-bind limit", async () => {
+	it("canonical 2-row insert stays within D1's 100-bind limit", async () => {
 		const { drizzle } = await import("drizzle-orm/d1");
 		const { nutritionIntake } = await import("~/db/schema");
 		const fakeDb = {
@@ -289,6 +289,8 @@ describe("nutrition_intake Drizzle insert bind counts", () => {
 				planId: "plan-1",
 				entryId: `entry-${index}`,
 				mealId: "meal-1",
+				organizationNameSnapshot: "Kitchen",
+				mealNameSnapshot: "Meal",
 				manifestDate: "2026-08-09",
 				slotType: "dinner",
 				servings: 1,
@@ -313,6 +315,7 @@ describe("nutrition_intake Drizzle insert bind counts", () => {
 				voidOperationId: null,
 				voidedAt: null,
 				voidedByUserId: null,
+				notes: null,
 				createdAt: now,
 			}),
 		);

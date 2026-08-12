@@ -25,6 +25,7 @@ describe("getClientSafeFlags", () => {
 			nutritionCookLogSplit: false,
 			cargoQuickEat: false,
 			nutritionIntakeNotes: false,
+			nutritionCrossOrgDiary: false,
 		});
 	});
 });

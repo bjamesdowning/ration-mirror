@@ -1177,8 +1177,11 @@ export const nutritionConsentRelations = relations(
 );
 
 /**
- * Logged nutrition intake from manifest consume / cook flows.
- * Additive v2 columns sit alongside legacy scalars for dual-read compatibility.
+ * Personal nutrition intake (Person-in-context tenancy).
+ * Owned by userId; organizationId is kitchen provenance (nullable after kitchen
+ * delete — ON DELETE SET NULL). Writers always set a non-null org + name snapshots.
+ * Diary summary/history may aggregate across orgs when nutrition-cross-org-diary is on.
+ * @see docs/dev/tenancy-classes.md
  */
 export const nutritionIntake = sqliteTable(
 	"nutrition_intake",
@@ -1186,9 +1189,10 @@ export const nutritionIntake = sqliteTable(
 		id: text("id")
 			.primaryKey()
 			.$defaultFn(() => crypto.randomUUID()),
-		organizationId: text("organization_id")
-			.notNull()
-			.references(() => organization.id, { onDelete: "cascade" }),
+		/** Kitchen provenance; null after shared kitchen hard-delete. */
+		organizationId: text("organization_id").references(() => organization.id, {
+			onDelete: "set null",
+		}),
 		userId: text("user_id")
 			.notNull()
 			.references(() => user.id, { onDelete: "cascade" }),
@@ -1197,6 +1201,10 @@ export const nutritionIntake = sqliteTable(
 		mealId: text("meal_id").references(() => meal.id, {
 			onDelete: "set null",
 		}),
+		/** Denormalized kitchen label for diary chips after org join dies. */
+		organizationNameSnapshot: text("organization_name_snapshot"),
+		/** Denormalized meal title for diary after meal join dies. */
+		mealNameSnapshot: text("meal_name_snapshot"),
 		/** UTC calendar date YYYY-MM-DD. */
 		manifestDate: text("manifest_date").notNull(),
 		slotType: text("slot_type"),
@@ -1262,6 +1270,10 @@ export const nutritionIntake = sqliteTable(
 				table.id,
 			)
 			.where(sql`${table.voidedAt} IS NULL`),
+		/** User-global diary cursor pagination (cross-org). */
+		index("nutrition_intake_user_diary_history_idx")
+			.on(table.userId, table.manifestDate, table.occurredAt, table.id)
+			.where(sql`${table.voidedAt} IS NULL`),
 		index("nutrition_intake_retention_idx").on(table.occurredAt),
 		index("nutrition_intake_operation_idx").on(
 			table.userId,
@@ -1271,10 +1283,12 @@ export const nutritionIntake = sqliteTable(
 		uniqueIndex("nutrition_intake_user_idempotency_uidx")
 			.on(table.userId, table.idempotencyKey)
 			.where(sql`${table.idempotencyKey} IS NOT NULL`),
-		/** One active personal intake per user/org/entry (editable Eat). */
+		/** One active personal intake per user/org/entry (live kitchens only). */
 		uniqueIndex("nutrition_intake_user_org_entry_active_uidx")
 			.on(table.userId, table.organizationId, table.entryId)
-			.where(sql`${table.entryId} IS NOT NULL AND ${table.voidedAt} IS NULL`),
+			.where(
+				sql`${table.entryId} IS NOT NULL AND ${table.organizationId} IS NOT NULL AND ${table.voidedAt} IS NULL`,
+			),
 	],
 );
 

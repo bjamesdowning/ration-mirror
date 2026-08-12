@@ -20,6 +20,8 @@ Ration can attach **energy and macro nutrients** to Cargo items and Galley meals
 | Blank | No snapshot yet—add or edit when you want tracking. |
 
 ## Where you see it
+Composition snapshots on Cargo and Galley meals are **kitchen** data. Your goals and logged intake diary are **personal**; when cross-kitchen diary is on, day totals can span kitchens while housemates never see your kcal.
+
 
 - **Cargo** — Detail and edit show a nutrition panel when the engine is on.
 - **Galley** — Meal cards, detail, and edit can show per-serving energy/macros.

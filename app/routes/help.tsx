@@ -89,7 +89,7 @@ export default function HelpIndex({ loaderData }: Route.ComponentProps) {
 														to={`/help/${article.slug}`}
 														className="group block rounded-lg border border-platinum/80 bg-white/50 px-4 py-3 hover:border-hyper-green/50 transition-colors dark:border-white/10 dark:bg-white/[0.03]"
 													>
-														<span className="font-medium text-carbon group-hover:text-hyper-green dark:text-ceramic">
+														<span className="font-medium text-carbon group-hover:text-hyper-green">
 															{article.title}
 														</span>
 														<span className="block text-sm text-muted mt-0.5">

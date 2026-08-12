@@ -598,7 +598,8 @@ final class ManifestViewModel {
             endDate: manifest.endDate,
             entries: updated,
             supplyDayInclusion: manifest.supplyDayInclusion,
-            intakeConsentGranted: manifest.intakeConsentGranted
+            intakeConsentGranted: manifest.intakeConsentGranted,
+            dayIntakeRows: manifest.dayIntakeRows
         )
     }
 
@@ -636,7 +637,8 @@ final class ManifestViewModel {
             endDate: manifest.endDate,
             entries: updated,
             supplyDayInclusion: manifest.supplyDayInclusion,
-            intakeConsentGranted: manifest.intakeConsentGranted
+            intakeConsentGranted: manifest.intakeConsentGranted,
+            dayIntakeRows: manifest.dayIntakeRows
         )
     }
 

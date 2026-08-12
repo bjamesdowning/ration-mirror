@@ -36,6 +36,7 @@ struct AccountDeletionView: View {
             if isLoadingPreview {
                 Section {
                     ProgressView("Checking account status…")
+                        .tint(Theme.hyperGreen)
                 }
             }
 

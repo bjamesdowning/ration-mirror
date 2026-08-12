@@ -11,6 +11,11 @@
 - Confirm the **active group** in the hub switcher.
 - Data does **not** merge across organizations.
 
+## Calories look wrong after switching kitchens
+
+- Pantry and meal plans are always per active group.
+- When **cross-kitchen personal diary** is on, today’s calorie total can include intake you logged in another kitchen—that is intentional. Rows may show a kitchen name chip. See *Nutrition goals and tracking*.
+
 ## Cannot invite members or share links
 
 - **Invitations** and **public share** for supply/manifest require **Crew Member** (and correct role).

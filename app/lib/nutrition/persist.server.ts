@@ -751,6 +751,8 @@ export type NutritionIntakeRow = {
 	fatG: number;
 	mealId: string | null;
 	mealName: string | null;
+	organizationId: string | null;
+	organizationName: string | null;
 	verified: number;
 	occurredAt: Date;
 	notes: string | null;
@@ -760,6 +762,13 @@ export type ListNutritionIntakesOptions = {
 	limit?: number;
 	/** Opaque cursor from a previous `nextCursor` (`manifestDate|occurredAtISO|id`). */
 	cursor?: string;
+	/** When true, aggregate the caller's intakes across all kitchens. */
+	crossOrgDiary?: boolean;
+};
+
+export type NutritionDiaryReadOptions = {
+	/** When true, aggregate the caller's intakes across all kitchens. */
+	crossOrgDiary?: boolean;
 };
 
 const MAX_INTAKE_LIST_LIMIT = 500;
@@ -793,6 +802,7 @@ export function decodeNutritionIntakeCursor(
 /**
  * Individual intake rows for a date range (Manifest day history).
  * Cursor-paginated when `options.limit` is set; default cap 500 rows per call.
+ * When `crossOrgDiary` is true, omits organization filter (user-global diary).
  */
 export async function listNutritionIntakesForRange(
 	db: D1Database,
@@ -811,9 +821,13 @@ export async function listNutritionIntakesForRange(
 		? decodeNutritionIntakeCursor(options.cursor)
 		: null;
 
+	const orgFilter = options.crossOrgDiary
+		? undefined
+		: eq(schema.nutritionIntake.organizationId, orgId);
+
 	const baseWhere = and(
 		eq(schema.nutritionIntake.userId, userId),
-		eq(schema.nutritionIntake.organizationId, orgId),
+		orgFilter,
 		gte(schema.nutritionIntake.manifestDate, from),
 		lte(schema.nutritionIntake.manifestDate, to),
 		isNull(schema.nutritionIntake.voidedAt),
@@ -846,13 +860,21 @@ export async function listNutritionIntakesForRange(
 			carbsG: schema.nutritionIntake.carbsG,
 			fatG: schema.nutritionIntake.fatG,
 			mealId: schema.nutritionIntake.mealId,
-			mealName: schema.meal.name,
+			mealNameLive: schema.meal.name,
+			mealNameSnapshot: schema.nutritionIntake.mealNameSnapshot,
+			organizationId: schema.nutritionIntake.organizationId,
+			organizationNameLive: schema.organization.name,
+			organizationNameSnapshot: schema.nutritionIntake.organizationNameSnapshot,
 			verified: schema.nutritionIntake.verified,
 			occurredAt: schema.nutritionIntake.occurredAt,
 			notes: schema.nutritionIntake.notes,
 		})
 		.from(schema.nutritionIntake)
 		.leftJoin(schema.meal, eq(schema.nutritionIntake.mealId, schema.meal.id))
+		.leftJoin(
+			schema.organization,
+			eq(schema.nutritionIntake.organizationId, schema.organization.id),
+		)
 		.where(cursorWhere ? and(baseWhere, cursorWhere) : baseWhere)
 		.orderBy(
 			schema.nutritionIntake.manifestDate,
@@ -873,7 +895,10 @@ export async function listNutritionIntakesForRange(
 		carbsG: r.carbsG,
 		fatG: r.fatG,
 		mealId: r.mealId,
-		mealName: r.mealName ?? null,
+		mealName: r.mealNameSnapshot ?? r.mealNameLive ?? null,
+		organizationId: r.organizationId ?? null,
+		organizationName:
+			r.organizationNameSnapshot ?? r.organizationNameLive ?? null,
 		verified: r.verified,
 		occurredAt: r.occurredAt,
 		notes: r.notes ?? null,
@@ -903,11 +928,15 @@ export async function getNutritionSummary(
 	orgId: string,
 	from: string,
 	to: string,
+	options: NutritionDiaryReadOptions = {},
 ): Promise<NutritionSummaryResult> {
 	const d1 = drizzle(db, { schema });
+	const orgFilter = options.crossOrgDiary
+		? undefined
+		: eq(schema.nutritionIntake.organizationId, orgId);
 	const whereClause = and(
 		eq(schema.nutritionIntake.userId, userId),
-		eq(schema.nutritionIntake.organizationId, orgId),
+		orgFilter,
 		gte(schema.nutritionIntake.manifestDate, from),
 		lte(schema.nutritionIntake.manifestDate, to),
 		isNull(schema.nutritionIntake.voidedAt),

@@ -139,6 +139,7 @@ Permanent boolean kill switches for billed AI pipelines. Registry `defaultEnable
 | `nutrition-cook-log-split` | `nutritionCookLogSplit` | Shared Cook vs private Eat; Galley Cook→Manifest bridge |
 | `nutrition-async-recompute` | _(not clientVisible)_ | Queue stub for async nutrition recompute |
 | `nutrition-intake-notes` | `nutritionIntakeNotes` | Optional private Eat notes (≤280) on intake rows |
+| `nutrition-cross-org-diary` | `nutritionCrossOrgDiary` | Personal intake summary/history aggregates across kitchens (user-global diary) |
 
 All default **off**. Create matching Flagship flags before enabling. Seed local nutrition D1 with `bun run db:nutrition:seed:local`.
 

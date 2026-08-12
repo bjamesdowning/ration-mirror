@@ -129,6 +129,13 @@ export const FLAG_REGISTRY: Record<string, FlagRegistryEntry> = {
 		clientVisible: true,
 		clientKey: "nutritionIntakeNotes",
 	},
+	"nutrition-cross-org-diary": {
+		defaultEnabled: false,
+		description:
+			"Personal intake summary/history aggregates across all kitchens for the signed-in user",
+		clientVisible: true,
+		clientKey: "nutritionCrossOrgDiary",
+	},
 	"nutrition-async-recompute": {
 		defaultEnabled: false,
 		description:

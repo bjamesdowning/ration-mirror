@@ -138,6 +138,8 @@ export const NutritionIntakeDTOSchema = z.object({
 	fiberG: z.number().nullable().optional(),
 	mealId: z.string().nullable(),
 	mealName: z.string().nullable(),
+	organizationId: z.string().nullable().optional(),
+	organizationName: z.string().nullable().optional(),
 	verified: z.boolean(),
 	occurredAt: z.string().min(1),
 	notes: z.string().max(280).nullable().optional(),

@@ -11,8 +11,9 @@ Use the **group switcher** in the hub (exact placement is in the app chrome) to 
 ## Data isolation
 
 - Members only see organizations they belong to.
-- Switching groups **does not merge** data; it only changes which workspace you are editing.
+- Switching groups **does not merge** kitchen data (Cargo, Galley, Manifest plan, Supply, credits); it only changes which workspace you are editing.
 - **Credits** belong to the active organization’s pool when you run AI features.
+- When **cross-kitchen personal diary** is on for your account, switching groups **does not reset** your calorie day — intake you already logged in another kitchen still counts toward today’s personal totals. Kitchen pages still show only the active group.
 
 ## Membership admin
 

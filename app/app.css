@@ -175,6 +175,29 @@
   border-color: rgba(255, 255, 255, 0.30);
 }
 
+/*
+ * Modal scrim / surface — fixed near-black wash.
+ * Never use remapped `carbon` for overlays or dark modal shells
+ * (`carbon` is primary text and inverts in dark mode).
+ */
+.modal-scrim {
+  background-color: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+}
+
+.modal-scrim-heavy {
+  background-color: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(4px);
+}
+
+.modal-surface {
+  background-color: var(--bg-primary);
+}
+
+.dark .modal-surface {
+  background-color: #1a1a1a;
+}
+
 /* ─── Prose Article ─────────────────────────────────────────────────────────── */
 /* Replaces @tailwindcss/typography — used on blog and legal pages.            */
 

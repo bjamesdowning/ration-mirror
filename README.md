@@ -27,6 +27,7 @@ An AI-powered pantry and meal-planning application built as a Cloudflare Worker 
   - [4.5 Hub Dashboard](#45-hub-dashboard)
   - [4.6 Settings & Identity](#46-settings--identity)
   - [4.7 Nutrition (feature-flagged)](#47-nutrition-feature-flagged)
+  - [4.8 Appearance & theming](#48-appearance--theming)
 - [5. AI & Vector Systems](#5-ai--vector-systems)
   - [5.1 Embedding Pipeline](#51-embedding-pipeline)
   - [5.2 Meal Matching Engine](#52-meal-matching-engine)
@@ -819,15 +820,39 @@ Avatars are served via `GET /api/user/avatar/:userId` and updated via `POST /api
 
 ### 4.7 Nutrition (feature-flagged)
 
-Nutrition is behind Flagship flags (registry default **off**): `nutrition-engine`, `nutrition-ai-estimate`, `nutrition-manifest`, `nutrition-goals`, `nutrition-cook-log-split`, `nutrition-async-recompute`, `nutrition-intake-notes`. See [Feature flags](docs/dev/feature-flags.md), [DPIA/consent notes](docs/dev/nutrition-dpia-notes.md), [rollout](docs/dev/nutrition-rollout.md), and help articles [`24`](docs/fin/24-nutrition-overview.md)–[`26`](docs/fin/26-editing-nutrition.md).
+Nutrition is behind Flagship flags (registry default **off**): `nutrition-engine`, `nutrition-ai-estimate`, `nutrition-manifest`, `nutrition-goals`, `nutrition-cook-log-split`, `nutrition-async-recompute`, `nutrition-intake-notes`, `nutrition-cross-org-diary`. See [Feature flags](docs/dev/feature-flags.md), [DPIA/consent notes](docs/dev/nutrition-dpia-notes.md), [rollout](docs/dev/nutrition-rollout.md), [tenancy classes](docs/dev/tenancy-classes.md), and help articles [`24`](docs/fin/24-nutrition-overview.md)–[`26`](docs/fin/26-editing-nutrition.md).
 
 - **Resolve** — USDA-shaped self-hosted `NUTRITION_DB` with curated `food_alias` short-circuit, FTS top-N + primary-prefix bank, JS re-rank (matcher `1.4.0`); optional live FDC search miss fallback when `USDA_FDC_API_KEY` is set. Blank on true miss/low for manual/CSV. Cargo ingest also rejects USDA hydrates with missing/empty/Atwater-inconsistent energy (treat as miss → AI when allowed). Cargo photo scan and Supply dock **review** call `POST /api/nutrition/resolve` (mobile twin) in the background after review opens (chunked for progressive kcal): medium+ USDA attaches; labelled **AI Estimate** when `nutrition-ai-estimate` is on and `ingestSource` is `scan_review`. Review shows **Looking up nutrients…** plus per-row calorie placeholders until batches return. Snapshots carry into cargo ingest; confirm still AI-fills lines without a preview snapshot. Merge into a cargo row with null nutrition backfills USDA/AI from the incoming name.
 - **Cargo overrides → meals** — Meal recompute prefers org cargo density (`user_override` → `usda` → `ai_estimate`) when linked by `cargoId` or exact name; otherwise re-resolves USDA. Package qty/unit edits can still rescale override package totals for density derivation.
 - **UI** — Cargo panels show **Per 100 g** (density) or household **Per serving** — never package totals; Meal/Galley shows **Per recipe serving** (scaled recipe totals). Source chip: `USDA` / `AI Estimate` / `Override` / `Blank`.
 - **Cook/Log split UI** (`nutrition-cook-log-split`) — When on, Manifest replaces the shared Eat/consume action with **Cook** (deducts Cargo once, marks the entry *Prepared*; never writes personal nutrition). Prepared entries with no personal log show a **Log my serving** button; entries you've logged show "You logged N servings" + **Edit serving**. After a successful first Cook, web and iOS both prompt Eat/plate-up. **Galley** (same flag): **Cook meal** bridges onto today’s Manifest (Prepared + optional Eat when `nutrition-manifest` is on); **Add to Manifest** opens Add-to-plan with meal/day prefilled. Galley `POST /api/meals/:id/cook` accepts optional `date` / `localHour` / `slotType` for the bridge. `PlateUpDialog` / iOS Eat sheet show scaled kcal + protein/carbs/fat when the meal snapshot exists (Cargo Quick Eat scales from cargo density). Optional private intake notes (≤280 chars) when `nutrition-intake-notes` is on — stored on `nutrition_intake.notes`, never logged, exposed on MCP `list_nutrition_intakes` / `log_manifest_intake` for later personalization (no embeddings yet). Client: `POST /api/meal-plans/:id/entries/cook` (shared Cook, `{ entryIds, confirmInsufficient }`); `POST|DELETE /api/meal-plans/:id/entries/:entryId/intake` (private Eat upsert/clear). Consent is granted only through the versioned privacy API. Every mutation has a UUID operation key; responses include stable replay semantics and commit-time authoritative day totals. Day/week "consumed" counts and the ✓-done label switch to *Prepared* semantics (`cookedAt ?? consumedAt`) in this mode. Legacy **Consume** (flag off or plate-up without cook-log-split) deducts Cargo only — it never writes `nutrition_intake`; personal calories require Eat. Flags off → no **Log my serving** button (`e2e/journeys/nutrition.spec.ts`); Galley Cook stays cargo-only.
 - **Mobile decode hardening** — Hub `nutritionToday` / `nutritionTrends` coerce D1 string aggregates to JSON numbers and soft-null invalid summaries so Hub still loads. Persisted Hub layouts and match cards are validated against iOS integer fields; a malformed optional card is omitted instead of rejecting the entire Hub. Shared golden fixture `app/lib/__fixtures__/mobile/hub-populated.json` (mirrored under `ios/RationTests/Fixtures/`) is asserted by Vitest (`MobileHubResponseSchema`) and XCTest (`HubResponse`). Manifest `personalIntake.occurredAt` is always ISO-8601, and a cold Manifest load failure presents a retry state rather than an empty-plan prompt. iOS DEBUG diagnostics report JSON paths and numeric kinds only—never response values, tokens, or other PII.
-- **APIs / MCP** — Summary and goals routes use nullable macros and require ≥1 nutrient on upsert; consent must already be active through `/api/privacy/nutrition`. Calendar dates are strict Gregorian; summary includes `goalAsOf` and additive `nutritionV2` (`carbsG` canonical). Flagship uses trusted web/ios/mcp/copilot/system surfaces; effective capability policy gates child flags on parents. MCP/Copilot tools: `get_nutrition_summary`, `list_nutrition_intakes`, `set_nutrition_goal`, `clear_nutrition_goal`, `cook_manifest_entries`, `log_manifest_intake`, `clear_manifest_intake` (explicit `mcp:nutrition:read|write` — legacy broad `mcp` never grants nutrition). Agent personal nutrition reads are value-free audited (fail closed). Tools return `structuredContent` + text with `outcome` / `timeout_ambiguous` on mutation timeouts. Nutrition mutators require request-level `operationKey`; bulk Eat/clear is one D1 transaction for 1–50 items with per-item idempotency keys. When `nutrition-cook-log-split` is on, `consume_manifest_entries` is refused for agents — Cook then Eat. Intake retention ~396 days; erased on account purge.
+- **APIs / MCP** — Summary and goals routes use nullable macros and require ≥1 nutrient on upsert; consent must already be active through `/api/privacy/nutrition`. Calendar dates are strict Gregorian; summary includes `goalAsOf` and additive `nutritionV2` (`carbsG` canonical). Flagship uses trusted web/ios/mcp/copilot/system surfaces; effective capability policy gates child flags on parents. When `nutrition-cross-org-diary` is on, personal intake **summary/history is user-global** across kitchens (writes still stamp active-org provenance + name snapshots; org delete uses `SET NULL` — see [tenancy-classes.md](docs/dev/tenancy-classes.md)). MCP/Copilot tools: `get_nutrition_summary`, `list_nutrition_intakes`, `set_nutrition_goal`, `clear_nutrition_goal`, `cook_manifest_entries`, `log_manifest_intake`, `clear_manifest_intake` (explicit `mcp:nutrition:read|write` — legacy broad `mcp` never grants nutrition). Agent personal nutrition reads are value-free audited (fail closed). Tools return `structuredContent` + text with `outcome` / `timeout_ambiguous` on mutation timeouts. Nutrition mutators require request-level `operationKey`; bulk Eat/clear is one D1 transaction for 1–50 items with per-item idempotency keys. When `nutrition-cook-log-split` is on, `consume_manifest_entries` is refused for agents — Cook then Eat. Intake retention ~396 days; erased on account purge.
 - **Dogfood / release** — One API serves App Store `1.3.17`, TestFlight, and web. Flags stay registry-default **off**; enable via Flagship platform rules (no `userId` allowlist required): iOS = `clientPlatform` `ios` **and** `clientVersion` ≥ **`1.4.x`**; web = `clientPlatform` `web` on; MCP/Copilot = platform on. After App Review, keep the same version floor so updaters get nutrition without a second backend cut. Never turn nutrition **on** with `FEATURE_FLAG_OVERRIDES`. Full phases: [nutrition-rollout.md](docs/dev/nutrition-rollout.md).
+
+---
+
+### 4.8 Appearance & theming
+
+Ration uses an explicit **Light / Dark** preference (default **dark**). Web persists via the `theme` cookie + `user.settings.theme` and applies a `.dark` class on `<html>` ([`app/lib/theme.ts`](app/lib/theme.ts), [`app/root.tsx`](app/root.tsx)). iOS uses `ThemeStore` + `.preferredColorScheme` ([`ios/Ration/Core/Preferences/ThemeStore.swift`](ios/Ration/Core/Preferences/ThemeStore.swift)). There is no “System” option. The public splash can toggle appearance **for that page only** without writing the app cookie.
+
+**Token contract** (web [`app/app.css`](app/app.css), iOS [`Theme.swift`](ios/Ration/Core/Design/Theme.swift)):
+
+| Token | Role | Light | Dark |
+|-------|------|-------|------|
+| `ceramic` | Primary background | `#F8F9FA` | `#0D0D0D` |
+| `platinum` | Secondary / cards | `#E6E6E6` | `#1A1A1A` |
+| `carbon` | Primary **text** | `#111111` | `#F8F9FA` |
+| `muted` | Secondary text | gray | lighter gray |
+| `hyper-green` / `on-hyper-green` | Accent + label on green fills | fixed | fixed |
+
+Brand names are **semantic slots that invert**. Rules:
+
+1. Never use `carbon` as a dark fill, scrim, or modal shell (`bg-carbon`, `bg-carbon/30`, `dark:bg-carbon`, `backdrop:bg-carbon`).
+2. Modal overlays use `.modal-scrim` / `.modal-scrim-heavy` (fixed near-black) or `backdrop:bg-black/50`. Panels use `.modal-surface` (ceramic / dark `#1A1A1A`).
+3. Copy / secondary actions: Hyper-Green Copy ([`CopyField`](app/components/settings/developer/CopyField.tsx)) or `.btn-secondary` — never bare `bg-white` + light text.
+4. iOS full-screen AI/confirm waits: [`AIProcessingView`](ios/Ration/Core/Design/AIProcessingView.swift) (optional title/message overrides), not bare labeled `ProgressView` chips.
+5. Guardrail test: `app/lib/__tests__/theme-class-guardrails.test.ts`. Audit log: [docs/dev/appearance-audit.md](docs/dev/appearance-audit.md).
 
 ---
 
@@ -1294,7 +1319,7 @@ sequenceDiagram
 
 ### 7.2 Multi-Tenant Isolation (Organizations)
 
-Ration uses an **organization-based multi-tenancy** model. Every piece of domain data is owned by an organization, and access is mediated through the `member` join table.
+Ration uses an **organization-based multi-tenancy** model for **Kitchen** data (Cargo, Galley, Manifest plan, Supply, credits). Access is mediated through the `member` join table. **Person** and **Person-in-context** data (nutrition goals, consent, personal intake) are user-owned; intake may aggregate across kitchens when `nutrition-cross-org-diary` is on. Canonical classes: [docs/dev/tenancy-classes.md](docs/dev/tenancy-classes.md).
 
 ```mermaid
 flowchart TB

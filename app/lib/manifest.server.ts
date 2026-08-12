@@ -339,15 +339,19 @@ export async function getConsumedIntakeDatesForRange(
 	organizationId: string,
 	startDate: string,
 	endDate: string,
+	options: { crossOrgDiary?: boolean } = {},
 ): Promise<string[]> {
 	const d1 = drizzle(db);
+	const orgFilter = options.crossOrgDiary
+		? undefined
+		: eq(nutritionIntake.organizationId, organizationId);
 	const rows = await d1
 		.selectDistinct({ date: nutritionIntake.manifestDate })
 		.from(nutritionIntake)
 		.where(
 			and(
 				eq(nutritionIntake.userId, userId),
-				eq(nutritionIntake.organizationId, organizationId),
+				orgFilter,
 				gte(nutritionIntake.manifestDate, startDate),
 				lte(nutritionIntake.manifestDate, endDate),
 				isNull(nutritionIntake.voidedAt),

@@ -1469,7 +1469,7 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 									block: "end",
 								});
 							}}
-							className="sticky bottom-1 ml-auto flex items-center gap-1 rounded-full border border-platinum bg-white/95 px-3 py-1.5 text-muted text-xs shadow-sm dark:border-white/10 dark:bg-carbon/95"
+							className="sticky bottom-1 ml-auto flex items-center gap-1 rounded-full border border-platinum bg-white/95 px-3 py-1.5 text-muted text-xs shadow-sm dark:border-white/10 dark:bg-[#1A1A1A]/95"
 						>
 							<ArrowDown className="size-3" />
 							Jump to latest

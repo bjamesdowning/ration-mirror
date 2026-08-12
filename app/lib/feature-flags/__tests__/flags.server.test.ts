@@ -66,6 +66,7 @@ describe("getClientSafeFlags", () => {
 				nutritionAiEstimate: true,
 				nutritionIntakeNotes: true,
 				nutritionGoals: true,
+				nutritionCrossOrgDiary: true,
 			}),
 		).toEqual({
 			nutritionEngine: false,
@@ -75,6 +76,7 @@ describe("getClientSafeFlags", () => {
 			nutritionAiEstimate: false,
 			nutritionIntakeNotes: false,
 			nutritionGoals: true,
+			nutritionCrossOrgDiary: false,
 		});
 
 		expect(
@@ -84,12 +86,14 @@ describe("getClientSafeFlags", () => {
 				nutritionCookLogSplit: true,
 				cargoQuickEat: true,
 				nutritionIntakeNotes: true,
+				nutritionCrossOrgDiary: true,
 			}),
 		).toMatchObject({
 			nutritionManifest: true,
 			nutritionCookLogSplit: true,
 			cargoQuickEat: true,
 			nutritionIntakeNotes: true,
+			nutritionCrossOrgDiary: true,
 		});
 	});
 });

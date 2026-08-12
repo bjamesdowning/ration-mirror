@@ -79,7 +79,7 @@ export function GalleyImportPreview({
 			: null;
 
 	return (
-		<div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-carbon/80 backdrop-blur-sm">
+		<div className="fixed inset-0 z-[60] flex items-center justify-center p-4 modal-scrim-heavy">
 			<div className="bg-ceramic dark:bg-[#1A1A1A] border-2 border-hyper-green rounded-xl shadow-glow w-full md:max-w-4xl max-h-[90vh] md:max-h-[85vh] overflow-hidden flex flex-col">
 				{/* Header */}
 				<div className="flex items-center justify-between p-6 border-b border-hyper-green/30">
@@ -121,7 +121,7 @@ export function GalleyImportPreview({
 				)}
 
 				{/* Bulk Controls */}
-				<div className="p-4 border-b border-hyper-green/30 bg-carbon/20">
+				<div className="p-4 border-b border-hyper-green/30 bg-platinum/30 dark:bg-white/5">
 					<button
 						type="button"
 						onClick={toggleAll}
@@ -138,7 +138,7 @@ export function GalleyImportPreview({
 					{manifest.meals.map((meal, index) => (
 						<div
 							key={meal.id ?? `meal-${index}`}
-							className="bg-carbon/20 border border-platinum/10 rounded-lg p-4 hover:border-hyper-green/30 transition-colors"
+							className="bg-platinum/30 dark:bg-white/5 border border-platinum/10 rounded-lg p-4 hover:border-hyper-green/30 transition-colors"
 						>
 							<div className="flex items-start gap-3">
 								<input

@@ -61,7 +61,7 @@ export function createNutritionToolDefs(env: McpToolsEnv) {
 		defineSharedTool({
 			name: "get_nutrition_summary",
 			description:
-				"Return daily nutrition intake totals (energy, macros, optional fiberG when known) for a UTC date range, plus the active goal when set. Requires nutrition-goals or nutrition-manifest. Not medical advice.",
+				"Return the caller's personal daily nutrition intake totals (energy, macros, optional fiberG) for a UTC date range, plus the active goal when set. When nutrition-cross-org-diary is on, totals include intakes from every kitchen the user logged in — not only the authorized household. Requires nutrition-goals or nutrition-manifest. Not medical advice.",
 			inputSchema: z.object({
 				from: z
 					.string()
@@ -118,7 +118,7 @@ export function createNutritionToolDefs(env: McpToolsEnv) {
 		defineSharedTool({
 			name: "list_nutrition_intakes",
 			description:
-				"List the caller's personal intake rows for a UTC date range (meal/slot/servings/macros/optional notes). Requires nutrition-goals or nutrition-manifest. Cursor-paginated (default limit 100, max 200). Not medical advice.",
+				"List the caller's personal intake rows for a UTC date range (meal/slot/servings/macros/optional notes and kitchen labels). When nutrition-cross-org-diary is on, includes rows from every kitchen — not only the authorized household. Requires nutrition-goals or nutrition-manifest. Cursor-paginated (default limit 100, max 200). Not medical advice.",
 			inputSchema: z.object({
 				from: z
 					.string()

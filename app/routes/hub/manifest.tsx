@@ -237,6 +237,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		servings: number;
 		energyKcal: number;
 		mealName: string | null;
+		organizationName: string | null;
 	}> = [];
 
 	if (nutritionManifest && intakeConsentGranted) {
@@ -271,6 +272,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 			servings: r.servings,
 			energyKcal: r.energyKcal,
 			mealName: r.mealName,
+			organizationName: r.organizationName,
 		}));
 		const intakes = summary.days.map((d) => ({
 			date: d.date,

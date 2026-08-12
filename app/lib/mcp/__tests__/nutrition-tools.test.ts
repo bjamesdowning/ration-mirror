@@ -201,6 +201,8 @@ describe("createNutritionToolDefs", () => {
 					fatG: 10,
 					mealId: null,
 					mealName: "Pasta",
+					organizationId: "org-1",
+					organizationName: "Test Kitchen",
 					verified: 1,
 					occurredAt: new Date("2026-08-01T12:00:00Z"),
 					notes: null,

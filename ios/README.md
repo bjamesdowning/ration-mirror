@@ -311,6 +311,8 @@ Add-to-plan with meal + day prefilled (`ration://manifest/add?mealId=&date=`). D
 an Intake log derived from personal intake on entries. Settings → Nutrition goals remain a
 separate explicit consent path (in-form Save; grant must leave goals consent **active** before upsert). Flags off → legacy Consume/Eat only; Galley Cook stays cargo-only.
 
+**Cross-org personal diary (iOS 1.4.15, flag `nutritionCrossOrgDiary`):** NutritionStore cache is user-global across kitchen switches when the flag is on. Manifest `dayIntakeRows` powers the day intake log (kitchen name chips); per-entry `personalIntake` markers stay active-kitchen scoped.
+
 **Eat macros + optional notes (iOS 1.4.9):** Shared `IntakeMacroPreview` on Manifest Eat and Cargo Quick Eat. Optional private notes (≤280) when `nutritionIntakeNotes` / `nutrition-intake-notes` is on. Hub/Manifest decode hardened for string aggregates and ISO `personalIntake.occurredAt`.
 
 **Nutrition goals + cargo override (iOS 1.3.25):** Nutrition Goals uses in-form Save (enabled when ≥1 target and consent affirmed or already active) with `MutationRetry` and `asOf` on GET. Cargo/Scan nutrition

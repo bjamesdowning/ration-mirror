@@ -230,7 +230,7 @@ export function PublicHeader({
 							<>
 								{/* Backdrop — full viewport, catches clicks to close */}
 								<div
-									className="fixed inset-0 z-[9998] bg-carbon/50 backdrop-blur-sm lg:hidden"
+									className="fixed inset-0 z-[9998] modal-scrim lg:hidden"
 									aria-hidden
 									onClick={() => setOpen(false)}
 								/>

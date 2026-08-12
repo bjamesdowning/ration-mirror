@@ -59,6 +59,8 @@ Recovery:
 - Grant/withdraw/erase failures emit `nutrition_consent` metrics (`denied` / `grant` / `withdraw` / `erase`) without statement text.
 - Agent reads fail closed if access audit cannot persist.
 - Withdrawal is user-global across organizations; clear private iOS caches on withdraw/logout.
+- Org hard-delete does **not** purge `nutrition_intake` (SET NULL + snapshots). Ops rows may CASCADE with the kitchen; undo-by-entry for wiped kitchens fails closed.
+- Flag `nutrition-cross-org-diary`: summary/history/Hub/calendar consumedDates are user-global when on; leave dashboard **off** until dogfood.
 
 ## Summary latency
 

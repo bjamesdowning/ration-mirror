@@ -90,7 +90,7 @@ export function SupplyItemActionsSheet({
 		<>
 			<button
 				type="button"
-				className="fixed inset-0 z-[99] bg-carbon/50 backdrop-blur-sm animate-fade-in border-none cursor-default"
+				className="fixed inset-0 z-[99] modal-scrim animate-fade-in border-none cursor-default"
 				onClick={onClose}
 				aria-label="Close actions"
 			/>

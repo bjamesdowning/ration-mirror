@@ -1,15 +1,13 @@
 import { data } from "react-router";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { handleApiError } from "~/lib/error-handler";
-import {
-	buildFlagContext,
-	isFeatureEnabled,
-} from "~/lib/feature-flags/flags.server";
+import { buildWebFlagContext } from "~/lib/feature-flags/context.server";
 import {
 	getConsumedIntakeDatesForRange,
 	getMealPlanById,
 	getPlannedDatesForRange,
 } from "~/lib/manifest.server";
+import { resolveNutritionCapabilities } from "~/lib/nutrition/feature-policy.server";
 import { WeekQuerySchema } from "~/lib/schemas/manifest";
 import type { Route } from "./+types/meal-plans.$id.planned-dates";
 
@@ -55,14 +53,10 @@ export async function loader({ request, context, params }: Route.LoaderArgs) {
 		);
 
 		const env = context.cloudflare.env;
-		const flagContext = buildFlagContext(request, env, { user });
-		const nutritionManifest = await isFeatureEnabled(
-			env,
-			"nutrition-manifest",
-			flagContext,
-		);
+		const flagContext = buildWebFlagContext(request, env, { user });
+		const caps = await resolveNutritionCapabilities(env, flagContext);
 
-		if (!nutritionManifest) {
+		if (!caps.manifest) {
 			return { dates };
 		}
 
@@ -72,6 +66,7 @@ export async function loader({ request, context, params }: Route.LoaderArgs) {
 			groupId,
 			from,
 			to,
+			{ crossOrgDiary: caps.crossOrgDiary },
 		);
 		return { dates, consumedDates };
 	} catch (e) {

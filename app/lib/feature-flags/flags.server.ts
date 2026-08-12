@@ -103,6 +103,11 @@ export function applyClientFlagDependencies(
 		result.nutritionIntakeNotes =
 			cookLogSplit && result.nutritionIntakeNotes === true;
 	}
+	if ("nutritionCrossOrgDiary" in result) {
+		const goals = engine && result.nutritionGoals === true;
+		result.nutritionCrossOrgDiary =
+			result.nutritionCrossOrgDiary === true && (manifest || goals);
+	}
 
 	return result;
 }

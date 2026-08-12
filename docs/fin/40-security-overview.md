@@ -10,6 +10,8 @@ Users sign in with **magic link email** and/or **Google OAuth** (whatever the li
 
 ## Authorization and multi-tenancy
 
+Kitchen data (Cargo, Galley, Manifest plan, Supply, credits) is isolated per organization. **Personal nutrition goals and intake** are private to the signed-in user—other members never see them. Switching the active group changes kitchen surfaces, not who owns your diary. See *Key concepts* and [tenancy classes](../dev/tenancy-classes.md).
+
 Data is partitioned by **organization**. Queries always anchor on the **verified session’s active organization** or a **scoped API key**—not on arbitrary IDs from the client. **Vector search** uses per-organization namespaces so semantic results cannot leak across groups.
 
 ## API keys

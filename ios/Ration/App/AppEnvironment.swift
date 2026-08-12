@@ -109,11 +109,17 @@ final class AppEnvironment {
     }
 
     /// Configures private nutrition caches for the signed-in user + active org.
+    /// When `nutritionCrossOrgDiary` is on, summary cache is user-global across kitchens.
     func configureNutritionScope() {
         guard let userId = session.session?.user.id,
               let organizationId = session.activeOrganizationId
         else { return }
-        nutrition.configure(userId: userId, organizationId: organizationId)
+        let crossOrg = session.clientFlags.isNutritionCrossOrgDiaryEnabled
+        nutrition.configure(
+            userId: userId,
+            organizationId: organizationId,
+            crossOrgDiary: crossOrg
+        )
         nutritionConsent.configure(userId: userId, organizationId: organizationId)
     }
 

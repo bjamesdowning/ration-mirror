@@ -2,6 +2,8 @@
 
 ## Edge application
 
+Multi-group data follows **Kitchen / Person / Person-in-context** tenancy (see *Key concepts* and developer [tenancy classes](../dev/tenancy-classes.md)): shared logistics stay org-scoped; personal nutrition can aggregate across kitchens when flagged.
+
 Ration’s web app runs as a **Cloudflare Worker**: server-side rendering with a modern React stack, executed close to users globally, with **Smart Placement** so database-heavy work stays **near the primary database** for low latency.
 
 ## Data services (plain English)

@@ -259,7 +259,7 @@ export function HubEditModeMobile({
 			</div>
 
 			{activeWidget && activeWidgetDef && activeWidgetIdTyped && (
-				<div className="fixed inset-0 bg-carbon/30 backdrop-blur-sm flex items-end z-[80] md:hidden">
+				<div className="fixed inset-0 modal-scrim flex items-end z-[80] md:hidden">
 					<button
 						type="button"
 						className="absolute inset-0 w-full h-full"

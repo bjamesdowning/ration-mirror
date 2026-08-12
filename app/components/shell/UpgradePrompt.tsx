@@ -16,7 +16,7 @@ export function UpgradePrompt({
 	if (!open) return null;
 
 	return (
-		<div className="fixed inset-0 z-[90] bg-carbon/30 backdrop-blur-sm flex items-center justify-center p-4">
+		<div className="fixed inset-0 z-[90] modal-scrim flex items-center justify-center p-4">
 			<div className="bg-ceramic rounded-2xl shadow-xl p-6 max-w-md w-full">
 				<h3 className="text-lg font-bold text-carbon">{title}</h3>
 				<p className="text-sm text-muted mt-2">{description}</p>

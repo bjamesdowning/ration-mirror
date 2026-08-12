@@ -186,7 +186,7 @@ export function PlateUpDialog({
 		>
 			<button
 				type="button"
-				className="absolute inset-0 bg-carbon/60 backdrop-blur-sm"
+				className="absolute inset-0 modal-scrim"
 				onClick={onClose}
 				aria-label="Close"
 			/>

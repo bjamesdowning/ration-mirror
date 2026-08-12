@@ -146,6 +146,7 @@ struct ManifestPlateUpSheet: View {
                             }
                         } else {
                             ProgressView("Loading privacy statement…")
+                                .tint(Theme.hyperGreen)
                         }
                     } footer: {
                         Text("Your logged servings are private. Withdrawal and erasure are available in Privacy & AI settings.")

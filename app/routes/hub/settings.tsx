@@ -2360,9 +2360,7 @@ function HelpSection() {
 							<p className="text-sm text-muted mb-3">
 								For the fastest help with account, billing, or how to use
 								Ration, use{" "}
-								<strong className="font-medium text-carbon dark:text-ceramic">
-									Ask Ration
-								</strong>{" "}
+								<strong className="font-medium text-carbon">Ask Ration</strong>{" "}
 								— open the first-party copilot for help or deterministic app
 								changes. You can also use the Ask Ration control in the hub
 								header.
@@ -2406,7 +2404,7 @@ function HelpSection() {
 								</h4>
 								<p className="text-sm text-muted">
 									Copilot charges per conversation based on total length:{" "}
-									<strong className="font-medium text-carbon dark:text-ceramic">
+									<strong className="font-medium text-carbon">
 										1 credit per 20,000 tokens
 									</strong>{" "}
 									(minimum 1 per chat). Each chat is capped at 128,000 tokens —
@@ -3666,7 +3664,7 @@ function GroupManagement({
 							type="text"
 							readOnly
 							value={inviteLink}
-							className="flex-1 bg-white/50 border border-carbon/10 rounded px-3 py-1 text-sm font-mono text-carbon"
+							className="flex-1 bg-platinum/50 dark:bg-white/5 border border-platinum dark:border-white/10 rounded px-3 py-1 text-sm font-mono text-carbon"
 							onClick={(e) => e.currentTarget.select()}
 						/>
 						<button
@@ -3675,7 +3673,7 @@ function GroupManagement({
 								navigator.clipboard.writeText(inviteLink);
 								copyToast.show();
 							}}
-							className="px-3 py-1 bg-white text-carbon text-xs font-semibold rounded border border-carbon/10 hover:bg-gray-50"
+							className="px-3 py-1 bg-hyper-green text-on-hyper-green text-xs font-semibold rounded hover:bg-hyper-green/90 shrink-0"
 						>
 							Copy
 						</button>

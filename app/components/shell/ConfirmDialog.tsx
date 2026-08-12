@@ -65,7 +65,7 @@ export function ConfirmDialog() {
 			ref={dialogRef}
 			onCancel={handleCancelEvent}
 			onClick={handleBackdropClick}
-			className="p-0 border-0 bg-transparent max-w-[min(calc(100vw-2rem),28rem)] w-full max-h-[85vh] open:animate-fade-in [&::backdrop]:animate-fade-in backdrop:bg-carbon/30 backdrop:backdrop-blur-sm"
+			className="p-0 border-0 bg-transparent max-w-[min(calc(100vw-2rem),28rem)] w-full max-h-[85vh] open:animate-fade-in [&::backdrop]:animate-fade-in backdrop:bg-black/50 backdrop:backdrop-blur-sm"
 			aria-labelledby="confirm-dialog-title"
 			aria-describedby="confirm-dialog-description"
 		>

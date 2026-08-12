@@ -13,6 +13,7 @@ import { cookMealFromGalley } from "~/lib/galley-cook-manifest.server";
 import { log } from "~/lib/logging.server";
 import { ensureProvisionFromCargo } from "~/lib/meals.server";
 import {
+	deriveNutritionOperationKey,
 	logManifestIntakes,
 	type NutritionPrincipal,
 } from "~/lib/nutrition/service.server";
@@ -293,14 +294,22 @@ export async function quickEatFromCargo(
 							: String(recomputeErr),
 				});
 			}
+			// logManifestIntakes requires RFC UUID operation/item keys — derive
+			// deterministic UUIDs from the client Quick Eat key for idempotent retries.
+			const intakeOperationKey = await deriveNutritionOperationKey([
+				`${input.operationKey}:intake`,
+			]);
+			const intakeItemKey = await deriveNutritionOperationKey([
+				`${input.operationKey}:intake-item`,
+			]);
 			await logManifestIntakes(env, principal, flagContext, {
-				operationKey: `${input.operationKey}:intake`,
+				operationKey: intakeOperationKey,
 				planId: cookResult.planId,
 				items: [
 					{
 						entryId: cookResult.entry.id,
 						servings: clamped.servings,
-						idempotencyKey: `${input.operationKey}:intake-item`,
+						idempotencyKey: intakeItemKey,
 						notes: input.notes ?? null,
 					},
 				],

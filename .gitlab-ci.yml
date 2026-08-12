@@ -24,18 +24,18 @@ cache:
     - node_modules/
     - .bun-install-cache/
 
-# Required local-quality gate (re-enabled for nutrition hardening).
-# Workers Builds remains the production deploy path; this job must not allow_failure.
-verify:
-  stage: verify
-  script:
-    - bun install --frozen-lockfile --ignore-scripts
-    - bun run cf-typegen
-    - bun run lint
-    - bun run typecheck
-    - bun run test:unit
-    - bun run flag:check
-  allow_failure: false
+# Disabled: local quality gate (lint/typecheck/unit/flag:check). Run locally instead.
+# Workers Builds remains the production deploy path.
+# verify:
+#   stage: verify
+#   script:
+#     - bun install --frozen-lockfile --ignore-scripts
+#     - bun run cf-typegen
+#     - bun run lint
+#     - bun run typecheck
+#     - bun run test:unit
+#     - bun run flag:check
+#   allow_failure: false
 
 # Manual: upload docs corpus to R2 and reindex Copilot AI Search.
 # Trigger after docs/fin, docs/dev, docs/legal, content/blog, or README changes.

@@ -20,7 +20,11 @@ import { isFeatureEnabled } from "~/lib/feature-flags/flags.server";
 import { normalizeForCargoDedup } from "~/lib/matching";
 import { chunkedQuery } from "~/lib/query-utils.server";
 import type { SupportedUnit } from "~/lib/units";
-import { getUnitFamily, toSupportedUnit } from "~/lib/units";
+import {
+	getUnitFamily,
+	isDiscreteCountFamily,
+	toSupportedUnit,
+} from "~/lib/units";
 import {
 	type ResolveCargoNutritionOptions,
 	resolveAndBuildCargoNutrition,
@@ -323,7 +327,7 @@ export async function recomputeAndStoreMealNutrition(
 					if (
 						ing.quantity != null &&
 						resolvedUnit &&
-						getUnitFamily(resolvedUnit) === "count_unit"
+						isDiscreteCountFamily(getUnitFamily(resolvedUnit))
 					) {
 						if (fdcId != null) {
 							const portion = await lookupFdcPortion(env, fdcId, resolvedUnit);

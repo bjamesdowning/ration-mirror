@@ -100,7 +100,8 @@ struct CargoQuickEatSheet: View {
         CargoEatMacroEstimate.scaled(
             nutrition: item.nutrition,
             quantity: quantity,
-            unit: item.unit
+            unit: item.unit,
+            packageQuantity: item.quantity
         )
     }
 

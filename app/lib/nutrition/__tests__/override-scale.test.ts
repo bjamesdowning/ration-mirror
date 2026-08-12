@@ -247,4 +247,32 @@ describe("directNutrientsFromCountCargoOverride", () => {
 			directNutrientsFromCountCargoOverride(milkOverride, 100, "g", 1, "g"),
 		).toBeNull();
 	});
+
+	it("accepts can/pack discrete count families", () => {
+		const snap: NutritionSnapshot = {
+			source: "user_override",
+			confidence: 1,
+			verified: true,
+			per100g: null,
+			perServing: { ...milkPackageTotals, energyKcal: 400 },
+			fdcId: null,
+			description: null,
+		};
+		const oneCan = directNutrientsFromCountCargoOverride(
+			snap,
+			1,
+			"can",
+			2,
+			"can",
+		);
+		expect(oneCan?.energyKcal).toBe(200);
+		const onePack = directNutrientsFromCountCargoOverride(
+			snap,
+			1,
+			"pack",
+			4,
+			"pack",
+		);
+		expect(onePack?.energyKcal).toBe(100);
+	});
 });

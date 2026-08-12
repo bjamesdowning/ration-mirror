@@ -162,6 +162,15 @@ export function getUnitFamily(unit: SupportedUnit): UnitFamily {
 	return UNIT_FACTORS_TO_BASE[unit].family;
 }
 
+/** Discrete stock counts (unit/piece/…, can, pack) for nutrition mass resolution. */
+export function isDiscreteCountFamily(
+	family: UnitFamily | null | undefined,
+): boolean {
+	return (
+		family === "count_unit" || family === "count_can" || family === "count_pack"
+	);
+}
+
 export function areSameFamily(a: SupportedUnit, b: SupportedUnit): boolean {
 	return getUnitFamily(a) === getUnitFamily(b);
 }

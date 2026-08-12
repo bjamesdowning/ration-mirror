@@ -74,7 +74,8 @@ Recovery:
 4. Treat a Foundation message such as `Number 1.4 is not representable in Swift` as a decimal reaching an iOS `Int` field, not invalid JSON. Inspect the reported path, then repair or omit the malformed optional Hub card/server value.
 5. Re-check the shared Hub wire contract after schema or model edits: `bunx vitest run app/lib/schemas/mobile/__tests__/hub-populated-contract.test.ts` and XCTest `HubPopulatedContractTests` against `hub-populated.json`.
 6. A cold Manifest decode failure must show its retry state. If it instead looks empty, do not add duplicate plan entries—first retry after verifying the deployed Worker and migration.
-7. Enable nutrition in dependency order for the same platform cohort: `nutrition-engine` → `nutrition-manifest` → `nutrition-cook-log-split`; `nutrition-intake-notes` is additive and does not enable Eat.
+7. Enable nutrition in dependency order for the same platform cohort: `nutrition-engine` → `nutrition-manifest` → `nutrition-cook-log-split` → `cargo-quick-eat`; `nutrition-intake-notes` is additive and does not enable Eat.
+8. Quick Eat logs zero macros or `nutrition_unavailable` when provision recompute cannot resolve count/can/pack mass (density-only cargo without FDC/`perServing`). Heal gate reads persisted `carbG` (not wire `carbsG` alone).
 
 ## Alerts (initial — configure in Cloudflare / Grafana)
 

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { Link, useFetcher } from "react-router";
+import { Link, useFetcher, useRouteLoaderData } from "react-router";
 import { CargoEditModal } from "~/components/cargo/CargoEditModal";
+import { CargoQuickEatDialog } from "~/components/cargo/CargoQuickEatDialog";
 import { RestockQuantityModal } from "~/components/cargo/RestockQuantityModal";
 import { StatusGauge } from "~/components/cargo/StatusGauge";
 import { StandardCard } from "~/components/common/StandardCard";
@@ -11,6 +12,7 @@ import { Toast } from "~/components/shell/Toast";
 import type { cargo } from "~/db/schema";
 import { useToast } from "~/hooks/useToast";
 import { formatCargoStatus } from "~/lib/cargo";
+import type { NutritionSnapshot } from "~/lib/nutrition";
 import type { TagRecord } from "~/lib/tags";
 import { toSupportedUnit } from "~/lib/units";
 
@@ -54,9 +56,23 @@ export function CargoCard({
 	const [promotedId, setPromotedId] = useState<string | null>(null);
 	const [lastIntent, setLastIntent] = useState<string | null>(null);
 	const [showRestockModal, setShowRestockModal] = useState(false);
+	const [showQuickEat, setShowQuickEat] = useState(false);
+
+	const rootData = useRouteLoaderData("root") as
+		| {
+				clientFlags?: {
+					cargoQuickEat?: boolean;
+					nutritionIntakeNotes?: boolean;
+				};
+		  }
+		| undefined;
+	const cargoQuickEat = rootData?.clientFlags?.cargoQuickEat === true;
+	const nutritionIntakeNotes =
+		rootData?.clientFlags?.nutritionIntakeNotes === true;
 
 	const successToast = useToast({ duration: 4000 });
 	const alreadyToast = useToast({ duration: 3000 });
+	const eatToast = useToast({ duration: 4000 });
 
 	const currentIntent = fetcher.formData?.get("intent") as string | null;
 	const isDeleting = fetcher.state !== "idle" && currentIntent === "delete";
@@ -186,6 +202,9 @@ export function CargoCard({
 		onClick: handleToggleRestock,
 	};
 	const cardActions = [
+		...(cargoQuickEat
+			? [{ label: "Eat", onClick: () => setShowQuickEat(true) }]
+			: []),
 		{ label: "Edit", onClick: () => setIsEditing(true) },
 		{
 			label: isPromoted
@@ -237,6 +256,15 @@ export function CargoCard({
 						) : undefined
 					}
 					onDismiss={alreadyToast.hide}
+				/>
+			)}
+			{eatToast.isOpen && (
+				<Toast
+					variant="success"
+					position="bottom-right"
+					title="Logged snack"
+					description="Added to today's Manifest"
+					onDismiss={eatToast.hide}
 				/>
 			)}
 			<div className="relative">
@@ -346,6 +374,18 @@ export function CargoCard({
 					onConfirm={handleRestockConfirm}
 					onCancel={() => setShowRestockModal(false)}
 					isPending={isTogglingRestock}
+				/>
+			)}
+			{showQuickEat && cargoQuickEat && (
+				<CargoQuickEatDialog
+					cargoId={item.id}
+					name={item.name}
+					quantity={localQuantity}
+					unit={item.unit}
+					nutrition={item.nutrition as NutritionSnapshot | null}
+					notesEnabled={nutritionIntakeNotes}
+					onClose={() => setShowQuickEat(false)}
+					onSuccess={() => eatToast.show()}
 				/>
 			)}
 		</>

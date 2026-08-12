@@ -1,14 +1,18 @@
 import { useEffect, useState } from "react";
 import { Link, useFetcher, useRouteLoaderData } from "react-router";
 import { CargoEditModal } from "~/components/cargo/CargoEditModal";
+import { CargoQuickEatDialog } from "~/components/cargo/CargoQuickEatDialog";
 import { RestockQuantityModal } from "~/components/cargo/RestockQuantityModal";
 import { StatusGauge } from "~/components/cargo/StatusGauge";
 import { CheckIcon, PlusIcon } from "~/components/icons/PageIcons";
 import { NutritionPanel } from "~/components/nutrition/NutritionPanel";
 import { DisplayQuantity } from "~/components/shared/DisplayQuantity";
 import { TagChip } from "~/components/shared/TagChip";
+import { Toast } from "~/components/shell/Toast";
 import type { cargo } from "~/db/schema";
+import { useToast } from "~/hooks/useToast";
 import { useConfirm } from "~/lib/confirm-context";
+import type { NutritionSnapshot } from "~/lib/nutrition";
 import type { TagRecord } from "~/lib/tags";
 import { toSupportedUnit } from "~/lib/units";
 
@@ -79,9 +83,20 @@ export function CargoDetail({
 	const isMarkingEmpty =
 		fetcher.state !== "idle" && currentIntent === "mark-empty";
 	const rootData = useRouteLoaderData("root") as
-		| { clientFlags?: { nutritionEngine?: boolean } }
+		| {
+				clientFlags?: {
+					nutritionEngine?: boolean;
+					cargoQuickEat?: boolean;
+					nutritionIntakeNotes?: boolean;
+				};
+		  }
 		| undefined;
 	const nutritionEngine = rootData?.clientFlags?.nutritionEngine === true;
+	const cargoQuickEat = rootData?.clientFlags?.cargoQuickEat === true;
+	const nutritionIntakeNotes =
+		rootData?.clientFlags?.nutritionIntakeNotes === true;
+	const [showQuickEat, setShowQuickEat] = useState(false);
+	const eatToast = useToast({ duration: 4000 });
 
 	useEffect(() => {
 		if (fetcher.state === "idle") {
@@ -221,6 +236,15 @@ export function CargoDetail({
 							Expiry: {formatExpiryDate(item.expiresAt)}
 						</div>
 						<div className="flex gap-2">
+							{cargoQuickEat && (
+								<button
+									type="button"
+									onClick={() => setShowQuickEat(true)}
+									className="px-3 py-1.5 text-sm rounded-lg border border-hyper-green/40 text-hyper-green hover:bg-hyper-green/5"
+								>
+									Eat
+								</button>
+							)}
 							<button
 								type="button"
 								onClick={() => setIsEditing(true)}
@@ -370,6 +394,27 @@ export function CargoDetail({
 					onConfirm={handleRestockConfirm}
 					onCancel={() => setShowRestockModal(false)}
 					isPending={restockFetcher.state !== "idle"}
+				/>
+			)}
+			{showQuickEat && cargoQuickEat && (
+				<CargoQuickEatDialog
+					cargoId={item.id}
+					name={item.name}
+					quantity={localQuantity}
+					unit={item.unit}
+					nutrition={item.nutrition as NutritionSnapshot | null}
+					notesEnabled={nutritionIntakeNotes}
+					onClose={() => setShowQuickEat(false)}
+					onSuccess={() => eatToast.show()}
+				/>
+			)}
+			{eatToast.isOpen && (
+				<Toast
+					variant="success"
+					position="bottom-right"
+					title="Logged snack"
+					description="Added to today's Manifest"
+					onDismiss={eatToast.hide}
 				/>
 			)}
 		</div>

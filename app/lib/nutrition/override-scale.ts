@@ -1,5 +1,9 @@
 import { normalizeForCargoDedup } from "~/lib/matching";
-import { getUnitFamily, type SupportedUnit } from "~/lib/units";
+import {
+	getUnitFamily,
+	isDiscreteCountFamily,
+	type SupportedUnit,
+} from "~/lib/units";
 import {
 	convertIngredientAmountToGrams,
 	scaleNutrientValues,
@@ -105,13 +109,13 @@ export function directNutrientsFromCountCargoOverride(
 ): NutrientValues | null {
 	if (
 		!ingredientUnit ||
-		getUnitFamily(ingredientUnit) !== "count_unit" ||
+		!isDiscreteCountFamily(getUnitFamily(ingredientUnit)) ||
 		!Number.isFinite(ingredientQuantity) ||
 		ingredientQuantity <= 0
 	) {
 		return null;
 	}
-	if (packageUnit && getUnitFamily(packageUnit) !== "count_unit") {
+	if (packageUnit && !isDiscreteCountFamily(getUnitFamily(packageUnit))) {
 		return null;
 	}
 

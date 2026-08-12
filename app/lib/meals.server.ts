@@ -2110,6 +2110,8 @@ export function mealNutritionIsUsable(nutrition: unknown): boolean {
 		perServing?: {
 			energyKcal?: number | null;
 			proteinG?: number | null;
+			/** Persisted meal JSON uses `carbG`; wire/API aliases may use `carbsG`. */
+			carbG?: number | null;
 			carbsG?: number | null;
 			fatG?: number | null;
 		};
@@ -2118,6 +2120,12 @@ export function mealNutritionIsUsable(nutrition: unknown): boolean {
 	} | null;
 	const perServing = snap?.perServing;
 	const coverage = snap?.coverage;
+	const carb =
+		perServing?.carbG != null && Number.isFinite(perServing.carbG)
+			? perServing.carbG
+			: perServing?.carbsG != null && Number.isFinite(perServing.carbsG)
+				? perServing.carbsG
+				: null;
 	return (
 		coverage != null &&
 		Number.isFinite(coverage) &&
@@ -2129,8 +2137,7 @@ export function mealNutritionIsUsable(nutrition: unknown): boolean {
 		Number.isFinite(perServing.energyKcal) &&
 		perServing.proteinG != null &&
 		Number.isFinite(perServing.proteinG) &&
-		perServing.carbsG != null &&
-		Number.isFinite(perServing.carbsG) &&
+		carb != null &&
 		perServing.fatG != null &&
 		Number.isFinite(perServing.fatG)
 	);

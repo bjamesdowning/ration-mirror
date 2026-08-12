@@ -1,6 +1,12 @@
 import { useEffect, useState } from "react";
-import { Link, useFetcher, useNavigate } from "react-router";
+import {
+	Link,
+	useFetcher,
+	useNavigate,
+	useRouteLoaderData,
+} from "react-router";
 import { CargoEditModal } from "~/components/cargo/CargoEditModal";
+import { CargoQuickEatDialog } from "~/components/cargo/CargoQuickEatDialog";
 import { RestockQuantityModal } from "~/components/cargo/RestockQuantityModal";
 import { ActionMenu } from "~/components/hud/ActionMenu";
 import { DisplayQuantity } from "~/components/shared/DisplayQuantity";
@@ -12,6 +18,7 @@ import {
 	calculateInventoryStatus,
 	computeDaysUntilExpiry,
 } from "~/lib/cargo-utils";
+import type { NutritionSnapshot } from "~/lib/nutrition";
 import type { TagRecord } from "~/lib/tags";
 import { toSupportedUnit } from "~/lib/units";
 
@@ -89,6 +96,7 @@ export function CargoListRow({
 
 	const successToast = useToast({ duration: 4000 });
 	const alreadyToast = useToast({ duration: 3000 });
+	const eatToast = useToast({ duration: 4000 });
 
 	const currentIntent = fetcher.formData?.get("intent") as string | null;
 	const isDeleting = fetcher.state !== "idle" && currentIntent === "delete";
@@ -98,7 +106,20 @@ export function CargoListRow({
 	const isPromoting = fetcher.state !== "idle" && currentIntent === "promote";
 	const [lastIntent, setLastIntent] = useState<string | null>(null);
 	const [showRestockModal, setShowRestockModal] = useState(false);
+	const [showQuickEat, setShowQuickEat] = useState(false);
 	const [localQuantity, setLocalQuantity] = useState(item.quantity);
+
+	const rootData = useRouteLoaderData("root") as
+		| {
+				clientFlags?: {
+					cargoQuickEat?: boolean;
+					nutritionIntakeNotes?: boolean;
+				};
+		  }
+		| undefined;
+	const cargoQuickEat = rootData?.clientFlags?.cargoQuickEat === true;
+	const nutritionIntakeNotes =
+		rootData?.clientFlags?.nutritionIntakeNotes === true;
 
 	useEffect(() => {
 		setLocalQuantity(item.quantity);
@@ -241,6 +262,15 @@ export function CargoListRow({
 					onDismiss={alreadyToast.hide}
 				/>
 			)}
+			{eatToast.isOpen && (
+				<Toast
+					variant="success"
+					position="bottom-right"
+					title="Logged snack"
+					description="Added to today's Manifest"
+					onDismiss={eatToast.hide}
+				/>
+			)}
 
 			<div className="relative flex items-center gap-2 py-3 min-h-[48px] group overflow-hidden">
 				<button
@@ -325,6 +355,14 @@ export function CargoListRow({
 				<div className="relative z-20 shrink-0" data-row-action>
 					<ActionMenu
 						actions={[
+							...(cargoQuickEat
+								? [
+										{
+											label: "Eat",
+											onClick: () => setShowQuickEat(true),
+										},
+									]
+								: []),
 							{
 								label: localActive
 									? "Remove from Supply list"
@@ -380,6 +418,18 @@ export function CargoListRow({
 					onConfirm={handleRestockConfirm}
 					onCancel={() => setShowRestockModal(false)}
 					isPending={restockFetcher.state !== "idle"}
+				/>
+			)}
+			{showQuickEat && cargoQuickEat && (
+				<CargoQuickEatDialog
+					cargoId={item.id}
+					name={item.name}
+					quantity={localQuantity}
+					unit={item.unit}
+					nutrition={item.nutrition as NutritionSnapshot | null}
+					notesEnabled={nutritionIntakeNotes}
+					onClose={() => setShowQuickEat(false)}
+					onSuccess={() => eatToast.show()}
 				/>
 			)}
 		</>

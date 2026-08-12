@@ -46,31 +46,33 @@ struct IntakeMacroPreview: View {
     }
 }
 
-/// Scale cargo nutrition for a Quick Eat amount (client preview only).
+/// Scale cargo nutrition for a Quick Eat amount (client preview).
+/// Matches web `scaleCargoEatMacros`: mass/volume from density; count from
+/// household/package `perServing` — never treat `per100g` as per count unit.
 enum CargoEatMacroEstimate {
     static func scaled(
         nutrition: NutritionSnapshot?,
         quantity: Double,
-        unit: String
+        unit: String,
+        packageQuantity: Double? = nil
     ) -> (energyKcal: Double?, proteinG: Double?, carbsG: Double?, fatG: Double?) {
         guard quantity > 0, let nutrition else {
             return (nil, nil, nil, nil)
         }
         let unitLower = unit.lowercased()
-        let isMassOrVolume =
-            ["g", "kg", "mg", "ml", "l", "oz", "lb", "cup", "tbsp", "tsp"].contains(unitLower)
+        let discreteCount = [
+            "unit", "piece", "dozen", "bunch", "clove", "slice", "head",
+            "stalk", "sprig", "can", "pack",
+        ].contains(unitLower)
 
-        if isMassOrVolume, let per100g = nutrition.per100g, per100g.hasAnyMacro {
+        if let per100g = nutrition.per100g, per100g.hasAnyMacro {
             let grams: Double?
             switch unitLower {
             case "g", "ml":
                 grams = quantity
             case "kg", "l":
                 grams = quantity * 1000
-            case "mg":
-                grams = quantity / 1000
             default:
-                // Volume without density — fall through to perServing.
                 grams = nil
             }
             if let grams, grams > 0 {
@@ -85,24 +87,24 @@ enum CargoEatMacroEstimate {
         }
 
         if let perServing = nutrition.perServing, perServing.hasAnyMacro {
+            let factor: Double
+            if discreteCount,
+               nutrition.per100g == nil,
+               nutrition.source == "user_override" || nutrition.source == "ai_estimate",
+               let packageQuantity, packageQuantity > 0 {
+                factor = quantity / packageQuantity
+            } else {
+                factor = quantity
+            }
             return (
-                perServing.energyKcal.map { $0 * quantity },
-                perServing.proteinG.map { $0 * quantity },
-                perServing.carbG.map { $0 * quantity },
-                perServing.fatG.map { $0 * quantity }
+                perServing.energyKcal.map { $0 * factor },
+                perServing.proteinG.map { $0 * factor },
+                perServing.carbG.map { $0 * factor },
+                perServing.fatG.map { $0 * factor }
             )
         }
 
-        if let per100g = nutrition.per100g, per100g.hasAnyMacro {
-            // Count / unknown mass: treat display density as one portion unit.
-            return (
-                per100g.energyKcal.map { $0 * quantity },
-                per100g.proteinG.map { $0 * quantity },
-                per100g.carbG.map { $0 * quantity },
-                per100g.fatG.map { $0 * quantity }
-            )
-        }
-
+        // Density-only count/can/pack: no authentic per-unit mass.
         return (nil, nil, nil, nil)
     }
 }

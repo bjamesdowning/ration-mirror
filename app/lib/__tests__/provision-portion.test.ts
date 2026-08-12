@@ -140,7 +140,7 @@ describe("mealNutritionIsUsable", () => {
 		expect(mealNutritionIsUsable(null)).toBe(false);
 		expect(
 			mealNutritionIsUsable({
-				perServing: { energyKcal: 0, proteinG: 0, carbsG: 0, fatG: 0 },
+				perServing: { energyKcal: 0, proteinG: 0, carbG: 0, fatG: 0 },
 				coverage: 0,
 				attributions: [],
 			}),
@@ -151,20 +151,31 @@ describe("mealNutritionIsUsable", () => {
 		const { mealNutritionIsUsable } = await import("~/lib/meals.server");
 		expect(
 			mealNutritionIsUsable({
-				perServing: { energyKcal: 0, proteinG: 0, carbsG: 0, fatG: 0 },
+				perServing: { energyKcal: 0, proteinG: 0, carbG: 0, fatG: 0 },
 				coverage: 1,
 				attributions: [{ ingredientName: "sparkling water" }],
 			}),
 		).toBe(true);
 	});
 
-	it("accepts a covered provision with complete macros", async () => {
+	it("accepts a covered provision with complete macros (persisted carbG)", async () => {
 		const { mealNutritionIsUsable } = await import("~/lib/meals.server");
 		expect(
 			mealNutritionIsUsable({
-				perServing: { energyKcal: 120, proteinG: 20, carbsG: 0, fatG: 4 },
+				perServing: { energyKcal: 120, proteinG: 20, carbG: 0, fatG: 4 },
 				coverage: 1,
 				attributions: [{ ingredientName: "steak" }],
+			}),
+		).toBe(true);
+	});
+
+	it("accepts wire-alias carbsG when carbG is absent", async () => {
+		const { mealNutritionIsUsable } = await import("~/lib/meals.server");
+		expect(
+			mealNutritionIsUsable({
+				perServing: { energyKcal: 90, proteinG: 10, carbsG: 5, fatG: 2 },
+				coverage: 1,
+				attributions: [{ ingredientName: "yogurt" }],
 			}),
 		).toBe(true);
 	});

@@ -210,6 +210,9 @@ export function MealDetail({
 				id: string;
 				mealName: string;
 				mealEnergyKcalPerServing?: number | null;
+				mealProteinGPerServing?: number | null;
+				mealCarbsGPerServing?: number | null;
+				mealFatGPerServing?: number | null;
 			};
 			undoToken?: string;
 		};
@@ -223,6 +226,10 @@ export function MealDetail({
 		id: string;
 		mealName: string;
 		planId: string;
+		mealEnergyKcalPerServing?: number | null;
+		mealProteinGPerServing?: number | null;
+		mealCarbsGPerServing?: number | null;
+		mealFatGPerServing?: number | null;
 	} | null>(null);
 	const [intakeConsentGranted, setIntakeConsentGranted] = useState(false);
 	const isCooking = fetcher.state !== "idle";
@@ -242,12 +249,15 @@ export function MealDetail({
 					nutritionEngine?: boolean;
 					nutritionCookLogSplit?: boolean;
 					nutritionManifest?: boolean;
+					nutritionIntakeNotes?: boolean;
 				};
 		  }
 		| undefined;
 	const nutritionEngine = rootData?.clientFlags?.nutritionEngine === true;
 	const cookLogSplit = rootData?.clientFlags?.nutritionCookLogSplit === true;
 	const nutritionManifest = rootData?.clientFlags?.nutritionManifest === true;
+	const nutritionIntakeNotes =
+		rootData?.clientFlags?.nutritionIntakeNotes === true;
 	const offerEatEnabled = cookLogSplit && nutritionManifest;
 
 	const handleServingsChange = (next: number) => {
@@ -382,6 +392,10 @@ export function MealDetail({
 			id: result.entry.id,
 			mealName: result.entry.mealName,
 			planId: result.planId,
+			mealEnergyKcalPerServing: result.entry.mealEnergyKcalPerServing ?? null,
+			mealProteinGPerServing: result.entry.mealProteinGPerServing ?? null,
+			mealCarbsGPerServing: result.entry.mealCarbsGPerServing ?? null,
+			mealFatGPerServing: result.entry.mealFatGPerServing ?? null,
 		});
 	}, [fetcher.state, fetcher.data, offerEatEnabled]);
 
@@ -429,12 +443,17 @@ export function MealDetail({
 		);
 	};
 
-	const handleEat = (entryId: string, servings: number) => {
+	const handleEat = (
+		entryId: string,
+		servings: number,
+		notes: string | null = null,
+	) => {
 		if (!eatEntry) return;
 		intakeFetcher.submit(
 			JSON.stringify({
 				servings,
 				idempotencyKey: crypto.randomUUID(),
+				...(notes != null ? { notes } : {}),
 			}),
 			{
 				method: "POST",
@@ -857,11 +876,16 @@ export function MealDetail({
 					mode="eat"
 					mealName={eatEntry.mealName}
 					defaultServings={1}
+					energyKcalPerServing={eatEntry.mealEnergyKcalPerServing}
+					proteinGPerServing={eatEntry.mealProteinGPerServing}
+					carbsGPerServing={eatEntry.mealCarbsGPerServing}
+					fatGPerServing={eatEntry.mealFatGPerServing}
 					intakeConsentGranted={intakeConsentGranted}
-					onConfirmEat={(servings) => {
+					notesEnabled={nutritionIntakeNotes}
+					onConfirmEat={(servings, notes) => {
 						const entryId = eatEntry.id;
 						setEatEntry(null);
-						handleEat(entryId, servings);
+						handleEat(entryId, servings, notes);
 					}}
 					onClose={() => setEatEntry(null)}
 				/>

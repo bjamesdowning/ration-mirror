@@ -12,6 +12,11 @@ export {
 	upgradeNutritionSnapshotToV2,
 } from "./adapters";
 export {
+	type CargoEatMacroPreview,
+	type ScaleCargoEatMacrosInput,
+	scaleCargoEatMacros,
+} from "./cargo-eat-macros";
+export {
 	computeMealNutrition,
 	type MealNutritionIngredientInput,
 } from "./compute-meal-nutrition";

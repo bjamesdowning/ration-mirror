@@ -92,6 +92,9 @@ export function PricingFeatureMatrix({
 				<SectionHeader label="Manifest" />
 				<FeatureRow label="Weekly meal calendar" free crew />
 				<FeatureRow label="Consume & auto-deduct" free crew />
+				<FeatureRow label="Daily Fuel from meals you cook" free crew />
+				<FeatureRow label="Personal calorie and macro goals" free crew />
+				<FeatureRow label="Private log in a shared kitchen" free crew />
 				<FeatureRow label="Share manifest via link" crew />
 
 				<SectionHeader label="Supply" />
@@ -120,7 +123,7 @@ export function PricingFeatureMatrix({
 
 				<SectionHeader label="Collaboration" />
 				<FeatureRow
-					label="Groups"
+					label="Owned kitchens"
 					free={`${free.maxOwnedGroups}`}
 					crew={`${crew.maxOwnedGroups}`}
 				/>

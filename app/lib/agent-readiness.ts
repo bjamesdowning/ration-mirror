@@ -25,7 +25,7 @@ export const AGENT_DISCOVERY_LINK_HEADER = [
 ].join(", ");
 
 const SITE_DESCRIPTION =
-	"Ration is an AI-native kitchen management system for inventory, meal planning, shopping lists, and MCP agent control.";
+	"Ration is a live kitchen system for pantry inventory, meal plans, shopping lists, private macros, multiple kitchens, and MCP agent control.";
 
 export const AGENT_API_SCOPES = [
 	"inventory",
@@ -540,7 +540,7 @@ export const HOME_MARKDOWN = `# Ration
 
 ${SITE_DESCRIPTION}
 
-Ration is an AI pantry management system that keeps inventory, recipes, meal plans, and shopping lists in one closed loop. Use the built-in Ration Copilot, or paste the MCP URL into Claude, ChatGPT, Cursor, or any compatible client for scoped access to the same live kitchen context.
+Ration keeps pantry inventory, recipes, meal plans, shopping lists, and private Daily Fuel macros in one closed loop. Run more than one kitchen. Use the built-in Ration Copilot, or paste the MCP URL into Claude, ChatGPT, Cursor, or any compatible client for scoped access to the same live kitchen context.
 
 ## Two AI Control Surfaces
 
@@ -556,10 +556,11 @@ The MCP server card advertises \`oauth2\` transport auth at \`/.well-known/mcp/s
 ## Core Loop
 
 1. Cargo: pantry inventory with tags, expiry tracking, and semantic search.
-2. Galley: meals and provisions matched against what is in stock.
+2. Galley: meals and provisions matched against what is in stock — including recipes imported from TikTok, Instagram, YouTube, or the web.
 3. Manifest: weekly meal planning with breakfast, lunch, dinner, and snack slots.
 4. Supply: shopping lists generated from missing ingredients.
 5. Dock: purchased items flow back into Cargo.
+6. Daily Fuel (personal): optional calorie and macro log from meals you cook. Cook deducts household stock; logging a serving stays private. Not medical advice.
 
 Ration for iOS is available on the App Store. The responsive web app and installable PWA are available now.
 

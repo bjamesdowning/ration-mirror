@@ -1,6 +1,6 @@
 # App Store Connect — English (U.K.) copy
 
-Paste these fields into **App Store Connect → Ration → Distribution → iOS App → [version] → App Store Localization (English (U.K.))**.
+Paste these fields into **App Store Connect → Ration → Distribution → iOS App → [version] → App Store Localization (English (U.K.))**. Also paste into the **primary** localisation if the Ireland listing still shows `Ration: Kitchen Hub`.
 
 Character counts verified at write time. Do not add spaces after commas in Keywords.
 
@@ -9,77 +9,94 @@ Character counts verified at write time. Do not add spaces after commas in Keywo
 ## Name (30 max)
 
 ```
-Ration: AI Pantry & Meals
+Ration: Meal & Macro Planner
 ```
 
 **Length:** 28
+
+`Ration: Meal and Macro Planning` is 31 characters (over Apple’s limit). This string keeps the intent and ranks for `meal planner`.
 
 ## Subtitle (30 max)
 
 ```
-Waste less. Shop the delta.
+Pantry, recipes & shopping
 ```
 
-**Length:** 28
+**Length:** 26
+
+Does not repeat Name words (`Ration`, `Meal`, `Macro`, `Planner`).
 
 ## Promotional Text (170 max)
 
 Editable anytime without a new binary. Not indexed for search.
 
 ```
-Your kitchen, operable by AI. Track Cargo, plan Manifest, shop Supply — and Ask Ration what’s for dinner with what you already have.
+Plan the week from your pantry, save recipes from social, and track macros when you cook. One kitchen loop — with a copilot on live stock.
 ```
 
-**Length:** ~148
+**Length:** 138
 
 ## Keywords (100 max)
 
-Comma-separated. Do not repeat words already in Name/Subtitle (`Ration`, `AI`, `Pantry`, `Meals`, `Waste`, `Shop`).
+Comma-separated. Do not repeat words already in Name/Subtitle (`Ration`, `Meal`, `Macro`, `Planner`, `Pantry`, `recipes`, `shopping`). Do not use competitor names or platform trademarks (Instagram, TikTok).
 
 ```
-pantry,meal planner,grocery list,food waste,expiry,recipe,inventory,shopping list,fridge,AI kitchen
+grocery,list,food waste,expiry,fridge,inventory,AI,calorie,protein,cook,diet,import,scan,household
 ```
 
-**Length:** 99
+**Length:** 98
 
 ## Description (4,000 max)
 
+**Length:** 2760
+
 ```
-Ration is pantry and meal operations for your household — track what you have, see what you can cook, plan the week, and shop only what you’re missing.
+Most kitchen apps do one job. Ration runs the week.
 
-CARGO — Know what’s in stock
-Quantities, categories, and expiry alerts so nothing quietly dies in the fridge. One shared inventory for the whole crew.
+You already have a fridge full of food, a camera roll full of recipes, and a rough idea of dinner. Then someone asks what’s for dinner — and you open three apps that do not talk to each other. Pantry in one. Recipes in another. Macros in a third. The shopping list is a guess.
 
-GALLEY — See what’s possible
-Recipes match against live Cargo so you know which meals are ready now — and what’s still short.
+Ration is one system. What you have feeds what you can cook. What you cook becomes the plan. The plan writes the shopping list. When you cook, stock comes off the shelf. When you log your serving, calories and macros update from the same meal — not a second diary you have to remember to fill in.
 
-MANIFEST — Turn intent into a plan
-Schedule breakfast, lunch, and dinner across the week. Keep the household aligned on what’s cooking.
+A WEEK IN THE LOOP
 
-SUPPLY — Buy only the delta
-Missing ingredients become one practical shopping list. Tick items as you buy; close the loop when stock returns to Cargo.
+Start with the pantry (Cargo). Quantities, categories, and expiry so nothing quietly dies in the fridge. One shared inventory for the household.
 
-ASK RATION — Your kitchen, in chat
-Natural-language help against your live kitchen: what’s expiring, what’s for dinner, add butter to Cargo.
+Save the recipes you actually want to eat (Galley). Share a TikTok, Instagram, or YouTube video into Ration, paste a website, or photograph a cookbook page. Review the extract, then keep it. Each meal shows how well it matches what’s already in stock, so dinner is “what can we cook tonight,” not another tab of inspiration.
 
-AI THAT SAVES TIME
-• Scan receipts, labels, or fridge photos into Cargo
-• Generate meal ideas from what you already have
-• Import and organise recipes in Galley
+Plan the week (Manifest). Pick the days. Let Ration suggest a plan from your kitchen and an optional note, then adjust. Cook when it’s time — that deducts pantry stock for everyone. Log your serving if you are tracking; that stays private to you.
 
-Built for households who want less waste, faster shops, and a kitchen that stays in sync — on iPhone, with the same orbital clarity as the web app.
+Shop only the gap (Supply). Missing ingredients from the plan become one list. Tick them off, then dock them back into the pantry when you get home. Scan a receipt and Ration matches the lines.
 
-AI features use credits. Always review AI suggestions before saving.
+YOUR COPILOT, ON LIVE STOCK
+
+Ask Ration what’s expiring this week, what you can make with what’s on the shelf, or to add butter to the pantry. It answers against your real kitchen. Generate meal ideas from what you already have. Scan a receipt, a label, or a photo of the fridge.
+
+Macros are a planning aid, not a clinic. Set daily calorie and macro goals if you want them. Daily Fuel and weekly trends show how the meals you cooked landed. Not medical advice. Always review AI suggestions before you save.
+
+MORE THAN ONE KITCHEN
+
+You are not locked to a single household. Create a kitchen for home, another for a sharehouse or a second place you cook, and switch when you walk in the door. Invite the people who actually shop and cook — pantry, recipes, plan, and shopping list stay in sync for that kitchen. Credits sit on the kitchen, not on one person’s phone. Your calorie and macro log stays private, even when the kitchen is shared.
+
+AI features use credits. Always review before saving.
 
 Terms of Use (EULA): https://www.apple.com/legal/internet-services/itunes/dev/stdeula/
 Terms of Service: https://ration.mayutic.com/legal/terms
 Privacy Policy: https://ration.mayutic.com/legal/privacy
 ```
 
-## What’s New (first public release)
+## What’s New (1.4 meal and macro release)
+
+**Length:** 362
 
 ```
-Welcome to Ration on iPhone — Cargo, Galley, Manifest, Supply, Ask Ration, and AI scan/generate in your pocket.
+Meal and macro planning, in one loop.
+
+• Daily Fuel — set calorie and macro goals, then log the meals you cook
+• Import recipes from TikTok, Instagram, YouTube, and the web (Share → Ration)
+• Plan the week from what’s already in your pantry
+• Cook deducts household stock; your intake stays private
+
+AI results are suggestions. Always review. Not medical advice.
 ```
 
 ---
@@ -94,7 +111,7 @@ Welcome to Ration on iPhone — Cargo, Galley, Manifest, Supply, Ask Ration, and
 | **Marketing URL** | `https://ration.mayutic.com` |
 | **Privacy Policy URL** | `https://ration.mayutic.com/legal/privacy` |
 | **License Agreement** | Apple Standard EULA |
-| **Terms of Use (EULA) in Description** | Required for auto-renewable subscriptions (Guideline 3.1.2) — see Description footer above (already set in ASC) |
+| **Terms of Use (EULA) in Description** | Required for auto-renewable subscriptions (Guideline 3.1.2) — see Description footer above |
 
 ## App Review notes
 

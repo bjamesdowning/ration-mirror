@@ -1,47 +1,93 @@
-import { Play } from "lucide-react";
-import { useState } from "react";
+import { Play, X } from "lucide-react";
+import { useEffect, useRef } from "react";
+import { lockBodyScroll } from "~/lib/body-scroll-lock";
 import { EXPLAINER_VIDEO_EMBED_URL } from "~/lib/marketing";
 
-const POSTER_URL = "/static/landing/explainer-poster.jpg";
+export function ExplainerVideoDialog({
+	open,
+	onClose,
+}: {
+	open: boolean;
+	onClose: () => void;
+}) {
+	const dialogRef = useRef<HTMLDialogElement>(null);
+	const wasOpenRef = useRef(false);
 
-export function ExplainerVideo() {
-	const [isPlaying, setIsPlaying] = useState(false);
+	useEffect(() => {
+		const dialog = dialogRef.current;
+		if (!dialog) return;
+		if (open) {
+			wasOpenRef.current = true;
+			if (!dialog.open) dialog.showModal();
+			return;
+		}
+		if (dialog.open) dialog.close();
+		if (wasOpenRef.current) {
+			wasOpenRef.current = false;
+			document.getElementById("splash-tour-trigger")?.focus();
+		}
+	}, [open]);
+
+	useEffect(() => {
+		if (!open) return;
+		return lockBodyScroll();
+	}, [open]);
 
 	return (
-		<figure className="splash-video">
-			<div className="splash-video-frame">
-				{isPlaying ? (
-					<iframe
-						src={EXPLAINER_VIDEO_EMBED_URL}
-						title="Ration explainer video"
-						allow="autoplay; encrypted-media; picture-in-picture"
-						allowFullScreen
-					/>
-				) : (
+		// biome-ignore lint/a11y/useKeyWithClickEvents: Escape is handled by the dialog cancel event; backdrop click has no keyboard equivalent
+		<dialog
+			ref={dialogRef}
+			className="splash-tour-dialog"
+			aria-labelledby="splash-tour-title"
+			onClose={onClose}
+			onCancel={(event) => {
+				event.preventDefault();
+				onClose();
+			}}
+			onClick={(event) => {
+				if (event.target === event.currentTarget) onClose();
+			}}
+		>
+			<div className="splash-tour-panel">
+				<div className="splash-tour-toolbar">
+					<p id="splash-tour-title">Watch the 90-second tour</p>
 					<button
 						type="button"
-						className="splash-video-facade"
-						onClick={() => setIsPlaying(true)}
-						aria-label="Play the Ration explainer video"
+						className="splash-tour-close"
+						onClick={onClose}
+						aria-label="Close explainer video"
 					>
-						<img
-							src={POSTER_URL}
-							alt=""
-							width={720}
-							height={1280}
-							fetchPriority="high"
-						/>
-						<span className="splash-video-scrim" aria-hidden />
-						<span className="splash-video-play" aria-hidden>
-							<Play size={26} fill="currentColor" />
-						</span>
+						<X size={18} />
 					</button>
-				)}
+				</div>
+				<div className="splash-tour-frame">
+					{open ? (
+						<iframe
+							src={EXPLAINER_VIDEO_EMBED_URL}
+							title="Ration explainer video"
+							allow="autoplay; encrypted-media; picture-in-picture"
+							allowFullScreen
+						/>
+					) : null}
+				</div>
 			</div>
-			<figcaption>
-				<span className="splash-status-dot" aria-hidden />
-				Watch the 90-second tour
-			</figcaption>
-		</figure>
+		</dialog>
+	);
+}
+
+export function ExplainerTourButton({ onClick }: { onClick: () => void }) {
+	return (
+		<button
+			id="splash-tour-trigger"
+			type="button"
+			className="splash-tour-link"
+			onClick={onClick}
+			aria-label="Play the Ration explainer video"
+		>
+			<span className="splash-tour-play" aria-hidden>
+				<Play size={11} fill="currentColor" />
+			</span>
+			Watch the 90-second tour
+		</button>
 	);
 }

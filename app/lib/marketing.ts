@@ -1,4 +1,4 @@
-/** Public App Store product page (Ration Kitchen Hub). */
+/** Public App Store product page. Apple slug stays kitchen-hub until ASC rename. */
 export const APP_STORE_URL =
 	"https://apps.apple.com/ie/app/ration-kitchen-hub/id6785010110";
 

@@ -5,11 +5,11 @@ test.describe("home", () => {
 		await page.goto("/");
 		await expect(
 			page.getByRole("heading", {
-				name: /Know your kitchen\. Shop only what's missing\./i,
+				name: /Most kitchen apps do one job\.\s*Ration runs the week\./i,
 			}),
 		).toBeVisible({ timeout: 5000 });
 		await expect(
-			page.getByText(/Pantry.*Meals.*Shopping.*one live system/i).first(),
+			page.getByText(/Pantry.*Meals.*Shopping.*Macros/i).first(),
 		).toBeVisible();
 		await expect(page.getByRole("banner").getByText("Ration")).toBeVisible();
 		await expect(
@@ -22,22 +22,35 @@ test.describe("home", () => {
 			name: /Play the Ration explainer video/i,
 		});
 		await expect(explainerButton).toBeVisible();
-		await expect(page.getByText(/Watch the 90-second tour/i)).toBeVisible();
+		await expect(
+			page.getByText(/Watch the 90-second tour/i).first(),
+		).toBeVisible();
 		await explainerButton.click();
 		await expect(page.getByTitle("Ration explainer video")).toHaveAttribute(
 			"src",
 			/https:\/\/www\.youtube-nocookie\.com\/embed\/yWXekcWGQQA/,
 		);
+		await page.getByRole("button", { name: "Close explainer video" }).click();
 		await expect(
 			page.getByRole("heading", {
 				name: /One loop: Cargo.*Galley.*Manifest.*Supply.*Dock/i,
 			}),
 		).toBeVisible();
+		await expect(
+			page.getByRole("heading", {
+				name: /Cook for the house\. Log your plate\./i,
+			}),
+		).toBeVisible();
+		await expect(
+			page.getByRole("heading", {
+				name: /Home, a sharehouse, a second place you cook\./i,
+			}),
+		).toBeVisible();
 		const interfaces = page.locator("#interfaces .splash-interface");
 		await expect(interfaces).toHaveCount(3);
 		await expect(interfaces.nth(0)).toContainText("iOS + Copilot");
-		await expect(interfaces.nth(1)).toContainText("MCP");
-		await expect(interfaces.nth(2)).toContainText("Web + Copilot");
+		await expect(interfaces.nth(1)).toContainText("Web + Copilot");
+		await expect(interfaces.nth(2)).toContainText("MCP");
 		await expect(
 			page.getByRole("link", { name: "Docs" }).first(),
 		).toBeVisible();
@@ -49,7 +62,6 @@ test.describe("home", () => {
 		await expect(page.locator("html")).not.toHaveClass(/dark/);
 		await darkMode.click();
 		await expect(page.locator("html")).toHaveClass(/dark/);
-		// Key footer/header links
 		await expect(
 			page.getByRole("link", { name: "Blog" }).first(),
 		).toBeVisible();

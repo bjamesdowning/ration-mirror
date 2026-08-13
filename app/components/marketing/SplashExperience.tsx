@@ -1,73 +1,26 @@
 import {
 	ArrowDown,
 	ArrowRight,
-	CalendarDays,
-	CookingPot,
 	Database,
 	ExternalLink,
-	PackageSearch,
+	Flame,
 	ScanLine,
-	ShieldCheck,
-	ShoppingBasket,
 	Users,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { Link } from "react-router";
 import {
 	APP_STORE_URL,
 	HELP_DOCS_URL,
 	YOUTUBE_CHANNEL_URL,
 } from "~/lib/marketing";
-import { ExplainerVideo } from "./ExplainerVideo";
+import { ExplainerTourButton, ExplainerVideoDialog } from "./ExplainerVideo";
 import { Reveal } from "./Reveal";
-
-const loopStages = [
-	{
-		id: "cargo",
-		number: "01",
-		title: "Cargo",
-		verb: "Know what you have.",
-		detail: "Track quantity and expiry in one live inventory.",
-		icon: PackageSearch,
-		signal: "18 items ready · 3 expiring soon",
-	},
-	{
-		id: "galley",
-		number: "02",
-		title: "Galley",
-		verb: "See what you can cook.",
-		detail: "Match recipes against the food already at home.",
-		icon: CookingPot,
-		signal: "6 meals available now",
-	},
-	{
-		id: "manifest",
-		number: "03",
-		title: "Manifest",
-		verb: "Plan the week.",
-		detail: "Schedule meals around your time and real stock.",
-		icon: CalendarDays,
-		signal: "5 dinners planned",
-	},
-	{
-		id: "supply",
-		number: "04",
-		title: "Supply",
-		verb: "Buy only the gaps.",
-		detail: "Turn missing ingredients into one shopping list.",
-		icon: ShoppingBasket,
-		signal: "11 missing items consolidated",
-	},
-	{
-		id: "dock",
-		number: "05",
-		title: "Dock",
-		verb: "Close the loop.",
-		detail: "Add purchases to Cargo and deduct what you cook.",
-		icon: ArrowDown,
-		signal: "Cargo updated automatically",
-	},
-] as const;
+import { SplashFuelStory } from "./SplashFuelStory";
+import { SplashHeroCanvas } from "./SplashHeroCanvas";
+import { SplashKitchens } from "./SplashKitchens";
+import { SplashLoop } from "./SplashLoop";
+import { SplashStickyCta } from "./SplashStickyCta";
 
 const whyCards = [
 	{
@@ -79,8 +32,8 @@ const whyCards = [
 		body: "See what expires next and find meals that use it.",
 	},
 	{
-		title: "What's for dinner, again",
-		body: "Ask Ration and get an answer grounded in your actual food.",
+		title: "Pantry in one app. Macros in another.",
+		body: "Log the meal you cooked. Daily Fuel updates from the same plate.",
 	},
 ] as const;
 
@@ -96,167 +49,34 @@ const capabilities = [
 		icon: ScanLine,
 	},
 	{
-		label: "One household record",
-		value: "Everyone in your crew sees the same live kitchen.",
+		label: "More than one kitchen",
+		value: "Home, a sharehouse, a second place — switch when you walk in.",
 		icon: Users,
 	},
 	{
-		label: "Access you control",
-		value: "OAuth scopes, revocable agents, and full data export.",
-		icon: ShieldCheck,
+		label: "Private Daily Fuel",
+		value: "Cook for the house. Your calories and macros stay yours.",
+		icon: Flame,
 	},
 ] as const;
 
 const proofShots = [
 	{
-		src: "/static/landing/cargo.png",
-		alt: "Ration Cargo inventory on iPhone",
-		caption: "Know your stock before it spoils",
+		src: "/static/landing/import.png",
+		alt: "Import a recipe from a shared video into Ration Galley",
+		caption: "Save recipes from TikTok, Reels, and the web",
 	},
 	{
-		src: "/static/landing/manifest.png",
-		alt: "Ration weekly Manifest on iPhone",
-		caption: "Plan the week. Keep the crew aligned",
+		src: "/static/landing/galley.png",
+		alt: "Ration Galley matching meals to pantry stock",
+		caption: "See what you can cook with what's here",
 	},
 	{
-		src: "/static/landing/supply.png",
-		alt: "Ration Supply shopping list on iPhone",
-		caption: "Shop only what you're still missing",
+		src: "/static/landing/ios-ask.png",
+		alt: "Ask Ration Copilot on iPhone",
+		caption: "Your kitchen copilot, on live stock",
 	},
 ] as const;
-
-function LoopDiagram({ activeIndex }: { activeIndex: number }) {
-	return (
-		<figure
-			className="splash-loop-visual"
-			data-active-stage={loopStages[activeIndex]?.id}
-		>
-			<figcaption className="sr-only">
-				Closed kitchen loop. Active stage: {loopStages[activeIndex]?.title}
-			</figcaption>
-			<div className="splash-orbit" aria-hidden>
-				<svg viewBox="0 0 420 420" role="presentation">
-					<path
-						className="splash-orbit-track"
-						d="M210 38 L374 157 L311 350 L109 350 L46 157 Z"
-					/>
-					<path
-						className="splash-orbit-flow"
-						d="M210 38 L374 157 L311 350 L109 350 L46 157 Z"
-					/>
-				</svg>
-				<div className="splash-orbit-core">
-					<img
-						src="/static/ration-logo.png"
-						alt=""
-						width={72}
-						height={72}
-						className="splash-orbit-logo"
-						decoding="async"
-					/>
-					<span>Ration</span>
-					<small>one live kitchen</small>
-				</div>
-				{loopStages.map((stage, index) => {
-					const Icon = stage.icon;
-					return (
-						<div
-							key={stage.id}
-							className="splash-orbit-node"
-							data-position={index}
-							data-active={index === activeIndex}
-						>
-							<Icon aria-hidden size={20} />
-							<span>{stage.title}</span>
-						</div>
-					);
-				})}
-			</div>
-			<div className="splash-stage-readout" aria-live="polite">
-				<span>{loopStages[activeIndex]?.signal}</span>
-				<div className="splash-scan-line" aria-hidden />
-			</div>
-		</figure>
-	);
-}
-
-function ClosedLoopStory() {
-	const [activeIndex, setActiveIndex] = useState(0);
-	const stageRefs = useRef<Array<HTMLElement | null>>([]);
-
-	useEffect(() => {
-		if (!("IntersectionObserver" in window)) return;
-		const isCompact = window.matchMedia("(max-width: 900px)").matches;
-		const observer = new IntersectionObserver(
-			(entries) => {
-				const visible = entries
-					.filter((entry) => entry.isIntersecting)
-					.sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
-				const index = visible?.target.getAttribute("data-stage-index");
-				if (index !== undefined && index !== null) {
-					setActiveIndex(Number(index));
-				}
-			},
-			{
-				rootMargin: isCompact ? "-40% 0px -35% 0px" : "-30% 0px -45% 0px",
-				threshold: [0.15, 0.5, 0.8],
-			},
-		);
-
-		for (const stage of stageRefs.current) {
-			if (stage) observer.observe(stage);
-		}
-		return () => observer.disconnect();
-	}, []);
-
-	return (
-		<section
-			id="how-it-works"
-			className="splash-section scroll-mt-24"
-			aria-labelledby="loop-heading"
-		>
-			<Reveal className="splash-section-heading">
-				<p className="text-label text-hyper-green">How it works</p>
-				<h2 id="loop-heading">
-					One loop: Cargo → Galley → Manifest → Supply → Dock
-				</h2>
-				<p>
-					Cook a meal and stock deducts. Buy groceries and Cargo updates.
-					Nothing is retyped.
-				</p>
-			</Reveal>
-			<div className="splash-story-grid">
-				<div className="splash-story-sticky">
-					<LoopDiagram activeIndex={activeIndex} />
-				</div>
-				<div className="splash-story-copy">
-					{loopStages.map((stage, index) => {
-						const Icon = stage.icon;
-						return (
-							<article
-								key={stage.id}
-								ref={(node) => {
-									stageRefs.current[index] = node;
-								}}
-								data-stage-index={index}
-								data-active={activeIndex === index}
-								className="splash-story-step"
-							>
-								<div className="splash-step-index">
-									<span>{stage.number}</span>
-									<Icon aria-hidden size={18} />
-								</div>
-								<h3>{stage.title}</h3>
-								<p className="splash-step-verb">{stage.verb}</p>
-								<p>{stage.detail}</p>
-							</article>
-						);
-					})}
-				</div>
-			</div>
-		</section>
-	);
-}
 
 function WhyRation() {
 	return (
@@ -281,10 +101,11 @@ function Interfaces() {
 		>
 			<Reveal className="splash-section-heading centered">
 				<p className="text-label text-hyper-green">Use Ration your way</p>
-				<h2 id="interfaces-heading">One kitchen. Three interfaces.</h2>
+				<h2 id="interfaces-heading">The full kitchen, wherever you are.</h2>
 				<p>
-					Your inventory, meals, plans, and shopping list stay in sync
-					everywhere.
+					Your inventory, meals, plans, shopping list, and private Daily Fuel
+					stay in sync on iPhone and the web. Bring your own AI when you want
+					it.
 				</p>
 			</Reveal>
 
@@ -298,7 +119,8 @@ function Interfaces() {
 						<h3>The full kitchen in your pocket.</h3>
 						<p>
 							Ask Ration what to cook and get an answer from your actual stock.
-							Scan receipts, plan meals, and shop the gaps while you move.
+							Scan receipts, save a recipe from social, plan the week, shop the
+							gaps, and log your plate while you move.
 						</p>
 						<a
 							href={APP_STORE_URL}
@@ -335,11 +157,39 @@ function Interfaces() {
 
 				<Reveal
 					as="article"
-					className="splash-interface splash-interface-mcp"
+					className="splash-interface splash-interface-web"
 					delay={70}
 				>
 					<div className="splash-interface-copy">
-						<span className="splash-interface-number">02 · Agent access</span>
+						<span className="splash-interface-number">02 · Browser access</span>
+						<p className="text-label text-hyper-green">Web + Copilot</p>
+						<h3>Your kitchen, on any screen.</h3>
+						<p>
+							Everything also runs at ration.mayutic.com — the same data and the
+							same Ask Ration assistant, with nothing to install.
+						</p>
+						<a href="#signup" className="splash-inline-link">
+							Start free on the web <ArrowRight aria-hidden size={15} />
+						</a>
+					</div>
+					<div className="splash-web-shot">
+						<img
+							src="/static/ration-cargo-light.webp"
+							alt="Ration Cargo inventory in the web app"
+							width={2952}
+							height={1472}
+							loading="lazy"
+						/>
+					</div>
+				</Reveal>
+
+				<Reveal
+					as="article"
+					className="splash-interface splash-interface-mcp"
+					delay={140}
+				>
+					<div className="splash-interface-copy">
+						<span className="splash-interface-number">03 · Agent access</span>
 						<p className="text-label text-hyper-green">MCP</p>
 						<h3>Bring your own AI.</h3>
 						<p>
@@ -361,38 +211,10 @@ function Interfaces() {
 							<span>02</span> match_meals
 						</p>
 						<p>
-							<span>03</span> sync_supply_from_selected_meals
+							<span>03</span> get_nutrition_summary
 						</p>
 						<strong>One live kitchen · OAuth 2.1</strong>
 					</section>
-				</Reveal>
-
-				<Reveal
-					as="article"
-					className="splash-interface splash-interface-web"
-					delay={140}
-				>
-					<div className="splash-interface-copy">
-						<span className="splash-interface-number">03 · Browser access</span>
-						<p className="text-label text-hyper-green">Web + Copilot</p>
-						<h3>Your kitchen, on any screen.</h3>
-						<p>
-							Everything also runs at ration.mayutic.com — the same data and the
-							same Ask Ration assistant, with nothing to install.
-						</p>
-						<a href="#signup" className="splash-inline-link">
-							Start free on the web <ArrowRight aria-hidden size={15} />
-						</a>
-					</div>
-					<div className="splash-web-shot">
-						<img
-							src="/static/ration-cargo-light.webp"
-							alt="Ration Cargo inventory in the web app"
-							width={2952}
-							height={1472}
-							loading="lazy"
-						/>
-					</div>
 				</Reveal>
 			</div>
 		</section>
@@ -405,7 +227,7 @@ function CapabilityProof() {
 			<Reveal className="splash-section-heading centered">
 				<p className="text-label text-hyper-green">Real kitchen work</p>
 				<h2 id="proof-heading">
-					See what changes when your pantry stays current.
+					See what changes when your pantry and your plate stay current.
 				</h2>
 			</Reveal>
 
@@ -453,6 +275,8 @@ function CapabilityProof() {
 }
 
 export function SplashExperience() {
+	const [tourOpen, setTourOpen] = useState(false);
+
 	return (
 		<>
 			<section className="splash-hero" aria-labelledby="splash-title">
@@ -470,18 +294,18 @@ export function SplashExperience() {
 							<p className="splash-brand-name">Ration</p>
 							<p className="splash-brand-tag">
 								<span className="splash-status-dot" aria-hidden />
-								Pantry · Meals · Shopping — one live system
+								Pantry · Meals · Shopping · Macros
 							</p>
 						</div>
 					</div>
 					<h1 id="splash-title">
-						Know your kitchen. Shop only what's missing.
+						Most kitchen apps do one job.
+						<span>Ration runs the week.</span>
 					</h1>
 					<p>
-						Ration keeps a live inventory of your food. Ask what&apos;s for
-						dinner, plan the week from what you already have, and get a shopping
-						list of only the gaps — on iPhone, on the web, or inside Claude and
-						ChatGPT.
+						What you have, what you can cook, what to buy, and — if you want it
+						— calories and macros from the meals you actually cooked. On iPhone,
+						on the web, or inside Claude and ChatGPT.
 					</p>
 					<div className="splash-hero-actions">
 						<a
@@ -497,16 +321,24 @@ export function SplashExperience() {
 							or start free on the web
 						</a>
 					</div>
+					<ExplainerTourButton onClick={() => setTourOpen(true)} />
 					<a href="#how-it-works" className="splash-scroll-cue">
 						See how the loop works <ArrowDown aria-hidden size={15} />
 					</a>
 				</div>
-				<ExplainerVideo />
+				<SplashHeroCanvas />
 			</section>
 			<WhyRation />
-			<ClosedLoopStory />
+			<SplashLoop />
+			<SplashFuelStory />
+			<SplashKitchens />
 			<Interfaces />
 			<CapabilityProof />
+			<ExplainerVideoDialog
+				open={tourOpen}
+				onClose={() => setTourOpen(false)}
+			/>
+			<SplashStickyCta />
 		</>
 	);
 }

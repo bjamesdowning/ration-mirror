@@ -12,7 +12,7 @@ That error means you dropped files into the **wrong display class**.
 **What to do now**
 
 1. In App Store Connect → Previews and Screenshots, click **View All Sizes** (Media Manager).
-2. Prefer **iPhone 6.9" Display** → upload `framed/6.9/01-hub.png` … `08-supply.png`.
+2. Prefer **iPhone 6.9" Display** → upload `framed/6.9/01-hub.png` … `10-theme.png`.
 3. If the UI only shows **6.5"** (or you already started there), upload `framed/6.5/` instead — those are **1284×2778**, matching the error message.
 
 Do **not** mix: 1320×2868 files into the 6.5" slot will always fail.
@@ -22,14 +22,15 @@ Do **not** mix: 1320×2868 files into the 6.5" slot will always fail.
 | Order | File |
 |-------|------|
 | 1 | `01-hub.png` |
-| 2 | `02-cargo.png` |
-| 3 | `03-ask.png` |
+| 2 | `02-macros.png` |
+| 3 | `03-import.png` |
 | 4 | `04-scan.png` |
 | 5 | `05-galley.png` |
-| 6 | `06-generate.png` |
+| 6 | `06-plan.png` |
 | 7 | `07-manifest.png` |
 | 8 | `08-supply.png` |
-| 9 | `09-theme.png` |
+| 9 | `09-ask.png` |
+| 10 | `10-theme.png` |
 
 PNG, RGB, no alpha. Apple scales a 6.9" set down for smaller phones if you provide it.
 
@@ -42,10 +43,10 @@ cd marketing/appstore/uk
 
 ## Localisation copy
 
-Paste from [`COPY.md`](COPY.md) into **English (U.K.)**:
+Paste from [`COPY.md`](COPY.md) into **English (U.K.)** and the primary localisation if it still says Kitchen Hub:
 
-- [ ] Name
-- [ ] Subtitle
+- [ ] Name — `Ration: Meal & Macro Planner`
+- [ ] Subtitle — `Pantry, recipes & shopping`
 - [ ] Promotional Text
 - [ ] Description
 - [ ] Keywords
@@ -81,3 +82,4 @@ Paste from [`COPY.md`](COPY.md) into **English (U.K.)**:
 - [ ] App Preview video (15–30s)
 - [ ] Product Page Optimization A/B on frame 1 caption
 - [ ] English (U.S.) localisation pass
+- [ ] Custom product page for recipe import vs macro planning

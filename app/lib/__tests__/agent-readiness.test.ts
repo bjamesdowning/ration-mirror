@@ -49,9 +49,7 @@ describe("agent readiness metadata", () => {
 	});
 
 	it("provides markdown for key public pages", () => {
-		expect(getPublicMarkdownForPath("/")).toContain(
-			"AI pantry management system",
-		);
+		expect(getPublicMarkdownForPath("/")).toContain("live kitchen system");
 		expect(getPublicMarkdownForPath("/")).toContain("Ration Copilot");
 		expect(getPublicMarkdownForPath("/")).toContain(
 			"iOS is available on the App Store",

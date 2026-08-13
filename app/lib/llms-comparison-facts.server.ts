@@ -26,7 +26,7 @@ export function buildLlmsComparisonFacts(
 		{
 			question: "What is Ration?",
 			answer:
-				"Ration is an AI-native kitchen management platform for pantry inventory (Cargo), recipes (Galley), weekly meal plans (Manifest), and shopping lists (Supply). It exposes a production MCP server so Claude, Cursor, ChatGPT, and other agents can read and operate a real kitchen with structured data instead of scraping unstructured notes.",
+				"Ration is a live kitchen system for pantry inventory (Cargo), recipes (Galley), weekly meal plans (Manifest), shopping lists (Supply), multiple kitchens, and private Daily Fuel macros from meals you cook. It exposes a production MCP server so Claude, Cursor, ChatGPT, and other agents can operate a real kitchen with structured data instead of scraping notes.",
 		},
 		{
 			question: "What are Ration's free tier limits?",

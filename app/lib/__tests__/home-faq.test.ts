@@ -15,13 +15,35 @@ const subscriptionProducts = {
 };
 
 describe("buildHomeFaqEntries", () => {
-	it("returns nine FAQ entries with tier-aware pricing answer", () => {
+	it("leads with the consumer kitchen loop, macros, and kitchens", () => {
 		const entries = buildHomeFaqEntries({ tierLimits, subscriptionProducts });
-		expect(entries).toHaveLength(9);
+		expect(entries).toHaveLength(11);
 		expect(entries[0]?.question).toBe("What is Ration?");
-		expect(entries[3]?.answer).toContain("50 pantry items");
-		expect(entries[3]?.answer).toContain("€2/month");
-		expect(entries[3]?.answer).toContain("12 welcome credits");
+		expect(entries[0]?.answer).toContain("one live kitchen loop");
+		expect(entries[0]?.answer).toContain("calories and macros");
+
+		const macros = entries.find(
+			(entry) => entry.question === "Does Ration track calories and macros?",
+		);
+		expect(macros?.answer).toContain("not medical advice");
+		expect(macros?.answer).toContain("stays private");
+
+		const kitchens = entries.find(
+			(entry) => entry.question === "Can I run more than one kitchen?",
+		);
+		expect(kitchens?.answer).toContain("sharehouse");
+		expect(kitchens?.answer).toContain("Credits sit on the kitchen");
+	});
+
+	it("keeps a tier-aware pricing answer", () => {
+		const entries = buildHomeFaqEntries({ tierLimits, subscriptionProducts });
+		const free = entries.find((entry) => entry.question === "Is Ration free?");
+		expect(free?.answer).toContain("50 pantry items");
+		expect(free?.answer).toContain("€2/month");
+		expect(free?.answer).toContain("12 welcome credits");
+		expect(free?.answer).toContain(
+			"1 free Ask Ration (Copilot) conversation per group per day",
+		);
 	});
 
 	it("includes MCP and export guidance in agent-related answers", () => {
@@ -45,9 +67,6 @@ describe("buildHomeFaqEntries", () => {
 		)?.answer;
 		expect(copilotAnswer).toContain("built-in AI kitchen assistant");
 		expect(copilotAnswer).toContain("1 free conversation per group per day");
-		expect(
-			entries.find((entry) => entry.question === "Is Ration free?")?.answer,
-		).toContain("1 free Ask Ration (Copilot) conversation per group per day");
 		expect(
 			entries.find((entry) => entry.question === "Is there a Ration iOS app?")
 				?.answer,

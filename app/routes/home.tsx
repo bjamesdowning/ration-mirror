@@ -48,9 +48,9 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 }
 
 export function meta(_: Route.MetaArgs) {
-	const title = "Ration — Pantry Inventory, Meal Plans & Shopping Lists";
+	const title = "Ration — Meal & Macro Planner";
 	const description =
-		"Know what food you have, plan meals from it, and shop only what is missing. Use Ration on iPhone, the web, or through your AI assistant.";
+		"Know what food you have, plan meals from it, shop only what is missing, and track macros from the meals you cook. Use Ration on iPhone, the web, or through your AI assistant.";
 	return [
 		{ title },
 		{ name: "description", content: description },
@@ -301,7 +301,8 @@ function FaqSection({
 					Common questions
 				</h2>
 				<p className="text-muted text-sm max-w-2xl mt-2 leading-relaxed">
-					Direct answers about the app, pricing, Copilot, and agent access.
+					Direct answers about the app, macros, multiple kitchens, pricing,
+					Copilot, and agent access.
 				</p>
 			</div>
 			<div className="space-y-3">
@@ -357,7 +358,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 		softwareAppSchema({
 			name: "Ration",
 			description:
-				"Live pantry inventory, recipes, meal plans, and shopping lists on iPhone and web, with built-in Copilot and MCP access for external assistants.",
+				"Live pantry inventory, recipes, meal plans, shopping lists, and private Daily Fuel macros on iPhone and web, with built-in Copilot and MCP access for external assistants.",
 			offers: [
 				{
 					name: "Free",
@@ -382,9 +383,9 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 			],
 		}),
 		videoSchema({
-			name: "Ration: waste less and shop only what's missing",
+			name: "Ration: waste less, shop the gap, and log the plate",
 			description:
-				"See how Ration connects pantry inventory, recipes, meal plans, and shopping lists in one live kitchen loop.",
+				"See how Ration connects pantry inventory, recipes, meal plans, shopping lists, and private Daily Fuel macros in one live kitchen loop.",
 			thumbnailPath: "/static/landing/explainer-poster.jpg",
 			embedUrl: EXPLAINER_VIDEO_EMBED_URL,
 			uploadDate: "2026-08-08T15:25:06-07:00",
@@ -430,8 +431,8 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 						<div className="space-y-5">
 							<SectionHeader
 								eyebrow="Begin"
-								title="Give your agent a kitchen it can actually operate."
-								subtitle="Create an account for the web app, or let your MCP agent self-provision a kitchen via auth.md — then paste the MCP URL into your AI client."
+								title="Start a kitchen in two minutes."
+								subtitle="Create an account for the web app, or get Ration on iPhone. When you want an external agent, connect Claude, ChatGPT, or Cursor from /connect."
 							/>
 							<div className="glass-panel rounded-2xl p-5 space-y-3">
 								<h3 className="text-display text-lg text-carbon">

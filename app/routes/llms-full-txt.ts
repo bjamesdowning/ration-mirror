@@ -18,8 +18,9 @@ function buildProductBrief(opts: {
 }): string {
 	return `# Ration
 
-Ration is an AI-native kitchen management system. It tracks pantry inventory ("Cargo"),
-recipes ("Galley"), weekly meal plans ("Manifest"), and shopping lists ("Supply"), and
+Ration is a live kitchen system. It tracks pantry inventory ("Cargo"),
+recipes ("Galley"), weekly meal plans ("Manifest"), and shopping lists ("Supply"),
+keeps private Daily Fuel macros from meals you cook, and
 exposes an MCP (Model Context Protocol) server so Claude, ChatGPT, Cursor, Zed, and any
 other MCP-compatible AI client can operate the kitchen with natural language.
 
@@ -52,12 +53,11 @@ plan and adjust it around real life.
 Supply lists are auto-generated from planned meals and current Cargo so you only buy
 the delta. After shopping, items dock back into Cargo.
 
-### Nutrition (feature-flagged)
-Optional USDA-backed nutrition on cargo and recipes, Manifest day totals from Eat
-(plate-up), personal goals with explicit consent, and labelled AI estimates only on
-AI ingest after a USDA miss. Defaults off; not medical advice. Intake history is
-retained about 13 months. MCP tools: \`get_nutrition_summary\`, \`set_nutrition_goal\`,
-\`clear_nutrition_goal\`.
+### Daily Fuel (personal nutrition)
+Optional calorie and macro goals and a private intake log from meals you cook.
+Cook deducts household stock; logging a serving stays on your account. Not medical
+advice. Intake history is retained about 13 months. MCP tools: \`get_nutrition_summary\`,
+\`set_nutrition_goal\`, \`clear_nutrition_goal\`.
 
 ## Pricing
 

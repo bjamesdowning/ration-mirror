@@ -143,10 +143,13 @@ export function PublicHeader({
 					{isHome ? (
 						<>
 							<Link to="/#how-it-works" className={desktopLinkClass}>
-								How it works
+								Loop
 							</Link>
-							<Link to="/#interfaces" className={desktopLinkClass}>
-								Interfaces
+							<Link to="/#fuel" className={desktopLinkClass}>
+								Fuel
+							</Link>
+							<Link to="/#kitchens" className={desktopLinkClass}>
+								Kitchens
 							</Link>
 						</>
 					) : (
@@ -257,14 +260,21 @@ export function PublicHeader({
 													className={linkClass}
 													onClick={() => setOpen(false)}
 												>
-													How it works
+													Loop
 												</Link>
 												<Link
-													to="/#interfaces"
+													to="/#fuel"
 													className={linkClass}
 													onClick={() => setOpen(false)}
 												>
-													Interfaces
+													Fuel
+												</Link>
+												<Link
+													to="/#kitchens"
+													className={linkClass}
+													onClick={() => setOpen(false)}
+												>
+													Kitchens
 												</Link>
 											</>
 										) : (

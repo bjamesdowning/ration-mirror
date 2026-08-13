@@ -24,6 +24,10 @@ Sign-in: On Sign In, enter User Name (app-review@mayutic.com) in Email —
 a Password field then appears. Enter the Password from Review Information
 and tap Continue. Do not use Sign in with Apple / Google.
 No 2FA. Account is pre-seeded (Cargo, Galley, Manifest, Supply).
+Macros (planning aids, not medical advice): Hub Daily Fuel / Fuel Trends;
+Settings → Preferences → Nutrition Goals; Manifest → Eat (Log my serving);
+optional Macro Tracking under Feature enablement. Nutrition Flagship is on
+for iOS 1.4.x.
 AI features (scan, generate, import, plan week, Ask, onboarding) may show a
 one-time consent gate naming Google Gemini and Cloudflare Workers AI.
 Account deletion: Settings → Account → type delete to confirm.
@@ -71,11 +75,11 @@ Before each App Review window, confirm `app-review@mayutic.com` (`d773eefb-e112-
 - Server enforces consent on scan / generate / import / plan-week (403 `ai_consent_required`). Mobile Ask/Copilot WebSocket also returns 403 `ai_consent_required` when consent is missing.
 - Privacy policy: https://ration.mayutic.com/legal/privacy
 - Terms: https://ration.mayutic.com/legal/terms
-- `PrivacyInfo.xcprivacy` declares collected types including **Health** (allergens / dietary preferences for meal safety — App Functionality, not tracking).
+- `PrivacyInfo.xcprivacy` declares collected types including **Health** (App Functionality, not tracking). ASC Health & Fitness has only **Health** vs **Fitness** — declare **Health** only (not Fitness). That single type covers allergens/dietary prefs and optional nutrition goals/private intake; ASC has no allergen/macro subtypes.
 
 ### ASC App Privacy Nutrition (operator)
 
-Declare **Health** (allergens / dietary preferences): linked to the user, used for App Functionality, **not** used for tracking. Align ASC answers with the binary PrivacyInfo Health entry.
+Declare **Health**: linked to the user, used for App Functionality, **not** used for tracking. Do **not** declare Fitness. Align ASC with the binary PrivacyInfo Health entry. Detail (allergens vs goals/intake) belongs in the privacy policy, not ASC subtypes.
 
 ### Nutrition (version-gated)
 
@@ -104,7 +108,7 @@ Nutrition goals / Manifest Eat / Hub fuel widgets are Flagship-gated with defaul
 3. [ ] ASC Review Information password matches `APP_REVIEW_DEMO_PASSWORD`
 4. [ ] On device: Sign In with demo email → password → Settings → billing shows **Inactive** Crew and **1 month** / **1 year** packages + Restore + Terms/Privacy
 5. [ ] Sandbox: offerings load; one purchase + Restore; cancel → paywall shows Active until date / Delete Account unlocks
-6. [ ] ASC App Privacy: Health (allergens) declared; Description EULA/Terms/Privacy footer present; Support + Privacy URLs live
+6. [ ] ASC App Privacy: Health declared (Linked, App Functionality, not tracking; not Fitness); Description EULA/Terms/Privacy footer present; Support + Privacy URLs live
 7. [ ] RevenueCat: App Store Server Notifications enabled (reduces cancel webhook lag)
 8. [ ] Upload new binary when paywall/consent/plist changed
 9. [ ] After approval: disable `app-review-login`

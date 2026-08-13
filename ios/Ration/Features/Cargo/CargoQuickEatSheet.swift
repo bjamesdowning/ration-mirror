@@ -47,7 +47,7 @@ struct CargoQuickEatSheet: View {
                         unavailableMessage: "Nutrition unavailable for this item."
                     )
                 } footer: {
-                    Text("Estimates scale with amount. Saving logs nutrients to your private intake when available.")
+                    Text("Estimates scale with amount. Saving logs nutrients to your private intake when available. Not medical advice. Goals and totals are planning aids only.")
                         .rationCaption()
                 }
                 if notesEnabled {

@@ -209,7 +209,7 @@ export function SplashKitchenScreen({
 	const key = beat ?? stage ?? "cargo";
 
 	return (
-		<div className="splash-os" data-screen={key} key={key}>
+		<div className="splash-os" data-screen={key}>
 			{key === "scan" ? <ScanScreen /> : null}
 			{key === "cargo" ? <CargoScreen /> : null}
 			{key === "galley" ? <GalleyScreen /> : null}

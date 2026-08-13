@@ -67,13 +67,13 @@ const proofShots = [
 		caption: "Save recipes from TikTok, Reels, and the web",
 	},
 	{
-		src: "/static/landing/galley.png",
-		alt: "Ration Galley matching meals to pantry stock",
-		caption: "See what you can cook with what's here",
+		src: "/static/landing/manifest.png",
+		alt: "Ration Manifest meal planner with calorie and macro tracking on iPhone",
+		caption: "Meal planner and macro tracker",
 	},
 	{
-		src: "/static/landing/ios-ask.png",
-		alt: "Ask Ration Copilot on iPhone",
+		src: "/static/landing/ios/ask.png",
+		alt: "Ask Ration Copilot answering from live kitchen stock",
 		caption: "Your kitchen copilot, on live stock",
 	},
 ] as const;
@@ -247,17 +247,20 @@ function CapabilityProof() {
 			</section>
 
 			<div className="splash-shots">
-				{proofShots.map((shot, index) => (
-					<Reveal as="article" key={shot.src} delay={index * 70}>
-						<img
-							src={shot.src}
-							alt={shot.alt}
-							width={331}
-							height={720}
-							loading="lazy"
-						/>
+				{proofShots.map((shot) => (
+					<article key={shot.src}>
+						<figure className="splash-shots-frame">
+							<img
+								src={shot.src}
+								alt={shot.alt}
+								width={780}
+								height={1688}
+								decoding="async"
+								draggable={false}
+							/>
+						</figure>
 						<p>{shot.caption}</p>
-					</Reveal>
+					</article>
 				))}
 			</div>
 

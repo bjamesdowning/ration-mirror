@@ -18,7 +18,7 @@ const STATIC_PAGES: ReadonlyArray<SitemapEntry> = [
 	{ path: "/docs/api", lastmod: "2026-06-19" },
 	{ path: "/tools", lastmod: "2026-04-25" },
 	{ path: "/tools/unit-converter", lastmod: "2026-04-25" },
-	{ path: "/legal/terms", lastmod: "2026-07-15" },
+	{ path: "/legal/terms", lastmod: "2026-08-13" },
 	{ path: "/legal/privacy", lastmod: "2026-07-15" },
 	{ path: "/auth.md", lastmod: "2026-06-19" },
 	{ path: "/mcp.md", lastmod: "2026-06-19" },

@@ -59,6 +59,8 @@ Your use of the Service is at your sole risk. The Service is provided on an "AS 
 
 Mayutic uses third-party AI providers for certain features. We do not guarantee the accuracy, completeness, or reliability of any AI-generated content or analysis.
 
+**Nutrition, allergens, and health-related features:** Optional daily nutrition goals, private intake logging, allergen and dietary preferences, food composition lookups, and AI nutrient estimates are planning and meal-safety aids only. They are **not medical advice**, diagnosis, or treatment. Nutrient values may be incomplete or approximate. Do not rely on the Service for clinical or dietary medical decisions; consult a qualified clinician where appropriate.
+
 ## 10. Limitation of Liability
 
 To the fullest extent permitted by applicable law, Mayutic shall not be liable for any indirect, incidental, special, consequential or punitive damages, including without limitation, loss of profits, data, use, goodwill, or other intangible losses, resulting from (i) your access to or use of or inability to access or use the Service; (ii) any conduct or content of any third party on the Service; (iii) any content obtained from the Service; and (iv) unauthorized access, use or alteration of your transmissions or content, whether based on warranty, contract, tort (including negligence) or any other legal theory, whether or not we have been informed of the possibility of such damage, and even if a remedy set forth herein is found to have failed of its essential purpose.

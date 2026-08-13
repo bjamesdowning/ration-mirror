@@ -41,10 +41,12 @@ Plan the week from your pantry, save recipes from social, and track macros when 
 Comma-separated. Do not repeat words already in Name/Subtitle (`Ration`, `Meal`, `Macro`, `Planner`, `Pantry`, `recipes`, `shopping`). Do not use competitor names or platform trademarks (Instagram, TikTok).
 
 ```
-grocery,list,food waste,expiry,fridge,inventory,AI,calorie,protein,cook,diet,import,scan,household
+grocery,list,food waste,expiry,fridge,inventory,AI,calorie,protein,cook,fuel,import,scan,household
 ```
 
 **Length:** 98
+
+`fuel` preferred over `diet` (avoids diet-app keyword signal; does not repeat Name/Subtitle words).
 
 ## Description (4,000 max)
 

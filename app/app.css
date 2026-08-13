@@ -720,6 +720,17 @@
   50% { opacity: 0.5; transform: translateX(0); }
 }
 
+@keyframes splashOsIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
 @keyframes splashScan {
   0% { transform: translateX(0); }
   70%, 100% { transform: translateX(540%); }
@@ -777,6 +788,8 @@
 }
 
 .splash-why {
+  position: relative;
+  z-index: 1;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   border-block: 1px solid var(--border-color);
@@ -985,13 +998,21 @@
   min-width: 0;
 }
 
+.splash-shots-frame {
+  overflow: hidden;
+  margin: 0;
+  border: 1px solid var(--border-color);
+  border-radius: 1.5rem;
+  background: #111111;
+  box-shadow: 0 1.5rem 4rem color-mix(in srgb, var(--text-primary) 12%, transparent);
+}
+
 .splash-shots img {
   width: 100%;
   height: auto;
   display: block;
-  border: 1px solid var(--border-color);
-  border-radius: 1.5rem;
-  box-shadow: 0 1.5rem 4rem color-mix(in srgb, var(--text-primary) 12%, transparent);
+  background: #111111;
+  vertical-align: middle;
 }
 
 .splash-shots p {
@@ -1073,18 +1094,16 @@
   }
 
   .splash-story-sticky {
-    position: sticky;
-    z-index: 5;
-    top: 7.35rem;
+    position: relative;
+    z-index: auto;
+    top: auto;
     width: 100%;
     min-height: 0;
     height: auto;
     overflow: visible;
     display: grid;
     place-items: center;
-    background:
-      linear-gradient(to bottom, var(--bg-primary) 82%, transparent),
-      var(--bg-primary);
+    background: none;
   }
 
   .splash-story-step {
@@ -1271,11 +1290,13 @@
   .splash-shots {
     width: calc(100% + 1rem);
     display: flex;
-    gap: 1rem;
+    align-items: flex-start;
+    gap: 0.75rem;
     overflow-x: auto;
     overscroll-behavior-inline: contain;
-    padding: 0.5rem 1rem 1.5rem 0;
+    padding: 0.25rem 1.5rem 1.25rem 0;
     scroll-snap-type: x mandatory;
+    scroll-padding-inline: 0.15rem;
     scrollbar-width: none;
   }
 
@@ -1284,8 +1305,28 @@
   }
 
   .splash-shots article {
-    min-width: min(76vw, 18rem);
+    flex: none;
+    width: min(46vw, 11.25rem);
+    min-width: 0;
     scroll-snap-align: start;
+    transform: translateZ(0);
+    backface-visibility: hidden;
+  }
+
+  .splash-shots-frame {
+    border-radius: 1.1rem;
+    box-shadow: 0 0.85rem 2rem color-mix(in srgb, var(--text-primary) 12%, transparent);
+  }
+
+  .splash-shots img {
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .splash-shots p {
+    margin-top: 0.65rem;
+    font-size: 0.7rem;
+    line-height: 1.4;
   }
 
   .splash-resources {
@@ -1371,6 +1412,14 @@
   justify-self: center;
 }
 
+.splash-hero-canvas .splash-phone,
+.splash-hero-canvas-caption,
+.splash-hero-beats {
+  position: relative;
+  z-index: 1;
+  flex-shrink: 0;
+}
+
 .splash-hero-canvas-caption {
   display: flex;
   align-items: center;
@@ -1448,18 +1497,6 @@
   flex-direction: column;
   gap: 0.7rem;
   padding: 1.55rem 0.85rem 0.9rem;
-  animation: splashOsIn var(--splash-stage) var(--splash-ease);
-}
-
-@keyframes splashOsIn {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
 }
 
 .splash-os-bar {
@@ -1633,7 +1670,6 @@
   color: var(--text-primary);
   font-size: 0.62rem;
   font-weight: 700;
-  animation: splashOsIn var(--splash-stage) var(--splash-ease);
 }
 
 .splash-fuel-chip small {
@@ -2006,15 +2042,26 @@
 @media (max-width: 900px) {
   .splash-hero {
     min-height: auto;
+    overflow: clip;
+    padding-bottom: 3rem;
   }
 
   .splash-hero-canvas {
-    width: min(100%, 18rem);
-    max-height: 42vh;
+    width: min(100%, 16rem);
+    max-height: none;
+    overflow: visible;
   }
 
   .splash-phone {
-    width: min(100%, 13.75rem);
+    width: min(100%, 11.25rem);
+  }
+
+  .splash-loop-stage {
+    overflow: hidden;
+  }
+
+  .splash-loop-stage .splash-phone {
+    margin: 0.85rem auto 0.65rem;
   }
 
   .splash-loop-rail {
@@ -2043,6 +2090,10 @@
   .splash-fuel-grid,
   .splash-kitchen-panel {
     grid-template-columns: 1fr;
+  }
+
+  .splash-proof {
+    padding-bottom: 7rem;
   }
 
   .splash-sticky-cta {
@@ -2094,11 +2145,15 @@
   }
 
   .splash-hero-canvas {
-    max-height: 38vh;
+    max-height: none;
   }
 
   .splash-phone-compact {
-    width: min(100%, 12.5rem);
+    width: min(100%, 10.5rem);
+  }
+
+  .splash-shots article {
+    width: min(48vw, 10.5rem);
   }
 
   .splash-fuel-dials {

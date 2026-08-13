@@ -141,4 +141,45 @@ describe("buildAgentFlagContext", () => {
 		expect(context.clientVersion).toBe(APP_VERSION);
 		expect(context.userId).toBeUndefined();
 	});
+
+	it("inherits originating iOS client for Copilot", () => {
+		const context = buildAgentFlagContext(
+			{ RATION_ENV: "production" },
+			"user-1",
+			"copilot",
+			{ clientPlatform: "ios", clientVersion: "1.4.26" },
+		);
+		expect(context).toEqual({
+			clientPlatform: "ios",
+			clientVersion: "1.4.26",
+			environment: "production",
+			userId: "user-1",
+		});
+	});
+
+	it("omits iOS clientVersion when originating Ask omits it", () => {
+		const context = buildAgentFlagContext({}, "user-1", "copilot", {
+			clientPlatform: "ios",
+		});
+		expect(context.clientPlatform).toBe("ios");
+		expect(context.clientVersion).toBeUndefined();
+	});
+
+	it("inherits originating web client for Copilot", () => {
+		const context = buildAgentFlagContext({}, "user-1", "copilot", {
+			clientPlatform: "web",
+			clientVersion: APP_VERSION,
+		});
+		expect(context.clientPlatform).toBe("web");
+		expect(context.clientVersion).toBe(APP_VERSION);
+	});
+
+	it("ignores originating client for MCP", () => {
+		const context = buildAgentFlagContext({}, "user-1", "mcp", {
+			clientPlatform: "ios",
+			clientVersion: "1.4.26",
+		});
+		expect(context.clientPlatform).toBe("mcp");
+		expect(context.clientVersion).toBe(APP_VERSION);
+	});
 });

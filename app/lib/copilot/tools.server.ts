@@ -21,7 +21,12 @@ import { createSupplyToolDefs } from "../mcp/tools/supply";
 
 export type CopilotToolContext = Pick<
 	McpToolContext,
-	"organizationId" | "userId" | "scopes" | "preClaim" | "waitUntil"
+	| "organizationId"
+	| "userId"
+	| "scopes"
+	| "preClaim"
+	| "waitUntil"
+	| "originatingClient"
 >;
 
 export function buildCopilotMcpContext(
@@ -37,6 +42,7 @@ export function buildCopilotMcpContext(
 		keyName: "Ration Copilot",
 		keyPrefix: "copilot_",
 		agentSurface: "copilot",
+		originatingClient: ctx.originatingClient,
 		waitUntil: ctx.waitUntil,
 	};
 }

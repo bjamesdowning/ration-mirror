@@ -58,6 +58,11 @@ import {
 	resolveAllowedOnboardingBriefingTurn,
 } from "../app/lib/copilot/onboarding-briefing.server";
 import {
+	type CopilotOriginatingClient,
+	inferCopilotAuthSource,
+	resolveCopilotOriginatingClient,
+} from "../app/lib/copilot/originating-client.server";
+import {
 	buildSessionUsageSnapshot,
 	evaluateSessionLimitWarning,
 	resolveCumulativeUsageTokens,
@@ -69,6 +74,7 @@ import {
 	toAiSdkTools,
 } from "../app/lib/copilot/tools.server";
 import {
+	buildAgentFlagContext,
 	buildFlagContext,
 	isFeatureEnabled,
 } from "../app/lib/feature-flags/flags.server";
@@ -234,18 +240,21 @@ type CopilotAgentUsageConfig = {
 	sessionWarningsEmitted: SessionLimitWarningSeverity[];
 	/** Must match CopilotConversationCharge.openedAt for the active KV charge. */
 	chargeOpenedAt?: number;
+	/** Ask client Flagship identity — survives Durable Object hibernation. */
+	originatingPlatform?: "web" | "ios";
+	originatingVersion?: string;
 };
 
 async function resolveNativeFeatureFlags(
 	env: Cloudflare.Env,
 	userId: string,
+	originating?: CopilotOriginatingClient,
 ): Promise<NativeFeatureEnabledMap> {
-	const flagContext = buildFlagContext(
-		new Request("https://copilot.internal/", {
-			headers: { "X-Ration-Client": `copilot/${APP_VERSION}` },
-		}),
+	const flagContext = buildAgentFlagContext(
 		env,
-		{ user: { id: userId } },
+		userId,
+		"copilot",
+		originating,
 	);
 	const keys = ["ai-scan-receipt", "ai-import-url"] as const;
 	const entries = await Promise.all(
@@ -278,6 +287,11 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 	};
 	/** Web vs mobile — drives native-feature link format. */
 	private clientSource: NativeFeatureClientSource = "web";
+	/** Ask client's Flagship identity (web/ios). MCP never inherits this. */
+	private originatingClient: CopilotOriginatingClient = {
+		clientPlatform: "web",
+		clientVersion: APP_VERSION,
+	};
 	/** Per-turn deflection tracking. */
 	private turnToolCallCount = 0;
 	private turnUserText = "";
@@ -293,6 +307,10 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 			sessionWarningsEmitted: [...this.sessionWarningsEmitted],
 			...(this.boundChargeOpenedAt != null
 				? { chargeOpenedAt: this.boundChargeOpenedAt }
+				: {}),
+			originatingPlatform: this.originatingClient.clientPlatform,
+			...(this.originatingClient.clientVersion
+				? { originatingVersion: this.originatingClient.clientVersion }
 				: {}),
 		});
 	}
@@ -319,6 +337,18 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 				this.sessionWarningsEmitted.add(severity);
 			}
 		}
+		if (
+			cfg.originatingPlatform === "web" ||
+			cfg.originatingPlatform === "ios"
+		) {
+			this.originatingClient = {
+				clientPlatform: cfg.originatingPlatform,
+				...(cfg.originatingVersion
+					? { clientVersion: cfg.originatingVersion }
+					: {}),
+			};
+			this.clientSource = cfg.originatingPlatform === "ios" ? "mobile" : "web";
+		}
 	}
 
 	private async hydrateCumulativeUsage(
@@ -334,10 +364,7 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 			this.totalUsageTokens = 0;
 			this.sessionWarningsEmitted.clear();
 			this.boundChargeOpenedAt = null;
-			this.configure<CopilotAgentUsageConfig>({
-				totalUsageTokens: 0,
-				sessionWarningsEmitted: [],
-			});
+			this.persistUsageConfig();
 			return null;
 		}
 		const chargeOpenedAt = charge.openedAt ?? Date.now();
@@ -399,11 +426,19 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 		ctx: ConnectionContext,
 	): Promise<void> {
 		await super.onConnect(connection, ctx);
-		const clientHeader = ctx.request.headers.get("X-Ration-Client") ?? "";
-		this.clientSource = /mobile|ios/i.test(clientHeader) ? "mobile" : "web";
+		const originating = resolveCopilotOriginatingClient(
+			ctx.request,
+			inferCopilotAuthSource(ctx.request),
+		);
+		this.originatingClient = originating;
+		this.clientSource = originating.clientPlatform === "ios" ? "mobile" : "web";
 		try {
 			const identity = decodeAgentName(this.name);
 			const charge = await this.hydrateCumulativeUsage(identity);
+			this.originatingClient = originating;
+			this.clientSource =
+				originating.clientPlatform === "ios" ? "mobile" : "web";
+			this.persistUsageConfig();
 			if (this.totalUsageTokens <= 0) {
 				return;
 			}
@@ -435,6 +470,7 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 				userId: identity.userId,
 				scopes: [...COPILOT_MCP_SCOPES],
 				preClaim: false,
+				originatingClient: this.originatingClient,
 				waitUntil: (promise) => this.ctx.waitUntil(promise),
 			},
 			{
@@ -465,6 +501,7 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 		this.nativeFeatureFlags = await resolveNativeFeatureFlags(
 			this.env,
 			identity.userId,
+			this.originatingClient,
 		);
 		this.sessionMessageCount = ctx.messages.length;
 		const charge = await this.hydrateCumulativeUsage(identity);

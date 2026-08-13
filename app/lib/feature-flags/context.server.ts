@@ -12,6 +12,12 @@ export type ClientSurface = "web" | "ios" | "mcp" | "copilot" | "system";
 /** Agent surfaces that evaluate Flagship without an HTTP `X-Ration-Client` header. */
 export type AgentFlagPlatform = "mcp" | "copilot";
 
+/** First-party Copilot Ask client. MCP never inherits this. */
+export type AgentOriginatingClient = {
+	clientPlatform: "web" | "ios";
+	clientVersion?: string;
+};
+
 type SessionUser = {
 	id: string;
 	isAdmin?: boolean | null;
@@ -185,18 +191,32 @@ export function buildFlagContext(
 }
 
 /**
- * Flagship context for MCP / Copilot tool runs (no Request / X-Ration-Client).
- * Uses explicit `clientPlatform` + web `APP_VERSION` — never invents ios/1.3.25.
+ * Flagship context for MCP / Copilot tool runs.
+ *
+ * MCP stays `mcp` + web `APP_VERSION` (never invents an iOS marketing version).
+ * First-party Copilot inherits the Ask client's web/ios identity when provided,
+ * so product flags (nutrition, Quick Eat) match Hub / iOS instead of a fourth
+ * `copilot` cohort. Missing originating client keeps `copilot` + APP_VERSION.
  */
 export function buildAgentFlagContext(
 	env: { RATION_ENV?: string },
 	userId: string | null | undefined,
 	platform: AgentFlagPlatform,
+	originating?: AgentOriginatingClient | null,
 ): FlagshipEvaluationContext {
+	const inherited =
+		platform === "copilot" && originating?.clientPlatform ? originating : null;
 	const context: FlagshipEvaluationContext = {
-		clientPlatform: platform,
-		clientVersion: APP_VERSION,
+		clientPlatform: inherited?.clientPlatform ?? platform,
 	};
+
+	if (inherited?.clientPlatform === "ios") {
+		if (inherited.clientVersion) {
+			context.clientVersion = inherited.clientVersion;
+		}
+	} else {
+		context.clientVersion = inherited?.clientVersion ?? APP_VERSION;
+	}
 
 	const environment = env.RATION_ENV?.trim();
 	if (environment) {

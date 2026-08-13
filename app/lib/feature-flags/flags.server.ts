@@ -133,6 +133,7 @@ export async function getClientSafeFlags(
 }
 
 export type {
+	AgentOriginatingClient,
 	ClientSurface,
 	FlagshipEvaluationContext,
 } from "./context.server";

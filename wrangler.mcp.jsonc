@@ -22,8 +22,9 @@
 		"RATION_ENV": "production"
 	},
 	/**
-	 * Same Flagship app as the main Worker — MCP/Copilot evaluate nutrition and
+	 * Same Flagship app as the main Worker — MCP tools evaluate nutrition and
 	 * other release flags via buildAgentFlagContext (clientPlatform: mcp).
+	 * First-party Copilot Ask inherits web/ios on the ration-copilot worker.
 	 */
 	"flagship": [
 		{

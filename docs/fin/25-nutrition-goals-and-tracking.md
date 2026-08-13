@@ -76,7 +76,7 @@ Ask Ration (Copilot) and MCP can read and act on nutrition when Flagship flags a
 - **Eat (private):** `log_manifest_intake` / `clear_manifest_intake`, each with a request-level operation key; consent must already be active in Ration.
 - **Goals:** `set_nutrition_goal` / `clear_nutrition_goal`.
 
-When **nutrition-cook-log-split** is on, `consume_manifest_entries` is refused (`cook_eat_split_required`) — use Cook then Eat. Agent Flagship context uses `clientPlatform` `mcp`|`copilot` + web `APP_VERSION` (never a faked iOS version). See *MCP tools reference*.
+When **nutrition-cook-log-split** is on, `consume_manifest_entries` is refused (`cook_eat_split_required`) — use Cook then Eat. External MCP Flagship context uses `clientPlatform` `mcp` + web `APP_VERSION` (never a faked iOS version). First-party Copilot Ask inherits the originating web/ios client. See *MCP tools reference*.
 
 ## Related
 

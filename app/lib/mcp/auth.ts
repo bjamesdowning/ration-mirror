@@ -4,6 +4,7 @@ import { drizzle } from "drizzle-orm/d1";
 import * as schema from "~/db/schema";
 import { resolvePreClaimForOrg } from "../agent/onboarding.server";
 import { verifyApiKey } from "../api-key.server";
+import type { AgentOriginatingClient } from "../feature-flags/context.server";
 import { isApiKeyCredential } from "../oauth.constants";
 import { touchUserLastActive } from "../user-activity.server";
 import { verifyMcpOAuthToken } from "./oauth-token.server";
@@ -49,9 +50,15 @@ export interface McpToolContext {
 	preClaim: boolean;
 	/**
 	 * Which agent surface is running tools. Defaults to `mcp` when omitted.
-	 * Copilot sets `copilot` so Flagship + kitchen_event source stay accurate.
+	 * Copilot sets `copilot` so kitchen_event source stays accurate.
+	 * Product Flagship for Copilot uses {@link originatingClient} when set.
 	 */
 	agentSurface?: "mcp" | "copilot";
+	/**
+	 * First-party Ask client (web/ios). Copilot product flags inherit this.
+	 * External MCP must omit it.
+	 */
+	originatingClient?: AgentOriginatingClient;
 	/**
 	 * Optional Worker/DO waitUntil — keep background work (e.g. embeddings)
 	 * alive after the tool envelope returns.

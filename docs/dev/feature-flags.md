@@ -29,7 +29,7 @@ Dashboard (Flagship) → propagated config → env.FLAGS binding → flags.serve
 - **`context.server.ts`** — trusted Flagship context builders:
   - `buildWebFlagContext` — Hub/SSR document loads and web APIs (server-owned `clientPlatform: "web"` + `APP_VERSION`; ignores `X-Ration-Client`)
   - `buildMobileFlagContext` — iOS mobile APIs (`clientPlatform: "ios"`; marketing version from `X-Ration-Client` when valid)
-  - `buildAgentFlagContext` — MCP / Copilot (`mcp`|`copilot` + web `APP_VERSION`)
+  - `buildAgentFlagContext` — MCP stays `mcp` + web `APP_VERSION`. First-party Copilot inherits the Ask client's `web`/`ios` identity when provided; otherwise `copilot` + `APP_VERSION`. Never invent an iOS marketing version for external MCP.
   - `buildSystemFlagContext` — background/queue jobs
   - `buildFlagContext` — **deprecated**; legacy helper that still honors `X-Ration-Client` (do not use for Hub UI)
 - **`flags.server.ts`** — `isFeatureEnabled`, `getClientSafeFlags`
@@ -143,7 +143,7 @@ Permanent boolean kill switches for billed AI pipelines. Registry `defaultEnable
 
 All default **off**. Create matching Flagship flags before enabling. Seed local nutrition D1 with `bun run db:nutrition:seed:local`.
 
-Hub/SSR and web APIs evaluate Flagship with `buildWebFlagContext` (server-owned `clientPlatform: "web"` + `APP_VERSION`). Mobile uses `buildMobileFlagContext` + validated `X-Ration-Client`. MCP/Copilot use `buildAgentFlagContext` with `clientPlatform` `mcp`|`copilot` and web `APP_VERSION` — never invent an iOS marketing version for agents.
+Hub/SSR and web APIs evaluate Flagship with `buildWebFlagContext` (server-owned `clientPlatform: "web"` + `APP_VERSION`). Mobile uses `buildMobileFlagContext` + validated `X-Ration-Client`. External MCP uses `buildAgentFlagContext` with `clientPlatform` `mcp` and web `APP_VERSION` — never invent an iOS marketing version for MCP. First-party Copilot Ask inherits the originating client's `web` or `ios` identity (iOS marketing version from `X-Ration-Client` when the connection is Bearer-authenticated). Product flags therefore match Hub / iOS without a separate `copilot` platform cohort. Connect-time `ration-copilot` still evaluates from the HTTP request.
 
 ### Production dogfood (nutrition)
 
@@ -155,7 +155,8 @@ For operator / dogfood rollout in **production**, keep registry `defaultEnabled:
 2. **Operator dogfood** — For each nutrition flag, Flagship default stays off; enable with platform rules as in [nutrition-rollout.md](nutrition-rollout.md):
    - **iOS:** `clientPlatform` equals `ios` **and** `clientVersion` ≥ `1.4.x`
    - **Web:** `clientPlatform` equals `web` on
-   - **MCP / Copilot:** `clientPlatform` equals `mcp` or `copilot` (platform on; optional web `APP_VERSION` gate)
+   - **MCP:** `clientPlatform` equals `mcp` (platform on; optional web `APP_VERSION` gate)
+   - **Copilot Ask:** no extra platform rule — tools inherit the Ask client's `ios` or `web` identity above
 3. **iOS binary** — `ClientFlags` includes nutrition keys (fail-closed `== true`). Submit App Review on **iOS ≥ 1.4.x**; nutrition may be visible to reviewers on that binary when platform/version rules are on. Compound `clientVersion` / `clientPlatform` from `X-Ration-Client` on **mobile** APIs so intake side effects skip old iOS. Web Hub UI reads nutrition keys from root `clientFlags` (evaluated with `buildWebFlagContext`).
 4. **Broaden** — Flip default variation on, or expand percent rollout if you still use percent targeting. Emergency: Flagship disable or `FEATURE_FLAG_OVERRIDES` kill (`false` only).
 

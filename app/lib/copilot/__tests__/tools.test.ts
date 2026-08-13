@@ -55,6 +55,21 @@ describe("createCopilotToolDefs", () => {
 		).toBe("copilot");
 	});
 
+	it("forwards originating Ask client into MCP context", () => {
+		expect(
+			buildCopilotMcpContext({
+				organizationId: "org-1",
+				userId: "user-1",
+				scopes: [...COPILOT_MCP_SCOPES],
+				preClaim: false,
+				originatingClient: {
+					clientPlatform: "ios",
+					clientVersion: "1.4.26",
+				},
+			}).originatingClient,
+		).toEqual({ clientPlatform: "ios", clientVersion: "1.4.26" });
+	});
+
 	it("exposes every MCP tool plus search_docs, without billed AI jobs", () => {
 		const names = createCopilotToolDefs(makeEnv()).map(
 			(definition) => definition.name,

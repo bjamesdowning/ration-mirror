@@ -17,5 +17,10 @@ export function resolveAgentFlagContext(
 	env: { RATION_ENV?: string },
 	ctx: McpToolContext,
 ): FlagshipEvaluationContext {
-	return buildAgentFlagContext(env, ctx.userId, resolveAgentSurface(ctx));
+	return buildAgentFlagContext(
+		env,
+		ctx.userId,
+		resolveAgentSurface(ctx),
+		ctx.originatingClient,
+	);
 }

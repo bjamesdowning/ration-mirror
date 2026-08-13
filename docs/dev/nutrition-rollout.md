@@ -33,7 +33,8 @@ One production API serves everyone. Safety comes from **flags default off** + **
 2. Keep Flagship **default variation off** for each nutrition flag. Enable with **platform** (and iOS version) rules — **no `userId` allowlist required**:
    - **iOS:** `clientPlatform` equals `ios` **and** `clientVersion` ≥ `1.4.0` (or the shipping `1.4.x` floor)
    - **Web:** `clientPlatform` equals `web` (optionally also `clientVersion` ≥ shipping `APP_VERSION`)
-   - **MCP / Copilot:** `clientPlatform` equals `mcp` or `copilot` (platform on; optional web `APP_VERSION` gate)
+   - **MCP:** `clientPlatform` equals `mcp` (platform on; optional web `APP_VERSION` gate)
+   - **Copilot Ask:** inherits the originating iOS/web client — the rules above cover TestFlight Ask without a `copilot` platform rule
 3. Enable flags in order (dashboard only; stay off for everyone else until the matching rule hits):
    1. `nutrition-engine`
    2. `nutrition-async-recompute` (after queue consumer verified)
@@ -68,7 +69,7 @@ After fin help edits for cross-org diary, sync Copilot AI Search ([copilot-ai-se
 1. Apply D1 migrations through `0050_dark_havok` — operator-owned; not from CI without approval.
 2. Deploy Workers that include Cook/Eat, Galley bridge, and **undo KV fallback**.
 3. Ship / verify TestFlight **iOS ≥ `1.4.0`**. Older binaries must not be targeted.
-4. Enable Flagship with **default off** + platform rules (iOS: `ios` + `clientVersion` ≥ `1.4.x`; web: `web` on; mcp/copilot: platform on). A `userId` allowlist is **not** required. Never use `FEATURE_FLAG_OVERRIDES` to turn nutrition **on**.
+4. Enable Flagship with **default off** + platform rules (iOS: `ios` + `clientVersion` ≥ `1.4.x`; web: `web` on; MCP: `mcp` on). Copilot Ask follows the iOS/web rules. A `userId` allowlist is **not** required. Never use `FEATURE_FLAG_OVERRIDES` to turn nutrition **on**.
 
 **Prefer default off + version/platform gate**, not default on with exclusions for old clients.
 
@@ -89,15 +90,15 @@ When `nutrition-cook-log-split` is on for the client cohort:
 ## Dates and capability policy
 
 - Date-only fields (`from`/`to`/`asOf`/`effectiveFrom`) are local proleptic-Gregorian calendar labels validated as real calendar days (impossible dates like `2026-02-31` fail). Inclusive ranges; summary `goalAsOf` equals `to`.
-- Flagship evaluation uses trusted surfaces: web forces `web` + server `APP_VERSION`; mobile forces `ios` (header version is rollout metadata only); MCP/Copilot use server-owned `mcp`/`copilot` + `APP_VERSION`. Headers cannot switch platforms for auth/consent.
+- Flagship evaluation uses trusted surfaces: web forces `web` + server `APP_VERSION`; mobile forces `ios` (header version is rollout metadata only); MCP uses server-owned `mcp` + `APP_VERSION`; first-party Copilot Ask inherits the originating web/ios client. Headers cannot switch platforms for auth/consent.
 - Effective capabilities gate children on parents (`manifest` requires `engine`; `cookLogSplit` requires `manifest`; AI/async require engine + server eligibility). Clients should prefer effective capabilities over raw child flags.
 - Additive `nutritionV2` / `goalAsOf` fields appear on summary and resolve responses; legacy `carbG` shapes remain for the fleet window.
 
 ## MCP / Copilot (agent dogfood)
 
-Workers expose Cook/Eat parity tools over shared libs (`cook_manifest_entries`, `log_manifest_intake`, `clear_manifest_intake`, `list_nutrition_intakes`, plus summary/goals). Agents evaluate Flagship via `buildAgentFlagContext`: `clientPlatform` `mcp`|`copilot` + web `APP_VERSION` (never a faked `ios`/`1.4.0` header). The **`ration-mcp` Worker must bind Flagship** (`FLAGS` in `wrangler.mcp.jsonc`) — without it, nutrition flags always evaluate off regardless of dashboard rules. Redeploy with `bun run deploy:mcp` after Flagship binding changes.
+Workers expose Cook/Eat parity tools over shared libs (`cook_manifest_entries`, `log_manifest_intake`, `clear_manifest_intake`, `list_nutrition_intakes`, plus summary/goals, `quick_eat_cargo`). External MCP evaluates Flagship via `buildAgentFlagContext`: `clientPlatform` `mcp` + web `APP_VERSION` (never a faked `ios`/`1.4.0` header). First-party Copilot Ask inherits the originating client's `web` or `ios` identity so nutrition / Quick Eat match Hub and TestFlight. The **`ration-mcp` Worker must bind Flagship** (`FLAGS` in `wrangler.mcp.jsonc`) — without it, nutrition flags always evaluate off regardless of dashboard rules. Redeploy with `bun run deploy:mcp` after Flagship binding changes.
 
-Dogfood agents with nutrition flags **on for platform** (`clientPlatform` in `{mcp,copilot}`; optional `clientVersion` ≥ current web `APP_VERSION`). A `userId` allowlist is not required. Nutrition tools require explicit `mcp:nutrition:read` / `mcp:nutrition:write`. Legacy broad `mcp` expands only to pre-nutrition kitchen scopes (never nutrition); existing keys are rewritten on authenticate. New API keys cannot create blanket `mcp`. OAuth consent must re-grant nutrition scopes (and Connected Agent / `agent_processing` consent) before agents can read or write health data. Copilot may include nutrition scopes in its capability set, but empty-text intent still exposes only core tools.
+Dogfood MCP with nutrition flags **on for platform** (`clientPlatform` `mcp`; optional `clientVersion` ≥ current web `APP_VERSION`). Copilot Ask uses the same iOS/web rules as the native app — a separate `copilot` platform rule is not required. A `userId` allowlist is not required. Nutrition tools require explicit `mcp:nutrition:read` / `mcp:nutrition:write`. Legacy broad `mcp` expands only to pre-nutrition kitchen scopes (never nutrition); existing keys are rewritten on authenticate. New API keys cannot create blanket `mcp`. OAuth consent must re-grant nutrition scopes (and Connected Agent / `agent_processing` consent) before agents can read or write health data. Copilot may include nutrition scopes in its capability set, but empty-text intent still exposes only core tools.
 
 Write timeouts return `timeout_ambiguous` with the same `operationKey` — clients must retry/query status with that key, never mint a new one.
 

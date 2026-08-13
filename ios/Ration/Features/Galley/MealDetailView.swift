@@ -3,6 +3,7 @@ import SwiftUI
 struct MealDetailView: View {
     @Environment(AppEnvironment.self) private var env
     @Environment(CopilotScrollContext.self) private var scrollContext
+    @Environment(\.currentMainTab) private var currentMainTab
     let mealId: String
     let initialMeal: Meal
     var isInitiallySelectedForSupply = false
@@ -105,7 +106,7 @@ struct MealDetailView: View {
                 )
             }
         }
-        .tabDockAction(tag: .galley) {
+        .tabDockAction(tag: .galley, layer: .detail, isActive: currentMainTab == .galley) {
             IconFABMenuCore(systemImage: "ellipsis.circle.fill", accessibilityLabel: "Meal actions") {
                 Button { Task { await cook() } } label: {
                     Label("Cook meal", systemImage: "flame")

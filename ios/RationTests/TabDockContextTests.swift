@@ -4,63 +4,70 @@ import XCTest
 
 @MainActor
 final class TabDockContextTests: XCTestCase {
-    func testPushActionRegistersAndIncrementsRevision() {
+    func testRootLayerRegistersAndIncrementsRevision() {
         let tabDock = TabDockContext()
 
-        tabDock.pushAction(for: .hub) {
+        tabDock.setLayerAction(for: .hub, layer: .root) {
             Text("Scan")
         }
         XCTAssertEqual(tabDock.revision, 1)
         XCTAssertTrue(tabDock.hasAction(for: .hub))
+        XCTAssertTrue(tabDock.hasAction(for: .hub, layer: .root))
     }
 
-    func testSecondPushOnSameTagReplacesTopAction() {
+    func testDetailLayerTakesPriorityOverRoot() {
         let tabDock = TabDockContext()
-        tabDock.pushAction(for: .cargo) { Text("Add") }
+        tabDock.setLayerAction(for: .cargo, layer: .root) { Text("Add") }
+        tabDock.setLayerAction(for: .cargo, layer: .detail) { Text("Detail") }
 
-        tabDock.pushAction(for: .cargo) { Text("Detail") }
+        XCTAssertTrue(tabDock.hasAction(for: .cargo, layer: .root))
+        XCTAssertTrue(tabDock.hasAction(for: .cargo, layer: .detail))
         XCTAssertEqual(tabDock.revision, 2)
-        XCTAssertTrue(tabDock.hasAction(for: .cargo))
     }
 
-    func testPopRestoresPreviousAction() {
+    func testClearingDetailRestoresRootWithoutPoppingIt() {
         let tabDock = TabDockContext()
-        tabDock.pushAction(for: .cargo) { Text("Add") }
-        tabDock.pushAction(for: .cargo) { Text("Detail") }
+        tabDock.setLayerAction(for: .cargo, layer: .root) { Text("Add") }
+        tabDock.setLayerAction(for: .cargo, layer: .detail) { Text("Detail") }
 
-        tabDock.popAction(for: .cargo)
+        tabDock.clearLayerAction(for: .cargo, layer: .detail)
         XCTAssertEqual(tabDock.revision, 3)
+        XCTAssertTrue(tabDock.hasAction(for: .cargo, layer: .root))
+        XCTAssertFalse(tabDock.hasAction(for: .cargo, layer: .detail))
         XCTAssertTrue(tabDock.hasAction(for: .cargo))
     }
 
-    func testPopUntilEmptyRemovesAction() {
+    func testClearingRootWhileDetailPresentKeepsDetail() {
         let tabDock = TabDockContext()
-        tabDock.pushAction(for: .galley) { Text("Only") }
+        tabDock.setLayerAction(for: .galley, layer: .root) { Text("Add") }
+        tabDock.setLayerAction(for: .galley, layer: .detail) { Text("Meal") }
 
-        tabDock.popAction(for: .galley)
+        tabDock.clearLayerAction(for: .galley, layer: .root)
+        XCTAssertTrue(tabDock.hasAction(for: .galley, layer: .detail))
+        XCTAssertFalse(tabDock.hasAction(for: .galley, layer: .root))
+        XCTAssertTrue(tabDock.hasAction(for: .galley))
+    }
+
+    func testClearLayerUntilEmptyRemovesAction() {
+        let tabDock = TabDockContext()
+        tabDock.setLayerAction(for: .galley, layer: .root) { Text("Only") }
+
+        tabDock.clearLayerAction(for: .galley, layer: .root)
         XCTAssertEqual(tabDock.revision, 2)
         XCTAssertFalse(tabDock.hasAction(for: .galley))
     }
 
-    func testPopEmptyStackIsNoOp() {
+    func testClearMissingLayerIsNoOp() {
         let tabDock = TabDockContext()
-        tabDock.popAction(for: .manifest)
+        tabDock.clearLayerAction(for: .manifest, layer: .detail)
         XCTAssertEqual(tabDock.revision, 0)
         XCTAssertFalse(tabDock.hasAction(for: .manifest))
     }
 
-    func testSetActionIsIdempotentWhenStackNonEmpty() {
+    func testClearActionRemovesAllLayers() {
         let tabDock = TabDockContext()
-        tabDock.pushAction(for: .hub) { Text("Scan") }
-
-        tabDock.setAction(for: .hub) { Text("Scan again") }
-        XCTAssertEqual(tabDock.revision, 1, "setAction must not push when stack already has an entry")
-    }
-
-    func testClearActionRemovesEntireStack() {
-        let tabDock = TabDockContext()
-        tabDock.pushAction(for: .cargo) { Text("Add") }
-        tabDock.pushAction(for: .cargo) { Text("Detail") }
+        tabDock.setLayerAction(for: .cargo, layer: .root) { Text("Add") }
+        tabDock.setLayerAction(for: .cargo, layer: .detail) { Text("Detail") }
 
         tabDock.clearAction(for: .cargo)
         XCTAssertEqual(tabDock.revision, 3)
@@ -72,7 +79,7 @@ final class TabDockContextTests: XCTestCase {
 
     func testBumpContentEpochIncrementsWithoutStackRevision() {
         let tabDock = TabDockContext()
-        tabDock.pushAction(for: .hub) { Text("Scan") }
+        tabDock.setLayerAction(for: .hub, layer: .root) { Text("Scan") }
         let revisionAfterPush = tabDock.revision
 
         tabDock.bumpContentEpoch()
@@ -80,12 +87,20 @@ final class TabDockContextTests: XCTestCase {
         XCTAssertEqual(tabDock.revision, revisionAfterPush, "Content refresh must not animate dock layout")
     }
 
-    func testPopWrongTagDoesNotAffectOtherTagStack() {
+    func testClearWrongTagDoesNotAffectOtherTab() {
         let tabDock = TabDockContext()
-        tabDock.pushAction(for: .galley) { Text("Galley") }
+        tabDock.setLayerAction(for: .galley, layer: .root) { Text("Galley") }
 
-        tabDock.popAction(for: .cargo)
+        tabDock.clearLayerAction(for: .cargo, layer: .root)
 
-        XCTAssertTrue(tabDock.hasAction(for: .galley), "Popping an empty/wrong tag must not drain another tab's stack")
+        XCTAssertTrue(tabDock.hasAction(for: .galley), "Clearing an empty/wrong tag must not drain another tab's layers")
+    }
+
+    func testReplacingSameLayerBumpsRevision() {
+        let tabDock = TabDockContext()
+        tabDock.setLayerAction(for: .hub, layer: .root) { Text("Scan") }
+        tabDock.setLayerAction(for: .hub, layer: .root) { Text("Scan again") }
+        XCTAssertEqual(tabDock.revision, 2)
+        XCTAssertTrue(tabDock.hasAction(for: .hub, layer: .root))
     }
 }

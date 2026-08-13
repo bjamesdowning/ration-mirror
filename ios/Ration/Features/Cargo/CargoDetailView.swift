@@ -2,6 +2,7 @@ import SwiftUI
 
 struct CargoDetailView: View {
     @Environment(AppEnvironment.self) private var env
+    @Environment(\.currentMainTab) private var currentMainTab
     @Environment(\.dismiss) private var dismiss
     let itemId: String
     @State private var model = CargoDetailViewModel()
@@ -65,7 +66,7 @@ struct CargoDetailView: View {
         .background(Theme.ceramic)
         .navigationTitle(model.item?.name.capitalized ?? "Cargo")
         .navigationBarTitleDisplayMode(.inline)
-        .tabDockAction(tag: .cargo) {
+        .tabDockAction(tag: .cargo, layer: .detail, isActive: currentMainTab == .cargo) {
             IconFABMenuCore(systemImage: "ellipsis.circle.fill", accessibilityLabel: "Cargo actions") {
                 if env.session.clientFlags.isCargoQuickEatEnabled {
                     Button { showingQuickEat = true } label: {

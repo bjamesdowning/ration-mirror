@@ -107,3 +107,13 @@ final class DeepLinkRouter {
     func acknowledgeCargoItem() { cargoItemPending = nil }
     func acknowledgeMeal() { mealPending = nil }
 }
+
+/// Cross-tab handoff must wait until the destination TabView page is selected.
+/// Applying `NavigationPath` while the tab is off-screen makes SwiftUI call
+/// `onDisappear` on the detail, which used to leave the list dock FAB visible.
+enum DeepLinkTabHandoff {
+    static func pendingDetailId(isCurrentTab: Bool, pendingId: String?) -> String? {
+        guard isCurrentTab else { return nil }
+        return pendingId
+    }
+}

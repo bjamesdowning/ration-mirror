@@ -3,6 +3,7 @@ import SwiftUI
 struct GalleyView: View {
     @Environment(AppEnvironment.self) private var env
     @Environment(CopilotScrollContext.self) private var scrollContext
+    @Environment(\.currentMainTab) private var currentMainTab
     var isTabActive: Bool = false
     var onOpenSettings: () -> Void = {}
     var onOpenGroupSettings: () -> Void = {}
@@ -185,14 +186,13 @@ struct GalleyView: View {
                 model.scheduleAvailabilityRefresh(api: env.api, online: env.network.isOnline)
             }
         }
-        .onChange(of: env.deepLinkRouter.mealPending, initial: true) { _, id in
-            guard let id else { return }
-            if path.last?.id != id {
-                path = [MealDetailRoute(id: id)]
-            }
-            env.deepLinkRouter.acknowledgeMeal()
+        .onChange(of: env.deepLinkRouter.mealPending, initial: true) { _, _ in
+            applyPendingMealIfNeeded()
         }
-        .tabDockAction(tag: .galley) {
+        .onChange(of: currentMainTab) { _, _ in
+            applyPendingMealIfNeeded()
+        }
+        .tabDockAction(tag: .galley, layer: .root) {
             IconFABMenuCore(systemImage: "plus.circle.fill", accessibilityLabel: "Galley actions") {
                 Button { showingAddTypeChoice = true } label: {
                     Label("Add", systemImage: "plus")
@@ -369,6 +369,17 @@ struct GalleyView: View {
             }
             .padding(24)
         }
+    }
+
+    private func applyPendingMealIfNeeded() {
+        guard let id = DeepLinkTabHandoff.pendingDetailId(
+            isCurrentTab: currentMainTab == .galley,
+            pendingId: env.deepLinkRouter.mealPending
+        ) else { return }
+        if path.last?.id != id {
+            path = [MealDetailRoute(id: id)]
+        }
+        env.deepLinkRouter.acknowledgeMeal()
     }
 
     private func initialMeal(for id: String) -> Meal {

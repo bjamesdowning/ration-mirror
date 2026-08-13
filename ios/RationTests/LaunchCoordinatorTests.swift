@@ -170,4 +170,17 @@ final class DeepLinkRouterTests: XCTestCase {
         XCTAssertEqual(actions, ["ask", "scan"])
         XCTAssertNil(router.pending)
     }
+
+    func testPendingDetailWaitsUntilDestinationTabIsCurrent() {
+        XCTAssertNil(
+            DeepLinkTabHandoff.pendingDetailId(isCurrentTab: false, pendingId: "meal-1")
+        )
+        XCTAssertEqual(
+            DeepLinkTabHandoff.pendingDetailId(isCurrentTab: true, pendingId: "meal-1"),
+            "meal-1"
+        )
+        XCTAssertNil(
+            DeepLinkTabHandoff.pendingDetailId(isCurrentTab: true, pendingId: nil)
+        )
+    }
 }

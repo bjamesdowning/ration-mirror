@@ -15,37 +15,64 @@ final class TabDockActionHandle {
     }
 }
 
+/// Independent slots per tab so a detail `⋯` cannot be LIFO-popped off a list `+`.
+/// TabView hides inactive tabs with `onDisappear`, which used to pop the detail
+/// action and leave the list FAB on top after a cross-tab deep link.
+enum TabDockLayer: Int, Comparable, Sendable {
+    case root = 0
+    case detail = 1
+
+    static func < (lhs: TabDockLayer, rhs: TabDockLayer) -> Bool {
+        lhs.rawValue < rhs.rawValue
+    }
+}
+
+private struct CurrentMainTabKey: EnvironmentKey {
+    static let defaultValue: MainTab? = nil
+}
+
+extension EnvironmentValues {
+    /// The TabView selection driving Copilot dock actions. Independent of
+    /// `activatedTabs` (which is sticky for data loading).
+    var currentMainTab: MainTab? {
+        get { self[CurrentMainTabKey.self] }
+        set { self[CurrentMainTabKey.self] = newValue }
+    }
+}
+
 /// Per-tab action slot for the unified Copilot bottom dock (Hub scan, Galley +, etc.).
 @MainActor
 @Observable
 final class TabDockContext {
     private(set) var revision = 0
     private(set) var contentEpoch = 0
-    private var actionStacks: [MainTab: [() -> AnyView]] = [:]
+    private var layerActions: [MainTab: [TabDockLayer: () -> AnyView]] = [:]
 
-    func pushAction<Content: View>(for tag: MainTab, @ViewBuilder content: @escaping () -> Content) {
-        actionStacks[tag, default: []].append { AnyView(content()) }
+    func setLayerAction<Content: View>(
+        for tag: MainTab,
+        layer: TabDockLayer,
+        @ViewBuilder content: @escaping () -> Content
+    ) {
+        var layers = layerActions[tag] ?? [:]
+        layers[layer] = { AnyView(content()) }
+        layerActions[tag] = layers
         revision += 1
     }
 
-    func popAction(for tag: MainTab) {
-        guard var stack = actionStacks[tag], !stack.isEmpty else { return }
-        stack.removeLast()
-        if stack.isEmpty {
-            actionStacks.removeValue(forKey: tag)
+    func clearLayerAction(for tag: MainTab, layer: TabDockLayer) {
+        guard var layers = layerActions[tag], layers.removeValue(forKey: layer) != nil else {
+            return
+        }
+        if layers.isEmpty {
+            layerActions.removeValue(forKey: tag)
         } else {
-            actionStacks[tag] = stack
+            layerActions[tag] = layers
         }
         revision += 1
     }
 
-    func setAction<Content: View>(for tag: MainTab, @ViewBuilder content: @escaping () -> Content) {
-        guard actionStacks[tag]?.isEmpty ?? true else { return }
-        pushAction(for: tag, content: content)
-    }
-
     func clearAction(for tag: MainTab) {
-        guard actionStacks.removeValue(forKey: tag) != nil else { return }
+        guard layerActions.removeValue(forKey: tag) != nil else { return }
         revision += 1
     }
 
@@ -54,17 +81,25 @@ final class TabDockContext {
     }
 
     func action(for tag: MainTab) -> AnyView? {
-        actionStacks[tag]?.last?()
+        guard let layers = layerActions[tag], let top = layers.keys.max() else {
+            return nil
+        }
+        return layers[top]?()
     }
 
     func hasAction(for tag: MainTab) -> Bool {
-        !(actionStacks[tag]?.isEmpty ?? true)
+        !(layerActions[tag]?.isEmpty ?? true)
+    }
+
+    func hasAction(for tag: MainTab, layer: TabDockLayer) -> Bool {
+        layerActions[tag]?[layer] != nil
     }
 }
 
 private struct TabDockActionModifier<Action: View>: ViewModifier {
     @Environment(TabDockContext.self) private var tabDock
     let tag: MainTab
+    let layer: TabDockLayer
     let isActive: Bool
     @ViewBuilder let action: () -> Action
     @State private var actionHandle = TabDockActionHandle()
@@ -82,7 +117,7 @@ private struct TabDockActionModifier<Action: View>: ViewModifier {
 
     private func sync() {
         if isActive && !isRegistered {
-            tabDock.pushAction(for: tag) { actionHandle.makeView() }
+            tabDock.setLayerAction(for: tag, layer: layer) { actionHandle.makeView() }
             isRegistered = true
             registeredTag = tag
         } else if !isActive && isRegistered {
@@ -92,7 +127,7 @@ private struct TabDockActionModifier<Action: View>: ViewModifier {
 
     private func unregisterFromDock() {
         guard isRegistered, let registeredTag else { return }
-        tabDock.popAction(for: registeredTag)
+        tabDock.clearLayerAction(for: registeredTag, layer: layer)
         isRegistered = false
         self.registeredTag = nil
     }
@@ -101,9 +136,12 @@ private struct TabDockActionModifier<Action: View>: ViewModifier {
 extension View {
     func tabDockAction<Action: View>(
         tag: MainTab,
+        layer: TabDockLayer = .root,
         isActive: Bool = true,
         @ViewBuilder _ action: @escaping () -> Action
     ) -> some View {
-        modifier(TabDockActionModifier(tag: tag, isActive: isActive, action: action))
+        modifier(
+            TabDockActionModifier(tag: tag, layer: layer, isActive: isActive, action: action)
+        )
     }
 }

@@ -196,6 +196,7 @@ struct MainTabView: View {
         .environment(env.ask)
         .environment(env.copilotScroll)
         .environment(env.tabDock)
+        .environment(\.currentMainTab, selectedTab)
         .sheet(isPresented: $showingSettings) {
             SettingsView()
         }

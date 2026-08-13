@@ -2,6 +2,7 @@ import SwiftUI
 
 struct CargoListView: View {
     @Environment(AppEnvironment.self) private var env
+    @Environment(\.currentMainTab) private var currentMainTab
     var isTabActive: Bool = false
     var onScan: () -> Void = {}
     var onOpenSettings: () -> Void = {}
@@ -150,14 +151,13 @@ struct CargoListView: View {
                 CargoDetailView(itemId: route.id)
             }
         }
-        .onChange(of: env.deepLinkRouter.cargoItemPending, initial: true) { _, id in
-            guard let id else { return }
-            if path.last?.id != id {
-                path = [CargoDetailRoute(id: id)]
-            }
-            env.deepLinkRouter.acknowledgeCargoItem()
+        .onChange(of: env.deepLinkRouter.cargoItemPending, initial: true) { _, _ in
+            applyPendingCargoItemIfNeeded()
         }
-        .tabDockAction(tag: .cargo) {
+        .onChange(of: currentMainTab) { _, _ in
+            applyPendingCargoItemIfNeeded()
+        }
+        .tabDockAction(tag: .cargo, layer: .root) {
             IconFABMenuCore(systemImage: "plus.circle.fill", accessibilityLabel: "Cargo actions") {
                 if env.session.clientFlags.isAiScanReceiptEnabled {
                     Button(action: onScan) {
@@ -174,6 +174,17 @@ struct CargoListView: View {
             await reload(forceRemoteSearch: false, organizationId: organizationId)
         }
         .onDisappear { model.cancelLoads() }
+    }
+
+    private func applyPendingCargoItemIfNeeded() {
+        guard let id = DeepLinkTabHandoff.pendingDetailId(
+            isCurrentTab: currentMainTab == .cargo,
+            pendingId: env.deepLinkRouter.cargoItemPending
+        ) else { return }
+        if path.last?.id != id {
+            path = [CargoDetailRoute(id: id)]
+        }
+        env.deepLinkRouter.acknowledgeCargoItem()
     }
 
     private func reload(forceRemoteSearch: Bool = false, organizationId: String? = nil) async {

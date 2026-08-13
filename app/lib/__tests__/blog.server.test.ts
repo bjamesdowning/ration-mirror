@@ -90,6 +90,18 @@ describe("getPostBySlug", () => {
 		expect(post?.faq.length).toBeGreaterThanOrEqual(4);
 		expect(post?.faq.some((e) => /claim/i.test(e.question))).toBe(true);
 	});
+
+	it("parses FAQ from the macro-tracking and kitchen-apps posts", () => {
+		const macros = getPostBySlug("macro-tracking-meal-planning-grocery");
+		expect(macros?.faq.length).toBeGreaterThanOrEqual(4);
+		expect(macros?.faq.some((e) => /medical advice/i.test(e.question))).toBe(
+			true,
+		);
+
+		const roundup = getPostBySlug("best-all-around-kitchen-apps");
+		expect(roundup?.faq.length).toBeGreaterThanOrEqual(3);
+		expect(roundup?.faq.some((e) => /Paprika/i.test(e.question))).toBe(true);
+	});
 });
 
 describe("getRelatedPosts", () => {

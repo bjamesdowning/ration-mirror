@@ -41,13 +41,14 @@ export const HELP_ARTICLES: ReadonlyArray<HelpArticleMeta> = [
 		slug: "01-what-is-ration",
 		title: "What is Ration?",
 		summary:
-			"Product overview: kitchen loop, Ask Ration (Copilot), and MCP as kitchen memory for AI.",
+			"Product overview: kitchen loop, Macro Tracking / Daily Fuel, Ask Ration (Copilot), and MCP.",
 		section: "overview",
 	},
 	{
 		slug: "02-key-concepts",
 		title: "Key concepts",
-		summary: "Organizations, credits, and the four kitchen surfaces.",
+		summary:
+			"Organizations, credits, four kitchen surfaces, and Macro Tracking.",
 		section: "overview",
 	},
 	{
@@ -94,8 +95,9 @@ export const HELP_ARTICLES: ReadonlyArray<HelpArticleMeta> = [
 	},
 	{
 		slug: "13-add-meals-url-import",
-		title: "Import a recipe from a URL",
-		summary: "Pull a recipe from an HTTPS page into Galley.",
+		title: "Import a recipe (URL, social, or photo)",
+		summary:
+			"Pull a recipe from a website, social video, or photo into Galley.",
 		section: "kitchen",
 	},
 	{
@@ -125,13 +127,15 @@ export const HELP_ARTICLES: ReadonlyArray<HelpArticleMeta> = [
 	{
 		slug: "18-hub-dashboard-and-settings",
 		title: "Hub dashboard and settings",
-		summary: "Widgets, preferences, developer tools, and account purge.",
+		summary:
+			"Widgets, Feature enablement, preferences, developer tools, and account purge.",
 		section: "kitchen",
 	},
 	{
 		slug: "19-kitchen-loop",
 		title: "The kitchen loop",
-		summary: "How Cargo, Galley, Manifest, and Supply work together.",
+		summary:
+			"How Cargo, Galley, Manifest, Supply, and optional Daily Fuel work together.",
 		section: "kitchen",
 	},
 	{
@@ -143,9 +147,9 @@ export const HELP_ARTICLES: ReadonlyArray<HelpArticleMeta> = [
 	},
 	{
 		slug: "25-nutrition-goals-and-tracking",
-		title: "Nutrition goals and tracking",
+		title: "Macro tracking, goals, and intake",
 		summary:
-			"Goals, Manifest Eat plate-up, calendar retention, and Flight Recorder.",
+			"Macro Tracking, Manifest Eat plate-up (servings or g/oz), calendar retention, and Flight Recorder.",
 		section: "kitchen",
 	},
 	{
@@ -199,7 +203,7 @@ export const HELP_ARTICLES: ReadonlyArray<HelpArticleMeta> = [
 	},
 	{
 		slug: "33-mcp-vs-web-app",
-		title: "MCP vs web app",
+		title: "MCP vs hub app",
 		summary: "What agents can and cannot do compared to the hub.",
 		section: "agents",
 	},

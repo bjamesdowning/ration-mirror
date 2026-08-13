@@ -9,7 +9,7 @@ type BlogCTAProps = {
 
 export function BlogCTA({
 	title = "Try Ration",
-	description = "Track your pantry, plan meals, and reduce waste.",
+	description = "Track your pantry, plan meals, and log macros from the same kitchen.",
 	to = "/",
 	label = "Get started",
 }: BlogCTAProps) {

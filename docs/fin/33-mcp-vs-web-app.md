@@ -1,4 +1,4 @@
-# MCP vs web app capabilities
+# MCP vs hub app capabilities
 
 ## Use MCP for
 
@@ -10,16 +10,16 @@
 
 ## MCP does **not** include
 
-These **AI-heavy** features exist **only in the web app** and **consume Ration AI credits** there:
+These **AI-heavy** features exist **only in the hub app** (**web and iOS**) and **consume Ration AI credits** there:
 
 - **Receipt scan** (Ration runs the OCR/LLM)
 - **AI meal generation**
 - **AI plan week**
-- **URL recipe import**
+- **URL / social / photo recipe import**
 - **Vector embedding generation for cargo writes** (skipped on MCP for cost reasons)
 - **`get_credit_balance`** (UI-only surface)
 
-There are **no MCP tools** that replace those flows. The principle is: if the agent's own LLM can do the AI work for free, MCP exposes the deterministic data path. If Ration would have to spend credits, the user must opt in through the web UI.
+There are **no MCP tools** that replace those flows. The principle is: if the agent's own LLM can do the AI work for free, MCP exposes the deterministic data path. If Ration would have to spend credits, the user must opt in through the hub UI (web or iOS). Copilot also redirects URL paste and camera scan to those native screens.
 
 ## REST vs MCP
 

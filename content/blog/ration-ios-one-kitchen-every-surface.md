@@ -1,8 +1,8 @@
 ---
 title: "Ration for iOS: One Kitchen, Every Surface"
-description: "Ration Kitchen Hub is on the App Store. Same household data model across iPhone, web, Ask Ration, and MCP — Cargo, Galley, Manifest, and Supply stay in sync wherever dinner happens."
+description: "Ration: Meal & Macro Planner is on the App Store. Same household data model across iPhone, web, Ask Ration, and MCP — Cargo, Galley, Manifest, Supply, and private Daily Fuel stay in sync wherever dinner happens."
 date: 2026-07-29
-dateModified: 2026-07-29
+dateModified: 2026-08-14
 authorName: "Ration"
 image: "/static/ration-logo.png"
 tags:
@@ -16,7 +16,7 @@ tags:
 
 Dinner does not happen at a desk.
 
-It happens at the fridge door, in the aisle, on the couch after work — and sometimes in a chat with an AI assistant that needs real kitchen context. Outline below: why Ration for iOS (store name **Ration Kitchen Hub**) matters, and how one household data model ties every surface together.
+It happens at the fridge door, in the aisle, on the couch after work — and sometimes in a chat with an AI assistant that needs real kitchen context. Outline below: why Ration for iOS (App Store name **Ration: Meal & Macro Planner**, previously listed as Ration Kitchen Hub) matters, and how one household data model ties every surface together.
 
 ---
 
@@ -30,14 +30,15 @@ It happens at the fridge door, in the aisle, on the couch after work — and som
 
 ## What launched
 
-- **Ration Kitchen Hub** on the [App Store](https://apps.apple.com/ie/app/ration-kitchen-hub/id6785010110) (iPhone).
+- **Ration: Meal & Macro Planner** on the [App Store](https://apps.apple.com/ie/app/ration-kitchen-hub/id6785010110) (iPhone). The listing previously used the name Ration Kitchen Hub; the Apple URL slug has not changed yet. The home-screen name stays **Ration**.
 - Native access to the full loop:
   - **Cargo** — pantry stock, quantities, expiry
   - **Galley** — recipes matched to what you have
   - **Manifest** — weekly meal plan
   - **Supply** — shop only what you are still missing
+  - **Daily Fuel** — optional private macros from meals you cook
   - **Ask Ration** — in-app Copilot on live household data
-  - AI scan / generate where credits apply
+  - AI scan / generate / import where credits apply
 - Same account and household as the web app and PWA.
 
 ---

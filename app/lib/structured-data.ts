@@ -79,7 +79,7 @@ export function organizationSchema(opts?: {
 		url: SITE_ORIGIN,
 		logo: PUBLISHER_LOGO,
 		description:
-			"AI-native kitchen management for pantry inventory, meal planning, supply lists, and MCP agent control.",
+			"Live kitchen loop for pantry inventory, meal planning, shopping lists, private macros, and MCP agent control.",
 	};
 	if (opts?.sameAs && opts.sameAs.length > 0) {
 		schema.sameAs = opts.sameAs;

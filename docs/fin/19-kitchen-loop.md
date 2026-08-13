@@ -1,6 +1,6 @@
 # The kitchen loop
 
-Ration’s kitchen is four surfaces that feed each other: **Cargo → Galley → Manifest → Supply**, then dock back into **Cargo**.
+Ration’s kitchen is four household surfaces that feed each other: **Cargo → Galley → Manifest → Supply**, then dock back into **Cargo**. Optional **Macro Tracking** (Daily Fuel) is a personal overlay on that loop — not a fifth shared surface, and not a shopping-list generator.
 
 ## The loop
 
@@ -9,9 +9,11 @@ Ration’s kitchen is four surfaces that feed each other: **Cargo → Galley →
 3. **Manifest** — When you plan to eat (meal plan calendar). Place Galley meals into breakfast, lunch, dinner, or snack slots. Include or exclude plan days from Supply. See *Manifest (meal plan)*.
 4. **Supply** — What to buy. Sync builds the list from active Galley meals, Manifest days inside the org **planning horizon**, and Cargo restock toggles — minus what Cargo already covers. Shop, mark purchased, then **dock** into Cargo (or replenish via receipt scan). See *Supply (shopping list)*.
 
+Supply is **plan minus Cargo**. Remaining protein or calories do **not** rewrite the list. AI Plan Week drafts from your Galley and preferences; it does not optimize for macro targets.
+
 ## Closing the loop
 
-Docking (or a Supply-linked receipt scan) adds purchases into Cargo. Cooking or consuming from Galley/Manifest deducts ingredients from Cargo. The next sync then sees a fuller pantry and a shorter list.
+Docking (or a Supply-linked receipt scan) adds purchases into Cargo. **Cook** from Galley/Manifest deducts ingredients from Cargo. Optionally **log your serving** (Macro Tracking) so Daily Fuel and day totals update for you alone. The next Supply sync then sees a fuller pantry and a shorter list.
 
 ## Practical tip
 

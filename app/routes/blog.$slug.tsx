@@ -13,6 +13,39 @@ import {
 } from "~/lib/structured-data";
 import type { Route } from "./+types/blog.$slug";
 
+function ctaForSlug(slug: string): {
+	title: string;
+	description: string;
+	to: string;
+	label: string;
+} {
+	if (slug === "macro-tracking-meal-planning-grocery") {
+		return {
+			title: "Try Ration",
+			description:
+				"Pantry, meals, and macros in one loop — private Daily Fuel from the meals you cook.",
+			to: "/",
+			label: "Get started free",
+		};
+	}
+	if (slug === "best-all-around-kitchen-apps") {
+		return {
+			title: "See how Ration connects the loop",
+			description:
+				"One kitchen for pantry, recipes, the week, shopping, and private macros.",
+			to: "/",
+			label: "Get started free",
+		};
+	}
+	return {
+		title: "Start using Ration",
+		description:
+			"Track your pantry, plan meals, and log macros from the same kitchen — with or without an AI assistant.",
+		to: "/",
+		label: "Get started free",
+	};
+}
+
 export async function loader({ params }: Route.LoaderArgs) {
 	const { getPostBySlug, getRelatedPosts } = await import("~/lib/blog.server");
 	const post = getPostBySlug(params.slug);
@@ -178,12 +211,7 @@ export default function BlogPost({ loaderData }: Route.ComponentProps) {
 					<RelatedPosts posts={related} />
 
 					<div className="mt-12 pt-8 border-t border-carbon/10">
-						<BlogCTA
-							title="Start using Ration"
-							description="Track your pantry, plan meals, and reduce waste — with or without an AI assistant."
-							to="/"
-							label="Get started free"
-						/>
+						<BlogCTA {...ctaForSlug(post.slug)} />
 					</div>
 				</div>
 			</main>

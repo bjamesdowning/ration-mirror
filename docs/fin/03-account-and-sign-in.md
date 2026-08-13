@@ -12,7 +12,7 @@ Exact buttons and labels appear on the **landing and auth** screens in the app.
 ## After sign-in
 
 - If you have more than one organization, you may be asked to **select a group** before opening the hub.
-- New users may see an **onboarding tour** that highlights Cargo, Galley, Supply, and Manifest.
+- New users may see an **onboarding tour** that highlights Cargo, Galley, Manifest, and Supply (spotlight on web; Ask Ration briefing on iOS). When **Feature enablement** is shown for your account, that sits between Welcome and the tour: optional **AI Features** and **Macro Tracking** toggles. If you do not see Feature enablement, the feature is not enabled for your account.
 
 ## Profile
 

@@ -14,7 +14,7 @@
 ## Calories look wrong after switching kitchens
 
 - Pantry and meal plans are always per active group.
-- When **cross-kitchen personal diary** is on, today’s calorie total can include intake you logged in another kitchen—that is intentional. Rows may show a kitchen name chip. See *Nutrition goals and tracking*.
+- When **cross-kitchen personal diary** is on, today’s calorie total can include intake you logged in another kitchen—that is intentional. Rows may show a kitchen name chip. See *Macro tracking, goals, and intake*.
 
 ## Cannot invite members or share links
 
@@ -28,7 +28,13 @@
 
 ## URL import “duplicate”
 
-That recipe **URL was already imported** for this org. Open the existing meal or edit manually.
+That recipe **URL was already imported** for this org. Open the existing meal or edit it instead of re-importing.
+
+## URL import blocked, partial, or “Listening to the video…”
+
+- Some publishers block automated downloads. Ration still prefers a **saved-link holder** so you keep the URL. On **web**, paste page HTML (or recipe text) into the import dialog and extract (**3 credits**). On **iOS**, Ration may reload the page on-device, or you can edit the holder / use a screenshot.
+- Social posts (TikTok / Instagram / YouTube) may show **Listening to the video…** while spoken-audio transcription runs. A **partial skeleton** (ingredient names without amounts, or steps only) is a successful import.
+- Holder and skeleton jobs are **completed** (no refund) — you received a meal to review. Only hard failures (auth, credits, invalid URL) refund. See *Import a recipe (URL, social, or photo)*.
 
 ## MCP “connection closed” or 401
 

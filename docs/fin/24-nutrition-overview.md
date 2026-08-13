@@ -26,12 +26,12 @@ Composition snapshots on Cargo and Galley meals are **kitchen** data. Your goals
 - **Cargo** — Detail and edit show a nutrition panel when the engine is on.
 - **Galley** — Meal cards, detail, and edit can show per-serving energy/macros.
 - **Scan review** — Proposed nutrients appear before you add items to Cargo; edit there first.
-- **Manifest** — Day totals, Eat / plate-up intake logging, and a month calendar when Manifest nutrition is on. See *Nutrition goals and tracking*.
+- **Manifest** — Day totals, Eat / plate-up intake logging, and a month calendar when Manifest nutrition is on. See *Macro tracking, goals, and intake*.
 - **Hub** — Flight Recorder shows shared kitchen logistics (not personal kcal).
 - **Settings** — Personal daily goals when goals are enabled. See *Editing nutrition* for how to correct values.
 
 ## Related
 
-- *Nutrition goals and tracking* — Goals, Eat, calendar retention, Flight Recorder.
+- *Macro tracking, goals, and intake* — Goals, Eat, calendar retention, Flight Recorder.
 - *Editing nutrition* — Scan review, Cargo edits, user overrides.
 - *Data, privacy, and deletion* and `/legal/privacy` — Retention and erasure.

@@ -67,6 +67,7 @@ describe("getCopilotSystemPrompt", () => {
 		expect(prompt).toContain("cook_manifest_entries");
 		expect(prompt).toContain("get_nutrition_summary");
 		expect(prompt).toContain("vsGoal");
+		expect(prompt).toContain("optional macro planning / tracking");
 		expect(prompt).toContain("Do not give medical");
 		expect(prompt).toContain("feature_disabled");
 		expect(prompt).toContain("quick_eat_cargo");

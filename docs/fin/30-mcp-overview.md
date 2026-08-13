@@ -62,4 +62,4 @@ OAuth grants can be revoked instantly in Connected Agents. API keys should be tr
 
 - *Connecting to MCP* — OAuth setup and advanced API key config.
 - *MCP tools reference* — full tool list and rate limits.
-- *MCP vs web app* — what MCP cannot do.
+- *MCP vs hub app* — what MCP cannot do.

@@ -27,7 +27,8 @@ Open **Hub → Settings**:
 
 - **Account** — Display name, avatar, default group after sign-in.
 - **Group** — Active group name/avatar, members, invitations (when tier allows), roles, ownership transfer, credit transfer, org tags, supply planning horizon. See *Groups and membership*.
-- **Preferences** — Allergens, unit display mode, and other kitchen preferences shown in the UI. When nutrition goals are enabled, set or clear **daily nutrition goals** here (consent required on save)—see *Nutrition goals and tracking*.
+- **Feature enablement** — When shown for your account: turn **AI Features** and **Macro Tracking** on or off, review the full statements, and erase Macro Tracking data. Collected during onboarding; managed here afterward. Macro Tracking is required before saving nutrition goals or logging a serving. If this section is missing, the feature is not enabled for your account. See *Macro tracking, goals, and intake*.
+- **Preferences** — Allergens, unit display mode, and other kitchen preferences shown in the UI. When nutrition goals are enabled, set or clear **daily nutrition goals** here (Macro Tracking must already be on)—see *Macro tracking, goals, and intake*.
 - **Developer** — Overview path chooser, **MCP** (OAuth connect + grant management), and **API Keys** (REST v1 and advanced MCP scopes). See *API key safety*, *MCP overview*, and *REST API (v1) overview*.
 - **Help & Feedback** — Links into the self-serve guide at `/help` (same docs used by Ask Ration). See *Ask Ration vs reading the guide*.
 - **Danger Zone** — Delete group (when allowed), and **purge account** (irreversible). Read all warnings. Account purge removes user data and handles owned groups per product rules (transfer or delete). See *Data, privacy, and deletion*.
@@ -50,6 +51,7 @@ After Stripe checkout you may land with **`transaction=success`** so the hub ref
 - Update **Account** profile and **default group**.
 - Manage **Group** membership, tags, and owner/admin admin flows.
 - Edit **Preferences** (allergens, units, and nutrition goals when enabled).
+- Manage **Feature enablement** when shown (AI Features and Macro Tracking).
 - Configure **Developer** MCP and API keys.
 - Open **Help** (`/help`) or give feedback.
 - Run **Danger Zone** purge or group delete only when you intend permanent loss.

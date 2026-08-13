@@ -158,6 +158,12 @@ describe("onboarding briefing", () => {
 			"search_docs",
 		);
 		expect(getOnboardingBriefingSystemPromptAppend("bootstrap")).toContain(
+			"Macro Tracking / Daily Fuel",
+		);
+		expect(getOnboardingBriefingSystemPromptAppend("bootstrap")).toContain(
+			"optional personal macros",
+		);
+		expect(getOnboardingBriefingSystemPromptAppend("bootstrap")).toContain(
 			"Stock my kitchen",
 		);
 		expect(getOnboardingBriefingSystemPromptAppend("seed")).toContain(

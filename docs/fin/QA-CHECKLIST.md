@@ -15,6 +15,7 @@ Ask each in Ask Ration (with `search_docs`) and optionally open the matching `/h
 
 | # | Question | Expect article / theme |
 |---|----------|------------------------|
+| 0 | What is Ration? | `01` — pantry, meals, shopping, **and macros / Daily Fuel** (planning aid, private) |
 | 1 | What is Cargo vs Galley? | `02`, `10`, `12` |
 | 2 | How do I invite someone to my household? | `05`, `22` |
 | 3 | Can I leave a group? | `05` (leave for non-owners; owners transfer or delete) |
@@ -26,7 +27,7 @@ Ask each in Ask Ration (with `search_docs`) and optionally open the matching `/h
 | 9 | Where is the privacy policy? | `41` → `/legal/privacy` |
 | 10 | Paid but credits missing? | `61`, `21` |
 | 11 | Where do nutrients come from? USDA vs estimate? | `24`, `26` |
-| 12 | How do nutrition goals and Eat / plate-up work? | `25`, `15` |
+| 12 | How do nutrition goals and Eat / plate-up work (servings vs g/oz)? | `25`, `15` |
 | 12b | Two kitchens same day → one personal total; housemate cannot see logs; delete shared kitchen keeps diary | `25`, `05`, `02` |
 
 ## `/help` surface

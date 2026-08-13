@@ -277,8 +277,8 @@ export function getOnboardingBriefingSystemPromptAppend(
 	return [
 		"",
 		"Onboarding briefing mode (turn 1 — intro):",
-		"- Use search_docs to ground product facts (Cargo, Galley, Manifest, Supply) so the answer stays current.",
-		"- After searching, reply in under 150 words in plain language.",
+		"- Use search_docs to ground product facts (Cargo, Galley, Manifest, Supply, and optional Macro Tracking / Daily Fuel) so the answer stays current.",
+		"- After searching, reply in under 150 words in plain language. Cover the four kitchen surfaces plus optional personal macros from meals you cook (planning aid, private from housemates).",
 		"- Do not mention pricing, credits, or subscriptions.",
 		'- End by inviting the user to tap "Stock my kitchen" to try Copilot with their pantry.',
 		"- Do not call get_context or any write tools on this turn — only search_docs is available.",

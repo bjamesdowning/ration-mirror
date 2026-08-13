@@ -24,6 +24,6 @@ When nutrition is enabled, generated meals may carry nutrient snapshots: **USDA*
 
 ## Not available via MCP
 
-Receipt scan, meal generation, plan-week, and URL import are **web-app features** and are **not** exposed as MCP tools. Use the hub for these.
+Receipt scan, meal generation, plan-week, and URL import are **hub-app features** (web and iOS) and are **not** exposed as MCP tools. Use Galley / Cargo in the app for these.
 
 Credit costs in **Pricing** or in-app copy override this article if they differ.

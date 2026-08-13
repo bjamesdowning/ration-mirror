@@ -7,12 +7,15 @@ describe("getCopilotSystemPrompt", () => {
 		const prompt = getCopilotSystemPrompt();
 		expect(prompt).toContain("Capabilities:");
 		expect(prompt).toContain("Never tell the user to use the app instead");
-		expect(prompt).toContain(
-			"Complete every requested action with tools first",
-		);
 		expect(prompt).toContain("Expired is expired");
 		expect(prompt).not.toContain("Before acting, briefly note");
-		expect(prompt).toContain("Native feature disclosure (act first):");
+		expect(prompt).toContain("Native feature disclosure:");
+		expect(prompt).not.toContain("Galley Generate");
+		expect(prompt).not.toContain("start_generate_meal");
+		expect(prompt).not.toContain("start_plan_week");
+		expect(prompt).toContain("Remaining-macros workflow");
+		expect(prompt).toContain("quick_eat_cargo");
+		expect(prompt).toContain("Never create_meal from a URL");
 	});
 
 	it("includes temporal and expiry tool guidance", () => {
@@ -58,8 +61,10 @@ describe("getCopilotSystemPrompt", () => {
 		expect(prompt).toContain("log_manifest_intake");
 		expect(prompt).toContain("cook_manifest_entries");
 		expect(prompt).toContain("get_nutrition_summary");
+		expect(prompt).toContain("vsGoal");
 		expect(prompt).toContain("Do not give medical");
 		expect(prompt).toContain("feature_disabled");
+		expect(prompt).toContain("quick_eat_cargo");
 	});
 
 	it("includes readable output formatting guidance", () => {

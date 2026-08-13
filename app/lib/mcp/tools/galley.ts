@@ -28,7 +28,7 @@ export function createGalleyToolDefs(env: McpToolsEnv) {
 		defineSharedTool({
 			name: "create_meal",
 			description:
-				"Create a structured recipe in the Galley (credit-free). Use this whenever the user asks to add/create meals. For AI-assisted generation with review, offer start_generate_meal as an upgrade (Copilot) or disclose ration://galley/generate in the Ration app.",
+				"Create a structured recipe in the Galley (credit-free). Use this whenever the user asks to add, invent, or generate a meal from pantry context — pass a complete structured recipe (ingredients, directions, servings). Do not use for a URL; Copilot users must use Galley Import; MCP clients extract caption/page text with the client LLM, then pass a structured meal.",
 			inputSchema: z.object({
 				meal: McpCreateMealSchema,
 			}),

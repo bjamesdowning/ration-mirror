@@ -107,7 +107,7 @@ struct AskView: View {
                             EmptyStateView(
                                 icon: "sparkles",
                                 title: "Ask Ration",
-                                message: "Ask about the app, update Cargo, or inspect what is expiring. Scans, recipe generation, imports, and week planning stay in their native flows."
+                                message: "Ask about the app, update Cargo, or inspect what is expiring. Macros, Quick Eat, creating meals, and scheduling a week work in chat with no extra credits. Scan and URL import stay native."
                             )
                             .padding(.top, 32)
                         }

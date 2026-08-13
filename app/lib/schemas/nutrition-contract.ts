@@ -161,6 +161,25 @@ export const NutritionDayTotalsDTOSchema = z.object({
 
 export type NutritionDayTotalsDTO = z.infer<typeof NutritionDayTotalsDTOSchema>;
 
+export const NutrientVsGoalDTOSchema = z.object({
+	consumed: z.number(),
+	target: z.number().nullable(),
+	remaining: z.number().nullable(),
+	overage: z.number().nullable(),
+});
+
+export type NutrientVsGoalDTO = z.infer<typeof NutrientVsGoalDTOSchema>;
+
+export const NutritionVsGoalDTOSchema = z.object({
+	energyKcal: NutrientVsGoalDTOSchema,
+	proteinG: NutrientVsGoalDTOSchema,
+	carbsG: NutrientVsGoalDTOSchema,
+	fatG: NutrientVsGoalDTOSchema,
+	fiberG: NutrientVsGoalDTOSchema.optional(),
+});
+
+export type NutritionVsGoalDTO = z.infer<typeof NutritionVsGoalDTOSchema>;
+
 export const NutritionSummaryV2Schema = z.object({
 	schemaVersion: z.literal(2),
 	from: CalendarDateSchema,
@@ -173,8 +192,13 @@ export const NutritionSummaryV2Schema = z.object({
 		fatG: z.number(),
 		fiberG: z.number().nullable().optional(),
 	}),
-	days: z.array(NutritionDayTotalsDTOSchema),
+	days: z.array(
+		NutritionDayTotalsDTOSchema.extend({
+			vsGoal: NutritionVsGoalDTOSchema.optional(),
+		}),
+	),
 	goal: NutritionGoalDTOSchema.nullable(),
+	vsGoal: NutritionVsGoalDTOSchema.optional(),
 });
 
 export type NutritionSummaryV2 = z.infer<typeof NutritionSummaryV2Schema>;

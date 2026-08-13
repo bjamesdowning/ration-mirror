@@ -1427,8 +1427,9 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 						<div className="flex h-full flex-col items-center justify-center gap-3 text-center text-muted">
 							<Sparkles className="size-8 text-hyper-green" />
 							<p className="max-w-sm">
-								Ask about Ration, inspect Cargo, or make deterministic pantry
-								updates. Scans and generation stay in native flows.
+								Ask about Ration, inspect Cargo, or make pantry updates. Macros,
+								Quick Eat, creating meals, and scheduling a week work in chat
+								with no extra credits. Scan and URL import stay native.
 							</p>
 						</div>
 					) : (

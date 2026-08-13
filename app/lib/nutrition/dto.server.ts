@@ -2,10 +2,10 @@ import type { NutritionSummary } from "~/lib/schemas/nutrition";
 import type {
 	FoodNutritionSnapshotV2,
 	MealNutritionSnapshotV2,
-	NutritionDayTotalsDTO,
 	NutritionGoalDTO,
 	NutritionIntakeDTO,
 	NutritionSummaryV2,
+	NutritionVsGoalDTO,
 	PlannedDatesResponseV2,
 } from "~/lib/schemas/nutrition-contract";
 import {
@@ -13,6 +13,12 @@ import {
 	projectNutritionSnapshotToLegacy,
 	toCanonicalNutrientAmounts,
 } from "./adapters";
+import {
+	type NutrientGoalTargets,
+	nutrientOverage,
+	nutrientRemaining,
+	nutrientTarget,
+} from "./hub-widgets";
 import type {
 	NutritionIntakeRow,
 	NutritionSummaryResult,
@@ -31,6 +37,45 @@ export type MealNutritionDto = ReturnType<typeof serializeMealNutrition>;
 export type NutritionGoalDto = ReturnType<typeof serializeNutritionGoal>;
 export type NutritionSummaryDto = ReturnType<typeof serializeNutritionSummary>;
 export type NutritionIntakeDto = ReturnType<typeof serializeNutritionIntake>;
+
+function vsGoalNutrient(
+	consumed: number,
+	target: number | null,
+): NutritionVsGoalDTO["energyKcal"] {
+	return {
+		consumed,
+		target,
+		remaining: nutrientRemaining(consumed, target),
+		overage: nutrientOverage(consumed, target),
+	};
+}
+
+/** Remaining/overage vs personal targets. remaining/overage are null without a target. */
+export function buildNutritionVsGoal(
+	amounts: {
+		energyKcal: number;
+		proteinG: number;
+		carbsG: number;
+		fatG: number;
+		fiberG?: number | null;
+	},
+	goal: NutrientGoalTargets | null,
+): NutritionVsGoalDTO {
+	const dto: NutritionVsGoalDTO = {
+		energyKcal: vsGoalNutrient(
+			amounts.energyKcal,
+			nutrientTarget(goal, "energy"),
+		),
+		proteinG: vsGoalNutrient(amounts.proteinG, nutrientTarget(goal, "protein")),
+		carbsG: vsGoalNutrient(amounts.carbsG, nutrientTarget(goal, "carbs")),
+		fatG: vsGoalNutrient(amounts.fatG, nutrientTarget(goal, "fat")),
+	};
+	const fiberTarget = nutrientTarget(goal, "fiber");
+	if (amounts.fiberG != null || fiberTarget != null) {
+		dto.fiberG = vsGoalNutrient(amounts.fiberG ?? 0, fiberTarget);
+	}
+	return dto;
+}
 
 function toIso(value: Date | string | null | undefined): string | undefined {
 	if (value == null) return undefined;
@@ -210,10 +255,14 @@ export function serializeNutritionGoal(
 	return dto;
 }
 
-/** Legacy v1 summary shape plus additive v2 (`goalAsOf`, schemaVersion). */
+/** Legacy v1 summary shape plus additive v2 (`goalAsOf`, schemaVersion, vsGoal). */
 export function serializeNutritionSummary(
 	summary: NutritionSummaryResult,
-): NutritionSummary & { goalAsOf: string; nutritionV2: NutritionSummaryV2 } {
+): NutritionSummary & {
+	goalAsOf: string;
+	vsGoal: NutritionVsGoalDTO;
+	nutritionV2: NutritionSummaryV2;
+} {
 	const goal = summary.goal ? serializeNutritionGoal(summary.goal) : null;
 	const coercedDays = summary.days.map((day) => ({
 		date: day.date,
@@ -234,9 +283,20 @@ export function serializeNutritionSummary(
 			? { fiberG: coerceFiniteNumber(summary.totals.fiberG) }
 			: {}),
 	};
-	const days: NutritionDayTotalsDTO[] = coercedDays.map((day) => ({
+	const lastDay = coercedDays.find((day) => day.date === summary.to) ?? {
+		date: summary.to,
+		energyKcal: 0,
+		proteinG: 0,
+		carbsG: 0,
+		fatG: 0,
+		coverageAvg: 0,
+		entryCount: 0,
+	};
+	const vsGoal = buildNutritionVsGoal(lastDay, goal);
+	const days = coercedDays.map((day) => ({
 		schemaVersion: 2 as const,
 		...day,
+		vsGoal: buildNutritionVsGoal(day, goal),
 	}));
 	const nutritionV2: NutritionSummaryV2 = {
 		schemaVersion: 2,
@@ -246,6 +306,7 @@ export function serializeNutritionSummary(
 		totals: coercedTotals,
 		days,
 		goal,
+		vsGoal,
 	};
 	return {
 		from: summary.from,
@@ -265,6 +326,7 @@ export function serializeNutritionSummary(
 					effectiveTo: summary.goal.effectiveTo,
 				}
 			: null,
+		vsGoal,
 		nutritionV2,
 	};
 }

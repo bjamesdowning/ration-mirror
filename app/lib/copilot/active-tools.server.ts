@@ -44,7 +44,6 @@ const GALLEY_WRITE = [
 	"set_active_meals",
 	"clear_active_meals",
 	"consume_meal",
-	"start_generate_meal",
 ] as const;
 
 const MANIFEST_WRITE = [
@@ -55,7 +54,6 @@ const MANIFEST_WRITE = [
 	"remove_meal_plan_entry",
 	"cook_manifest_entries",
 	"consume_manifest_entries",
-	"start_plan_week",
 ] as const;
 
 const SUPPLY_WRITE = [
@@ -78,6 +76,7 @@ const NUTRITION_TOOLS = [
 	"clear_manifest_intake",
 	"cook_manifest_entries",
 	"consume_manifest_entries",
+	"quick_eat_cargo",
 ] as const;
 
 function includesAny(text: string, needles: RegExp[]): boolean {
@@ -171,7 +170,14 @@ export function resolveCopilotActiveTools(
 		/\bmacro/,
 		/\bnutrition/,
 		/\bgoal\b/,
+		/\btonight\b/,
+		/\beat\b/,
 		/\bate\b/,
+		/\bsnack\b/,
+		/\bremaining\b/,
+		/\bleft\b/,
+		/\bbudget\b/,
+		/\bfits\b/,
 		/\bconsumed\b/,
 		/\bprotein\b/,
 		/\bintake\b/,

@@ -13,62 +13,22 @@ export const NATIVE_FEATURE_HINTS = {
 		webPath: "/hub/galley",
 		flag: "ai-import-url" as const,
 		message:
-			"Recipe URL import requires Galley Import for browser extraction, credit billing, and review.",
-	},
-	generate_meal: {
-		name: "Galley Generate",
-		deepLink: "ration://galley/generate",
-		webPath: "/hub/galley",
-		flag: "ai-generate-meal" as const,
-		message:
-			"Galley Generate provides Ration's dedicated AI recipe generator and review-before-save flow.",
-	},
-	plan_week: {
-		name: "Manifest Plan Week",
-		deepLink: "ration://manifest/plan-week",
-		webPath: "/hub/manifest",
-		flag: "ai-plan-week" as const,
-		message:
-			"Manifest Plan Week provides Ration's background AI planner with dietary and tag controls.",
+			"Website and social recipe URLs (Instagram, TikTok, YouTube) require Galley Import for extraction, credits, and review. Open Galley Import rather than creating a meal from the link in chat.",
 	},
 } as const;
 
 export type NativeFeatureFlagKey =
 	(typeof NATIVE_FEATURE_HINTS)[keyof typeof NATIVE_FEATURE_HINTS]["flag"];
 
+/** Copilot no longer upsells billed Generate / Plan Week after acting. */
 export type NativeFeatureSuggestion =
-	| typeof NATIVE_FEATURE_HINTS.generate_meal
-	| typeof NATIVE_FEATURE_HINTS.plan_week;
+	(typeof NATIVE_FEATURE_HINTS)[keyof typeof NATIVE_FEATURE_HINTS];
 
 export type NativeFeatureEnabledMap = Partial<
 	Record<NativeFeatureFlagKey, boolean>
 >;
 
 export type NativeFeatureClientSource = "web" | "mobile";
-
-const CHAT_PREFERENCE_PATTERN =
-	/\b(in (?:this )?chat|through copilot|with copilot|just do it|continue (?:here|in (?:this )?chat))\b/i;
-
-const NATIVE_FEATURE_SUGGESTIONS: Array<{
-	hint: NativeFeatureSuggestion;
-	patterns: RegExp[];
-}> = [
-	{
-		hint: NATIVE_FEATURE_HINTS.generate_meal,
-		patterns: [
-			/\b(generate|create|make)\b.*\b(recipe|meal|dish)\b/i,
-			/\bai\b.*\b(recipe|meal)\b/i,
-		],
-	},
-	{
-		hint: NATIVE_FEATURE_HINTS.plan_week,
-		patterns: [
-			/\b(plan|build|generate)\b.*\b(week|weekly)\b/i,
-			/\b(create|make|build|plan|fill|schedule)\b.*\b(meal plan|manifest)\b/i,
-			/\bmanifest\b.*\b(ai|plan)\b/i,
-		],
-	},
-];
 
 function isHintEnabled(
 	flag: NativeFeatureFlagKey,
@@ -78,18 +38,12 @@ function isHintEnabled(
 	return enabled[flag] === true;
 }
 
+/** Generate / Plan Week are fulfilled with kitchen primitives — no native upsell. */
 export function detectNativeFeatureSuggestion(
-	input: string,
-	enabled?: NativeFeatureEnabledMap,
+	_input: string,
+	_enabled?: NativeFeatureEnabledMap,
 ): NativeFeatureSuggestion | null {
-	const text = input.trim();
-	if (!text || CHAT_PREFERENCE_PATTERN.test(text)) return null;
-	const match = NATIVE_FEATURE_SUGGESTIONS.find(({ patterns }) =>
-		patterns.some((pattern) => pattern.test(text)),
-	);
-	if (!match) return null;
-	if (!isHintEnabled(match.hint.flag, enabled)) return null;
-	return match.hint;
+	return null;
 }
 
 /** Prefer web routes for browser clients; deep links for iOS. */
@@ -100,19 +54,11 @@ export function resolveNativeFeatureLink(
 	return source === "mobile" ? hint.deepLink : hint.webPath;
 }
 
-/**
- * Act-first advisory appended per turn when a native AI feature overlaps.
- * Tools stay available; disclosure is post-action only.
- */
 export function formatNativeFeatureAdvisory(
-	hint: NativeFeatureSuggestion,
-	source: NativeFeatureClientSource = "web",
+	_hint: NativeFeatureSuggestion,
+	_source: NativeFeatureClientSource = "web",
 ): string {
-	const link = resolveNativeFeatureLink(hint, source);
-	return (
-		`\n\nThe user's request overlaps ${hint.name}. You MUST complete all requested actions with tools in this turn. ` +
-		`Only after your final action summary, add one sentence noting the native alternative and its benefit, with this link: ${link}.`
-	);
+	return "";
 }
 
 export function formatNativeFeatureGuidance(

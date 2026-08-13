@@ -66,6 +66,7 @@ describe("createNutritionToolDefs", () => {
 			"get_nutrition_summary",
 			"list_nutrition_intakes",
 			"log_manifest_intake",
+			"quick_eat_cargo",
 			"set_nutrition_goal",
 		]);
 		expect(
@@ -75,6 +76,11 @@ describe("createNutritionToolDefs", () => {
 			"mcp:nutrition:write",
 		]);
 		expect(defs.find((d) => d.name === "log_manifest_intake")?.scopes).toEqual([
+			"mcp:nutrition:write",
+		]);
+		expect(defs.find((d) => d.name === "quick_eat_cargo")?.scopes).toEqual([
+			"mcp:inventory:write",
+			"mcp:manifest:write",
 			"mcp:nutrition:write",
 		]);
 	});
@@ -91,6 +97,62 @@ describe("createNutritionToolDefs", () => {
 		if (envelope.ok) return;
 		expect(envelope.error.code).toBe("feature_disabled");
 		expect(envelope.error.recoveryHint).toBeTruthy();
+	});
+
+	it("defaults from/to to today UTC and returns vsGoal", async () => {
+		const { isFeatureEnabled } = await import(
+			"~/lib/feature-flags/flags.server"
+		);
+		vi.mocked(isFeatureEnabled).mockResolvedValue(true);
+		const { getSummary } = await import("~/lib/nutrition/service.server");
+		vi.mocked(getSummary).mockResolvedValue({
+			from: "2026-08-13",
+			to: "2026-08-13",
+			totals: {
+				energyKcal: 500,
+				proteinG: 20,
+				carbsG: 40,
+				fatG: 10,
+			},
+			days: [
+				{
+					date: "2026-08-13",
+					energyKcal: 500,
+					proteinG: 20,
+					carbsG: 40,
+					fatG: 10,
+					coverageAvg: 1,
+					entryCount: 1,
+				},
+			],
+			goal: {
+				dailyEnergyKcal: 2000,
+				proteinG: 100,
+				carbsG: 250,
+				fatG: 70,
+				fiberG: null,
+				effectiveFrom: "2026-08-01",
+				effectiveTo: null,
+			},
+		});
+
+		const defs = createNutritionToolDefs({} as never);
+		const summary = defs.find((d) => d.name === "get_nutrition_summary");
+		if (!summary) throw new Error("expected get_nutrition_summary");
+		const envelope = await summary.handler(baseCtx, {});
+		expect(envelope.ok).toBe(true);
+		if (!envelope.ok) return;
+		expect(getSummary).toHaveBeenCalledWith(
+			expect.anything(),
+			expect.anything(),
+			expect.anything(),
+			expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+			expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+		);
+		const data = envelope.data as {
+			vsGoal: { energyKcal: { remaining: number } };
+		};
+		expect(data.vsGoal.energyKcal.remaining).toBe(1500);
 	});
 
 	it("returns consent_required when Eat upsert denies consent", async () => {

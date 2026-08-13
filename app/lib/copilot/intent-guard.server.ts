@@ -1,3 +1,4 @@
+import { extractImportUrl } from "../import/extract-import-url";
 import type { CopilotBlockedFeature } from "../schemas/copilot";
 import {
 	NATIVE_FEATURE_HINTS,
@@ -40,9 +41,17 @@ const BLOCKED_FEATURES: Array<{
 		patterns: [
 			/\b(import|pull|parse|extract)\b.*\b(url|link|website|recipe site)\b/i,
 			/\b(import|pull|parse|extract)\b.*https?:\/\/\S+/i,
+			/\bthis\s+(reel|tiktok|instagram|youtube)\b/i,
+			/\b(tiktok|instagram|youtube|youtu\.be)\b.*\b(recipe|meal|dish)\b/i,
+			/\b(recipe|meal|dish)\b.*\b(tiktok|instagram|youtube|reel)\b/i,
 		],
 	},
 ];
+
+function matchesImportUrlBlock(text: string, patterns: RegExp[]): boolean {
+	if (extractImportUrl(text)) return true;
+	return patterns.some((pattern) => pattern.test(text));
+}
 
 export function detectBlockedCopilotIntent(
 	input: string,
@@ -52,7 +61,11 @@ export function detectBlockedCopilotIntent(
 	if (!text) return null;
 
 	for (const blocked of BLOCKED_FEATURES) {
-		if (blocked.patterns.some((pattern) => pattern.test(text))) {
+		const matched =
+			blocked.feature === "import_url"
+				? matchesImportUrlBlock(text, blocked.patterns)
+				: blocked.patterns.some((pattern) => pattern.test(text));
+		if (matched) {
 			const nativeAvailable =
 				enabled === undefined || enabled[blocked.flag] === true;
 			return {

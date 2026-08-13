@@ -89,6 +89,50 @@ describe("NutritionSummaryV2Schema", () => {
 		});
 		expect(parsed.goalAsOf).toBe("2026-08-07");
 	});
+
+	it("accepts additive vsGoal remaining/overage", () => {
+		const parsed = NutritionSummaryV2Schema.parse({
+			schemaVersion: 2,
+			from: "2026-08-11",
+			to: "2026-08-11",
+			goalAsOf: "2026-08-11",
+			totals: {
+				energyKcal: 1800,
+				proteinG: 90,
+				carbsG: 200,
+				fatG: 70,
+			},
+			days: [],
+			goal: null,
+			vsGoal: {
+				energyKcal: {
+					consumed: 1800,
+					target: 2000,
+					remaining: 200,
+					overage: null,
+				},
+				proteinG: {
+					consumed: 90,
+					target: null,
+					remaining: null,
+					overage: null,
+				},
+				carbsG: {
+					consumed: 200,
+					target: null,
+					remaining: null,
+					overage: null,
+				},
+				fatG: {
+					consumed: 70,
+					target: null,
+					remaining: null,
+					overage: null,
+				},
+			},
+		});
+		expect(parsed.vsGoal?.energyKcal.remaining).toBe(200);
+	});
 });
 
 describe("PlannedDatesResponseV2Schema", () => {

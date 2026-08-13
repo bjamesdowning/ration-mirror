@@ -14,8 +14,8 @@ import { registerSupplyTools } from "./tools/supply";
 
 /**
  * Registers the credit-free MCP kitchen tool surface.
- * Billed AI workflows (`start_plan_week` / `start_generate_meal`) remain
- * Copilot/web-only via `createAiWorkflowToolDefs` — not registered here.
+ * Billed Gemini jobs (scan, URL import, Galley Generate, Plan Week) stay on
+ * native web/iOS only — they are not MCP or Copilot tools.
  */
 export function registerTools(
 	server: McpServer,

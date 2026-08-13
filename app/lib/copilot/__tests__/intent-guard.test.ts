@@ -34,4 +34,52 @@ describe("detectBlockedCopilotIntent", () => {
 			})?.feature,
 		).toBe("import_url");
 	});
+
+	it("hard-blocks a bare Instagram URL", () => {
+		expect(
+			detectBlockedCopilotIntent("https://www.instagram.com/p/abc123", {
+				"ai-scan-receipt": true,
+				"ai-import-url": true,
+			})?.feature,
+		).toBe("import_url");
+	});
+
+	it("hard-blocks bare TikTok and YouTube URLs", () => {
+		expect(
+			detectBlockedCopilotIntent("https://vm.tiktok.com/ZMabc", {
+				"ai-scan-receipt": true,
+				"ai-import-url": true,
+			})?.feature,
+		).toBe("import_url");
+		expect(
+			detectBlockedCopilotIntent("https://youtu.be/abc", {
+				"ai-scan-receipt": true,
+				"ai-import-url": true,
+			})?.feature,
+		).toBe("import_url");
+	});
+
+	it("hard-blocks a bare recipe-site HTTPS URL", () => {
+		expect(
+			detectBlockedCopilotIntent("https://www.allrecipes.com/recipe/1/", {
+				"ai-scan-receipt": true,
+				"ai-import-url": true,
+			})?.feature,
+		).toBe("import_url");
+	});
+
+	it("hard-blocks this-reel / social recipe phrasing without a URL", () => {
+		expect(
+			detectBlockedCopilotIntent("this tiktok recipe looks good", {
+				"ai-scan-receipt": true,
+				"ai-import-url": true,
+			})?.feature,
+		).toBe("import_url");
+		expect(
+			detectBlockedCopilotIntent("save this reel", {
+				"ai-scan-receipt": true,
+				"ai-import-url": true,
+			})?.feature,
+		).toBe("import_url");
+	});
 });

@@ -94,6 +94,14 @@ vi.mock("~/lib/galley-cook-manifest.server", () => ({
 	cookMealFromGalley: vi.fn(),
 }));
 
+vi.mock("~/lib/nutrition/service.server", () => ({
+	attachPersonalIntakeToEntries: vi.fn(
+		async (_env: unknown, _p: unknown, _f: unknown, entries: unknown) =>
+			entries,
+	),
+	getSummary: vi.fn(),
+}));
+
 vi.mock("~/lib/nutrition/persist.server", async (importOriginal) => {
 	const actual =
 		await importOriginal<typeof import("~/lib/nutrition/persist.server")>();
@@ -245,7 +253,7 @@ function getToolHandler(
 }
 
 /** Returns a fresh server with all tools registered */
-function makeServer(orgId = "org-test-123") {
+function makeServer(orgId = "org-test-123", scopes: string[] = ["mcp"]) {
 	const mockEnv = {
 		...createMockEnv(),
 		__mcp: {
@@ -254,7 +262,7 @@ function makeServer(orgId = "org-test-123") {
 			userId: "user-test-123",
 			keyName: "Test Key",
 			keyPrefix: "ration_test",
-			scopes: ["mcp"], // legacy full scope
+			scopes,
 		},
 	};
 	const server = new McpServer({ name: "test", version: "1.0.0" });
@@ -1291,6 +1299,109 @@ describe("MCP tools", () => {
 			);
 		});
 
+		it("includes compact per-serving nutrition", async () => {
+			vi.mocked(matchMeals).mockResolvedValueOnce([
+				{
+					meal: {
+						id: "m1",
+						name: "Salad",
+						servings: 2,
+						nutritionStatus: "current",
+						nutrition: {
+							perServing: {
+								energyKcal: 420,
+								proteinG: 18,
+								carbG: 40,
+								fatG: 12,
+								fiberG: 8,
+							},
+							coverage: 0.9,
+						},
+					},
+					matchPercentage: 100,
+					canMake: true,
+					missingIngredients: [],
+				},
+			] as never);
+			const server = makeServer();
+			const result = await getToolHandler(server, "match_meals")({});
+			const data = parseOk(result);
+			expect(data[0]?.servings).toBe(2);
+			expect(data[0]?.nutritionStatus).toBe("current");
+			expect(data[0]?.nutrition).toEqual({
+				perServing: {
+					energyKcal: 420,
+					proteinG: 18,
+					carbsG: 40,
+					fatG: 12,
+					fiberG: 8,
+				},
+				coverage: 0.9,
+			});
+		});
+
+		it("excludes known over-cap kcal but keeps unknown nutrition", async () => {
+			vi.mocked(matchMeals).mockResolvedValueOnce([
+				{
+					meal: {
+						id: "heavy",
+						name: "Heavy",
+						nutritionStatus: "current",
+						nutrition: {
+							perServing: {
+								energyKcal: 900,
+								proteinG: 20,
+								carbG: 80,
+								fatG: 40,
+							},
+						},
+					},
+					matchPercentage: 100,
+					canMake: true,
+					missingIngredients: [],
+				},
+				{
+					meal: {
+						id: "fit",
+						name: "Fit",
+						nutritionStatus: "current",
+						nutrition: {
+							perServing: {
+								energyKcal: 400,
+								proteinG: 20,
+								carbG: 30,
+								fatG: 10,
+							},
+						},
+					},
+					matchPercentage: 100,
+					canMake: true,
+					missingIngredients: [],
+				},
+				{
+					meal: {
+						id: "unknown",
+						name: "Unknown",
+						nutritionStatus: "pending",
+						nutrition: null,
+					},
+					matchPercentage: 100,
+					canMake: true,
+					missingIngredients: [],
+				},
+			] as never);
+			const server = makeServer();
+			const result = await getToolHandler(
+				server,
+				"match_meals",
+			)({ maxEnergyKcal: 500 });
+			const data = parseOk(result);
+			expect(data.map((row: { mealId: string }) => row.mealId)).toEqual([
+				"fit",
+				"unknown",
+			]);
+		});
+
 		it("returns empty array when no strict matches", async () => {
 			vi.mocked(matchMeals).mockResolvedValueOnce([] as never);
 			const server = makeServer();
@@ -1397,12 +1508,121 @@ describe("MCP tools", () => {
 			});
 			const data = parseOk(result);
 			expect(data.kitchen.credits).toBe(5);
+			expect(data.personalNutritionToday).toBeUndefined();
 			expect(buildKitchenSummary).toHaveBeenCalledWith(
 				expect.anything(),
 				"org-test-123",
 				"user-test-123",
 				{ manifestDays: 1 },
 			);
+		});
+
+		it("attaches personalNutritionToday when nutrition read is granted", async () => {
+			const { isFeatureEnabled } = await import(
+				"~/lib/feature-flags/flags.server"
+			);
+			vi.mocked(isFeatureEnabled).mockResolvedValue(true);
+			const { getSummary } = await import("~/lib/nutrition/service.server");
+			vi.mocked(getSummary).mockResolvedValue({
+				from: "2026-08-13",
+				to: "2026-08-13",
+				totals: {
+					energyKcal: 500,
+					proteinG: 20,
+					carbsG: 40,
+					fatG: 10,
+				},
+				days: [
+					{
+						date: "2026-08-13",
+						energyKcal: 500,
+						proteinG: 20,
+						carbsG: 40,
+						fatG: 10,
+						coverageAvg: 1,
+						entryCount: 1,
+					},
+				],
+				goal: {
+					dailyEnergyKcal: 2000,
+					proteinG: 100,
+					carbsG: 250,
+					fatG: 70,
+					fiberG: null,
+					effectiveFrom: "2026-08-01",
+					effectiveTo: null,
+				},
+			});
+
+			const server = makeServer("org-test-123", [
+				"mcp:read",
+				"mcp:nutrition:read",
+			]);
+			const result = await getToolHandler(
+				server,
+				"get_kitchen_summary",
+			)({
+				manifestDays: 1,
+			});
+			const data = parseOk(result);
+			expect(data.personalNutritionToday.vsGoal.energyKcal.remaining).toBe(
+				1500,
+			);
+			expect(data.personalNutritionToday.consumed.energyKcal).toBe(500);
+		});
+
+		it("omits personalNutritionToday on consent_required", async () => {
+			const { isFeatureEnabled } = await import(
+				"~/lib/feature-flags/flags.server"
+			);
+			vi.mocked(isFeatureEnabled).mockResolvedValue(true);
+			const { getSummary } = await import("~/lib/nutrition/service.server");
+			vi.mocked(getSummary).mockRejectedValue(
+				Object.assign(new Error("Consent required"), {
+					code: "nutrition_consent_required",
+				}),
+			);
+
+			const server = makeServer("org-test-123", [
+				"mcp:read",
+				"mcp:nutrition:read",
+			]);
+			const result = await getToolHandler(
+				server,
+				"get_kitchen_summary",
+			)({
+				manifestDays: 1,
+			});
+			const data = parseOk(result);
+			expect(data.kitchen.credits).toBe(5);
+			expect(data.personalNutritionToday).toBeUndefined();
+		});
+
+		it("omits personalNutritionToday on reconsent_required", async () => {
+			const { isFeatureEnabled } = await import(
+				"~/lib/feature-flags/flags.server"
+			);
+			vi.mocked(isFeatureEnabled).mockResolvedValue(true);
+			const { getSummary } = await import("~/lib/nutrition/service.server");
+			vi.mocked(getSummary).mockRejectedValue(
+				Object.assign(new Error("Reconsent required"), {
+					code: "nutrition_reconsent_required",
+				}),
+			);
+
+			const server = makeServer("org-test-123", [
+				"mcp:read",
+				"mcp:nutrition:read",
+			]);
+			const result = await getToolHandler(
+				server,
+				"get_kitchen_summary",
+			)({
+				manifestDays: 1,
+			});
+			const data = parseOk(result);
+			expect(data.kitchen.credits).toBe(5);
+			expect(data.personalNutritionToday).toBeUndefined();
 		});
 	});
 

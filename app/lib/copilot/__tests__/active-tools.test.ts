@@ -124,4 +124,22 @@ describe("resolveCopilotActiveTools", () => {
 		expect(tools).toContain("log_manifest_intake");
 		expect(tools).toContain("cook_manifest_entries");
 	});
+
+	it("opens remaining-macros tools for tonight + calorie goals", () => {
+		const tools = resolveCopilotActiveTools(
+			[...ALL, "get_nutrition_summary", "match_meals", "quick_eat_cargo"],
+			"what can i eat tonight that fits into my calorie goals",
+		);
+		expect(tools).toContain("get_nutrition_summary");
+		expect(tools).toContain("match_meals");
+	});
+
+	it("opens quick_eat_cargo for I just ate grapes", () => {
+		const tools = resolveCopilotActiveTools(
+			[...ALL, "quick_eat_cargo", "get_nutrition_summary", "adjust_cargo_item"],
+			"I just ate grapes",
+		);
+		expect(tools).toContain("quick_eat_cargo");
+		expect(tools).toContain("get_nutrition_summary");
+	});
 });

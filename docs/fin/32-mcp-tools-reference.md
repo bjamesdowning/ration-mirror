@@ -1,6 +1,6 @@
 # MCP tools reference
 
-All tools are scoped to the **authorized household** (OAuth grant or API key organization). Nutrition **read** tools (`get_nutrition_summary`, `list_nutrition_intakes`) return the **caller’s personal diary**; when `nutrition-cross-org-diary` is on, totals/history include intakes from every kitchen that user logged—not “household nutrition.” Writes still authorize against the grant kitchen for that entry. **MCP tools do not consume AI credits**; they use **rate limits** instead. Billed AI Plan Week / meal generate remain on the web app and Copilot (deep links `ration://manifest/plan-week`, `ration://galley/generate`) — not MCP tools. Every tool returns a uniform JSON envelope (`{ ok: true, tool, data, warnings?, meta? }` or `{ ok: false, tool, error }`). Failures include `error.code` (including `timeout`), `error.message`, optional `error.details`, and often `error.recoveryHint`. Copilot returns the **same envelope shape** to the model. Tool handlers are capped (~20s) so hung Workers AI/D1 calls cannot stall the agent forever.
+All tools are scoped to the **authorized household** (OAuth grant or API key organization). Nutrition **read** tools (`get_nutrition_summary`, `list_nutrition_intakes`) return the **caller’s personal diary**; when `nutrition-cross-org-diary` is on, totals/history include intakes from every kitchen that user logged—not “household nutrition.” Writes still authorize against the grant kitchen for that entry. **MCP and Copilot kitchen tools do not consume AI credits**; they use **rate limits** instead. Billed Gemini jobs (scan, URL import, Galley Generate, Plan Week) stay on native web/iOS only. Copilot invents meals with `create_meal` and fills a week with `propose_manifest_plan` → `commit_manifest_plan`. Every tool returns a uniform JSON envelope (`{ ok: true, tool, data, warnings?, meta? }` or `{ ok: false, tool, error }`). Failures include `error.code` (including `timeout`), `error.message`, optional `error.details`, and often `error.recoveryHint`. Copilot returns the **same envelope shape** to the model. Tool handlers are capped (~20s) so hung Workers AI/D1 calls cannot stall the agent forever.
 
 ## Rate limit categories
 
@@ -23,7 +23,7 @@ Exact windows may be tuned; if you hit limits, wait for the window to reset. Rat
 | `search_ingredients` | `mcp:read` | Semantic search in pantry by meaning. |
 | `get_expiring_items` | `mcp:read` | Pantry lines expiring within N UTC calendar days. Defaults to the user's `expirationAlertDays` when `days` is omitted. |
 | `get_expired_items` | `mcp:read` | Pantry lines whose expiry date is before today (UTC). |
-| `get_kitchen_summary` | `mcp:read` | Single-call kitchen snapshot. Prefer this over `get_context` for status. |
+| `get_kitchen_summary` | `mcp:read` | Single-call kitchen snapshot. Prefer this over `get_context` for status. When `mcp:nutrition:read` is granted, may include caller-only `personalNutritionToday`. |
 | `get_kitchen_events` | `mcp:read` | Flight Recorder timeline (filter by event type / date range; paginated). |
 | `get_kitchen_stats` | `mcp:read` | Flight Recorder aggregates (7d/30d/90d/365d counts + top cooked meals). |
 | `add_cargo_item` | `mcp:inventory:write` | Add a single pantry item. Fuzzy Vectorize merge skipped; embeddings backfill async. |
@@ -53,7 +53,7 @@ Prefer resource `ration://schemas/inventory-import` for the item shape.
 | Tool | Scope | Purpose |
 |------|-------|---------|
 | `list_meals` | `mcp:read` | Cursor-paginated recipe list. |
-| `match_meals` | `mcp:read` | Cookability match (`strict` / `delta`). |
+| `match_meals` | `mcp:read` | Cookability match (`strict` / `delta`). Includes compact `nutrition.perServing` and optional `maxEnergyKcal` (unknown kcal stays listed). |
 | `create_meal` | `mcp:galley:write` | Create structured recipe (credit-free). |
 | `update_meal` | `mcp:galley:write` | Update a recipe. |
 | `delete_meal` | `mcp:galley:write` | Delete a recipe. **Requires `confirm: true`.** Cascades to ingredients, tags, and linked meal plan entries. Returns `deletedPlanEntryCount`. |
@@ -80,12 +80,13 @@ Gated by nutrition feature flags. Not medical advice. Cargo/meal read and write 
 
 | Tool | Scope | Purpose |
 |------|-------|---------|
-| `get_nutrition_summary` | `mcp:nutrition:read` | Daily intake totals (energy + macros + optional fiber) for a UTC date range, plus active goal when set. Requires nutrition-goals or nutrition-manifest. |
+| `get_nutrition_summary` | `mcp:nutrition:read` | Daily intake totals (energy + macros + optional fiber) for a UTC date range, plus active goal and additive `vsGoal` remaining/overage for the last day. `from`/`to` default to today UTC. Requires nutrition-goals or nutrition-manifest. |
 | `list_nutrition_intakes` | `mcp:nutrition:read` | Row-level personal intake history for a UTC range (cursor-paginated). |
 | `set_nutrition_goal` | `mcp:nutrition:write` | Idempotently upsert a personal daily goal using `operationKey` (active consent required). Requires nutrition-goals. |
 | `clear_nutrition_goal` | `mcp:nutrition:write` | Idempotently clear the active goal as of a date using `operationKey`. Requires nutrition-goals. **`confirm: true`.** |
 | `log_manifest_intake` | `mcp:nutrition:write` | Atomic private Eat / plate-up for prepared entries (`operationKey` + `portions[]` with per-item keys). Consent must already be active in Ration. Never deducts Cargo. |
 | `clear_manifest_intake` | `mcp:nutrition:write` | Atomically soft-void personal intake using `operationKey`. **`confirm: true`.** Does not uncook. |
+| `quick_eat_cargo` | `mcp:inventory:write` + `mcp:manifest:write` + `mcp:nutrition:write` | Personal Quick Eat: resolve by `cargoId` or `name`; create a missing line then eat (net 0 restock reminder). Manifest snack + optional private intake. Requires cargo-quick-eat + nutrition-cook-log-split. |
 
 ## Supply (Shopping)
 
@@ -111,6 +112,7 @@ Gated by nutrition feature flags. Not medical advice. Cargo/meal read and write 
 ## Not exposed
 
 - Camera/OCR receipt scan as a tool (text → preview/apply, or native Scan)
-- Recipe URL extraction without native import (`ration://galley/import`)
+- Recipe URL scraping (`start_import_url` does not exist). Copilot hard-blocks URL paste → Galley Import. MCP clients extract caption/page text with the client LLM, then `create_meal`.
+- Billed Galley Generate / Manifest Plan Week as tools. Use `create_meal` and `propose_manifest_plan` → `commit_manifest_plan`. Native buttons remain on web/iOS.
 
 Large Galley JSON imports use the REST API with `galley` scope—not MCP.

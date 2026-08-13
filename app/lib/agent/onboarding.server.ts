@@ -203,7 +203,7 @@ export function buildNutritionCapabilityNotes(
 	}
 	if (flags.cookLogSplit) {
 		notes.push(
-			"nutrition-cook-log-split: Cook with cook_manifest_entries or consume_meal (Galley bridge) — never logs personal intake. Eat separately with log_manifest_intake after consent. consume_manifest_entries is refused while split is on.",
+			"nutrition-cook-log-split: Cook with cook_manifest_entries or consume_meal (Galley bridge) — never logs personal intake. Eat separately with log_manifest_intake after consent. Personal snacks: quick_eat_cargo. consume_manifest_entries is refused while split is on.",
 		);
 	}
 	if (flags.manifest) {

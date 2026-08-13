@@ -260,7 +260,7 @@ export function createInventoryToolDefs(env: McpToolsEnv) {
 		defineSharedTool({
 			name: "adjust_cargo_item",
 			description:
-				"Change pantry quantity by a relative delta (e.g. delta:-2 when the user ate 2). Floors at 0; the item stays in Cargo. Prefer over update_cargo_item for 'I used/ate N'. Provide itemId, or name to resolve via semantic search. For absolute set (including 0), use update_cargo_item. For bulk add, use preview_inventory_import.",
+				"Change pantry quantity by a relative delta (e.g. delta:-2 when stock was used or wasted). Floors at 0; the item stays in Cargo. For personal eating / 'I just ate X', use quick_eat_cargo instead (creates a missing line, Manifest snack, optional intake). Provide itemId, or name to resolve via semantic search. For absolute set (including 0), use update_cargo_item. For bulk add, use preview_inventory_import.",
 			inputSchema: z.object({
 				itemId: z.string().uuid().optional(),
 				name: z

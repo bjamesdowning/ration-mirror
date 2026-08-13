@@ -55,19 +55,15 @@ describe("createCopilotToolDefs", () => {
 		).toBe("copilot");
 	});
 
-	it("exposes every MCP tool plus Copilot AI workflows and search_docs", () => {
+	it("exposes every MCP tool plus search_docs, without billed AI jobs", () => {
 		const names = createCopilotToolDefs(makeEnv()).map(
 			(definition) => definition.name,
 		);
 		const mcpNames = MCP_TOOL_GROUPS.flatMap((group) => [...group.tools]);
-		const copilotOnly = [
-			"start_plan_week",
-			"start_generate_meal",
-			"search_docs",
-		];
-
-		expect(names.sort()).toEqual([...mcpNames, ...copilotOnly].sort());
+		expect(names.sort()).toEqual([...mcpNames, "search_docs"].sort());
 		expect(new Set(names).size).toBe(names.length);
+		expect(names).not.toContain("start_plan_week");
+		expect(names).not.toContain("start_generate_meal");
 	});
 
 	it("preserves strict schemas used by both transports", () => {
@@ -119,8 +115,6 @@ describe("createCopilotToolDefs", () => {
 			"clear_active_meals",
 			"commit_manifest_plan",
 			"complete_supply_list",
-			"start_plan_week",
-			"start_generate_meal",
 			"clear_nutrition_goal",
 			"clear_manifest_intake",
 		];

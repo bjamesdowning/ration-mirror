@@ -14,15 +14,25 @@ import {
 	getExpiringCargo,
 } from "../../cargo.server";
 import { addUtcDays, getUtcTodayISO } from "../../cargo-utils";
+import { isFeatureEnabled } from "../../feature-flags/flags.server";
 import { getMealPlan, getWeekEntries } from "../../manifest.server";
 import { MEAL_MATCH_CANDIDATE_CAP, matchMeals } from "../../matching.server";
 import { getMealsPage } from "../../meals.server";
-import { attachPersonalIntakeToEntries } from "../../nutrition/service.server";
+import { serializeNutritionSummary } from "../../nutrition/dto.server";
+import {
+	attachPersonalIntakeToEntries,
+	getSummary,
+} from "../../nutrition/service.server";
 import { parseDirections } from "../../schemas/directions";
 import { getSupplyList, getSupplyListById } from "../../supply.server";
 import { getTagsForCargoIds, tagsToSlugs } from "../../tags.server";
 import { findSimilarCargoBatch } from "../../vector.server";
 import { MCP_SERVER_VERSION } from "../../version";
+import {
+	resolveAgentFlagContext,
+	resolveAgentSurface,
+} from "../agent-flag-context";
+import type { McpToolContext } from "../auth";
 import {
 	decodeCursor,
 	decodeInventoryCursor,
@@ -32,6 +42,7 @@ import {
 	ok,
 } from "../envelope";
 import { mapExpiryCargoItems } from "../expiry-map";
+import { hasScope } from "../scopes";
 import {
 	defineSharedTool,
 	type McpToolsEnv,
@@ -56,6 +67,94 @@ async function resolveExpirationAlertDays(
 	const settings = await getUserSettings(db, userId);
 	const fromPrefs = settings.expirationAlertDays ?? 7;
 	return Math.min(Math.max(fromPrefs, 1), MAX_EXPIRING_DAYS);
+}
+
+function finiteOrNull(value: unknown): number | null {
+	return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+/** Compact meal macros for match_meals — no attributions. */
+function compactMealMatchNutrition(raw: unknown): {
+	perServing: {
+		energyKcal: number | null;
+		proteinG: number | null;
+		carbsG: number | null;
+		fatG: number | null;
+		fiberG: number | null;
+	};
+	coverage: number | null;
+} | null {
+	if (!raw || typeof raw !== "object") return null;
+	const record = raw as {
+		perServing?: Record<string, unknown>;
+		coverage?: unknown;
+	};
+	const per = record.perServing;
+	if (!per || typeof per !== "object") return null;
+	return {
+		perServing: {
+			energyKcal: finiteOrNull(per.energyKcal),
+			proteinG: finiteOrNull(per.proteinG),
+			carbsG: finiteOrNull(per.carbsG) ?? finiteOrNull(per.carbG),
+			fatG: finiteOrNull(per.fatG),
+			fiberG: finiteOrNull(per.fiberG),
+		},
+		coverage: finiteOrNull(record.coverage),
+	};
+}
+
+function isNutritionConsentError(error: unknown): boolean {
+	if (!(error instanceof Error)) return false;
+	const code =
+		"code" in error && typeof error.code === "string" ? error.code : "";
+	return (
+		code.startsWith("nutrition_consent_") ||
+		code === "nutrition_reconsent_required" ||
+		error.name === "NutritionConsentRequiredError"
+	);
+}
+
+async function maybePersonalNutritionToday(
+	env: McpToolsEnv,
+	ctx: McpToolContext,
+) {
+	if (!hasScope(ctx, "mcp:nutrition:read")) return undefined;
+	const flagContext = resolveAgentFlagContext(env, ctx);
+	const [goalsOn, manifestOn] = await Promise.all([
+		isFeatureEnabled(env, "nutrition-goals", flagContext),
+		isFeatureEnabled(env, "nutrition-manifest", flagContext),
+	]);
+	if (!goalsOn && !manifestOn) return undefined;
+	const today = getUtcTodayISO();
+	try {
+		const summary = await getSummary(
+			env,
+			{
+				userId: ctx.userId,
+				organizationId: ctx.organizationId,
+				surface: resolveAgentSurface(ctx),
+				authMethod: ctx.authMethod,
+				credentialId: ctx.apiKeyId || null,
+				clientId: ctx.oauthClientId ?? null,
+				scopes: ["nutrition:read"],
+				requestId: crypto.randomUUID(),
+			},
+			flagContext,
+			today,
+			today,
+		);
+		const serialized = serializeNutritionSummary(summary);
+		return {
+			consumed: serialized.totals,
+			goal: serialized.goal,
+			vsGoal: serialized.vsGoal,
+		};
+	} catch (error) {
+		if (isNutritionConsentError(error)) {
+			return undefined;
+		}
+		throw error;
+	}
 }
 
 export function createReadToolDefs(env: McpToolsEnv) {
@@ -427,13 +526,7 @@ export function createReadToolDefs(env: McpToolsEnv) {
 							entries,
 						);
 					} catch (error) {
-						if (
-							!(
-								error instanceof Error &&
-								"code" in error &&
-								String(error.code).startsWith("nutrition_consent_")
-							)
-						) {
+						if (!isNutritionConsentError(error)) {
 							throw error;
 						}
 					}
@@ -536,7 +629,7 @@ export function createReadToolDefs(env: McpToolsEnv) {
 		defineSharedTool({
 			name: "match_meals",
 			description:
-				"Find meals that can be made with the current pantry. Use 'strict' for fully cookable, 'delta' to see partial matches with what's missing. When the user has allergens configured, each result includes allergenFlags; use allergenPolicy 'exclude' to omit unsafe meals.",
+				"Find meals that can be made with the current pantry. Use 'strict' for fully cookable, 'delta' to see partial matches with what's missing. When the user has allergens configured, each result includes allergenFlags; use allergenPolicy 'exclude' to omit unsafe meals. Each result includes servings, nutritionStatus, and compact nutrition.perServing (energyKcal, proteinG, carbsG, fatG, fiberG) plus coverage when known — no attributions. Use with get_nutrition_summary.vsGoal when the user asks what to eat that fits remaining calories. Optional maxEnergyKcal excludes meals whose known per-serving energy is greater than the cap; meals with unknown kcal stay in the list.",
 			inputSchema: z.object({
 				mode: z.enum(["strict", "delta"]).optional().default("strict"),
 				minMatch: z.number().min(0).max(100).optional().default(50),
@@ -554,6 +647,14 @@ export function createReadToolDefs(env: McpToolsEnv) {
 					.default("flag")
 					.describe(
 						"flag: include allergenFlags on each meal; exclude: omit meals matching user allergens",
+					),
+				maxEnergyKcal: z
+					.number()
+					.positive()
+					.max(20_000)
+					.optional()
+					.describe(
+						"Exclude meals whose known per-serving energyKcal is greater than this cap. Unknown nutrition stays listed.",
 					),
 			}),
 			scopes: ["mcp:read"],
@@ -585,11 +686,15 @@ export function createReadToolDefs(env: McpToolsEnv) {
 							userAllergens.length > 0
 								? detectAllergens(ingredientNames, userAllergens)
 								: [];
+						const nutrition = compactMealMatchNutrition(r.meal.nutrition);
 						return {
 							mealId: r.meal.id,
 							mealName: r.meal.name,
 							matchPercentage: Math.round(r.matchPercentage),
 							canMake: r.canMake,
+							servings: r.meal.servings ?? null,
+							nutritionStatus: r.meal.nutritionStatus ?? null,
+							nutrition,
 							allergenSafe: allergenFlags.length === 0,
 							allergenFlags,
 							missingIngredients: r.missingIngredients.map((m) => ({
@@ -605,6 +710,12 @@ export function createReadToolDefs(env: McpToolsEnv) {
 							userAllergens.length === 0 ||
 							row.allergenSafe,
 					)
+					.filter((row) => {
+						if (a.maxEnergyKcal == null) return true;
+						const kcal = row.nutrition?.perServing.energyKcal;
+						if (kcal == null) return true;
+						return kcal <= a.maxEnergyKcal;
+					})
 					.slice(0, limit);
 
 				return ok("match_meals", mapped);
@@ -696,7 +807,7 @@ export function createReadToolDefs(env: McpToolsEnv) {
 		defineSharedTool({
 			name: "get_kitchen_summary",
 			description:
-				"Single-call operational snapshot: temporal context, tier/credits/capacity, cargo stats with expiring/expired previews, meal plan entries, and active supply list preview. Prefer this for 'how is my kitchen?' before fanning out to granular tools.",
+				"Single-call operational snapshot: temporal context, tier/credits/capacity, cargo stats with expiring/expired previews, meal plan entries, and active supply list preview. Prefer this for 'how is my kitchen?' before fanning out to granular tools. When mcp:nutrition:read is granted and nutrition flags are on, includes personalNutritionToday (caller-only consumed/goal/vsGoal for today UTC) — never household-shared.",
 			inputSchema: z.object({
 				manifestDays: z
 					.number()
@@ -719,7 +830,14 @@ export function createReadToolDefs(env: McpToolsEnv) {
 					ctx.userId,
 					{ manifestDays: a.manifestDays ?? 1 },
 				);
-				return ok("get_kitchen_summary", summary);
+				const personalNutritionToday = await maybePersonalNutritionToday(
+					env,
+					ctx,
+				);
+				return ok("get_kitchen_summary", {
+					...summary,
+					...(personalNutritionToday ? { personalNutritionToday } : {}),
+				});
 			},
 		}),
 	];

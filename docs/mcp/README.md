@@ -30,6 +30,10 @@ Your assistant guesses. It does not know what is in your fridge, what expired ye
 
 ### With Ration MCP
 
+> "What can I eat tonight that fits my calorie goals?"
+
+`get_nutrition_summary` returns `vsGoal` remaining (UTC day — do not subtract yourself). `match_meals` includes compact per-serving nutrition and optional `maxEnergyKcal`. Ask follow-ups: schedule tonight on Manifest, or Quick Eat a snack.
+
 > "What can I cook tonight with what's in Cargo?"
 
 `match_meals` returns recipes ranked by what you can actually cook — with gaps listed for anything missing. Ask follow-ups: add missing items to Supply, schedule a meal on Manifest, deduct ingredients after you cook.
@@ -44,22 +48,24 @@ Your assistant guesses. It does not know what is in your fridge, what expired ye
 | "What did I cook last week?" | `get_kitchen_events` / `get_kitchen_stats` |
 | "List my pantry and what's expiring this week." | `list_inventory` + `get_expiring_items` |
 | "What already expired in my pantry?" | `get_expired_items` |
-| "What meals can I make with what we have?" | `match_meals` (strict or partial matches) |
+| "What meals can I make with what we have?" | `match_meals` (strict or partial matches; compact nutrition when known) |
+| "What can I eat tonight that fits my calorie goals?" | `get_nutrition_summary` (`vsGoal`) → `match_meals` with `maxEnergyKcal` |
 | "Plan dinners through Friday and add anything missing to the list." | `propose_manifest_plan` → `commit_manifest_plan` → `sync_supply_from_selected_meals` |
 | "We cooked lentil soup for four — update inventory." | `consume_meal` deducts ingredients via semantic matching |
 | "Add eggs and butter to the shopping list." | `add_supply_item` |
 | "I bought everything on the list — mark it purchased." | `mark_supply_purchased_bulk` |
 | "Parse this receipt and add new items to Cargo." | Agent parses text → `preview_inventory_import` → `apply_inventory_import` (no Ration AI credits) |
-| "I ate two cans of tuna." | `adjust_cargo_item` with `delta: -2` (floors at 0; line stays for restock) |
+| "I just ate grapes." | `quick_eat_cargo` (creates a missing line, Manifest snack, optional private intake) |
+| "Import this Instagram recipe." | Not an MCP scrape. Client extracts caption/page text → `create_meal`, or native Galley Import |
 
-MCP tool calls are **deterministic and do not consume Ration credits**. Receipt parsing runs in *your* LLM; Ration ingests structured items. Visual scan and AI meal generation in the web app use optional credit packs.
+MCP tool calls are **deterministic and do not consume Ration credits**. Receipt parsing and recipe extraction from pasted text run in *your* LLM; Ration ingests structured items. Visual scan and URL import in the web/iOS app use optional credit packs. Copilot Ask is the same kitchen tools plus a conversation token meter.
 
 ---
 
 ## Why Ration MCP is different
 
 - **Closed-loop kitchen ops** — inventory, recipes, plan, and shop list in one system (not four apps).
-- **35+ MCP tools** — granular OAuth scopes (`mcp:read`, `mcp:inventory:write`, `mcp:galley:write`, `mcp:manifest:write`, `mcp:supply:write`, `mcp:preferences:write`), including optional nutrition summary/goals when flags are on.
+- **35+ MCP tools** — granular OAuth scopes (`mcp:read`, `mcp:inventory:write`, `mcp:galley:write`, `mcp:manifest:write`, `mcp:supply:write`, `mcp:preferences:write`, `mcp:nutrition:read`, `mcp:nutrition:write`), including optional nutrition summary/goals and Quick Eat when flags are on.
 - **OAuth-first** — paste one URL; browser sign-in; revoke anytime in Hub → Settings → Connected Agents.
 - **Agent self-registration** — autonomous agents can provision a kitchen via [`auth.md`](https://ration.mayutic.com/auth.md) before a human signs up.
 - **Household-scoped** — one organization per grant; pick the correct household at consent.

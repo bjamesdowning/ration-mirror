@@ -121,6 +121,7 @@ export const MCP_TOOL_GROUPS = [
 			"clear_nutrition_goal",
 			"log_manifest_intake",
 			"clear_manifest_intake",
+			"quick_eat_cargo",
 		],
 	},
 ] as const;
@@ -160,6 +161,13 @@ export const AGENT_SKILLS = [
 		type: "workflow",
 		description:
 			"Summarize expiring items, planned meals, credit balance, and supply gaps.",
+	},
+	{
+		name: "Track Personal Macros",
+		slug: "track-personal-macros",
+		type: "workflow",
+		description:
+			"Read remaining UTC-day calories and macros, match cookable meals to the leftover budget, and log Quick Eat snacks. Not medical advice.",
 	},
 ] as const;
 
@@ -454,6 +462,21 @@ export function buildMcpServerCard(request: Request) {
 					name: "plan_week",
 					description:
 						"Suggest a meal plan for the next 7 days that minimizes waste from expiring items.",
+				},
+				{
+					name: "fit_remaining_macros",
+					description:
+						"Suggest cookable meals that fit remaining UTC-day calories and macros. Not medical advice.",
+				},
+				{
+					name: "import_recipe_from_text",
+					description:
+						"Extract a structured recipe from caption or page text, then create_meal. Ration MCP does not scrape URLs.",
+				},
+				{
+					name: "quick_eat_snack",
+					description:
+						"Log a personal snack via quick_eat_cargo; missing pantry lines are created then eaten.",
 				},
 			],
 		},

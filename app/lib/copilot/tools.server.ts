@@ -9,7 +9,6 @@ import {
 	runTool,
 	type SharedToolDefinition,
 } from "../mcp/tool-runtime";
-import { createAiWorkflowToolDefs } from "../mcp/tools/ai-workflows";
 import { createBillingToolDefs } from "../mcp/tools/billing";
 import { createKitchenEventToolDefs } from "../mcp/tools/events";
 import { createGalleyToolDefs } from "../mcp/tools/galley";
@@ -160,7 +159,6 @@ export function createCopilotToolDefs(
 		...createSupplyToolDefs(env),
 		...createPreferencesToolDefs(env),
 		...createNutritionToolDefs(env),
-		...createAiWorkflowToolDefs(env),
 	];
 }
 

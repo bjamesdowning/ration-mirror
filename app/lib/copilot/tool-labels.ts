@@ -231,15 +231,10 @@ export const COPILOT_TOOL_LABELS: Record<string, CopilotToolLabelSet> = {
 		done: "Updated Supply purchases",
 		error: "Could not update Supply purchases",
 	},
-	start_plan_week: {
-		running: "Starting AI Plan Week…",
-		done: "AI Plan Week queued",
-		error: "Could not start AI Plan Week",
-	},
-	start_generate_meal: {
-		running: "Starting AI meal generation…",
-		done: "AI meal generation queued",
-		error: "Could not start AI meal generation",
+	quick_eat_cargo: {
+		running: "Logging a Quick Eat…",
+		done: "Logged Quick Eat",
+		error: "Could not log Quick Eat",
 	},
 	get_context: {
 		running: "Loading Ration context…",

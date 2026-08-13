@@ -247,12 +247,7 @@ async function resolveNativeFeatureFlags(
 		env,
 		{ user: { id: userId } },
 	);
-	const keys = [
-		"ai-scan-receipt",
-		"ai-import-url",
-		"ai-generate-meal",
-		"ai-plan-week",
-	] as const;
+	const keys = ["ai-scan-receipt", "ai-import-url"] as const;
 	const entries = await Promise.all(
 		keys.map(
 			async (key) =>
@@ -280,8 +275,6 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 	private nativeFeatureFlags: NativeFeatureEnabledMap = {
 		"ai-scan-receipt": false,
 		"ai-import-url": false,
-		"ai-generate-meal": false,
-		"ai-plan-week": false,
 	};
 	/** Web vs mobile — drives native-feature link format. */
 	private clientSource: NativeFeatureClientSource = "web";

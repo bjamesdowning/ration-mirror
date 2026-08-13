@@ -33,6 +33,16 @@ Flags off: Manifest nutrition chrome is unchanged (no preference strip).
 
 You can Cook without ever logging a personal serving.
 
+## Ask / MCP
+
+When nutrition flags and consent allow, Copilot and MCP can:
+
+- Return **remaining vs goal** on `get_nutrition_summary` (`vsGoal`; UTC calendar day, not a dinner-only slice).
+- Match cookable meals with compact per-serving nutrition and an optional kcal cap.
+- Log **Quick Eat** (`quick_eat_cargo`) for “I just ate X” — creates a missing pantry line, then deducts it.
+
+Not medical advice. Agents never prescribe calorie targets.
+
 ## Galley Cook and Add to Manifest
 
 When **nutrition-cook-log-split** is on (same Flagship cohort as Manifest Cook/Eat):

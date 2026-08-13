@@ -71,4 +71,84 @@ describe("serializeNutritionSummary", () => {
 		expect(summary.totals.energyKcal).toBe(90);
 		expect(typeof summary.totals.energyKcal).toBe("number");
 	});
+
+	it("emits vsGoal remaining and overage for the last day in range", () => {
+		const summary = serializeNutritionSummary({
+			from: "2026-08-11",
+			to: "2026-08-11",
+			totals: {
+				energyKcal: 1800,
+				proteinG: 90,
+				carbsG: 200,
+				fatG: 70,
+			},
+			days: [
+				{
+					date: "2026-08-11",
+					energyKcal: 1800,
+					proteinG: 90,
+					carbsG: 200,
+					fatG: 70,
+					coverageAvg: 1,
+					entryCount: 3,
+				},
+			],
+			goal: {
+				dailyEnergyKcal: 2000,
+				proteinG: 80,
+				carbsG: 250,
+				fatG: 70,
+				fiberG: null,
+				effectiveFrom: "2026-08-01",
+				effectiveTo: null,
+			},
+		});
+
+		expect(summary.vsGoal.energyKcal).toEqual({
+			consumed: 1800,
+			target: 2000,
+			remaining: 200,
+			overage: null,
+		});
+		expect(summary.vsGoal.proteinG).toEqual({
+			consumed: 90,
+			target: 80,
+			remaining: 0,
+			overage: 10,
+		});
+		expect(summary.nutritionV2.vsGoal?.energyKcal.remaining).toBe(200);
+		expect(summary.nutritionV2.days[0]?.vsGoal?.energyKcal.remaining).toBe(200);
+	});
+
+	it("leaves remaining and overage null when there is no target", () => {
+		const summary = serializeNutritionSummary({
+			from: "2026-08-11",
+			to: "2026-08-11",
+			totals: {
+				energyKcal: 400,
+				proteinG: 10,
+				carbsG: 20,
+				fatG: 5,
+			},
+			days: [
+				{
+					date: "2026-08-11",
+					energyKcal: 400,
+					proteinG: 10,
+					carbsG: 20,
+					fatG: 5,
+					coverageAvg: 1,
+					entryCount: 1,
+				},
+			],
+			goal: null,
+		});
+
+		expect(summary.vsGoal.energyKcal).toEqual({
+			consumed: 400,
+			target: null,
+			remaining: null,
+			overage: null,
+		});
+	});
 });

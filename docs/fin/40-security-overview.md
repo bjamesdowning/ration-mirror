@@ -30,7 +30,7 @@ Ask Ration is first-party. It runs on Cloudflare Workers, Workers AI, Durable Ob
 - iOS uses the mobile Bearer token issued by Ration.
 - Every tool call is scoped to the verified active organization and audited without message text.
 
-The copilot cannot perform AI receipt scanning, recipe generation, URL import, or week planning inside chat. Those paid AI flows stay on their native screens with the existing consent, rate-limit, and credit gates.
+The copilot cannot perform AI receipt scanning or recipe URL import inside chat — those stay on native Scan / Galley Import. Inventing a recipe or filling a week uses credit-free kitchen tools (`create_meal`, `propose_manifest_plan`). Paid Gemini Generate / Plan Week remain on their native screens with existing consent, rate-limit, and credit gates.
 
 ## Payments
 

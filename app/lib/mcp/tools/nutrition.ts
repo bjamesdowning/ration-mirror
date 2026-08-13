@@ -3,7 +3,10 @@ import { z } from "zod";
 import { getUtcTodayISO } from "../../cargo-utils";
 import { isFeatureEnabled } from "../../feature-flags/flags.server";
 import { ensureMealPlan } from "../../manifest.server";
-import { serializeNutritionGoal } from "../../nutrition/dto.server";
+import {
+	serializeNutritionGoal,
+	serializeNutritionSummary,
+} from "../../nutrition/dto.server";
 import {
 	clearGoal,
 	clearManifestIntakes,
@@ -29,6 +32,7 @@ import {
 	type McpToolsEnv,
 	registerSharedMcpTool,
 } from "../tool-runtime";
+import { createQuickEatToolDefs } from "./quick-eat";
 
 function nutritionPrincipal(ctx: McpToolContext) {
 	const surface = resolveAgentSurface(ctx);
@@ -61,16 +65,18 @@ export function createNutritionToolDefs(env: McpToolsEnv) {
 		defineSharedTool({
 			name: "get_nutrition_summary",
 			description:
-				"Return the caller's personal daily nutrition intake totals (energy, macros, optional fiberG) for a UTC date range, plus the active goal when set. When nutrition-cross-org-diary is on, totals include intakes from every kitchen the user logged in — not only the authorized household. Requires nutrition-goals or nutrition-manifest. Not medical advice.",
+				"Return the caller's personal daily nutrition intake totals (energy, macros, optional fiberG) for a UTC date range, plus the active goal when set. Use this when the user asks remaining calories or whether a meal fits their budget — read vsGoal (and nutritionV2.vsGoal); do not subtract consumed from target yourself. from/to default to today UTC (temporal.todayUtc). Remaining is the UTC calendar day, not a dinner-only slice. When nutrition-cross-org-diary is on, totals include intakes from every kitchen the user logged in — not only the authorized household. Requires nutrition-goals or nutrition-manifest. Not medical advice.",
 			inputSchema: z.object({
 				from: z
 					.string()
 					.regex(/^\d{4}-\d{2}-\d{2}$/, "Must be YYYY-MM-DD")
-					.describe("Inclusive UTC start date"),
+					.optional()
+					.describe("Inclusive UTC start date (defaults to today UTC)"),
 				to: z
 					.string()
 					.regex(/^\d{4}-\d{2}-\d{2}$/, "Must be YYYY-MM-DD")
-					.describe("Inclusive UTC end date"),
+					.optional()
+					.describe("Inclusive UTC end date (defaults to today UTC)"),
 			}),
 			scopes: ["mcp:nutrition:read"],
 			rateLimitCategory: "mcp_list",
@@ -89,9 +95,10 @@ export function createNutritionToolDefs(env: McpToolsEnv) {
 						"Enable nutrition-goals or nutrition-manifest for this environment, or use Cargo/Galley/Manifest without intake totals.",
 					);
 				}
+				const today = getUtcTodayISO();
 				const parsed = NutritionSummaryQuerySchema.safeParse({
-					from: a.from,
-					to: a.to,
+					from: a.from ?? today,
+					to: a.to ?? today,
 				});
 				if (!parsed.success) {
 					return err(
@@ -109,7 +116,7 @@ export function createNutritionToolDefs(env: McpToolsEnv) {
 					parsed.data.from,
 					parsed.data.to,
 				);
-				return ok("get_nutrition_summary", summary, {
+				return ok("get_nutrition_summary", serializeNutritionSummary(summary), {
 					outcome: "no_effect",
 					requestId: principal.requestId,
 				});
@@ -400,6 +407,7 @@ export function createNutritionToolDefs(env: McpToolsEnv) {
 				);
 			},
 		}),
+		...createQuickEatToolDefs(env),
 	];
 }
 

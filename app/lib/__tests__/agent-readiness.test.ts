@@ -128,6 +128,9 @@ describe("agent readiness metadata", () => {
 		expect(card.capabilities.prompts.map((p) => p.name)).toEqual([
 			"parse_receipt",
 			"plan_week",
+			"fit_remaining_macros",
+			"import_recipe_from_text",
+			"quick_eat_snack",
 		]);
 	});
 

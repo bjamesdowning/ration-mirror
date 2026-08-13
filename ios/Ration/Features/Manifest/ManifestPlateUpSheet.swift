@@ -6,12 +6,14 @@ struct ManifestPlateUpSheet: View {
     let entry: ManifestEntry
     var hasIntakeConsent: Bool
     /// Returns an error message on failure, or `nil` on success.
-    let onSave: (_ servings: Double, _ notes: String?) async -> String?
+    let onSave: (_ servings: Double, _ notes: String?, _ amount: Double, _ unit: IntakeLoggedUnit) async -> String?
     var onRemove: (() async -> Void)?
 
     @Environment(AppEnvironment.self) private var env
     @Environment(\.dismiss) private var dismiss
     @State private var servings: Double
+    @State private var amount: Double
+    @State private var unit: IntakeLoggedUnit
     @State private var notes: String
     @State private var isSaving = false
     @State private var isRemoving = false
@@ -21,18 +23,29 @@ struct ManifestPlateUpSheet: View {
     init(
         entry: ManifestEntry,
         hasIntakeConsent: Bool,
-        onSave: @escaping (_ servings: Double, _ notes: String?) async -> String?,
+        onSave: @escaping (_ servings: Double, _ notes: String?, _ amount: Double, _ unit: IntakeLoggedUnit) async -> String?,
         onRemove: (() async -> Void)? = nil
     ) {
         self.entry = entry
         self.hasIntakeConsent = hasIntakeConsent
         self.onSave = onSave
         self.onRemove = onRemove
-        _servings = State(initialValue: entry.personalIntake?.servings ?? 1.0)
+        let initialServings = entry.personalIntake?.servings ?? 1.0
+        let storedUnit = entry.personalIntake?.loggedUnit ?? .serving
+        let canMass = IntakeAmount.canLogByMass(entry.gramsPerServing)
+        let unit = (storedUnit == .g || storedUnit == .oz) && canMass ? storedUnit : .serving
+        let amount = (entry.personalIntake?.loggedAmount).flatMap { storedUnit == unit ? $0 : nil }
+            ?? initialServings
+        _servings = State(initialValue: initialServings)
+        _amount = State(initialValue: amount)
+        _unit = State(initialValue: unit)
         _notes = State(initialValue: entry.personalIntake?.notes ?? "")
     }
 
     private var notesEnabled: Bool { env.session.clientFlags.isNutritionIntakeNotesEnabled }
+    private var massUnit: IntakeLoggedUnit {
+        IntakeAmount.massUnit(forDisplayMode: env.unitDisplayMode.mode)
+    }
 
     private var estimatedEnergyKcal: Double? {
         guard let perServing = entry.mealEnergyKcalPerServing else { return nil }
@@ -61,14 +74,8 @@ struct ManifestPlateUpSheet: View {
             || estimatedFatG != nil
     }
 
-    private var servingsLabel: String {
-        servings.truncatingRemainder(dividingBy: 1) == 0
-            ? String(format: "%.0f", servings)
-            : String(format: "%.1f", servings)
-    }
-
     private var canSave: Bool {
-        !isSaving && !isRemoving && hasIntakeConsent
+        !isSaving && !isRemoving && hasIntakeConsent && IntakeAmount.isServingsInRange(servings)
     }
 
     var body: some View {
@@ -96,14 +103,14 @@ struct ManifestPlateUpSheet: View {
                 }
 
                 Section {
-                    Stepper(value: $servings, in: 0.5 ... 100, step: 0.5) {
-                        HStack {
-                            Text("Portion")
-                            Spacer()
-                            Text(servingsLabel)
-                                .foregroundStyle(Theme.muted)
-                        }
-                    }
+                    IntakeAmountEditor(
+                        amount: $amount,
+                        unit: $unit,
+                        servings: $servings,
+                        gramsPerServing: entry.gramsPerServing,
+                        massUnit: massUnit,
+                        enabled: hasIntakeConsent
+                    )
                     if hasAnyNutritionEstimate {
                         IntakeMacroPreview(
                             energyKcal: estimatedEnergyKcal,
@@ -179,7 +186,7 @@ struct ManifestPlateUpSheet: View {
         errorMessage = nil
         defer { isSaving = false }
         let notePayload = notesEnabled ? IntakeNotesField.payload(from: notes) : nil
-        if let failure = await onSave(servings, notePayload) {
+        if let failure = await onSave(servings, notePayload, amount, unit) {
             errorMessage = failure
         } else {
             Haptics.success()

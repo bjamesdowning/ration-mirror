@@ -148,9 +148,15 @@ struct ManifestView: View {
                 ManifestPlateUpSheet(
                     entry: entry,
                     hasIntakeConsent: model.manifest?.intakeConsentGranted ?? false,
-                    onSave: { servings, notes in
-                        await handleLogServing(entry, servings: servings, notes: notes)
-                    },
+                onSave: { servings, notes, amount, unit in
+                    await handleLogServing(
+                        entry,
+                        servings: servings,
+                        notes: notes,
+                        amount: amount,
+                        unit: unit
+                    )
+                },
                     onRemove: entry.personalIntake != nil
                         ? { await handleClearServing(entry) }
                         : nil
@@ -644,12 +650,16 @@ struct ManifestView: View {
     private func handleLogServing(
         _ entry: ManifestEntry,
         servings: Double,
-        notes: String? = nil
+        notes: String? = nil,
+        amount: Double? = nil,
+        unit: IntakeLoggedUnit? = nil
     ) async -> String? {
         switch await model.logServing(
             entry,
             servings: servings,
             notes: notes,
+            amount: amount,
+            unit: unit,
             idempotencyKey: UUID().uuidString,
             api: env.api,
             nutrition: env.nutrition

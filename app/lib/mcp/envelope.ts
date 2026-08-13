@@ -81,7 +81,8 @@ export type ToolErrorCode =
 	| "timeout_ambiguous"
 	| "feature_disabled"
 	| "cook_eat_split_required"
-	| "consent_required";
+	| "consent_required"
+	| "amount_unit_unavailable";
 
 export const ToolEnvelopeSchema = z.object({
 	ok: z.boolean(),
@@ -321,6 +322,15 @@ export function mapErrorToEnvelope(
 			return err(tool, "conflict", error.message, {
 				recoveryHint:
 					"Meal nutrition snapshot is missing — update the meal or skip intake for this entry.",
+			});
+		}
+		if (
+			code === "amount_unit_unavailable" ||
+			error.name === "AmountUnitUnavailableError"
+		) {
+			return err(tool, "amount_unit_unavailable", error.message, {
+				recoveryHint:
+					"Use portions[].servings (0.01–100) instead of grams or ounces for this meal.",
 			});
 		}
 		if (

@@ -484,6 +484,8 @@ final class ManifestViewModel {
         _ entry: ManifestEntry,
         servings: Double,
         notes: String? = nil,
+        amount: Double? = nil,
+        unit: IntakeLoggedUnit? = nil,
         idempotencyKey: String,
         api: RationAPI,
         nutrition: NutritionStore
@@ -493,7 +495,9 @@ final class ManifestViewModel {
                 entryId: entry.id,
                 servings: servings,
                 idempotencyKey: idempotencyKey,
-                notes: notes
+                notes: notes,
+                amount: amount,
+                unit: unit
             )
             Haptics.success()
             setPersonalIntakeLocally(entryId: entry.id, intake: result.intake)

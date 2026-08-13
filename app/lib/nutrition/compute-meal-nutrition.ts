@@ -108,5 +108,6 @@ export function computeMealNutrition(
 			...a,
 			contribution: nutrientsPerServingFromTotal(a.contribution, servings),
 		})),
+		recipeMassG: totalGrams > 0 ? totalGrams : null,
 	};
 }

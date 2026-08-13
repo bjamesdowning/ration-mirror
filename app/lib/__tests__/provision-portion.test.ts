@@ -127,8 +127,15 @@ describe("cookServingsForCargoAmount", () => {
 });
 
 describe("clampIntakeServings", () => {
-	it("clamps below 0.5 and above 100", () => {
-		expect(clampIntakeServings(0.1)).toEqual({ servings: 0.5, clamped: true });
+	it("clamps below 0.01 and above 100", () => {
+		expect(clampIntakeServings(0.001)).toEqual({
+			servings: 0.01,
+			clamped: true,
+		});
+		expect(clampIntakeServings(0.1)).toEqual({
+			servings: 0.1,
+			clamped: false,
+		});
 		expect(clampIntakeServings(150)).toEqual({ servings: 100, clamped: true });
 		expect(clampIntakeServings(2)).toEqual({ servings: 2, clamped: false });
 	});

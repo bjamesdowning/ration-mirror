@@ -78,6 +78,12 @@ describe("createNutritionToolDefs", () => {
 		expect(defs.find((d) => d.name === "log_manifest_intake")?.scopes).toEqual([
 			"mcp:nutrition:write",
 		]);
+		expect(
+			defs.find((d) => d.name === "log_manifest_intake")?.description,
+		).toContain("0.01–100");
+		expect(
+			defs.find((d) => d.name === "log_manifest_intake")?.description,
+		).toContain("amount+unit");
 		expect(defs.find((d) => d.name === "quick_eat_cargo")?.scopes).toEqual([
 			"mcp:inventory:write",
 			"mcp:manifest:write",
@@ -239,6 +245,59 @@ describe("createNutritionToolDefs", () => {
 			expect.objectContaining({ clientPlatform: "mcp" }),
 			expect.objectContaining({
 				operationKey: "33333333-3333-4333-8333-333333333333",
+			}),
+		);
+	});
+
+	it("accepts amount+unit portions on log_manifest_intake", async () => {
+		const { isFeatureEnabled } = await import(
+			"~/lib/feature-flags/flags.server"
+		);
+		vi.mocked(isFeatureEnabled).mockResolvedValue(true);
+		const { logManifestIntakes } = await import(
+			"~/lib/nutrition/service.server"
+		);
+		vi.mocked(logManifestIntakes).mockResolvedValue({
+			operationId: "33333333-3333-4333-8333-333333333333",
+			replayed: false,
+			undoExpiresAt: null,
+			summaryGeneratedAt: "2026-08-09T12:00:00.000Z",
+			items: [
+				{
+					intake: { id: "intake-1" } as never,
+					replayed: false,
+					replacedIntakeId: null,
+				},
+			],
+			dayTotals: [],
+		});
+
+		const defs = createNutritionToolDefs({} as never);
+		const log = defs.find((d) => d.name === "log_manifest_intake");
+		if (!log) throw new Error("expected log_manifest_intake");
+		const envelope = await log.handler(baseCtx, {
+			operationKey: "33333333-3333-4333-8333-333333333333",
+			portions: [
+				{
+					entryId: "11111111-1111-4111-8111-111111111111",
+					amount: 180,
+					unit: "g",
+					idempotencyKey: "22222222-2222-4222-8222-222222222222",
+				},
+			],
+		});
+		expect(envelope.ok).toBe(true);
+		expect(logManifestIntakes).toHaveBeenCalledWith(
+			expect.anything(),
+			expect.anything(),
+			expect.anything(),
+			expect.objectContaining({
+				items: [
+					expect.objectContaining({
+						amount: 180,
+						unit: "g",
+					}),
+				],
 			}),
 		);
 	});

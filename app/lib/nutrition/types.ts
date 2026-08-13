@@ -154,6 +154,8 @@ export type MealNutritionResult = {
 	perServing: NutrientsPerServing;
 	coverage: number;
 	attributions: NutrientAttribution[];
+	/** Sum of convertible ingredient grams for the whole recipe (not per serving). */
+	recipeMassG: number | null;
 };
 
 /** Cargo row JSON shape (same as NutritionSnapshot). */
@@ -169,6 +171,8 @@ export type MealNutritionSnapshot = {
 	coverage: number;
 	attributions: NutrientAttribution[];
 	computedAt: string;
+	/** Whole-recipe convertible mass; omitted on snapshots computed before mass persist. */
+	recipeMassG?: number | null;
 };
 
 export type MassResolutionResult = {

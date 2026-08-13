@@ -23,6 +23,7 @@ import {
 	isManifestEntryPrepared,
 } from "~/lib/manifest-cook.server";
 import { resolveManifestSlotType } from "~/lib/manifest-slot";
+import { gramsPerServingFromSnapshot } from "~/lib/nutrition/intake-amount";
 import type { MealNutritionSnapshot } from "~/lib/nutrition/types";
 import type { KitchenEventSource } from "~/lib/schemas/kitchen-events";
 import type { SlotType } from "~/lib/schemas/manifest";
@@ -40,6 +41,7 @@ export type GalleyCookManifestEntrySummary = {
 	mealProteinGPerServing: number | null;
 	mealCarbsGPerServing: number | null;
 	mealFatGPerServing: number | null;
+	gramsPerServing: number | null;
 	cookedAt: string | null;
 	consumedAt: string | null;
 };
@@ -61,12 +63,16 @@ function toIso(value: Date | string | null | undefined): string | null {
 	return String(value);
 }
 
-function nutritionFields(snap: MealNutritionSnapshot | null | undefined) {
+function nutritionFields(
+	snap: MealNutritionSnapshot | null | undefined,
+	mealServings: number,
+) {
 	return {
 		mealEnergyKcalPerServing: snap?.perServing?.energyKcal ?? null,
 		mealProteinGPerServing: snap?.perServing?.proteinG ?? null,
 		mealCarbsGPerServing: snap?.perServing?.carbG ?? null,
 		mealFatGPerServing: snap?.perServing?.fatG ?? null,
+		gramsPerServing: gramsPerServingFromSnapshot(snap, mealServings),
 	};
 }
 
@@ -74,7 +80,7 @@ function toEntrySummary(
 	row: MealPlanEntryWithMeal,
 	nutrition?: MealNutritionSnapshot | null,
 ): GalleyCookManifestEntrySummary {
-	const macros = nutritionFields(nutrition);
+	const macros = nutritionFields(nutrition, row.mealServings);
 	return {
 		id: row.id,
 		planId: row.planId,
@@ -91,6 +97,7 @@ function toEntrySummary(
 		mealCarbsGPerServing:
 			row.mealCarbsGPerServing ?? macros.mealCarbsGPerServing,
 		mealFatGPerServing: row.mealFatGPerServing ?? macros.mealFatGPerServing,
+		gramsPerServing: row.gramsPerServing ?? macros.gramsPerServing,
 		cookedAt: toIso(row.cookedAt),
 		consumedAt: toIso(row.consumedAt),
 	};
@@ -193,7 +200,7 @@ export async function resolveOrCreateGalleyCookEntry(
 			mealType: r.mealType ?? "recipe",
 			mealPrepTime: r.mealPrepTime ?? null,
 			mealCookTime: r.mealCookTime ?? null,
-			...nutritionFields(snap),
+			...nutritionFields(snap, r.mealServings ?? 1),
 		} satisfies MealPlanEntryWithMeal;
 	});
 
@@ -220,6 +227,7 @@ export async function resolveOrCreateGalleyCookEntry(
 						mealProteinGPerServing: preferred.mealProteinGPerServing,
 						mealCarbsGPerServing: preferred.mealCarbsGPerServing,
 						mealFatGPerServing: preferred.mealFatGPerServing,
+						gramsPerServing: preferred.gramsPerServing,
 					},
 					autoCreated: false,
 				};
@@ -238,7 +246,7 @@ export async function resolveOrCreateGalleyCookEntry(
 	return {
 		entry: {
 			...created,
-			...nutritionFields(mealMeta?.nutrition),
+			...nutritionFields(mealMeta?.nutrition, mealMeta?.servings ?? 1),
 		},
 		autoCreated: true,
 	};

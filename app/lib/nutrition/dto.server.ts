@@ -188,6 +188,7 @@ export function serializeMealNutrition(snapshot: MealNutritionSnapshot) {
 		},
 		coverage: snapshot.coverage,
 		computedAt: snapshot.computedAt,
+		recipeMassG: snapshot.recipeMassG ?? null,
 		attributions: snapshot.attributions.map((a: NutrientAttribution) => ({
 			ingredientIndex: a.ingredientIndex,
 			ingredientName: a.ingredientName,
@@ -223,6 +224,7 @@ export function serializeMealNutrition(snapshot: MealNutritionSnapshot) {
 		})),
 		computedAt: snapshot.computedAt,
 		nutritionV2,
+		recipeMassG: snapshot.recipeMassG ?? null,
 	};
 }
 
@@ -351,6 +353,8 @@ export function serializeNutritionIntake(
 		verified: row.verified === 1,
 		occurredAt: toIsoDateString(row.occurredAt),
 		notes: row.notes ?? null,
+		loggedAmount: row.loggedAmount ?? null,
+		loggedUnit: row.loggedUnit ?? null,
 	};
 }
 

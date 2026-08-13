@@ -1272,6 +1272,10 @@ export const nutritionIntake = sqliteTable(
 		}),
 		/** Optional private Eat snippet (max 280 enforced at API). */
 		notes: text("notes"),
+		/** User-facing amount at log time (round-trip edit). */
+		loggedAmount: real("logged_amount"),
+		/** serving | g | oz; null on rows logged before amount+unit. */
+		loggedUnit: text("logged_unit"),
 		createdAt: integer("created_at", { mode: "timestamp" })
 			.notNull()
 			.default(sql`(unixepoch())`),

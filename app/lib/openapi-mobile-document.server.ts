@@ -502,7 +502,7 @@ export function buildMobileOpenApiDocument(baseUrl: string) {
 				post: {
 					summary: "Log or edit personal serving (Eat)",
 					description:
-						"Requires nutrition-cook-log-split, nutrition-manifest, and active intake consent granted through /privacy/nutrition. Entry must be prepared. Body: servings (0.5–100), idempotencyKey (UUID; also the single-item operation key). Returns stable operationId/replayed semantics and authoritative dayTotals. Never mutates Cargo.",
+						"Requires nutrition-cook-log-split, nutrition-manifest, and active intake consent granted through /privacy/nutrition. Entry must be prepared. Body: servings (0.01–100) and/or amount+unit (serving|g|oz), idempotencyKey (UUID; also the single-item operation key). Returns stable operationId/replayed semantics and authoritative dayTotals. Never mutates Cargo.",
 					security: [{ bearerAuth: [] }],
 					parameters: [
 						{

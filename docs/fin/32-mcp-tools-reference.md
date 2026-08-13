@@ -65,7 +65,7 @@ Prefer resource `ration://schemas/inventory-import` for the item shape.
 
 | Tool | Scope | Purpose |
 |------|-------|---------|
-| `get_meal_plan` | `mcp:read` | Meal plan entries for a date range (`cookedAt`/`consumedAt`; `personalIntake` when nutrition flags allow). |
+| `get_meal_plan` | `mcp:read` | Meal plan entries for a date range (`cookedAt`/`consumedAt`; `personalIntake` when nutrition flags allow; `gramsPerServing` when recipe mass is known). |
 | `propose_manifest_plan` | `mcp:read` | Compact week proposal from expiring + match_meals. No writes. |
 | `commit_manifest_plan` | `mcp:manifest:write` | Commit confirmed entries; optional supply sync. Approval required. |
 | `add_meal_plan_entry` | `mcp:manifest:write` | Schedule one meal. |
@@ -84,7 +84,7 @@ Gated by nutrition feature flags. Not medical advice. Cargo/meal read and write 
 | `list_nutrition_intakes` | `mcp:nutrition:read` | Row-level personal intake history for a UTC range (cursor-paginated). |
 | `set_nutrition_goal` | `mcp:nutrition:write` | Idempotently upsert a personal daily goal using `operationKey` (active consent required). Requires nutrition-goals. |
 | `clear_nutrition_goal` | `mcp:nutrition:write` | Idempotently clear the active goal as of a date using `operationKey`. Requires nutrition-goals. **`confirm: true`.** |
-| `log_manifest_intake` | `mcp:nutrition:write` | Atomic private Eat / plate-up for prepared entries (`operationKey` + `portions[]` with per-item keys). Consent must already be active in Ration. Never deducts Cargo. |
+| `log_manifest_intake` | `mcp:nutrition:write` | Atomic private Eat / plate-up for prepared entries (`operationKey` + `portions[]` with per-item keys). `servings` is 0.01–100, or `amount`+`unit` (`serving` \| `g` \| `oz`) when `get_meal_plan` `gramsPerServing` is present. Consent must already be active in Ration. Never deducts Cargo. |
 | `clear_manifest_intake` | `mcp:nutrition:write` | Atomically soft-void personal intake using `operationKey`. **`confirm: true`.** Does not uncook. |
 | `quick_eat_cargo` | `mcp:inventory:write` + `mcp:manifest:write` + `mcp:nutrition:write` | Personal Quick Eat: resolve by `cargoId` or `name`; create a missing line then eat (net 0 restock reminder). Manifest snack + optional private intake. Requires cargo-quick-eat + nutrition-cook-log-split. |
 

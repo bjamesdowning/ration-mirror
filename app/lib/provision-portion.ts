@@ -6,6 +6,7 @@
  * N portions rather than emptying the bag.
  */
 
+import { clampIntakeServings as clampIntakeServingsRange } from "~/lib/nutrition/intake-amount";
 import {
 	convertQuantity,
 	normalizeUnitAlias,
@@ -19,7 +20,7 @@ const STOCK_SHAPE_ABS_EPS = 0.01;
 /**
  * Canonical edible portion size in the cargo item's unit.
  * Mass/volume use household-scale defaults so cook/intake servings stay in a
- * sensible range (intake accepts 0.5–100 servings).
+ * sensible range (intake accepts 0.01–100 servings).
  */
 export function resolveProvisionUnitPortion(unit: SupportedUnit): number {
 	switch (unit) {
@@ -145,13 +146,5 @@ export function clampIntakeServings(cookServings: number): {
 	servings: number;
 	clamped: boolean;
 } {
-	const MIN = 0.5;
-	const MAX = 100;
-	if (cookServings < MIN) {
-		return { servings: MIN, clamped: true };
-	}
-	if (cookServings > MAX) {
-		return { servings: MAX, clamped: true };
-	}
-	return { servings: cookServings, clamped: false };
+	return clampIntakeServingsRange(cookServings);
 }

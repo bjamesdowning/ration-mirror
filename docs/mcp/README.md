@@ -126,7 +126,7 @@ All tools are scoped to the authorized household. **MCP calls do not consume Rat
 | `get_expired_items` | `mcp:read` | List items whose expiry date is before today (UTC). Optional `daysBack` (default 30). |
 | `list_meals` | `mcp:read` | Cursor-paginated recipe list. Set `includeIngredients: false` for a lightweight index. |
 | `match_meals` | `mcp:read` | Find cookable recipes from current pantry — `strict` or `delta`. Adds `allergenFlags` when user allergens are configured. |
-| `get_meal_plan` | `mcp:read` | Weekly meal plan entries by date and slot (`cookedAt`/`consumedAt`; `personalIntake` when nutrition flags allow). |
+| `get_meal_plan` | `mcp:read` | Weekly meal plan entries by date and slot (`cookedAt`/`consumedAt`; `personalIntake` when nutrition flags allow; `gramsPerServing` is recipe-ingredient mass per serving when known). |
 | `get_supply_list` | `mcp:read` | Active shopping list with item ids for updates and purchase toggles. |
 | `get_user_preferences` | `mcp:read` | Allergens, expiration alert days, theme, manifest defaults, and other user settings. |
 | `update_user_preferences` | `mcp:preferences:write` | Patch user settings (allergens, alerts, theme). Only provided fields change. |
@@ -134,7 +134,7 @@ All tools are scoped to the authorized household. **MCP calls do not consume Rat
 | `list_nutrition_intakes` | `mcp:nutrition:read` | Caller’s personal intake rows for a UTC range (cursor-paginated; kitchen labels when present). Cross-org when `nutrition-cross-org-diary` is on. Agent reads audited. |
 | `set_nutrition_goal` | `mcp:nutrition:write` | Idempotently upsert personal daily energy/macro/fiber goals using `operationKey`; consent must already be active in Ration. Not medical advice. |
 | `clear_nutrition_goal` | `mcp:nutrition:write` | Idempotently close open-ended goals using `operationKey`. **Requires `confirm: true` + host approval.** |
-| `log_manifest_intake` | `mcp:nutrition:write` | Atomic private Eat for 1–50 prepared entries (`operationKey` + per-item `idempotencyKey`). Multi-entry calls need host approval. Consent must already be active in Ration. |
+| `log_manifest_intake` | `mcp:nutrition:write` | Atomic private Eat for 1–50 prepared entries (`operationKey` + per-item `idempotencyKey`). Portions: `servings` (0.01–100) or `amount`+`unit` (`serving`/`g`/`oz`) when `gramsPerServing` is present. Multi-entry calls need host approval. Consent must already be active in Ration. |
 | `clear_manifest_intake` | `mcp:nutrition:write` | Atomically soft-void personal intake using `operationKey`. **Requires `confirm: true` + host approval.** |
 ### Inventory (Cargo)
 

@@ -322,7 +322,22 @@ final class NutritionModelsDecodingTests: XCTestCase {
         XCTAssertTrue(json.contains("\"servings\":2"))
         XCTAssertTrue(json.contains("\"idempotencyKey\":\"key-1\""))
         XCTAssertFalse(json.contains("consent"))
-        XCTAssertFalse(json.contains("consent"))
+        XCTAssertFalse(json.contains("amount"))
+        XCTAssertFalse(json.contains("unit"))
+    }
+
+    func testEncodesManifestIntakeUpsertRequestWithAmountUnit() throws {
+        let request = ManifestIntakeUpsertRequest(
+            servings: 180.0 / 310.0,
+            amount: 180,
+            unit: .g,
+            idempotencyKey: "key-1"
+        )
+        let data = try JSONEncoder().encode(request)
+        let json = try XCTUnwrap(String(data: data, encoding: .utf8))
+        XCTAssertTrue(json.contains("\"amount\":180"))
+        XCTAssertTrue(json.contains("\"unit\":\"g\""))
+        XCTAssertTrue(json.contains("\"idempotencyKey\":\"key-1\""))
     }
 
     // MARK: - ManifestEntry cook/eat fields
@@ -356,10 +371,13 @@ final class NutritionModelsDecodingTests: XCTestCase {
           "mealProteinGPerServing": 20,
           "mealCarbsGPerServing": 30,
           "mealFatGPerServing": 10,
+          "gramsPerServing": 310,
           "personalIntake": {
             "id": "intake-9", "servings": 1, "energyKcal": 320, "proteinG": 20, "carbsG": 30, "fatG": 10,
             "occurredAt": "2026-01-01T13:05:00Z",
-            "notes": "Lunch after training"
+            "notes": "Lunch after training",
+            "loggedAmount": 180,
+            "loggedUnit": "g"
           }
         }
         """.data(using: .utf8)!
@@ -369,8 +387,31 @@ final class NutritionModelsDecodingTests: XCTestCase {
         XCTAssertEqual(entry.mealProteinGPerServing, 20)
         XCTAssertEqual(entry.mealCarbsGPerServing, 30)
         XCTAssertEqual(entry.mealFatGPerServing, 10)
+        XCTAssertEqual(entry.gramsPerServing, 310)
         XCTAssertEqual(entry.personalIntake?.id, "intake-9")
         XCTAssertEqual(entry.personalIntake?.notes, "Lunch after training")
+        XCTAssertEqual(entry.personalIntake?.loggedAmount, 180)
+        XCTAssertEqual(entry.personalIntake?.loggedUnit, .g)
+    }
+
+    func testManifestEntryIgnoresUnknownLoggedUnit() throws {
+        let json = """
+        {
+          "id": "entry-2", "planId": "plan-1", "mealId": "meal-1", "date": "2026-01-01",
+          "slotType": "lunch", "orderIndex": 0, "servingsOverride": null, "notes": null,
+          "consumedAt": "2026-01-01T13:00:00Z", "cookedAt": "2026-01-01T12:30:00Z",
+          "createdAt": "2026-01-01T00:00:00Z",
+          "mealName": "Soup", "mealServings": 2, "mealType": "recipe",
+          "personalIntake": {
+            "id": "intake-9", "servings": 1, "energyKcal": 320, "proteinG": 20, "carbsG": 30, "fatG": 10,
+            "occurredAt": "2026-01-01T13:05:00Z",
+            "loggedUnit": "cup"
+          }
+        }
+        """.data(using: .utf8)!
+        let entry = try decoder.decode(ManifestEntry.self, from: json)
+        XCTAssertEqual(entry.personalIntake?.id, "intake-9")
+        XCTAssertNil(entry.personalIntake?.loggedUnit)
     }
 
     // MARK: - Cargo / Meal nutrition snapshots

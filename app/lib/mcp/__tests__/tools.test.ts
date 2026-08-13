@@ -450,6 +450,7 @@ describe("MCP tools", () => {
 				mealName: "Oatmeal",
 				slotType: "breakfast",
 				servings: 2,
+				gramsPerServing: null,
 			});
 			expect(getWeekEntries).toHaveBeenCalledWith(
 				expect.anything(),

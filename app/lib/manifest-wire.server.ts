@@ -27,6 +27,7 @@ export type ManifestEntryWire = Omit<
 	| "mealProteinGPerServing"
 	| "mealCarbsGPerServing"
 	| "mealFatGPerServing"
+	| "gramsPerServing"
 > & {
 	orderIndex: number;
 	servingsOverride: number | null;
@@ -40,6 +41,7 @@ export type ManifestEntryWire = Omit<
 	mealProteinGPerServing: number | null;
 	mealCarbsGPerServing: number | null;
 	mealFatGPerServing: number | null;
+	gramsPerServing: number | null;
 	personalIntake?: {
 		id: string;
 		servings: number;
@@ -49,6 +51,8 @@ export type ManifestEntryWire = Omit<
 		fatG: number;
 		occurredAt: string;
 		notes?: string | null;
+		loggedAmount?: number | null;
+		loggedUnit?: "serving" | "g" | "oz" | null;
 	} | null;
 };
 
@@ -64,6 +68,11 @@ function serializePersonalIntake(
 		fatG: coerceFiniteNumber(intake.fatG),
 		occurredAt: toIsoDateString(intake.occurredAt),
 		notes: intake.notes ?? null,
+		loggedAmount:
+			intake.loggedAmount != null
+				? coerceFiniteNumber(intake.loggedAmount)
+				: null,
+		loggedUnit: intake.loggedUnit ?? null,
 	};
 }
 
@@ -101,6 +110,7 @@ export function serializeManifestEntryForWire(
 		mealProteinGPerServing: protein,
 		mealCarbsGPerServing: carbs,
 		mealFatGPerServing: fat,
+		gramsPerServing: coerceOptionalFiniteNumber(entry.gramsPerServing) ?? null,
 		...(entry.personalIntake !== undefined
 			? {
 					personalIntake: entry.personalIntake

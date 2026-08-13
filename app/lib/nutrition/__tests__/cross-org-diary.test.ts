@@ -54,6 +54,8 @@ describe("getNutritionSummary cross-org diary", () => {
 				voided_at integer,
 				voided_by_user_id text,
 				notes text,
+				logged_amount real,
+				logged_unit text,
 				created_at integer not null
 			);
 			insert into nutrition_intake (
@@ -115,6 +117,8 @@ describe("getNutritionSummary cross-org diary", () => {
 				occurred_at integer not null,
 				notes text,
 				voided_at integer,
+				logged_amount real,
+				logged_unit text,
 				created_at integer not null
 			);
 			insert into organization values ('org-shared', 'Shared Home');

@@ -431,7 +431,7 @@ export function createManifestToolDefs(env: McpToolsEnv) {
 						"nutrition-cook-log-split is on: use cook_manifest_entries for Cook, then log_manifest_intake for Eat.",
 						{
 							recoveryHint:
-								"Call cook_manifest_entries with the entryIds, then log_manifest_intake with portions[{entryId, servings, idempotencyKey}]. Nutrition consent must already be active in Ration.",
+								"Call cook_manifest_entries with the entryIds, then log_manifest_intake with portions[{entryId, servings or amount+unit, idempotencyKey}]. Nutrition consent must already be active in Ration.",
 						},
 					);
 				}

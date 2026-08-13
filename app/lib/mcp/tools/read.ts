@@ -474,7 +474,7 @@ export function createReadToolDefs(env: McpToolsEnv) {
 		defineSharedTool({
 			name: "get_meal_plan",
 			description:
-				"Retrieve the user's weekly meal plan. Returns scheduled meals by date and slot (breakfast, lunch, dinner, snack), including cookedAt/consumedAt. When nutrition-manifest is on and the key has mcp:nutrition:read, includes the caller's personalIntake per entry.",
+				"Retrieve the user's weekly meal plan. Returns scheduled meals by date and slot (breakfast, lunch, dinner, snack), including cookedAt/consumedAt. gramsPerServing is recipe-ingredient mass per serving when known — use it to convert plated grams/oz for log_manifest_intake; do not invent grams if it is null. When nutrition-manifest is on and the key has mcp:nutrition:read, includes the caller's personalIntake per entry.",
 			inputSchema: z.object({
 				startDate: z
 					.string()
@@ -543,6 +543,7 @@ export function createReadToolDefs(env: McpToolsEnv) {
 						mealId: e.mealId,
 						mealName: e.mealName,
 						servings: e.servingsOverride ?? e.mealServings,
+						gramsPerServing: e.gramsPerServing ?? null,
 						notes: e.notes,
 						consumedAt: e.consumedAt,
 						cookedAt: e.cookedAt,

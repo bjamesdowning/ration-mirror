@@ -59,6 +59,11 @@ describe("getCopilotSystemPrompt", () => {
 		expect(prompt).toContain("Nutrition (when flags enabled");
 		expect(prompt).toContain("Cook ≠ Eat");
 		expect(prompt).toContain("log_manifest_intake");
+		expect(prompt).toContain("gramsPerServing");
+		expect(prompt).toContain("0.01");
+		expect(prompt).toContain("a few bites");
+		expect(prompt).toContain("never invent grams");
+		expect(prompt).toContain("whole pot");
 		expect(prompt).toContain("cook_manifest_entries");
 		expect(prompt).toContain("get_nutrition_summary");
 		expect(prompt).toContain("vsGoal");

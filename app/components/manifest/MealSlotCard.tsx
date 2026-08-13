@@ -30,9 +30,7 @@ interface MealSlotCardProps {
 	onEditServing?: (entryId: string) => void;
 }
 
-function formatServingsCount(value: number): string {
-	return value % 1 === 0 ? String(value) : value.toFixed(1);
-}
+import { formatLoggedIntake } from "~/lib/nutrition/intake-amount";
 
 export function MealSlotCard({
 	entry,
@@ -178,8 +176,11 @@ export function MealSlotCard({
 
 				{isSplit && isPrepared && personalIntake && (
 					<p className="text-[11px] font-mono text-hyper-green mt-1.5">
-						You logged {formatServingsCount(personalIntake.servings)}{" "}
-						{personalIntake.servings === 1 ? "serving" : "servings"}
+						You logged{" "}
+						{formatLoggedIntake(
+							personalIntake.loggedAmount ?? personalIntake.servings,
+							personalIntake.loggedUnit ?? "serving",
+						)}
 					</p>
 				)}
 			</div>

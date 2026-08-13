@@ -30,6 +30,7 @@ import { log } from "./logging.server";
 import { getExcludedManifestDates } from "./manifest-supply.server";
 import { getMealMissingIngredients } from "./matching.server";
 import { type CargoDeduction, cookMeal } from "./meals.server";
+import { gramsPerServingFromSnapshot } from "./nutrition/intake-amount";
 import type { MealNutritionSnapshot } from "./nutrition/types";
 import { chunkedQuery } from "./query-utils.server";
 import { bumpReadinessCacheVersions } from "./readiness-cache.server";
@@ -173,6 +174,8 @@ export interface MealPlanEntryWithMeal {
 	mealProteinGPerServing?: number | null;
 	mealCarbsGPerServing?: number | null;
 	mealFatGPerServing?: number | null;
+	/** Recipe ingredient mass per recipe serving; null when mass is unknown. */
+	gramsPerServing?: number | null;
 	/** Current-user-only personal intake (never another member's). */
 	personalIntake?: {
 		id: string;
@@ -184,6 +187,8 @@ export interface MealPlanEntryWithMeal {
 		/** ISO-8601 string from serialize path. */
 		occurredAt: string;
 		notes?: string | null;
+		loggedAmount?: number | null;
+		loggedUnit?: "serving" | "g" | "oz" | null;
 	} | null;
 }
 
@@ -277,6 +282,7 @@ export async function getWeekEntries(
 			mealProteinGPerServing: snap?.perServing?.proteinG ?? null,
 			mealCarbsGPerServing: snap?.perServing?.carbG ?? null,
 			mealFatGPerServing: snap?.perServing?.fatG ?? null,
+			gramsPerServing: gramsPerServingFromSnapshot(snap, r.mealServings ?? 1),
 		};
 	}) as MealPlanEntryWithMeal[];
 }

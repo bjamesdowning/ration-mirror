@@ -184,18 +184,19 @@ describe("get_context onboarding helpers", () => {
 	});
 
 	it("buildNutritionCapabilityNotes lists enabled flags only", () => {
-		expect(
-			buildNutritionCapabilityNotes({
-				engine: true,
-				manifest: false,
-				goals: true,
-				cookLogSplit: true,
-			}),
-		).toEqual([
+		const notes = buildNutritionCapabilityNotes({
+			engine: true,
+			manifest: false,
+			goals: true,
+			cookLogSplit: true,
+		});
+		expect(notes).toEqual([
 			expect.stringContaining("nutrition-engine"),
 			expect.stringContaining("nutrition-cook-log-split"),
 			expect.stringContaining("nutrition-goals"),
 		]);
+		expect(notes[1]).toContain("gramsPerServing");
+		expect(notes[1]).toContain("0.01");
 	});
 });
 

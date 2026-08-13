@@ -357,6 +357,23 @@ describe("Cook and Eat request schemas", () => {
 		expect(parsed.servings).toBe(0.5);
 	});
 
+	it("accepts 0.25 servings and amount+unit", async () => {
+		const { ManifestPersonalIntakeUpsertSchema } = await import("../manifest");
+		expect(
+			ManifestPersonalIntakeUpsertSchema.parse({
+				servings: 0.25,
+				idempotencyKey: "22222222-2222-4222-8222-222222222222",
+			}).servings,
+		).toBe(0.25);
+		const mass = ManifestPersonalIntakeUpsertSchema.parse({
+			amount: 180,
+			unit: "g",
+			idempotencyKey: "22222222-2222-4222-8222-222222222222",
+		});
+		expect(mass.amount).toBe(180);
+		expect(mass.unit).toBe("g");
+	});
+
 	it("rejects client-provided consent on the Eat write", async () => {
 		const { ManifestPersonalIntakeUpsertSchema } = await import("../manifest");
 		expect(() =>
@@ -368,11 +385,22 @@ describe("Cook and Eat request schemas", () => {
 		).toThrow();
 	});
 
-	it("rejects servings below 0.5", async () => {
+	it("rejects servings below 0.01 and missing amount", async () => {
 		const { ManifestPersonalIntakeUpsertSchema } = await import("../manifest");
 		expect(() =>
 			ManifestPersonalIntakeUpsertSchema.parse({
-				servings: 0.25,
+				servings: 0.009,
+				idempotencyKey: "22222222-2222-4222-8222-222222222222",
+			}),
+		).toThrow();
+		expect(() =>
+			ManifestPersonalIntakeUpsertSchema.parse({
+				servings: 0,
+				idempotencyKey: "22222222-2222-4222-8222-222222222222",
+			}),
+		).toThrow();
+		expect(() =>
+			ManifestPersonalIntakeUpsertSchema.parse({
 				idempotencyKey: "22222222-2222-4222-8222-222222222222",
 			}),
 		).toThrow();

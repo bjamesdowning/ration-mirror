@@ -27,7 +27,7 @@ Flags off: Manifest nutrition chrome is unchanged (no preference strip).
 **Cook / Log split (when enabled for your account):**
 
 - **Cook** — Shared household action: deducts Cargo once and marks the plan entry *Prepared*. Does **not** write personal nutrition.
-- **Log my serving** / **Edit serving** — Private to you. Opens plate-up for how many servings **you** ate; records intake from the meal’s nutrition snapshot scaled to portions.
+- **Log my serving** / **Edit serving** — Private to you. Opens plate-up for **how much you ate**: fraction chips (¼ ⅓ ½ ¾ 1 1½ 2), a typed amount (0.01–100 servings), and optional **g / oz** when the meal has recipe-ingredient mass (`gramsPerServing`). Macros are `perServing × servings`. Mass is ingredient grams, not cooked plated weight. Records a snapshot on your private intake row (including the unit you used, for edit round-trip).
 - **Explicit Macro Tracking** — First personal log requires Macro Tracking to be enabled in Settings → Feature enablement (versioned nutrition purposes under the hood). Consent is **not** an inline Eat field and is not implied by Cook, Prepared status, or saving goals.
 - **Remove my log** — Clears your personal intake for that entry without undoing Cook/Prepared.
 
@@ -39,6 +39,7 @@ When nutrition flags and consent allow, Copilot and MCP can:
 
 - Return **remaining vs goal** on `get_nutrition_summary` (`vsGoal`; UTC calendar day, not a dinner-only slice).
 - Match cookable meals with compact per-serving nutrition and an optional kcal cap.
+- Log **Eat** on a prepared Manifest meal (`log_manifest_intake`) as servings (half → `0.5`, a third → `0.33`, a few bites → `0.1`) or `amount` + `unit` (`g` / `oz`) when `get_meal_plan` includes `gramsPerServing`.
 - Log **Quick Eat** (`quick_eat_cargo`) for “I just ate X” — creates a missing pantry line, then deducts it.
 
 Not medical advice. Agents never prescribe calorie targets.
@@ -71,9 +72,9 @@ The Hub **Flight Recorder** widget shows recent kitchen activity (cooks, docks, 
 
 Ask Ration (Copilot) and MCP can read and act on nutrition when Flagship flags and `mcp:nutrition:read` / `mcp:nutrition:write` scopes allow:
 
-- **Reads:** `get_nutrition_summary`, `list_nutrition_intakes`; `get_meal_plan` includes `cookedAt` and the caller’s `personalIntake` when nutrition flags allow.
+- **Reads:** `get_nutrition_summary`, `list_nutrition_intakes`; `get_meal_plan` includes `cookedAt`, the caller’s `personalIntake`, and `gramsPerServing` (recipe-ingredient mass per serving) when nutrition flags allow.
 - **Cook (shared):** `cook_manifest_entries` or Galley `consume_meal` (Manifest bridge when **nutrition-cook-log-split** is on) — Cargo/Prepared only; never personal intake.
-- **Eat (private):** `log_manifest_intake` / `clear_manifest_intake`, each with a request-level operation key; consent must already be active in Ration.
+- **Eat (private):** `log_manifest_intake` / `clear_manifest_intake`, each with a request-level operation key; consent must already be active in Ration. Portions are `servings` (0.01–100) or `amount` + `unit` (`serving` | `g` | `oz`). If mass is requested but `gramsPerServing` is missing, agents should ask for a serving fraction — they must not invent grams.
 - **Goals:** `set_nutrition_goal` / `clear_nutrition_goal`.
 
 When **nutrition-cook-log-split** is on, `consume_manifest_entries` is refused (`cook_eat_split_required`) — use Cook then Eat. External MCP Flagship context uses `clientPlatform` `mcp` + web `APP_VERSION` (never a faked iOS version). First-party Copilot Ask inherits the originating web/ios client. See *MCP tools reference*.

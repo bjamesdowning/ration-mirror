@@ -49,6 +49,7 @@ function setup() {
 			id text primary key,
 			organization_id text not null,
 			name text not null default 'Meal',
+			servings integer not null default 1,
 			nutrition text,
 			nutrition_revision integer not null default 0,
 			nutrition_computed_revision integer not null default 0,
@@ -98,6 +99,8 @@ function setup() {
 			voided_at integer,
 			voided_by_user_id text,
 			notes text,
+			logged_amount real,
+			logged_unit text,
 			created_at integer not null
 		);
 		create unique index nutrition_intake_user_idempotency_uidx
@@ -282,6 +285,27 @@ describe("canonical nutrition service with transactional SQLite", () => {
 		).rejects.toBeInstanceOf(NutritionItemConflictError);
 	});
 
+	it("resolves gram amount+unit onto servings and logged unit", async () => {
+		const { env } = setup();
+		const result = await logManifestIntakes(env, principal, flags, {
+			operationKey: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+			planId: "plan-1",
+			items: [
+				{
+					entryId: firstItem.entryId,
+					amount: 50,
+					unit: "g",
+					idempotencyKey: "ffffffff-ffff-4fff-8fff-ffffffffffff",
+				},
+			],
+		});
+		const intake = result.items[0]?.intake;
+		expect(intake?.servings).toBe(0.5);
+		expect(intake?.loggedAmount).toBe(50);
+		expect(intake?.loggedUnit).toBe("g");
+		expect(intake?.energyKcal).toBe(250);
+	});
+
 	it("atomically replaces active intake and preserves commit-time totals on replay", async () => {
 		const { env, sqlite } = setup();
 		const first = await logManifestIntakes(env, principal, flags, {
@@ -393,7 +417,7 @@ describe("canonical nutrition service with transactional SQLite", () => {
 							 protein_g, carbs_g, fat_g, coverage, source, confidence, verified,
 							 occurred_at, kitchen_event_id, schema_version, nutrients_json,
 							 coverage_json, fiber_g, consent_id, '99999999-9999-4999-8999-999999999999',
-							 null, id, null, null, null, notes, created_at
+							 null, id, null, null, null, notes, logged_amount, logged_unit, created_at
 							 from nutrition_intake where id = ?`,
 						)
 						.run(first.items[0]?.intake.id);

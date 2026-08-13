@@ -366,6 +366,7 @@ export function handleApiError(error: unknown) {
 			"operation_in_progress",
 			"nutrition_write_conflict",
 			"nutrition_operation_invalid",
+			"amount_unit_unavailable",
 			"nutrition_persistence_invariant",
 			"undo_conflict",
 			"not_found",

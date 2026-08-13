@@ -93,6 +93,7 @@ export const MealNutritionSnapshotV2Schema = z.object({
 	perServing: NutrientAmountsV2Schema,
 	coverage: z.number().min(0).max(1),
 	computedAt: z.string().min(1),
+	recipeMassG: z.number().nonnegative().nullable().optional(),
 	attributions: z.array(
 		z.object({
 			ingredientIndex: z.number().int().nonnegative(),
@@ -136,6 +137,8 @@ export const NutritionIntakeDTOSchema = z.object({
 	carbsG: z.number(),
 	fatG: z.number(),
 	fiberG: z.number().nullable().optional(),
+	loggedAmount: z.number().positive().nullable().optional(),
+	loggedUnit: z.enum(["serving", "g", "oz"]).nullable().optional(),
 	mealId: z.string().nullable(),
 	mealName: z.string().nullable(),
 	organizationId: z.string().nullable().optional(),

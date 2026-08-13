@@ -56,6 +56,23 @@ export {
 } from "./goal-effective";
 export { sha256Hex } from "./hash";
 export {
+	amountFromServings,
+	canLogIntakeByMass,
+	clampIntakeServings,
+	coerceIntakeLoggedUnit,
+	formatIntakeServings,
+	formatLoggedIntake,
+	gramsPerServingFromSnapshot,
+	INTAKE_PORTION_PRESETS,
+	INTAKE_SERVINGS_MAX,
+	INTAKE_SERVINGS_MIN,
+	type IntakeLoggedUnit,
+	massUnitForDisplayMode,
+	normalizeIntakeLoggedUnit,
+	recipeMassGFromSnapshot,
+	resolveIntakeAmount,
+} from "./intake-amount";
+export {
 	gramsFromMassResolution,
 	type ResolveIngredientMassOptions,
 	resolveIngredientMass,

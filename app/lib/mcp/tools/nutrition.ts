@@ -8,6 +8,10 @@ import {
 	serializeNutritionSummary,
 } from "../../nutrition/dto.server";
 import {
+	INTAKE_SERVINGS_MAX,
+	INTAKE_SERVINGS_MIN,
+} from "../../nutrition/intake-amount";
+import {
 	clearGoal,
 	clearManifestIntakes,
 	deriveNutritionOperationKey,
@@ -16,7 +20,10 @@ import {
 	logManifestIntakes,
 	setGoal,
 } from "../../nutrition/service.server";
-import { IntakeNotesSchema } from "../../schemas/manifest";
+import {
+	IntakeNotesSchema,
+	refineIntakeAmountFields,
+} from "../../schemas/manifest";
 import {
 	NutritionGoalUpsertSchema,
 	NutritionSummaryQuerySchema,
@@ -53,12 +60,28 @@ function nutritionPrincipal(ctx: McpToolContext) {
 	};
 }
 
-const intakePortionSchema = z.object({
-	entryId: z.string().uuid(),
-	servings: z.number().min(0.5).max(100),
-	idempotencyKey: z.string().uuid(),
-	notes: IntakeNotesSchema,
-});
+const intakePortionSchema = z
+	.object({
+		entryId: z.string().uuid(),
+		servings: z
+			.number()
+			.min(INTAKE_SERVINGS_MIN)
+			.max(INTAKE_SERVINGS_MAX)
+			.optional()
+			.describe("Recipe servings eaten (0.01–100). Use this or amount+unit."),
+		amount: z
+			.number()
+			.positive()
+			.optional()
+			.describe("Eaten quantity in `unit` when not sending servings alone."),
+		unit: z
+			.enum(["serving", "servings", "g", "oz"])
+			.optional()
+			.describe("serving, g, or oz. Required with amount."),
+		idempotencyKey: z.string().uuid(),
+		notes: IntakeNotesSchema,
+	})
+	.superRefine(refineIntakeAmountFields);
 
 export function createNutritionToolDefs(env: McpToolsEnv) {
 	return [
@@ -323,7 +346,7 @@ export function createNutritionToolDefs(env: McpToolsEnv) {
 		defineSharedTool({
 			name: "log_manifest_intake",
 			description:
-				"Atomically log or update personal plate-up (Eat) for prepared Manifest entries. Never deducts Cargo. Requires active intake and agent-processing consent established in Ration. Pass operationKey plus portions[{entryId, servings, idempotencyKey, notes?}] (1–50); optional notes (≤280) persist only when nutrition-intake-notes is on. During the compatibility window, omission derives a stable operation key from the ordered item keys. Returns stable replay semantics and authoritative day totals. Not medical advice.",
+				"Atomically log or update personal plate-up (Eat) for prepared Manifest entries. Never deducts Cargo. Requires active intake and agent-processing consent established in Ration. Pass operationKey plus portions[{entryId, servings? or amount+unit, idempotencyKey, notes?}] (1–50). servings is 0.01–100 recipe servings; amount+unit may be serving, g, or oz when get_meal_plan gramsPerServing is present. Optional notes (≤280) persist only when nutrition-intake-notes is on. During the compatibility window, omission derives a stable operation key from the ordered item keys. Returns stable replay semantics and authoritative day totals. Not medical advice.",
 			inputSchema: z.object({
 				portions: z.array(intakePortionSchema).min(1).max(50),
 				operationKey: z.string().uuid().optional(),

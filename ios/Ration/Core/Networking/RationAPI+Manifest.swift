@@ -74,12 +74,16 @@ extension RationAPI {
         entryId: String,
         servings: Double,
         idempotencyKey: String,
-        notes: String? = nil
+        notes: String? = nil,
+        amount: Double? = nil,
+        unit: IntakeLoggedUnit? = nil
     ) async throws -> ManifestIntakeUpsertResponse {
         try await client.post(
             "manifest/entries/\(entryId)/intake",
             body: ManifestIntakeUpsertRequest(
                 servings: servings,
+                amount: amount,
+                unit: unit,
                 idempotencyKey: idempotencyKey,
                 notes: notes
             )

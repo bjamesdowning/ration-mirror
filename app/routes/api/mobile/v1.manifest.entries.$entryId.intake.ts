@@ -77,6 +77,8 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 						{
 							entryId,
 							servings: parsed.servings,
+							amount: parsed.amount ?? undefined,
+							unit: parsed.unit ?? undefined,
 							idempotencyKey: parsed.idempotencyKey,
 							notes: parsed.notes,
 						},
@@ -101,6 +103,8 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 					fatG: item.intake.fatG,
 					occurredAt: item.intake.occurredAt.toISOString(),
 					notes: item.intake.notes ?? null,
+					loggedAmount: item.intake.loggedAmount ?? null,
+					loggedUnit: item.intake.loggedUnit ?? null,
 				},
 				idempotent: item.replayed,
 				replayed: result.replayed,

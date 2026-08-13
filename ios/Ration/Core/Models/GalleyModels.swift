@@ -224,6 +224,7 @@ struct CookMealBridgedEntry: Codable, Sendable, Identifiable {
     let mealProteinGPerServing: Double?
     let mealCarbsGPerServing: Double?
     let mealFatGPerServing: Double?
+    let gramsPerServing: Double?
     let cookedAt: String?
     let consumedAt: String?
 }
@@ -269,6 +270,7 @@ extension CookMealBridgedEntry {
             mealProteinGPerServing: mealProteinGPerServing,
             mealCarbsGPerServing: mealCarbsGPerServing,
             mealFatGPerServing: mealFatGPerServing,
+            gramsPerServing: gramsPerServing,
             personalIntake: nil
         )
     }

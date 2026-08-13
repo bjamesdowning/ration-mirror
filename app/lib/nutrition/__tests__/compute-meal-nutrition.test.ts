@@ -52,6 +52,7 @@ describe("computeMealNutrition", () => {
 
 		expect(result.coverage).toBe(1);
 		expect(result.attributions).toHaveLength(2);
+		expect(result.recipeMassG).toBe(110);
 		// Total: 40 + 88.4 = 128.4 kcal → per serving 64.2
 		expect(result.perServing.energyKcal).toBeCloseTo(64.2, 5);
 		expect(result.perServing.fatG).toBeCloseTo(5.05, 5);
@@ -118,6 +119,7 @@ describe("computeMealNutrition", () => {
 		expect(result.coverage).toBe(0);
 		expect(result.perServing.energyKcal).toBe(0);
 		expect(result.attributions).toEqual([]);
+		expect(result.recipeMassG).toBeNull();
 	});
 
 	it("aggregates directContribution for count units without grams", () => {

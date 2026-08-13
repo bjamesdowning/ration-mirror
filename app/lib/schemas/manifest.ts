@@ -1,4 +1,10 @@
 import { z } from "zod";
+import {
+	INTAKE_LOGGED_UNITS,
+	INTAKE_SERVINGS_MAX,
+	INTAKE_SERVINGS_MIN,
+	type IntakeLoggedUnit,
+} from "~/lib/nutrition/intake-amount";
 import { INJECTION_PATTERNS } from "./meal";
 
 export const SLOT_TYPES = ["breakfast", "lunch", "dinner", "snack"] as const;
@@ -88,15 +94,53 @@ export const IntakeNotesSchema = z
 		message: "Invalid text",
 	});
 
+export const IntakeLoggedUnitSchema = z.enum(INTAKE_LOGGED_UNITS);
+
+export const IntakeServingsSchema = z.coerce
+	.number()
+	.min(INTAKE_SERVINGS_MIN)
+	.max(INTAKE_SERVINGS_MAX);
+
+/** Shared refine: servings XOR-or-both with amount+unit. */
+export function refineIntakeAmountFields(
+	val: {
+		servings?: number | null;
+		amount?: number | null;
+		unit?: IntakeLoggedUnit | "servings" | null;
+	},
+	ctx: z.RefinementCtx,
+): void {
+	const hasServings = val.servings != null && Number.isFinite(val.servings);
+	const hasAmount = val.amount != null && Number.isFinite(val.amount);
+	const hasUnit = val.unit != null;
+	if (hasAmount !== hasUnit) {
+		ctx.addIssue({
+			code: z.ZodIssueCode.custom,
+			message: "amount and unit must be provided together",
+			path: hasUnit ? ["amount"] : ["unit"],
+		});
+	}
+	if (!hasServings && !hasAmount) {
+		ctx.addIssue({
+			code: z.ZodIssueCode.custom,
+			message: "Provide servings or amount and unit",
+			path: ["servings"],
+		});
+	}
+}
+
 /** Private Eat upsert — path-scoped entry; no client user/org IDs. */
 export const ManifestPersonalIntakeUpsertSchema = z
 	.object({
-		servings: z.coerce.number().min(0.5).max(100),
+		servings: IntakeServingsSchema.optional(),
+		amount: z.number().positive().nullish(),
+		unit: z.union([IntakeLoggedUnitSchema, z.literal("servings")]).nullish(),
 		idempotencyKey: z.string().uuid(),
 		/** Optional Eat snippet; persisted only when `nutrition-intake-notes` is on. */
 		notes: IntakeNotesSchema,
 	})
-	.strict();
+	.strict()
+	.superRefine(refineIntakeAmountFields);
 
 /**
  * Used by the bulk-add endpoint for both the "Copy Entry / Day" features

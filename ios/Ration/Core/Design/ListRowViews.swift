@@ -292,6 +292,13 @@ struct ManifestEntryRow: View {
                         .foregroundStyle(entry.isCooked ? Theme.muted : Theme.carbon)
                     Text(entry.mealType.capitalized)
                         .rationCaption()
+                    if let intake = entry.personalIntake {
+                        Text(
+                            "You logged \(IntakeAmount.formatLogged(amount: intake.loggedAmount ?? intake.servings, unit: intake.loggedUnit ?? .serving))"
+                        )
+                        .font(Typography.dataCaption())
+                        .foregroundStyle(Theme.hyperGreen)
+                    }
                 }
             }
             .buttonStyle(.plain)

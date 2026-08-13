@@ -835,10 +835,13 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 		entryId: string,
 		servings: number,
 		notes: string | null = null,
+		amount?: number,
+		unit?: "serving" | "g" | "oz",
 	) => {
 		intakeFetcher.submit(
 			JSON.stringify({
 				servings,
+				...(amount != null && unit != null ? { amount, unit } : {}),
 				idempotencyKey: crypto.randomUUID(),
 				...(notes != null ? { notes } : {}),
 			}),
@@ -1491,6 +1494,9 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 					mode="eat"
 					mealName={eatEntry.mealName}
 					defaultServings={eatEntry.personalIntake?.servings ?? 1}
+					defaultLoggedAmount={eatEntry.personalIntake?.loggedAmount ?? null}
+					defaultLoggedUnit={eatEntry.personalIntake?.loggedUnit ?? null}
+					gramsPerServing={eatEntry.gramsPerServing ?? null}
 					energyKcalPerServing={eatEntry.mealEnergyKcalPerServing}
 					proteinGPerServing={eatEntry.mealProteinGPerServing}
 					carbsGPerServing={eatEntry.mealCarbsGPerServing}
@@ -1499,10 +1505,10 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 					hasExistingIntake={!!eatEntry.personalIntake}
 					notesEnabled={nutritionIntakeNotesFlag}
 					defaultNotes={eatEntry.personalIntake?.notes ?? null}
-					onConfirmEat={(servings, notes) => {
+					onConfirmEat={(servings, notes, amount, unit) => {
 						const entryId = eatEntry.id;
 						setEatEntry(null);
-						handleEat(entryId, servings, notes);
+						handleEat(entryId, servings, notes, amount, unit);
 					}}
 					onRemoveLog={() => {
 						const entryId = eatEntry.id;

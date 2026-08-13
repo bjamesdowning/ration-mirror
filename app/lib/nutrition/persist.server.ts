@@ -42,6 +42,7 @@ import {
 	isGoalEffectiveOnDate,
 	nutritionIntakeRetentionCutoff,
 } from "./goal-effective";
+import { coerceIntakeLoggedUnit } from "./intake-amount";
 import { mapWithConcurrency } from "./map-concurrency";
 import {
 	type CargoOverrideCandidate,
@@ -456,6 +457,7 @@ export async function recomputeAndStoreMealNutrition(
 		coverage: result.coverage,
 		attributions: result.attributions,
 		computedAt: new Date().toISOString(),
+		recipeMassG: result.recipeMassG,
 	};
 
 	const now = new Date();
@@ -641,6 +643,8 @@ export type PersonalIntakeSummary = {
 	fatG: number;
 	occurredAt: Date;
 	notes: string | null;
+	loggedAmount: number | null;
+	loggedUnit: "serving" | "g" | "oz" | null;
 	idempotencyKey: string | null;
 	replacesIntakeId: string | null;
 };
@@ -673,6 +677,8 @@ export async function getActivePersonalIntakesForEntries(
 				fatG: schema.nutritionIntake.fatG,
 				occurredAt: schema.nutritionIntake.occurredAt,
 				notes: schema.nutritionIntake.notes,
+				loggedAmount: schema.nutritionIntake.loggedAmount,
+				loggedUnit: schema.nutritionIntake.loggedUnit,
 				idempotencyKey: schema.nutritionIntake.idempotencyKey,
 				replacesIntakeId: schema.nutritionIntake.replacesIntakeId,
 			})
@@ -699,6 +705,8 @@ export async function getActivePersonalIntakesForEntries(
 			fatG: row.fatG,
 			occurredAt: row.occurredAt,
 			notes: row.notes ?? null,
+			loggedAmount: row.loggedAmount ?? null,
+			loggedUnit: coerceIntakeLoggedUnit(row.loggedUnit),
 			idempotencyKey: row.idempotencyKey,
 			replacesIntakeId: row.replacesIntakeId,
 		});
@@ -756,6 +764,8 @@ export type NutritionIntakeRow = {
 	verified: number;
 	occurredAt: Date;
 	notes: string | null;
+	loggedAmount?: number | null;
+	loggedUnit?: "serving" | "g" | "oz" | null;
 };
 
 export type ListNutritionIntakesOptions = {
@@ -868,6 +878,8 @@ export async function listNutritionIntakesForRange(
 			verified: schema.nutritionIntake.verified,
 			occurredAt: schema.nutritionIntake.occurredAt,
 			notes: schema.nutritionIntake.notes,
+			loggedAmount: schema.nutritionIntake.loggedAmount,
+			loggedUnit: schema.nutritionIntake.loggedUnit,
 		})
 		.from(schema.nutritionIntake)
 		.leftJoin(schema.meal, eq(schema.nutritionIntake.mealId, schema.meal.id))
@@ -902,6 +914,8 @@ export async function listNutritionIntakesForRange(
 		verified: r.verified,
 		occurredAt: r.occurredAt,
 		notes: r.notes ?? null,
+		loggedAmount: r.loggedAmount ?? null,
+		loggedUnit: coerceIntakeLoggedUnit(r.loggedUnit),
 	}));
 
 	const last = page.at(-1);

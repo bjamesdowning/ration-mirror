@@ -1,11 +1,26 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router";
+import {
+	IntakeAmountField,
+	type IntakeAmountValue,
+} from "~/components/manifest/IntakeAmountField";
+import { useUnitDisplayMode } from "~/components/shell/UnitDisplayToggle";
+import {
+	canLogIntakeByMass,
+	formatIntakeServings,
+	type IntakeLoggedUnit,
+	massUnitForDisplayMode,
+	resolveIntakeAmount,
+} from "~/lib/nutrition/intake-amount";
 
 interface PlateUpDialogProps {
 	/** legacy: existing Eat/consume plate-up. eat: private Cook/Log-split serving log. */
 	mode?: "legacy" | "eat";
 	mealName: string;
 	defaultServings?: number;
+	defaultLoggedAmount?: number | null;
+	defaultLoggedUnit?: IntakeLoggedUnit | null;
+	gramsPerServing?: number | null;
 	/** Per-serving macros for live scaled preview (eat mode). */
 	energyKcalPerServing?: number | null;
 	proteinGPerServing?: number | null;
@@ -14,7 +29,12 @@ interface PlateUpDialogProps {
 	/** legacy mode only. */
 	onConfirm?: (servings: number, logNutrition: boolean) => void;
 	/** eat mode only — Macro Tracking must already be enabled. */
-	onConfirmEat?: (servings: number, notes: string | null) => void;
+	onConfirmEat?: (
+		servings: number,
+		notes: string | null,
+		amount: number,
+		unit: IntakeLoggedUnit,
+	) => void;
 	/** eat mode only — shown when hasExistingIntake. */
 	onRemoveLog?: () => void;
 	onClose: () => void;
@@ -27,10 +47,6 @@ interface PlateUpDialogProps {
 	defaultNotes?: string | null;
 	/** eat mode only — label for the dismiss button (defaults to "Not now"). */
 	notNowLabel?: string;
-}
-
-function formatServingsValue(value: number): string {
-	return value % 1 === 0 ? String(value) : value.toFixed(1);
 }
 
 function formatGrams(value: number): string {
@@ -46,6 +62,41 @@ function scaleMacro(
 	return perServing * servings;
 }
 
+function initialAmountValue(input: {
+	defaultServings: number;
+	defaultLoggedAmount?: number | null;
+	defaultLoggedUnit?: IntakeLoggedUnit | null;
+	gramsPerServing: number | null;
+}): IntakeAmountValue {
+	const servings = input.defaultServings > 0 ? input.defaultServings : 1;
+	const storedUnit = input.defaultLoggedUnit;
+	const canMass = canLogIntakeByMass(input.gramsPerServing);
+	const unit: IntakeLoggedUnit =
+		storedUnit === "g" || storedUnit === "oz"
+			? canMass
+				? storedUnit
+				: "serving"
+			: "serving";
+	const amount =
+		storedUnit === unit &&
+		input.defaultLoggedAmount != null &&
+		Number.isFinite(input.defaultLoggedAmount)
+			? input.defaultLoggedAmount
+			: servings;
+	const resolved = resolveIntakeAmount(
+		{ amount, unit, servings },
+		{ gramsPerServing: input.gramsPerServing },
+	);
+	if (resolved.ok) {
+		return {
+			servings: resolved.servings,
+			amount: resolved.loggedAmount,
+			unit: resolved.loggedUnit,
+		};
+	}
+	return { servings, amount: servings, unit: "serving" };
+}
+
 /**
  * Small plate-up dialog. Two modes:
  * - legacy: existing Eat/consume flow when nutrition-manifest is on.
@@ -55,6 +106,9 @@ export function PlateUpDialog({
 	mode = "legacy",
 	mealName,
 	defaultServings = 1,
+	defaultLoggedAmount = null,
+	defaultLoggedUnit = null,
+	gramsPerServing = null,
 	energyKcalPerServing = null,
 	proteinGPerServing = null,
 	carbsGPerServing = null,
@@ -69,9 +123,19 @@ export function PlateUpDialog({
 	defaultNotes = null,
 	notNowLabel,
 }: PlateUpDialogProps) {
-	const [servings, setServings] = useState(defaultServings);
+	const displayMode = useUnitDisplayMode();
+	const massUnit = massUnitForDisplayMode(displayMode);
+	const [amountValue, setAmountValue] = useState<IntakeAmountValue>(() =>
+		initialAmountValue({
+			defaultServings,
+			defaultLoggedAmount,
+			defaultLoggedUnit,
+			gramsPerServing,
+		}),
+	);
 	const [notes, setNotes] = useState(defaultNotes ?? "");
 	const isEat = mode === "eat";
+	const servings = amountValue.servings;
 	const validServings = Number.isFinite(servings) && servings > 0;
 	const canSave = validServings && (!isEat || intakeConsentGranted);
 	const dismissLabel = notNowLabel ?? (isEat ? "Not now" : "Cancel");
@@ -88,6 +152,19 @@ export function PlateUpDialog({
 		scaledProtein != null ||
 		scaledCarbs != null ||
 		scaledFat != null;
+
+	const field = useMemo(
+		() => (
+			<IntakeAmountField
+				value={amountValue}
+				gramsPerServing={gramsPerServing}
+				massUnit={massUnit}
+				disabled={isEat && !intakeConsentGranted}
+				onChange={setAmountValue}
+			/>
+		),
+		[amountValue, gramsPerServing, massUnit, isEat, intakeConsentGranted],
+	);
 
 	return (
 		<div
@@ -143,23 +220,7 @@ export function PlateUpDialog({
 					</div>
 				) : null}
 
-				<label className="block space-y-2">
-					<span className="text-xs font-mono text-muted uppercase tracking-wide">
-						Servings
-					</span>
-					<input
-						type="number"
-						min={0.5}
-						max={100}
-						step={0.5}
-						value={servings}
-						onChange={(e) => {
-							const next = Number(e.target.value);
-							if (Number.isFinite(next)) setServings(next);
-						}}
-						className="w-full px-3 py-2.5 text-sm bg-transparent border border-platinum rounded-lg text-carbon font-mono focus:outline-none focus:border-hyper-green focus:ring-1 focus:ring-hyper-green"
-					/>
-				</label>
+				{field}
 
 				{isEat ? (
 					<div className="rounded-lg border border-platinum p-3 space-y-2">
@@ -226,12 +287,19 @@ export function PlateUpDialog({
 						<>
 							<button
 								type="button"
-								onClick={() => onConfirmEat?.(servings, notesPayload)}
+								onClick={() =>
+									onConfirmEat?.(
+										amountValue.servings,
+										notesPayload,
+										amountValue.amount,
+										amountValue.unit,
+									)
+								}
 								disabled={!canSave}
 								className="w-full px-4 py-2.5 text-sm font-semibold rounded-lg bg-hyper-green text-on-hyper-green hover:shadow-glow disabled:opacity-40 disabled:cursor-not-allowed transition-all"
 							>
 								{hasExistingIntake
-									? `Save (was ${formatServingsValue(defaultServings)})`
+									? `Save (was ${formatIntakeServings(defaultServings)})`
 									: "Save"}
 							</button>
 							{hasExistingIntake && (
@@ -255,7 +323,12 @@ export function PlateUpDialog({
 						<>
 							<button
 								type="button"
-								onClick={() => onConfirm?.(servings > 0 ? servings : 1, false)}
+								onClick={() =>
+									onConfirm?.(
+										amountValue.servings > 0 ? amountValue.servings : 1,
+										false,
+									)
+								}
 								disabled={!validServings}
 								className="w-full px-4 py-2.5 text-sm font-semibold rounded-lg bg-hyper-green text-on-hyper-green hover:shadow-glow disabled:opacity-40 disabled:cursor-not-allowed transition-all"
 							>

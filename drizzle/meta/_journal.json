@@ -379,6 +379,13 @@
       "when": 1786522753603,
       "tag": "0053_round_lilith",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "6",
+      "when": 1786658205932,
+      "tag": "0054_fantastic_bishop",
+      "breakpoints": true
     }
   ]
 }

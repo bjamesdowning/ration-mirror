@@ -213,6 +213,7 @@ export function MealDetail({
 				mealProteinGPerServing?: number | null;
 				mealCarbsGPerServing?: number | null;
 				mealFatGPerServing?: number | null;
+				gramsPerServing?: number | null;
 			};
 			undoToken?: string;
 		};
@@ -230,6 +231,7 @@ export function MealDetail({
 		mealProteinGPerServing?: number | null;
 		mealCarbsGPerServing?: number | null;
 		mealFatGPerServing?: number | null;
+		gramsPerServing?: number | null;
 	} | null>(null);
 	const [intakeConsentGranted, setIntakeConsentGranted] = useState(false);
 	const isCooking = fetcher.state !== "idle";
@@ -396,6 +398,7 @@ export function MealDetail({
 			mealProteinGPerServing: result.entry.mealProteinGPerServing ?? null,
 			mealCarbsGPerServing: result.entry.mealCarbsGPerServing ?? null,
 			mealFatGPerServing: result.entry.mealFatGPerServing ?? null,
+			gramsPerServing: result.entry.gramsPerServing ?? null,
 		});
 	}, [fetcher.state, fetcher.data, offerEatEnabled]);
 
@@ -447,11 +450,14 @@ export function MealDetail({
 		entryId: string,
 		servings: number,
 		notes: string | null = null,
+		amount?: number,
+		unit?: "serving" | "g" | "oz",
 	) => {
 		if (!eatEntry) return;
 		intakeFetcher.submit(
 			JSON.stringify({
 				servings,
+				...(amount != null && unit != null ? { amount, unit } : {}),
 				idempotencyKey: crypto.randomUUID(),
 				...(notes != null ? { notes } : {}),
 			}),
@@ -880,12 +886,13 @@ export function MealDetail({
 					proteinGPerServing={eatEntry.mealProteinGPerServing}
 					carbsGPerServing={eatEntry.mealCarbsGPerServing}
 					fatGPerServing={eatEntry.mealFatGPerServing}
+					gramsPerServing={eatEntry.gramsPerServing ?? null}
 					intakeConsentGranted={intakeConsentGranted}
 					notesEnabled={nutritionIntakeNotes}
-					onConfirmEat={(servings, notes) => {
+					onConfirmEat={(servings, notes, amount, unit) => {
 						const entryId = eatEntry.id;
 						setEatEntry(null);
-						handleEat(entryId, servings, notes);
+						handleEat(entryId, servings, notes, amount, unit);
 					}}
 					onClose={() => setEatEntry(null)}
 				/>

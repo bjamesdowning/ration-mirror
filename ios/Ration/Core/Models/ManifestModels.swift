@@ -31,6 +31,8 @@ struct ManifestEntry: Codable, Sendable, Identifiable {
     var mealProteinGPerServing: Double? = nil
     var mealCarbsGPerServing: Double? = nil
     var mealFatGPerServing: Double? = nil
+    /// Recipe ingredient mass per recipe serving (Eat gram/oz mode).
+    var gramsPerServing: Double? = nil
     /// Current-user-only personal intake — never another member's (nutrition-cook-log-split).
     var personalIntake: ManifestPersonalIntake? = nil
 
@@ -43,6 +45,7 @@ struct ManifestEntry: Codable, Sendable, Identifiable {
         case consumedAt, cookedAt, createdAt, mealName, mealServings, mealType
         case mealPrepTime, mealCookTime
         case mealEnergyKcalPerServing, mealProteinGPerServing, mealCarbsGPerServing, mealFatGPerServing
+        case gramsPerServing
         case personalIntake
     }
 
@@ -67,6 +70,7 @@ struct ManifestEntry: Codable, Sendable, Identifiable {
         mealProteinGPerServing: Double? = nil,
         mealCarbsGPerServing: Double? = nil,
         mealFatGPerServing: Double? = nil,
+        gramsPerServing: Double? = nil,
         personalIntake: ManifestPersonalIntake? = nil
     ) {
         self.id = id
@@ -89,6 +93,7 @@ struct ManifestEntry: Codable, Sendable, Identifiable {
         self.mealProteinGPerServing = mealProteinGPerServing
         self.mealCarbsGPerServing = mealCarbsGPerServing
         self.mealFatGPerServing = mealFatGPerServing
+        self.gramsPerServing = gramsPerServing
         self.personalIntake = personalIntake
     }
 
@@ -114,6 +119,7 @@ struct ManifestEntry: Codable, Sendable, Identifiable {
         mealProteinGPerServing = try c.decodeTolerantOptionalDouble(forKey: .mealProteinGPerServing)
         mealCarbsGPerServing = try c.decodeTolerantOptionalDouble(forKey: .mealCarbsGPerServing)
         mealFatGPerServing = try c.decodeTolerantOptionalDouble(forKey: .mealFatGPerServing)
+        gramsPerServing = try c.decodeTolerantOptionalDouble(forKey: .gramsPerServing)
         personalIntake = try c.decodeIfPresent(ManifestPersonalIntake.self, forKey: .personalIntake)
     }
 
@@ -139,6 +145,7 @@ struct ManifestEntry: Codable, Sendable, Identifiable {
         try c.encodeIfPresent(mealProteinGPerServing, forKey: .mealProteinGPerServing)
         try c.encodeIfPresent(mealCarbsGPerServing, forKey: .mealCarbsGPerServing)
         try c.encodeIfPresent(mealFatGPerServing, forKey: .mealFatGPerServing)
+        try c.encodeIfPresent(gramsPerServing, forKey: .gramsPerServing)
         try c.encodeIfPresent(personalIntake, forKey: .personalIntake)
     }
 }
@@ -319,9 +326,12 @@ struct ManifestPersonalIntake: Codable, Sendable, Equatable {
     let fatG: Double
     let occurredAt: Date
     var notes: String? = nil
+    var loggedAmount: Double? = nil
+    var loggedUnit: IntakeLoggedUnit? = nil
 
     enum CodingKeys: String, CodingKey {
         case id, servings, energyKcal, proteinG, carbsG, fatG, occurredAt, notes
+        case loggedAmount, loggedUnit
     }
 
     init(
@@ -332,7 +342,9 @@ struct ManifestPersonalIntake: Codable, Sendable, Equatable {
         carbsG: Double,
         fatG: Double,
         occurredAt: Date,
-        notes: String? = nil
+        notes: String? = nil,
+        loggedAmount: Double? = nil,
+        loggedUnit: IntakeLoggedUnit? = nil
     ) {
         self.id = id
         self.servings = servings
@@ -342,6 +354,8 @@ struct ManifestPersonalIntake: Codable, Sendable, Equatable {
         self.fatG = fatG
         self.occurredAt = occurredAt
         self.notes = notes
+        self.loggedAmount = loggedAmount
+        self.loggedUnit = loggedUnit
     }
 
     init(from decoder: Decoder) throws {
@@ -354,6 +368,12 @@ struct ManifestPersonalIntake: Codable, Sendable, Equatable {
         fatG = try c.decodeTolerantDouble(forKey: .fatG)
         occurredAt = try c.decodeTolerantDate(forKey: .occurredAt)
         notes = try c.decodeIfPresent(String.self, forKey: .notes)
+        loggedAmount = try c.decodeTolerantOptionalDouble(forKey: .loggedAmount)
+        if let raw = try c.decodeIfPresent(String.self, forKey: .loggedUnit) {
+            loggedUnit = IntakeLoggedUnit(rawValue: raw)
+        } else {
+            loggedUnit = nil
+        }
     }
 
     func encode(to encoder: Encoder) throws {
@@ -366,13 +386,30 @@ struct ManifestPersonalIntake: Codable, Sendable, Equatable {
         try c.encode(fatG, forKey: .fatG)
         try c.encode(occurredAt, forKey: .occurredAt)
         try c.encodeIfPresent(notes, forKey: .notes)
+        try c.encodeIfPresent(loggedAmount, forKey: .loggedAmount)
+        try c.encodeIfPresent(loggedUnit, forKey: .loggedUnit)
     }
 }
 
 struct ManifestIntakeUpsertRequest: Encodable, Sendable {
-    let servings: Double
+    var servings: Double? = nil
+    var amount: Double? = nil
+    var unit: IntakeLoggedUnit? = nil
     let idempotencyKey: String
     var notes: String? = nil
+
+    enum CodingKeys: String, CodingKey {
+        case servings, amount, unit, idempotencyKey, notes
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encodeIfPresent(servings, forKey: .servings)
+        try c.encodeIfPresent(amount, forKey: .amount)
+        try c.encodeIfPresent(unit, forKey: .unit)
+        try c.encode(idempotencyKey, forKey: .idempotencyKey)
+        try c.encodeIfPresent(notes, forKey: .notes)
+    }
 }
 
 struct ManifestIntakeUpsertResponse: Codable, Sendable {

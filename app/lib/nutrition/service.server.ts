@@ -18,6 +18,12 @@ import {
 import { resolveNutritionCapabilities } from "~/lib/nutrition/feature-policy.server";
 import { previousUtcCalendarDay } from "~/lib/nutrition/goal-effective";
 import {
+	coerceIntakeLoggedUnit,
+	gramsPerServingFromSnapshot,
+	type IntakeLoggedUnit,
+	resolveIntakeAmount,
+} from "~/lib/nutrition/intake-amount";
+import {
 	getActiveNutritionGoal,
 	getActivePersonalIntakesForEntries,
 	listNutritionIntakesForRange,
@@ -98,6 +104,18 @@ export class NutritionUnavailableError extends Error {
 	constructor(message = "Meal nutrition is unavailable for this entry") {
 		super(message);
 		this.name = "NutritionUnavailableError";
+	}
+}
+
+export class AmountUnitUnavailableError extends Error {
+	readonly code = "amount_unit_unavailable" as const;
+	readonly status = 422;
+
+	constructor(
+		message = "This meal has no recipe mass to log in grams or ounces. Use servings instead.",
+	) {
+		super(message);
+		this.name = "AmountUnitUnavailableError";
 	}
 }
 
@@ -685,6 +703,7 @@ async function loadEntries(
 			cookedAt: schema.mealPlanEntry.cookedAt,
 			consumedAt: schema.mealPlanEntry.consumedAt,
 			mealNutrition: schema.meal.nutrition,
+			mealServings: schema.meal.servings,
 			nutritionStatus: schema.meal.nutritionStatus,
 			nutritionRevision: schema.meal.nutritionRevision,
 			nutritionComputedRevision: schema.meal.nutritionComputedRevision,
@@ -803,7 +822,7 @@ async function reconstructLogResult(
 	operation: OperationRow,
 	items: readonly {
 		entryId: string;
-		servings: number;
+		servings?: number;
 		idempotencyKey: string;
 	}[],
 	options: { crossOrgDiary?: boolean } = {},
@@ -820,7 +839,7 @@ async function reconstructLogResult(
 			!row ||
 			row.organizationId !== principal.organizationId ||
 			row.entryId !== item.entryId ||
-			row.servings !== item.servings
+			(item.servings != null && row.servings !== item.servings)
 		) {
 			throw new NutritionItemConflictError(
 				"Unable to reconstruct the completed operation from its item keys",
@@ -862,7 +881,9 @@ export async function logManifestIntakes(
 		planId: string;
 		items: Array<{
 			entryId: string;
-			servings: number;
+			servings?: number;
+			amount?: number;
+			unit?: IntakeLoggedUnit | "servings";
 			idempotencyKey: string;
 			occurredAt?: Date;
 			/** Private Eat snippet; only persisted when nutrition-intake-notes is on. */
@@ -906,7 +927,10 @@ export async function logManifestIntakes(
 		items: [...normalizedItems]
 			.map((item) => ({
 				entryId: item.entryId,
-				servings: item.servings,
+				...(item.servings != null ? { servings: item.servings } : {}),
+				...(item.amount != null && item.unit != null
+					? { amount: item.amount, unit: item.unit }
+					: {}),
 				idempotencyKey: item.idempotencyKey,
 				occurredAt: item.occurredAt?.toISOString() ?? null,
 				...intakeNotesForCanonicalHash(notesEnabled, item.requestedNotes),
@@ -953,15 +977,6 @@ export async function logManifestIntakes(
 		if (entry.cookedAt == null && entry.consumedAt == null) {
 			throw new ManifestEntryNotPreparedError();
 		}
-		if (
-			!Number.isFinite(item.servings) ||
-			item.servings < 0.5 ||
-			item.servings > 100
-		) {
-			throw new NutritionOperationValidationError(
-				"Servings must be between 0.5 and 100",
-			);
-		}
 	}
 
 	// Best-effort sync heal before plate-up — async recompute / density-only
@@ -998,6 +1013,37 @@ export async function logManifestIntakes(
 		}
 	}
 
+	const resolvedItems = normalizedItems.map((item) => {
+		const entry = entries.get(item.entryId);
+		if (!entry) throw new ManifestIntakeTargetNotFoundError();
+		const snapshot = entry.mealNutrition as MealNutritionSnapshot | null;
+		const resolved = resolveIntakeAmount(
+			{
+				servings: item.servings,
+				amount: item.amount,
+				unit: item.unit,
+			},
+			{
+				gramsPerServing: gramsPerServingFromSnapshot(
+					snapshot,
+					entry.mealServings ?? 1,
+				),
+			},
+		);
+		if (!resolved.ok) {
+			if (resolved.code === "amount_unit_unavailable") {
+				throw new AmountUnitUnavailableError(resolved.message);
+			}
+			throw new NutritionOperationValidationError(resolved.message);
+		}
+		return {
+			...item,
+			servings: resolved.servings,
+			loggedAmount: resolved.loggedAmount,
+			loggedUnit: resolved.loggedUnit,
+		};
+	});
+
 	const operationId = crypto.randomUUID();
 	const committedAt = new Date();
 	const stableIntakeIds = new Map(
@@ -1008,14 +1054,17 @@ export async function logManifestIntakes(
 		const byKey = await loadRowsByItemKeys(
 			db,
 			principal,
-			normalizedItems.map((item) => item.idempotencyKey),
+			resolvedItems.map((item) => item.idempotencyKey),
 		);
-		for (const item of normalizedItems) {
+		for (const item of resolvedItems) {
 			const row = byKey.get(item.idempotencyKey);
 			if (
 				row &&
 				(row.entryId !== item.entryId ||
 					row.servings !== item.servings ||
+					(row.loggedUnit != null && row.loggedUnit !== item.loggedUnit) ||
+					(row.loggedAmount != null &&
+						row.loggedAmount !== item.loggedAmount) ||
 					(notesEnabled &&
 						(row.notes ?? null) !== (item.requestedNotes ?? null)) ||
 					(item.occurredAt != null &&
@@ -1027,11 +1076,11 @@ export async function logManifestIntakes(
 		const activeByEntry = await loadActiveRows(
 			db,
 			principal,
-			normalizedItems.map((item) => item.entryId),
+			resolvedItems.map((item) => item.entryId),
 		);
 		const newRows: Array<typeof schema.nutritionIntake.$inferInsert> = [];
 		const results: NutritionIntakeResult[] = [];
-		for (const item of normalizedItems) {
+		for (const item of resolvedItems) {
 			const replayedRow = byKey.get(item.idempotencyKey);
 			if (replayedRow) {
 				results.push({
@@ -1107,6 +1156,8 @@ export async function logManifestIntakes(
 				voidedAt: null,
 				voidedByUserId: null,
 				notes,
+				loggedAmount: item.loggedAmount,
+				loggedUnit: item.loggedUnit,
 				createdAt: committedAt,
 			};
 			newRows.push(row);
@@ -1914,6 +1965,11 @@ export async function attachPersonalIntakeToEntries(
 						fatG: coerceFiniteNumber(intake.fatG),
 						occurredAt: toIsoDateString(intake.occurredAt),
 						notes: intake.notes ?? null,
+						loggedAmount:
+							intake.loggedAmount != null
+								? coerceFiniteNumber(intake.loggedAmount)
+								: null,
+						loggedUnit: coerceIntakeLoggedUnit(intake.loggedUnit),
 					}
 				: null,
 		};

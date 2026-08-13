@@ -14,6 +14,9 @@ enum CargoLinkResolver {
         for row in rows where normalize(row.name) == target {
             return row.id
         }
+        for row in rows where CargoTokenMatcher.isTokenPhaseMatch(recipeName: name, cargoName: row.name) {
+            return row.id
+        }
         return nil
     }
 

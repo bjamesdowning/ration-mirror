@@ -179,6 +179,7 @@ struct SnoozeDurationSheet: View {
 }
 
 struct SnoozedItemsSection: View {
+    @Environment(AppEnvironment.self) private var env
     let snoozes: [SupplySnooze]
     var cargoLinkRows: [CargoLinkResolver.Row] = []
     var onUnsnooze: (SupplySnooze) async -> Void
@@ -220,8 +221,8 @@ struct SnoozedItemsSection: View {
     @ViewBuilder
     private func snoozeNameLabel(_ snooze: SupplySnooze) -> some View {
         if let cargoId = CargoLinkResolver.resolveCargoId(forName: snooze.displayName, in: cargoLinkRows) {
-            NavigationLink {
-                CargoDetailView(itemId: cargoId)
+            Button {
+                env.openDeepLink(.cargoItem(id: cargoId))
             } label: {
                 Text(snooze.displayName.capitalized).rationBody()
             }

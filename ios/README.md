@@ -24,7 +24,7 @@ Set your **Apple Developer Team ID** in `project.yml` (`DEVELOPMENT_TEAM`) befor
 building to a device, then re-run `xcodegen generate`.
 
 **Versioning:** User-facing app version is `MARKETING_VERSION` in `project.yml`
-(currently **1.4.16**). `CURRENT_PROJECT_VERSION` is the monotonic build number for
+(currently **1.4.22**). `CURRENT_PROJECT_VERSION` is the monotonic build number for
 TestFlight / App Store uploads. Follow the same patch/minor rules as the web app
 (`1.X.1`–`1.X.49`, then `1.(X+1).0`); see `.cursor/rules/ration-master.mdc`.
 After editing `project.yml`, run `bun run ios:generate`.
@@ -397,8 +397,10 @@ read-only list/detail chips are unchanged.
 - Cargo item detail: `⋯` includes Add to Supply; pop back restores list FAB.
 - Cargo tab: open item detail, switch to Galley tab — Galley `+` FAB must remain visible.
 - Galley meal detail: same `⋯` dock behavior; scroll last card clears dock; dock collapse on scroll still works.
-- Galley meal → ingredient link → cargo detail (tab 2): `⋯` replaces Galley `+` on active tab.
-- Manifest entry → meal detail: `⋯` replaces Manifest tab FAB.
+- Galley meal → ingredient link → **Cargo tab slides in**; cargo `⋯` shows cargo actions (not Galley add/generate). Galley still has the meal if you switch back.
+- Cargo connected meal → **Galley tab slides in**; meal `⋯` shows meal actions. Cargo stack is preserved.
+- Hub / Supply / Manifest cargo or meal taps hand off to Cargo / Galley (originating tab stack is kept).
+- Manifest entry → meal detail: tab slides to Galley; returning to Manifest still shows the calendar.
 - Tab switch resets bar to expanded when allowance allows auto-expand; keyboard must stay closed until the composer is tapped.
 - Collapsed chat chip: tap expands the bar and opens the keyboard when allowance allows; when exhausted (no free chats and insufficient credits), tap opens the paywall. Scroll-up expand alone must not open the keyboard.
 - With keyboard open on any tab: composer stays directly above keyboard (not at top of screen).

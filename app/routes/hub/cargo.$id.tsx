@@ -41,7 +41,7 @@ export async function loader({ request, params, context }: Route.LoaderArgs) {
 
 	const [connectedMeals, adjacent, activeCargoIds, orgTags] = await Promise.all(
 		[
-			getMealsForCargo(context.cloudflare.env.DB, groupId, id, item.name),
+			getMealsForCargo(context.cloudflare.env, groupId, id),
 			getAdjacentCargoIds(
 				context.cloudflare.env.DB,
 				groupId,

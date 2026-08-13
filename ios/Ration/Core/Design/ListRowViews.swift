@@ -178,13 +178,10 @@ struct MealRowView: View {
                     .accessibilityLabel("\(Int(match.matchPercentage)) percent ingredient match")
             }
 
-            NavigationLink {
-                MealDetailView(
-                    mealId: meal.id,
-                    initialMeal: meal,
-                    isInitiallySelectedForSupply: isInitiallySelectedForSupply
-                )
-            } label: {
+            NavigationLink(value: MealDetailRoute(
+                id: meal.id,
+                isInitiallySelectedForSupply: isInitiallySelectedForSupply
+            )) {
                 mealMetadata
             }
             .buttonStyle(.plain)
@@ -264,6 +261,7 @@ struct MealRowView: View {
 // MARK: - Manifest row
 
 struct ManifestEntryRow: View {
+    @Environment(AppEnvironment.self) private var env
     let entry: ManifestEntry
     /// Fail-closed default — legacy single-tap Consume until flags say otherwise.
     var flags: ManifestEntryActionPolicy.Flags = .disabled
@@ -284,11 +282,8 @@ struct ManifestEntryRow: View {
     var body: some View {
         HStack(spacing: 12) {
             SlotGlyphView(slotType: entry.slotType)
-            NavigationLink {
-                MealDetailView(
-                    mealId: entry.mealId,
-                    initialMeal: entry.manifestStubMeal()
-                )
+            Button {
+                env.openDeepLink(.meal(id: entry.mealId))
             } label: {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(entry.mealName.capitalized)

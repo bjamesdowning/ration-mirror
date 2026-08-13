@@ -524,6 +524,7 @@ struct SupplyView: View {
 }
 
 private struct SupplyListItemRow: View {
+    @Environment(AppEnvironment.self) private var env
     let item: SupplyItem
     let cargoLinkRows: [CargoLinkResolver.Row]
     let onCheckOff: () -> Void
@@ -595,8 +596,8 @@ private struct SupplyListItemRow: View {
     private var supplyItemName: some View {
         if let cargoId = CargoLinkResolver.resolveCargoId(forName: item.name, in: cargoLinkRows),
            !item.isPurchased {
-            NavigationLink {
-                CargoDetailView(itemId: cargoId)
+            Button {
+                env.openDeepLink(.cargoItem(id: cargoId))
             } label: {
                 Text(item.name.capitalized)
                     .rationBody()

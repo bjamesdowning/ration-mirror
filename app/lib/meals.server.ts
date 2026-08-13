@@ -30,6 +30,11 @@ import { ITEM_DOMAINS } from "./domain";
 import type { FlagshipEvaluationContext } from "./feature-flags/context.server";
 import { buildSystemFlagContext } from "./feature-flags/context.server";
 import {
+	connectionTypeFromMatch,
+	type IngredientCargoLink,
+	resolveIngredientCargoLinks,
+} from "./ingredient-cargo-links.server";
+import {
 	buildGalleyCookedEvent,
 	buildKitchenEventInserts,
 } from "./kitchen-events.server";
@@ -615,7 +620,11 @@ export async function getAdjacentMealIds(
 	};
 }
 
-export type MealIngredientConnectionType = "direct" | "name_match";
+export type MealIngredientConnectionType =
+	| "direct"
+	| "exact"
+	| "token"
+	| "vector";
 
 export interface ConnectedMealIngredient {
 	id: string;
@@ -630,19 +639,20 @@ export interface ConnectedMealIngredient {
 }
 
 /**
- * Retrieves meals that reference a cargo item either by direct cargoId link
- * or by case-insensitive ingredient name match (for unlinked ingredients).
+ * Retrieves meals that reference a cargo item by explicit cargoId or by the
+ * operational pantry resolver (exact / token / vector).
+ *
+ * Unlinked ingredients are an intentional org-wide narrow projection (id, meal
+ * id, name, qty) so reverse matching can reuse resolveIngredientCargoLinks.
  */
 export async function getMealsForCargo(
-	db: D1Database,
+	env: Env,
 	organizationId: string,
 	cargoId: string,
-	cargoName: string,
 ) {
-	const d1 = drizzle(db);
-	const normalizedName = cargoName.trim().toLowerCase();
+	const d1 = drizzle(env.DB);
 
-	const [directRows, nameRows] = await d1.batch([
+	const [directRows, unlinkedRows] = await d1.batch([
 		d1
 			.select({
 				id: mealIngredient.id,
@@ -679,17 +689,30 @@ export async function getMealsForCargo(
 				and(
 					eq(meal.organizationId, organizationId),
 					isNull(mealIngredient.cargoId),
-					sql`lower(${mealIngredient.ingredientName}) = ${normalizedName}`,
 				),
 			),
 	]);
 
+	const namesToResolve = [
+		...new Set(unlinkedRows.map((row) => row.ingredientName)),
+	];
+	const links =
+		namesToResolve.length > 0
+			? await resolveIngredientCargoLinks(env, organizationId, namesToResolve)
+			: new Map<string, IngredientCargoLink>();
+
+	const resolvedConnections: ConnectedMealIngredient[] = [];
+	for (const row of unlinkedRows) {
+		const link = links.get(row.ingredientName);
+		if (!link?.cargoIds.includes(cargoId)) continue;
+		const connectionType = connectionTypeFromMatch(link.matchType);
+		if (!connectionType) continue;
+		resolvedConnections.push({ ...row, connectionType });
+	}
+
 	const allConnections: ConnectedMealIngredient[] = [
 		...directRows.map((row) => ({ ...row, connectionType: "direct" as const })),
-		...nameRows.map((row) => ({
-			...row,
-			connectionType: "name_match" as const,
-		})),
+		...resolvedConnections,
 	];
 
 	if (allConnections.length === 0) {
@@ -706,7 +729,7 @@ export async function getMealsForCargo(
 					and(eq(meal.organizationId, organizationId), inArray(meal.id, chunk)),
 				),
 		),
-		getTagsForMealIds(db, mealIds),
+		getTagsForMealIds(env.DB, mealIds),
 	]);
 
 	const connectionsByMealId = new Map<string, ConnectedMealIngredient[]>();

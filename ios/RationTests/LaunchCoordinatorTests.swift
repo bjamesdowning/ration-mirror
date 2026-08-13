@@ -100,6 +100,54 @@ final class DeepLinkRouterTests: XCTestCase {
     }
 
     @MainActor
+    func testReplayPendingOpensCargoItem() {
+        let router = DeepLinkRouter()
+        router.enqueue(.cargoItem(id: "cargo-1"))
+        var selectedTab: MainTab = .galley
+        router.replayPending(
+            selectedTab: &selectedTab,
+            openAskSheet: {},
+            openScan: {}
+        )
+        XCTAssertEqual(selectedTab, .cargo)
+        XCTAssertEqual(router.cargoItemPending, "cargo-1")
+        XCTAssertNil(router.pending)
+        router.acknowledgeCargoItem()
+        XCTAssertNil(router.cargoItemPending)
+    }
+
+    @MainActor
+    func testReplayPendingOpensMealOnGalley() {
+        let router = DeepLinkRouter()
+        router.enqueue(.meal(id: "meal-1"))
+        var selectedTab: MainTab = .cargo
+        router.replayPending(
+            selectedTab: &selectedTab,
+            openAskSheet: {},
+            openScan: {}
+        )
+        XCTAssertEqual(selectedTab, .galley)
+        XCTAssertEqual(router.mealPending, "meal-1")
+        router.acknowledgeMeal()
+        XCTAssertNil(router.mealPending)
+    }
+
+    @MainActor
+    func testEnqueueDeduplicatesIdenticalCargoItem() {
+        let router = DeepLinkRouter()
+        router.enqueue(.cargoItem(id: "cargo-1"))
+        router.enqueue(.cargoItem(id: "cargo-1"))
+        XCTAssertEqual(router.pending, .cargoItem(id: "cargo-1"))
+        var selectedTab: MainTab = .hub
+        router.replayPending(
+            selectedTab: &selectedTab,
+            openAskSheet: {},
+            openScan: {}
+        )
+        XCTAssertNil(router.pending)
+    }
+
+    @MainActor
     func testQueuedDestinationsReplayInOrder() {
         let router = DeepLinkRouter()
         router.enqueue(.ask)

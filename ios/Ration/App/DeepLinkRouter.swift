@@ -6,6 +6,15 @@ struct ManifestAddEntryPrefill: Equatable, Sendable {
     let date: String
 }
 
+struct CargoDetailRoute: Hashable, Identifiable, Sendable {
+    let id: String
+}
+
+struct MealDetailRoute: Hashable, Identifiable, Sendable {
+    let id: String
+    var isInitiallySelectedForSupply = false
+}
+
 /// Phase-aware deep-link queue — stores intent until the tab shell is ready,
 /// then exposes one-shot flags for feature sheets.
 @MainActor
@@ -18,6 +27,8 @@ final class DeepLinkRouter {
     private(set) var galleyImportAutoStart = false
     private(set) var manifestPlanWeekPending = false
     private(set) var manifestAddEntryPending: ManifestAddEntryPrefill?
+    private(set) var cargoItemPending: String?
+    private(set) var mealPending: String?
 
     var pending: AppEnvironment.DeepLinkDestination? {
         queue.first
@@ -43,6 +54,8 @@ final class DeepLinkRouter {
         galleyImportAutoStart = false
         manifestPlanWeekPending = false
         manifestAddEntryPending = nil
+        cargoItemPending = nil
+        mealPending = nil
     }
 
     /// Applies the pending destination once startup and org context are ready.
@@ -59,6 +72,12 @@ final class DeepLinkRouter {
             openScan()
         case .cargo:
             selectedTab = .cargo
+        case .cargoItem(let id):
+            selectedTab = .cargo
+            cargoItemPending = id
+        case .meal(let id):
+            selectedTab = .galley
+            mealPending = id
         case .galleyGenerate:
             selectedTab = .galley
             galleyGeneratePending = true
@@ -85,4 +104,6 @@ final class DeepLinkRouter {
     }
     func acknowledgeManifestPlanWeek() { manifestPlanWeekPending = false }
     func acknowledgeManifestAddEntry() { manifestAddEntryPending = nil }
+    func acknowledgeCargoItem() { cargoItemPending = nil }
+    func acknowledgeMeal() { mealPending = nil }
 }

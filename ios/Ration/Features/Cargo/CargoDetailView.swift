@@ -2,7 +2,6 @@ import SwiftUI
 
 struct CargoDetailView: View {
     @Environment(AppEnvironment.self) private var env
-    @Environment(CopilotScrollContext.self) private var scrollContext
     @Environment(\.dismiss) private var dismiss
     let itemId: String
     @State private var model = CargoDetailViewModel()
@@ -58,7 +57,7 @@ struct CargoDetailView: View {
                 }
                 .scrollDismissesKeyboard(.interactively)
                 .copilotDockScrollMargins()
-                .copilotScrollTracked(tab: scrollContext.activeTab, isActive: true)
+                .copilotScrollTracked(tab: .cargo, isActive: true)
             } else {
                 cargoLoadFailureView
             }
@@ -66,7 +65,7 @@ struct CargoDetailView: View {
         .background(Theme.ceramic)
         .navigationTitle(model.item?.name.capitalized ?? "Cargo")
         .navigationBarTitleDisplayMode(.inline)
-        .tabDockAction(tag: scrollContext.activeTab, isActive: model.item != nil) {
+        .tabDockAction(tag: .cargo) {
             IconFABMenuCore(systemImage: "ellipsis.circle.fill", accessibilityLabel: "Cargo actions") {
                 if env.session.clientFlags.isCargoQuickEatEnabled {
                     Button { showingQuickEat = true } label: {
@@ -78,7 +77,7 @@ struct CargoDetailView: View {
                         }
                     }
                     .tint(Theme.warning)
-                    .disabled(model.isQuickEating || !env.network.isOnline)
+                    .disabled(model.item == nil || model.isQuickEating || !env.network.isOnline)
                 }
                 Button {
                     Task { await handlePromote() }
@@ -88,10 +87,11 @@ struct CargoDetailView: View {
                         systemImage: model.isPromoted ? "checkmark.circle" : "fork.knife"
                     )
                 }
-                .disabled(model.isPromoting || model.isPromoted || !env.network.isOnline)
+                .disabled(model.item == nil || model.isPromoting || model.isPromoted || !env.network.isOnline)
                 Button { showingEdit = true } label: {
                     Label("Edit", systemImage: "pencil")
                 }
+                .disabled(model.item == nil)
                 if let item = model.item, item.quantity > 0 {
                     Button {
                         Task {
@@ -111,12 +111,16 @@ struct CargoDetailView: View {
                         systemImage: model.isSelectedForRestock ? "cart.fill.badge.minus" : "cart.badge.plus"
                     )
                 }
-                .disabled(model.isTogglingRestock || !env.network.isOnline)
+                .disabled(model.item == nil || model.isTogglingRestock || !env.network.isOnline)
                 Button(role: .destructive) { showingDeleteConfirm = true } label: {
                     Label("Delete", systemImage: "trash")
                 }
+                .disabled(model.item == nil)
                 .destructiveDeleteTint()
             }
+        }
+        .onChange(of: model.item != nil) { _, _ in
+            env.tabDock.bumpContentEpoch()
         }
         .onChange(of: model.isSelectedForRestock) { _, _ in
             env.tabDock.bumpContentEpoch()
@@ -345,8 +349,8 @@ struct CargoDetailView: View {
 
         return VStack(alignment: .leading, spacing: 8) {
             HStack {
-                NavigationLink {
-                    MealDetailView(mealId: meal.id, initialMeal: placeholderMeal(from: meal))
+                Button {
+                    env.openDeepLink(.meal(id: meal.id))
                 } label: {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(meal.name.capitalized).rationBody()
@@ -412,39 +416,5 @@ struct CargoDetailView: View {
             }
         }
         .padding(.vertical, 4)
-    }
-
-    private func placeholderMeal(from connected: ConnectedCargoMeal) -> Meal {
-        Meal(
-            id: connected.id,
-            organizationId: "",
-            name: connected.name,
-            domain: "food",
-            type: connected.type,
-            description: connected.description,
-            directions: nil,
-            equipment: nil,
-            servings: 1,
-            prepTime: nil,
-            cookTime: nil,
-            createdAt: Date(),
-            updatedAt: Date(),
-            tags: connected.tags,
-            ingredients: connected.connectedIngredients.map {
-                MealIngredient(
-                    id: $0.id,
-                    mealId: $0.mealId,
-                    cargoId: nil,
-                    resolvedCargoId: nil,
-                    ingredientName: $0.ingredientName,
-                    quantity: $0.quantity,
-                    unit: $0.unit,
-                    baseQuantity: nil,
-                    baseUnit: nil,
-                    isOptional: $0.isOptional ?? false,
-                    orderIndex: $0.orderIndex ?? 0
-                )
-            }
-        )
     }
 }

@@ -8,6 +8,8 @@ describe("resolveCargoIdForName", () => {
 	const rows = [
 		{ id: "cargo-1", name: "Salmon Fillet" },
 		{ id: "cargo-2", name: "canned tomatoes" },
+		{ id: "cargo-3", name: "white bread" },
+		{ id: "cargo-4", name: "coconut milk" },
 	];
 
 	it("matches by normalised name", () => {
@@ -16,6 +18,14 @@ describe("resolveCargoIdForName", () => {
 
 	it("matches regional synonyms", () => {
 		expect(resolveCargoIdForName("tinned tomatoes", rows)).toBe("cargo-2");
+	});
+
+	it("matches token-phase specialization (bread → white bread)", () => {
+		expect(resolveCargoIdForName("bread", rows)).toBe("cargo-3");
+	});
+
+	it("does not token-match fragile compounds", () => {
+		expect(resolveCargoIdForName("milk", rows)).toBeNull();
 	});
 
 	it("returns null when no match", () => {

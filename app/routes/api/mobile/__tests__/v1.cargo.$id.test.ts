@@ -132,10 +132,9 @@ describe("GET /api/mobile/v1/cargo/:id loader", () => {
 			{ id: "cargo_1", name: "Tomatoes" },
 		]);
 		expect(getMealsForCargo).toHaveBeenCalledWith(
-			{},
+			expect.objectContaining({ DB: {}, RATION_KV: {} }),
 			"org_1",
 			"cargo_1",
-			"Tomatoes",
 		);
 	});
 

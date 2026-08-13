@@ -15,7 +15,7 @@ struct GalleyView: View {
     @State private var showingImport = false
     @State private var importPrefillURL: String?
     @State private var importAutoStart = false
-    @State private var navigateToMealId: String?
+    @State private var path: [MealDetailRoute] = []
     @State private var availableTags: [String] = []
     @State private var generateSuccessMessage: String?
     @State private var pendingCookMealId: String?
@@ -58,7 +58,7 @@ struct GalleyView: View {
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             Group {
                 if model.isLoading && model.meals.isEmpty && model.matches.isEmpty {
                     LoadingView()
@@ -155,15 +155,19 @@ struct GalleyView: View {
                     initialURL: importPrefillURL,
                     autoStart: importAutoStart,
                     onComplete: { await reload() },
-                    onImportedMeal: { meal in navigateToMealId = meal.id },
+                    onImportedMeal: { meal in path = [MealDetailRoute(id: meal.id)] },
                     onAddManually: {
                         showingImport = false
                         showingAddMeal = true
                     }
                 )
             }
-            .navigationDestination(item: $navigateToMealId) { mealId in
-                MealDetailView(mealId: mealId, initialMeal: placeholderMeal(id: mealId))
+            .navigationDestination(for: MealDetailRoute.self) { route in
+                MealDetailView(
+                    mealId: route.id,
+                    initialMeal: initialMeal(for: route.id),
+                    isInitiallySelectedForSupply: route.isInitiallySelectedForSupply
+                )
             }
             .sheet(item: $editingMeal) { meal in
                 MealFormView(mode: .edit(meal)) { await reload() }
@@ -180,6 +184,13 @@ struct GalleyView: View {
             .onChange(of: env.cargoDataRevision) { _, _ in
                 model.scheduleAvailabilityRefresh(api: env.api, online: env.network.isOnline)
             }
+        }
+        .onChange(of: env.deepLinkRouter.mealPending, initial: true) { _, id in
+            guard let id else { return }
+            if path.last?.id != id {
+                path = [MealDetailRoute(id: id)]
+            }
+            env.deepLinkRouter.acknowledgeMeal()
         }
         .tabDockAction(tag: .galley) {
             IconFABMenuCore(systemImage: "plus.circle.fill", accessibilityLabel: "Galley actions") {
@@ -358,6 +369,16 @@ struct GalleyView: View {
             }
             .padding(24)
         }
+    }
+
+    private func initialMeal(for id: String) -> Meal {
+        if let meal = model.meals.first(where: { $0.id == id }) {
+            return meal
+        }
+        if let match = model.matches.first(where: { $0.meal.id == id }) {
+            return match.meal
+        }
+        return placeholderMeal(id: id)
     }
 
     private func placeholderMeal(id: String) -> Meal {

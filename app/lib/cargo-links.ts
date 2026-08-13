@@ -1,4 +1,4 @@
-import { normalizeForCargoDedup } from "./matching";
+import { isTokenPhaseMatch, normalizeForCargoDedup } from "./matching";
 import type { TagRecord } from "./tags";
 
 export type CargoLinkRow = { id: string; name: string; tags?: TagRecord[] };
@@ -9,7 +9,7 @@ export type CargoLinkedIngredient<
 
 /**
  * Resolves a cargo detail id for an ingredient name using the same
- * normalisation as inventory matching.
+ * normalisation as inventory matching, then token-phase specialization.
  */
 export function resolveCargoIdForName(
 	name: string,
@@ -18,6 +18,11 @@ export function resolveCargoIdForName(
 	const normalized = normalizeForCargoDedup(name);
 	for (const row of rows) {
 		if (normalizeForCargoDedup(row.name) === normalized) {
+			return row.id;
+		}
+	}
+	for (const row of rows) {
+		if (isTokenPhaseMatch(name, row.name)) {
 			return row.id;
 		}
 	}
@@ -31,13 +36,4 @@ export function resolveIngredientCargoId(
 ): string | null {
 	if (ingredient.cargoId) return ingredient.cargoId;
 	return resolveCargoIdForName(ingredient.ingredientName, rows);
-}
-
-export function enrichIngredientsWithCargoLinks<
-	T extends { ingredientName: string; cargoId?: string | null },
->(ingredients: T[], rows: CargoLinkRow[]): CargoLinkedIngredient<T>[] {
-	return ingredients.map((ing) => {
-		const resolvedCargoId = resolveIngredientCargoId(ing, rows) ?? undefined;
-		return resolvedCargoId ? { ...ing, resolvedCargoId } : { ...ing };
-	});
 }

@@ -4,9 +4,8 @@ import { HubHeader } from "~/components/hub/HubHeader";
 import { DetailNavRocker } from "~/components/shell/DetailNavRocker";
 import { parseAllergens } from "~/lib/allergens";
 import { requireActiveGroup } from "~/lib/auth.server";
-import { getCargoTagIndex } from "~/lib/cargo.server";
-import { enrichIngredientsWithCargoLinks } from "~/lib/cargo-links";
 import { ITEM_DOMAINS, type ItemDomain } from "~/lib/domain";
+import { enrichIngredientsWithResolvedCargo } from "~/lib/ingredient-cargo-links.server";
 import { getActiveMealSelections } from "~/lib/meal-selection.server";
 import { deleteMeal, getAdjacentMealIds, getMeal } from "~/lib/meals.server";
 import { tagsFromSearchParam, tagsToSearchParam } from "~/lib/tags";
@@ -41,7 +40,7 @@ export async function loader({ request, params, context }: Route.LoaderArgs) {
 	const meal = await getMeal(context.cloudflare.env.DB, groupId, id);
 	if (!meal) throw redirect("/hub/galley");
 
-	const [activeSelections, adjacent, cargoTagIndex] = await Promise.all([
+	const [activeSelections, adjacent, ingredients] = await Promise.all([
 		getActiveMealSelections(context.cloudflare.env.DB, groupId),
 		getAdjacentMealIds(
 			context.cloudflare.env.DB,
@@ -49,7 +48,17 @@ export async function loader({ request, params, context }: Route.LoaderArgs) {
 			{ id: meal.id, createdAt: meal.createdAt },
 			{ tag: tagSlugs[0], domain },
 		),
-		getCargoTagIndex(context.cloudflare.env.DB, groupId),
+		enrichIngredientsWithResolvedCargo(
+			context.cloudflare.env,
+			groupId,
+			meal.ingredients.map((i) => ({
+				...i,
+				cargoId: i.cargoId ?? undefined,
+				unit: toSupportedUnit(i.unit),
+				isOptional: i.isOptional ?? false,
+				orderIndex: i.orderIndex ?? 0,
+			})),
+		),
 	]);
 
 	const isSelectedForSupply = activeSelections.some((s) => s.mealId === id);
@@ -73,16 +82,7 @@ export async function loader({ request, params, context }: Route.LoaderArgs) {
 			: [],
 		customFields: (meal.customFields as Record<string, string>) || {},
 		tags: tagsToSlugs(meal.tags ?? []),
-		ingredients: enrichIngredientsWithCargoLinks(
-			meal.ingredients.map((i) => ({
-				...i,
-				cargoId: i.cargoId ?? undefined,
-				unit: toSupportedUnit(i.unit),
-				isOptional: i.isOptional ?? false,
-				orderIndex: i.orderIndex ?? 0,
-			})),
-			cargoTagIndex,
-		),
+		ingredients,
 	};
 
 	return {

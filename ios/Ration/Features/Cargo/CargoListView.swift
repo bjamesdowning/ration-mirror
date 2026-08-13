@@ -13,6 +13,7 @@ struct CargoListView: View {
     @State private var restockItem: CargoItem?
     @State private var eatItem: CargoItem?
     @State private var paywallContext: PaywallContext?
+    @State private var path: [CargoDetailRoute] = []
 
     private var organizationId: String? {
         env.session.activeOrganizationId
@@ -30,7 +31,7 @@ struct CargoListView: View {
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             Group {
                 if model.isLoading && isEmpty {
                     LoadingView()
@@ -145,6 +146,16 @@ struct CargoListView: View {
                     Task { await reload() }
                 }
             }
+            .navigationDestination(for: CargoDetailRoute.self) { route in
+                CargoDetailView(itemId: route.id)
+            }
+        }
+        .onChange(of: env.deepLinkRouter.cargoItemPending, initial: true) { _, id in
+            guard let id else { return }
+            if path.last?.id != id {
+                path = [CargoDetailRoute(id: id)]
+            }
+            env.deepLinkRouter.acknowledgeCargoItem()
         }
         .tabDockAction(tag: .cargo) {
             IconFABMenuCore(systemImage: "plus.circle.fill", accessibilityLabel: "Cargo actions") {
@@ -257,9 +268,7 @@ struct CargoListView: View {
                 switch model.listContent {
                 case let .inventory(items):
                     ForEach(items) { item in
-                        NavigationLink {
-                            CargoDetailView(itemId: item.id)
-                        } label: {
+                        NavigationLink(value: CargoDetailRoute(id: item.id)) {
                             CargoRowView(
                                 item: item,
                                 isSelectedForRestock: model.isCargoSelected(item.id)
@@ -291,9 +300,7 @@ struct CargoListView: View {
                     }
                 case let .search(results):
                     ForEach(results) { result in
-                        NavigationLink {
-                            CargoDetailView(itemId: result.id)
-                        } label: {
+                        NavigationLink(value: CargoDetailRoute(id: result.id)) {
                             SearchResultRow(result: result)
                         }
                         .listRowBackground(Theme.surface)

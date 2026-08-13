@@ -28,7 +28,7 @@ type ConnectedIngredient = {
 	ingredientName: string;
 	quantity: number;
 	unit: string;
-	connectionType: "direct" | "name_match";
+	connectionType: "direct" | "exact" | "token" | "vector" | "name_match";
 };
 
 type ConnectedMeal = {
@@ -57,8 +57,20 @@ function formatExpiryDate(expiresAt: Date | null): string {
 	});
 }
 
-function getConnectionLabel(connectionType: "direct" | "name_match") {
-	return connectionType === "direct" ? "Direct Link" : "Name Match";
+function getConnectionLabel(
+	connectionType: ConnectedIngredient["connectionType"],
+) {
+	switch (connectionType) {
+		case "direct":
+			return "Direct Link";
+		case "exact":
+		case "name_match":
+			return "Name Match";
+		case "token":
+			return "Related Name";
+		case "vector":
+			return "Semantic Match";
+	}
 }
 
 export function CargoDetail({

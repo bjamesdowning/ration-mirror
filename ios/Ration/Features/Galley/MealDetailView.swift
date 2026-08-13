@@ -82,7 +82,7 @@ struct MealDetailView: View {
         }
         .scrollDismissesKeyboard(.interactively)
         .copilotDockScrollMargins()
-        .copilotScrollTracked(tab: scrollContext.activeTab, isActive: true)
+        .copilotScrollTracked(tab: .galley, isActive: true)
         .background(Theme.ceramic)
         .navigationTitle((meal ?? initialMeal).name.capitalized)
         .navigationBarTitleDisplayMode(.inline)
@@ -105,7 +105,7 @@ struct MealDetailView: View {
                 )
             }
         }
-        .tabDockAction(tag: scrollContext.activeTab) {
+        .tabDockAction(tag: .galley) {
             IconFABMenuCore(systemImage: "ellipsis.circle.fill", accessibilityLabel: "Meal actions") {
                 Button { Task { await cook() } } label: {
                     Label("Cook meal", systemImage: "flame")
@@ -132,6 +132,7 @@ struct MealDetailView: View {
                 Button { showingEdit = true } label: {
                     Label("Edit", systemImage: "pencil")
                 }
+                .disabled(meal == nil && initialMeal.organizationId.isEmpty)
                 Button(role: .destructive) { showingDeleteConfirm = true } label: {
                     Label("Delete", systemImage: "trash")
                 }
@@ -146,6 +147,9 @@ struct MealDetailView: View {
         }
         .task(id: desiredServings) {
             await loadAvailability()
+        }
+        .onChange(of: meal != nil) { _, _ in
+            env.tabDock.bumpContentEpoch()
         }
         .onChange(of: isSelectedForSupply) { _, _ in
             env.tabDock.bumpContentEpoch()
@@ -303,8 +307,8 @@ struct MealDetailView: View {
     @ViewBuilder
     private func ingredientNameLabel(_ ingredient: MealIngredient) -> some View {
         if let cargoId = CargoLinkResolver.resolveCargoId(for: ingredient) {
-            NavigationLink {
-                CargoDetailView(itemId: cargoId)
+            Button {
+                env.openDeepLink(.cargoItem(id: cargoId))
             } label: {
                 Text(ingredient.ingredientName.capitalized)
                     .rationBody()

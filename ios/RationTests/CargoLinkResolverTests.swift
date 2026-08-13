@@ -22,6 +22,23 @@ final class CargoLinkResolverTests: XCTestCase {
         )
     }
 
+    func testResolveCargoIdMatchesTokenPhaseBread() {
+        let rows = [
+            CargoLinkResolver.Row(id: "cargo-3", name: "white bread"),
+        ]
+        XCTAssertEqual(
+            CargoLinkResolver.resolveCargoId(forName: "bread", in: rows),
+            "cargo-3"
+        )
+    }
+
+    func testResolveCargoIdRejectsFragileMilkCompound() {
+        let rows = [
+            CargoLinkResolver.Row(id: "cargo-4", name: "coconut milk"),
+        ]
+        XCTAssertNil(CargoLinkResolver.resolveCargoId(forName: "milk", in: rows))
+    }
+
     func testResolveCargoIdPrefersResolvedIngredientLink() {
         let ingredient = MealIngredient(
             id: "i1",

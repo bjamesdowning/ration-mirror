@@ -28,12 +28,7 @@ export async function loader({ request, context, params }: Route.LoaderArgs) {
 
 		const [[itemWithTags], connectedMeals] = await Promise.all([
 			attachTagsToCargo(context.cloudflare.env.DB, [item]),
-			getMealsForCargo(
-				context.cloudflare.env.DB,
-				organizationId,
-				id,
-				item.name,
-			),
+			getMealsForCargo(context.cloudflare.env, organizationId, id),
 		]);
 
 		return { item: itemWithTags, connectedMeals };

@@ -10,7 +10,9 @@ enum ConnectedMealsPresentation {
     static func connectionTypeLabel(_ connectionType: String) -> String {
         switch connectionType {
         case "direct": "Direct Link"
-        case "name_match": "Name Match"
+        case "exact", "name_match": "Name Match"
+        case "token": "Related Name"
+        case "vector": "Semantic Match"
         default: connectionType.replacingOccurrences(of: "_", with: " ").capitalized
         }
     }
@@ -73,9 +75,17 @@ enum ConnectedMealsPresentation {
         if meal.connectedIngredients.contains(where: { $0.connectionType == "direct" }) {
             return 0
         }
-        if meal.connectedIngredients.contains(where: { $0.connectionType == "name_match" }) {
+        if meal.connectedIngredients.contains(where: {
+            $0.connectionType == "exact" || $0.connectionType == "name_match"
+        }) {
             return 1
         }
-        return 2
+        if meal.connectedIngredients.contains(where: { $0.connectionType == "token" }) {
+            return 2
+        }
+        if meal.connectedIngredients.contains(where: { $0.connectionType == "vector" }) {
+            return 3
+        }
+        return 4
     }
 }

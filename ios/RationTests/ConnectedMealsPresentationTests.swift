@@ -8,6 +8,12 @@ final class ConnectedMealsPresentationTests: XCTestCase {
 
     func testConnectionTypeLabelNameMatch() {
         XCTAssertEqual(ConnectedMealsPresentation.connectionTypeLabel("name_match"), "Name Match")
+        XCTAssertEqual(ConnectedMealsPresentation.connectionTypeLabel("exact"), "Name Match")
+    }
+
+    func testConnectionTypeLabelTokenAndVector() {
+        XCTAssertEqual(ConnectedMealsPresentation.connectionTypeLabel("token"), "Related Name")
+        XCTAssertEqual(ConnectedMealsPresentation.connectionTypeLabel("vector"), "Semantic Match")
     }
 
     func testSortAlphabetical() {

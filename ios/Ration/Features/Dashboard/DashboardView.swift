@@ -16,8 +16,6 @@ struct DashboardView: View {
     var onOpenManifest: () -> Void = {}
     var onOpenNutritionGoals: () -> Void = {}
     @State private var model = HubViewModel()
-    @State private var selectedCargoRoute: HubCargoRoute?
-    @State private var selectedMealRoute: HubMealRoute?
 
     private var organizationId: String? {
         env.session.activeOrganizationId
@@ -106,12 +104,6 @@ struct DashboardView: View {
                 organizationId: organizationId,
                 isRefreshing: model.isRefreshing
             )
-            .navigationDestination(item: $selectedCargoRoute) { route in
-                CargoDetailView(itemId: route.id)
-            }
-            .navigationDestination(item: $selectedMealRoute) { route in
-                MealDetailView(mealId: route.meal.id, initialMeal: route.meal)
-            }
         }
         .task(id: loadTaskKey) {
             guard isTabActive, let organizationId else { return }
@@ -256,15 +248,15 @@ struct DashboardView: View {
             HubStatsWidget(data: data, size: size, onOpenCargo: onOpenCargo, onOpenExpiring: onOpenCargo, onOpenGalley: onOpenGalley, onOpenSupply: onOpenSupply)
         case .mealsReady:
             MealsReadyWidget(matches: data.mealMatches, itemLimit: itemLimit) { meal in
-                selectedMealRoute = HubMealRoute(meal: meal)
+                env.openDeepLink(.meal(id: meal.id))
             }
         case .mealsPartial:
             MealsPartialWidget(matches: data.partialMealMatches, itemLimit: itemLimit) { meal in
-                selectedMealRoute = HubMealRoute(meal: meal)
+                env.openDeepLink(.meal(id: meal.id))
             }
         case .snacksReady:
             MealsReadyWidget(title: "Snacks ready", matches: data.snackMatches, itemLimit: itemLimit) { meal in
-                selectedMealRoute = HubMealRoute(meal: meal)
+                env.openDeepLink(.meal(id: meal.id))
             }
         case .cargoExpiring:
             CargoExpiringWidget(
@@ -272,7 +264,7 @@ struct DashboardView: View {
                 alertDays: data.expirationAlertDays,
                 itemLimit: itemLimit
             ) { item in
-                selectedCargoRoute = HubCargoRoute(id: item.id)
+                env.openDeepLink(.cargoItem(id: item.id))
             }
         case .supplyPreview:
             SupplyPreviewWidget(
@@ -292,7 +284,7 @@ struct DashboardView: View {
                 },
                 onOpenSupply: onOpenSupply,
                 onSelectCargo: { cargoId in
-                    selectedCargoRoute = HubCargoRoute(id: cargoId)
+                    env.openDeepLink(.cargoItem(id: cargoId))
                 }
             )
         case .manifestPreview:
@@ -300,7 +292,7 @@ struct DashboardView: View {
                 preview: data.manifestPreview,
                 daySpan: HubLayoutEngine.resolvedDaySpan(filters: widget.filters),
                 onSelectEntry: { entry in
-                    selectedMealRoute = HubMealRoute(meal: entry.stubMeal())
+                    env.openDeepLink(.meal(id: entry.mealId))
                 },
                 onOpenManifest: onOpenManifest
             )
@@ -348,45 +340,6 @@ struct DashboardView: View {
                 .accessibilityLabel("Dismiss")
             }
         }
-    }
-}
-
-private struct HubCargoRoute: Identifiable, Hashable {
-    let id: String
-}
-
-private struct HubMealRoute: Identifiable, Hashable {
-    let meal: Meal
-    var id: String { meal.id }
-
-    static func == (lhs: HubMealRoute, rhs: HubMealRoute) -> Bool {
-        lhs.id == rhs.id
-    }
-
-    func hash(into hasher: inout Hasher) {
-        hasher.combine(id)
-    }
-}
-
-private extension ManifestPreviewEntry {
-    func stubMeal() -> Meal {
-        Meal(
-            id: mealId,
-            organizationId: "",
-            name: mealName,
-            domain: "food",
-            type: mealType ?? "dinner",
-            description: nil,
-            directions: nil,
-            equipment: [],
-            servings: servingsOverride,
-            prepTime: nil,
-            cookTime: nil,
-            createdAt: Date(),
-            updatedAt: Date(),
-            tags: [],
-            ingredients: []
-        )
     }
 }
 

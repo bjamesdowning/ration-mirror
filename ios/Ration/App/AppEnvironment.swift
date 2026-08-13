@@ -10,6 +10,8 @@ final class AppEnvironment {
         case ask
         case scan
         case cargo
+        case cargoItem(id: String)
+        case meal(id: String)
         case galleyGenerate
         case galleyImport(url: String?, autoStart: Bool)
         case manifestPlanWeek

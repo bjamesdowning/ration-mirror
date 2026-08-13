@@ -1,10 +1,9 @@
 import { data } from "react-router";
 import type { z } from "zod";
-import { getCargoTagIndex } from "~/lib/cargo.server";
-import { enrichIngredientsWithCargoLinks } from "~/lib/cargo-links";
 import type { ItemDomain } from "~/lib/domain";
 import { handleApiError } from "~/lib/error-handler";
 import { buildMobileFlagContext } from "~/lib/feature-flags/context.server";
+import { enrichIngredientsWithResolvedCargo } from "~/lib/ingredient-cargo-links.server";
 import { getActiveMealSelections } from "~/lib/meal-selection.server";
 import { deleteMeal, getMeal, updateMeal } from "~/lib/meals.server";
 import { requireMobileActiveGroup } from "~/lib/mobile/auth.server";
@@ -58,22 +57,23 @@ export async function loader({ request, context, params }: Route.LoaderArgs) {
 		const id = params.id;
 		if (!id) throw data({ error: "Not Found" }, { status: 404 });
 
-		const [meal, selections, cargoTagIndex] = await Promise.all([
+		const [meal, selections] = await Promise.all([
 			getMeal(context.cloudflare.env.DB, organizationId, id),
 			getActiveMealSelections(context.cloudflare.env.DB, organizationId),
-			getCargoTagIndex(context.cloudflare.env.DB, organizationId),
 		]);
 		if (!meal) throw data({ error: "Not Found" }, { status: 404 });
 
 		const selection = selections.find((s) => s.mealId === id);
+		const ingredients = await enrichIngredientsWithResolvedCargo(
+			context.cloudflare.env,
+			organizationId,
+			meal.ingredients,
+		);
 
 		return {
 			meal: {
 				...meal,
-				ingredients: enrichIngredientsWithCargoLinks(
-					meal.ingredients,
-					cargoTagIndex,
-				),
+				ingredients,
 			},
 			isSelectedForSupply: Boolean(selection),
 			servingsOverride: selection?.servingsOverride ?? null,

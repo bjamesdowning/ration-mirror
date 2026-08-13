@@ -24,7 +24,7 @@ final class ImportRecipeViewModel {
         case submitting
         case processing(requestId: String)
         case capturing
-        case verification(ExtractedRecipePreview, requestId: String)
+        case verification(ExtractedRecipePreview, requestId: String, softFailToPhoto: Bool)
         case confirming
         case duplicate(existingMealId: String, existingMealName: String?)
         case completed(MealSummary)
@@ -51,9 +51,11 @@ final class ImportRecipeViewModel {
 
     private(set) var state: State = .idle
     var url = ""
+    var userText: String?
     var inputMode: ImportInputMode = .link
     var shouldShowPaywall = false
     var paywallContext: PaywallContext?
+    private(set) var pollProgress: String?
     private var activeTask: Task<Void, Never>?
     private var submissionGeneration = 0
     private var didAttemptDeviceCapture = false
@@ -67,8 +69,11 @@ final class ImportRecipeViewModel {
     func submit(api: RationAPI, session: SessionStore) {
         let trimmed = url.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
+        let caption = userText
         beginSubmission(generation: submissionGeneration + 1) { generation in
-            let response = try await api.importRecipe(ImportRecipeRequest(url: trimmed))
+            let response = try await api.importRecipe(
+                ImportRecipeRequest(url: trimmed, userText: caption)
+            )
             try await self.handleSubmitResponse(
                 response,
                 api: api,
@@ -111,7 +116,7 @@ final class ImportRecipeViewModel {
         generation: Int,
         session: SessionStore
     ) async {
-        let maxAttempts = 80
+        let maxAttempts = 120
         let delayNanoseconds: UInt64 = 1_500_000_000
         for attempt in 0..<maxAttempts {
             do {
@@ -121,7 +126,11 @@ final class ImportRecipeViewModel {
                 }
                 let result = try await api.importRecipeStatus(requestId: requestId)
                 guard isCurrent(generation) else { return }
+                if let progress = result.progress, !progress.isEmpty {
+                    pollProgress = progress
+                }
                 if result.code == "DUPLICATE_URL", let existingId = result.existingMealId {
+                    pollProgress = nil
                     state = .duplicate(
                         existingMealId: existingId,
                         existingMealName: result.existingMealName
@@ -130,15 +139,31 @@ final class ImportRecipeViewModel {
                 }
                 switch result.status {
                 case "completed":
+                    pollProgress = nil
                     if let meal = result.meal {
                         state = .completed(meal)
                     } else if let extracted = result.extractedRecipe {
-                        state = .verification(extracted, requestId: requestId)
+                        var preview = extracted
+                        if preview.evidence == nil {
+                            preview.evidence = result.evidence
+                        }
+                        if preview.stepCount == nil {
+                            preview.stepCount = result.stepCount
+                        }
+                        if preview.missingAmountCount == nil {
+                            preview.missingAmountCount = result.missingAmountCount
+                        }
+                        state = .verification(
+                            preview,
+                            requestId: requestId,
+                            softFailToPhoto: result.softFailToPhoto == true
+                        )
                     } else {
                         state = .failed(result.error ?? "Import completed without recipe data.")
                     }
                     return
                 case "failed":
+                    pollProgress = nil
                     if result.softFailToPhoto == true {
                         state = .softFailToPhoto(
                             message: result.error
@@ -187,7 +212,9 @@ final class ImportRecipeViewModel {
         cancelActiveWork()
         submissionGeneration = generation
         shouldShowPaywall = false
+        paywallContext = nil
         didAttemptDeviceCapture = false
+        pollProgress = nil
         state = .submitting
         activeTask = Task {
             do {
@@ -231,6 +258,7 @@ final class ImportRecipeViewModel {
             return
         }
         Haptics.light()
+        pollProgress = nil
         state = .processing(requestId: requestId)
         Task { await AIErrorHandling.refreshCredits(session: session, api: api) }
         await poll(requestId: requestId, api: api, generation: generation, session: session)
@@ -320,6 +348,7 @@ final class ImportRecipeViewModel {
         shouldShowPaywall = false
         paywallContext = nil
         didAttemptDeviceCapture = false
+        pollProgress = nil
     }
 
     func fail(with message: String) {

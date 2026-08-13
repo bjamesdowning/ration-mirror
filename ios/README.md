@@ -24,7 +24,7 @@ Set your **Apple Developer Team ID** in `project.yml` (`DEVELOPMENT_TEAM`) befor
 building to a device, then re-run `xcodegen generate`.
 
 **Versioning:** User-facing app version is `MARKETING_VERSION` in `project.yml`
-(currently **1.4.22**). `CURRENT_PROJECT_VERSION` is the monotonic build number for
+(currently **1.4.24**). `CURRENT_PROJECT_VERSION` is the monotonic build number for
 TestFlight / App Store uploads. Follow the same patch/minor rules as the web app
 (`1.X.1`–`1.X.49`, then `1.(X+1).0`); see `.cursor/rules/ration-master.mdc`.
 After editing `project.yml`, run `bun run ios:generate`.
@@ -179,7 +179,7 @@ Ration/
     ├── Cargo/      # Paginated list + filters + FAB
     ├── Supply/     # Shopping list with filters + dock FAB
     ├── Scan/       # Camera capture → resize → POST /scan
-    ├── Galley/     # Meals CRUD, AI generate/import, match mode; Share → Import URL prefill
+    ├── Galley/     # Meals CRUD, AI generate/import, match mode; Share → Import URL + optional caption
     │               # RationShare: App Group + auto-start Import (iOS 1.4.5+)
     ├── Manifest/   # Edge week rocker + toolbar Today, plan-week AI, Cook/Eat (flag-gated)
     ├── Settings/   # Account settings (profile, tier, appearance, privacy, sign out)

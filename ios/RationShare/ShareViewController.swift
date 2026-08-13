@@ -12,6 +12,7 @@ final class ShareViewController: UIViewController {
     private static let pendingURLKey = "pendingImportURL"
     private static let pendingAtKey = "pendingImportURLAt"
     private static let pendingAutoStartKey = "pendingImportAutoStart"
+    private static let pendingUserTextKey = "pendingImportUserText"
 
     /// Ceramic background — mirrors Theme.ceramic (light #F8F9FA / dark #0D0D0D).
     private static let ceramicBackground = UIColor { traits in
@@ -100,7 +101,7 @@ final class ShareViewController: UIViewController {
     }
 
     private func handleShare() async {
-        guard let url = await extractSharedURL() else {
+        guard let extracted = await extractSharedPayload() else {
             await MainActor.run {
                 statusLabel?.text =
                     "No link found in this share. Copy the recipe URL and paste it in Ration → Import."
@@ -110,11 +111,11 @@ final class ShareViewController: UIViewController {
             return
         }
 
-        persistPendingURL(url, autoStart: true)
+        persistPending(url: extracted.url, userText: extracted.userText, autoStart: true)
 
         let encoded =
-            url.absoluteString.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)
-            ?? url.absoluteString
+            extracted.url.absoluteString.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)
+            ?? extracted.url.absoluteString
         guard let openURL = URL(string: "ration://galley/import?url=\(encoded)&auto=1") else {
             await MainActor.run {
                 statusLabel?.text = "Could not prepare Import link."
@@ -154,55 +155,85 @@ final class ShareViewController: UIViewController {
         extensionContext?.completeRequest(returningItems: nil, completionHandler: nil)
     }
 
-    private func persistPendingURL(_ url: URL, autoStart: Bool) {
+    private func persistPending(url: URL, userText: String?, autoStart: Bool) {
         guard let defaults = UserDefaults(suiteName: Self.appGroupId) else { return }
         defaults.set(url.absoluteString, forKey: Self.pendingURLKey)
         defaults.set(Date().timeIntervalSince1970, forKey: Self.pendingAtKey)
         defaults.set(autoStart, forKey: Self.pendingAutoStartKey)
+        if let userText, !userText.isEmpty {
+            defaults.set(userText, forKey: Self.pendingUserTextKey)
+        } else {
+            defaults.removeObject(forKey: Self.pendingUserTextKey)
+        }
         defaults.synchronize()
     }
 
-    private func extractSharedURL() async -> URL? {
+    private func extractSharedPayload() async -> (url: URL, userText: String?)? {
         guard let items = extensionContext?.inputItems as? [NSExtensionItem] else { return nil }
+        var foundURL: URL?
+        var texts: [String] = []
         for item in items {
+            if let text = item.attributedContentText?.string ?? item.attributedTitle?.string,
+               !text.isEmpty
+            {
+                texts.append(text)
+            }
             guard let providers = item.attachments else { continue }
             for provider in providers {
-                if let url = await loadURLObject(from: provider) {
-                    return httpsOrNil(url)
+                if foundURL == nil, let url = await loadURLObject(from: provider) {
+                    foundURL = httpsOrNil(url)
                 }
-                if provider.hasItemConformingToTypeIdentifier(UTType.url.identifier),
+                if foundURL == nil,
+                   provider.hasItemConformingToTypeIdentifier(UTType.url.identifier),
                    let url = await loadURL(from: provider, type: UTType.url.identifier)
                 {
-                    return httpsOrNil(url)
+                    foundURL = httpsOrNil(url)
                 }
-                if provider.hasItemConformingToTypeIdentifier("public.url"),
+                if foundURL == nil,
+                   provider.hasItemConformingToTypeIdentifier("public.url"),
                    let url = await loadURL(from: provider, type: "public.url")
                 {
-                    return httpsOrNil(url)
+                    foundURL = httpsOrNil(url)
                 }
                 if provider.hasItemConformingToTypeIdentifier(UTType.plainText.identifier),
                    let text = await loadString(
                        from: provider,
                        type: UTType.plainText.identifier
-                   ),
-                   let url = firstHTTPSURL(in: text)
+                   )
                 {
-                    return url
+                    texts.append(text)
+                    if foundURL == nil {
+                        foundURL = firstHTTPSURL(in: text)
+                    }
                 }
                 if provider.hasItemConformingToTypeIdentifier(UTType.text.identifier),
-                   let text = await loadString(from: provider, type: UTType.text.identifier),
-                   let url = firstHTTPSURL(in: text)
+                   let text = await loadString(from: provider, type: UTType.text.identifier)
                 {
-                    return url
+                    texts.append(text)
+                    if foundURL == nil {
+                        foundURL = firstHTTPSURL(in: text)
+                    }
                 }
             }
-            if let text = item.attributedContentText?.string ?? item.attributedTitle?.string,
+            if foundURL == nil,
+               let text = item.attributedContentText?.string ?? item.attributedTitle?.string,
                let url = firstHTTPSURL(in: text)
             {
-                return url
+                foundURL = url
             }
         }
-        return nil
+        guard let url = foundURL else { return nil }
+        let caption = captionExcludingURL(from: texts, url: url)
+        return (url, caption)
+    }
+
+    private func captionExcludingURL(from texts: [String], url: URL) -> String? {
+        let urlString = url.absoluteString
+        var combined = texts.joined(separator: "\n")
+        combined = combined.replacingOccurrences(of: urlString, with: "")
+        combined = combined.trimmingCharacters(in: .whitespacesAndNewlines)
+        if combined.count < 8 { return nil }
+        return String(combined.prefix(8000))
     }
 
     private func httpsOrNil(_ url: URL) -> URL? {

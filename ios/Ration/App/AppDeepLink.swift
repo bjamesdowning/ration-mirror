@@ -22,7 +22,7 @@ enum AppDeepLink {
                     .trimmingCharacters(in: .whitespacesAndNewlines)
                     .lowercased()
                 let autoStart = autoRaw == "1" || autoRaw == "true" || autoRaw == "yes"
-                return .galleyImport(url: decoded, autoStart: autoStart)
+                return .galleyImport(url: decoded, autoStart: autoStart, userText: nil)
             }
             return nil
         case "manifest":

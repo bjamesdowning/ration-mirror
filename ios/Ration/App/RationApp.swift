@@ -46,7 +46,7 @@ struct RationApp: App {
     @MainActor
     private func handleAppDeepLink(_ url: URL) -> Bool {
         if let destination = AppDeepLink.parse(url) {
-            if case .galleyImport(let linkURL, let autoStart) = destination {
+            if case .galleyImport(let linkURL, let autoStart, _) = destination {
                 let shared = SharedImportHandoff.consumePending()
                 // App Group URL is source of truth when present (share handoff).
                 let resolvedURL: String?
@@ -58,7 +58,12 @@ struct RationApp: App {
                     resolvedURL = nil
                 }
                 let resolvedAuto = shared?.autoStart == true || autoStart
-                env.openDeepLink(.galleyImport(url: resolvedURL, autoStart: resolvedAuto))
+                let resolvedText = shared?.userText
+                env.openDeepLink(.galleyImport(
+                    url: resolvedURL,
+                    autoStart: resolvedAuto,
+                    userText: resolvedText
+                ))
                 return true
             }
             env.openDeepLink(destination)
@@ -72,7 +77,11 @@ struct RationApp: App {
     @discardableResult
     private func consumeSharedImportHandoff() -> Bool {
         guard let shared = SharedImportHandoff.consumePending() else { return false }
-        env.openDeepLink(.galleyImport(url: shared.url, autoStart: shared.autoStart))
+        env.openDeepLink(.galleyImport(
+            url: shared.url,
+            autoStart: shared.autoStart,
+            userText: shared.userText
+        ))
         return true
     }
 

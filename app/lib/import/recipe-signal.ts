@@ -38,3 +38,10 @@ export function scoreRecipeSignal(text: string): number {
 export function hasStrongRecipeSignal(text: string): boolean {
 	return scoreRecipeSignal(text) >= 4;
 }
+
+/** True when text has any cooking cue (used to retry extract on spoken transcripts). */
+export function hasAnyCookingSignal(text: string): boolean {
+	const trimmed = text.trim();
+	if (trimmed.length < 20) return false;
+	return scoreRecipeSignal(trimmed) >= 1 || STEP_CUES.test(trimmed);
+}

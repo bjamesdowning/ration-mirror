@@ -1,5 +1,6 @@
 /**
- * Acquire social post evidence (platform meta → Supadata metadata → optional native transcript).
+ * Acquire social post evidence (platform meta → Supadata metadata → native
+ * transcript → ASR generate when the written caption is still thin).
  */
 
 import {
@@ -24,7 +25,8 @@ export type SocialEvidence =
 	| "oembed"
 	| "description"
 	| "supadata_metadata"
-	| "supadata"
+	| "transcript_native"
+	| "transcript_asr"
 	| "user_text";
 
 export type SocialContent = {
@@ -196,10 +198,13 @@ export function socialContentToPromptText(content: SocialContent): string {
 export type AcquireSocialOptions = {
 	/** Optional caption/text provided by the client (e.g. Instagram share). */
 	userText?: string;
+	/** When false, skip paid ASR generate after a native miss. Default true. */
+	enableAsr?: boolean;
 };
 
 /**
- * Hybrid acquire: free platform meta → Supadata metadata → native transcript when thin.
+ * Hybrid acquire: free platform meta → Supadata metadata → native transcript
+ * when thin → ASR generate when native is missing or still thin.
  * Both metadata and transcript (when present) feed Gemini via socialContentToPromptText.
  */
 export async function acquireSocialContent(
@@ -221,6 +226,7 @@ export async function acquireSocialContent(
 	let description: string | undefined;
 	let canonicalUrl = url;
 	const hasUserText = Boolean(options?.userText?.trim());
+	const enableAsr = options?.enableAsr !== false;
 
 	if (hasUserText) {
 		caption = options?.userText?.trim();
@@ -275,42 +281,23 @@ export async function acquireSocialContent(
 	let transcript: string | undefined;
 
 	if (!hasStrongRecipeSignal(signalText)) {
-		try {
-			const result = await fetchTranscript(env, canonicalUrl, {
-				mode: "native",
-			});
-			transcript = result.text;
-			evidence.push("supadata");
-		} catch (err) {
-			const code = err instanceof SupadataError ? err.code : undefined;
-			log.warn("social_transcript_failed", {
-				platform: kind,
-				code,
-				error: err instanceof Error ? err.message : "unknown",
-				unavailable: isSupadataUnavailable(err),
-			});
-
-			// Native miss — continue; CONTENT_TOO_SHORT gate decides if metadata is enough.
-			if (!isTranscriptProductMiss(err)) {
-				if (isSupadataUnavailable(err)) {
-					return {
-						ok: false,
-						error: IMPORT_PROVIDER_UNAVAILABLE_MESSAGE,
-						code: IMPORT_PROVIDER_UNAVAILABLE_CODE,
-						softFailToPhoto: true,
-					};
+		const transcriptFail = await fetchSocialTranscripts({
+			env,
+			canonicalUrl,
+			kind,
+			enableAsr,
+			onNative: (text) => {
+				transcript = text;
+				evidence.push("transcript_native");
+			},
+			onAsr: (text) => {
+				transcript = preferLonger(transcript, text);
+				if (!evidence.includes("transcript_asr")) {
+					evidence.push("transcript_asr");
 				}
-				return {
-					ok: false,
-					error:
-						kind === "instagram"
-							? "Could not read this Instagram post. Try a screenshot of the recipe."
-							: "Could not extract recipe text from this video. Try a screenshot or a different link.",
-					code: "SOCIAL_CONTENT_EMPTY",
-					softFailToPhoto: true,
-				};
-			}
-		}
+			},
+		});
+		if (transcriptFail) return transcriptFail;
 	}
 
 	const content: SocialContent = {
@@ -335,4 +322,108 @@ export async function acquireSocialContent(
 	}
 
 	return { ok: true, content };
+}
+
+async function fetchSocialTranscripts(args: {
+	env: SocialEnv;
+	canonicalUrl: string;
+	kind: SocialPlatform;
+	enableAsr: boolean;
+	onNative: (text: string) => void;
+	onAsr: (text: string) => void;
+}): Promise<
+	| { ok: false; error: string; code?: string; softFailToPhoto?: boolean }
+	| undefined
+> {
+	const { env, canonicalUrl, kind, enableAsr, onNative, onAsr } = args;
+	let nativeText: string | undefined;
+	let nativeMiss = false;
+
+	try {
+		const result = await fetchTranscript(env, canonicalUrl, {
+			mode: "native",
+		});
+		nativeText = result.text;
+		onNative(result.text);
+	} catch (err) {
+		const code = err instanceof SupadataError ? err.code : undefined;
+		log.warn("social_transcript_failed", {
+			platform: kind,
+			mode: "native",
+			code,
+			error: err instanceof Error ? err.message : "unknown",
+			unavailable: isSupadataUnavailable(err),
+		});
+
+		if (!isTranscriptProductMiss(err)) {
+			if (isSupadataUnavailable(err)) {
+				return {
+					ok: false,
+					error: IMPORT_PROVIDER_UNAVAILABLE_MESSAGE,
+					code: IMPORT_PROVIDER_UNAVAILABLE_CODE,
+					softFailToPhoto: true,
+				};
+			}
+			return {
+				ok: false,
+				error:
+					kind === "instagram"
+						? "Could not read this Instagram post. Try a screenshot of the recipe."
+						: "Could not extract recipe text from this video. Try a screenshot or a different link.",
+				code: "SOCIAL_CONTENT_EMPTY",
+				softFailToPhoto: true,
+			};
+		}
+		nativeMiss = true;
+	}
+
+	const nativeIsStrong = Boolean(
+		nativeText && hasStrongRecipeSignal(nativeText),
+	);
+	if (!enableAsr || nativeIsStrong) return undefined;
+
+	try {
+		const result = await fetchTranscript(env, canonicalUrl, {
+			mode: "generate",
+		});
+		onAsr(result.text);
+	} catch (err) {
+		const code = err instanceof SupadataError ? err.code : undefined;
+		log.warn("social_transcript_failed", {
+			platform: kind,
+			mode: "generate",
+			code,
+			error: err instanceof Error ? err.message : "unknown",
+			unavailable: isSupadataUnavailable(err),
+		});
+
+		if (isTranscriptProductMiss(err)) {
+			return undefined;
+		}
+		if (isSupadataUnavailable(err)) {
+			// Native text may still be enough; only fail hard when we had nothing.
+			if (nativeMiss && !nativeText) {
+				return {
+					ok: false,
+					error: IMPORT_PROVIDER_UNAVAILABLE_MESSAGE,
+					code: IMPORT_PROVIDER_UNAVAILABLE_CODE,
+					softFailToPhoto: true,
+				};
+			}
+			return undefined;
+		}
+		if (nativeMiss && !nativeText) {
+			return {
+				ok: false,
+				error:
+					kind === "instagram"
+						? "Could not read this Instagram post. Try a screenshot of the recipe."
+						: "Could not extract recipe text from this video. Try a screenshot or a different link.",
+				code: "SOCIAL_CONTENT_EMPTY",
+				softFailToPhoto: true,
+			};
+		}
+	}
+
+	return undefined;
 }

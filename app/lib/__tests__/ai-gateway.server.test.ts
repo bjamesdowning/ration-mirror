@@ -94,6 +94,26 @@ describe("buildGatewayRequest", () => {
 		expect(body.generationConfig?.mediaResolution).toBeUndefined();
 	});
 
+	it("honors skip-cache and LOW thinking overrides for social import extracts", () => {
+		const request = buildGatewayRequest(baseEnv, {
+			feature: "import_url",
+			parts: [{ text: "transcript" }],
+			metadata,
+			cache: { skip: true },
+			thinkingLevel: "LOW",
+		});
+
+		expect(request?.headers["cf-aig-skip-cache"]).toBe("true");
+		expect(request?.headers["cf-aig-cache-ttl"]).toBeUndefined();
+
+		const body = JSON.parse(request?.body ?? "{}") as {
+			generationConfig?: {
+				thinkingConfig?: { thinkingLevel?: string };
+			};
+		};
+		expect(body.generationConfig?.thinkingConfig?.thinkingLevel).toBe("LOW");
+	});
+
 	it("builds nutrition_estimate request with MINIMAL thinking and small output cap", () => {
 		const request = buildGatewayRequest(baseEnv, {
 			feature: "nutrition_estimate",

@@ -414,6 +414,9 @@ struct ExtractedRecipePreview: Codable, Sendable, Equatable {
     let ingredients: [CreateMealIngredientRequest]?
     let description: String?
     let customFields: [String: String]?
+    var evidence: [String]?
+    var stepCount: Int?
+    var missingAmountCount: Int?
 
     var ingredientCount: Int { ingredients?.count ?? 0 }
 
@@ -428,9 +431,47 @@ struct ExtractedRecipePreview: Codable, Sendable, Equatable {
     var completenessLabel: String {
         switch completeness {
         case "link_holder": return "Saved link"
-        case "skeleton": return "Partial recipe"
-        default: return "Recipe"
+        case "skeleton": return "Partial"
+        default: return "Full"
         }
+    }
+
+    var evidenceLabels: [String] {
+        ImportEvidenceLabels.summary(from: evidenceKeys)
+    }
+
+    var evidenceKeys: [String] {
+        if let evidence, !evidence.isEmpty { return evidence }
+        guard let raw = customFields?["importEvidence"], !raw.isEmpty else { return [] }
+        return raw
+            .split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+    }
+}
+
+enum ImportEvidenceLabels {
+    private static let labels: [String: String] = [
+        "oembed": "From caption",
+        "description": "From post description",
+        "supadata_metadata": "From post description",
+        "transcript_native": "From captions",
+        "transcript_asr": "From spoken audio",
+        "user_text": "From caption",
+        "json_ld": "From recipe card",
+        "page": "From page",
+    ]
+
+    static func summary(from keys: [String]) -> [String] {
+        var seen = Set<String>()
+        var out: [String] = []
+        for key in keys {
+            let label = labels[key] ?? "From source"
+            if seen.insert(label).inserted {
+                out.append(label)
+            }
+        }
+        return out
     }
 }
 
@@ -446,6 +487,11 @@ struct ImportRecipeStatusResponse: Codable, Sendable {
     let existingMealId: String?
     let existingMealName: String?
     let softFailToPhoto: Bool?
+    let progress: String?
+    let evidence: [String]?
+    let ingredientCount: Int?
+    let stepCount: Int?
+    let missingAmountCount: Int?
 }
 
 struct ImportRecipeConfirmRequest: Encodable, Sendable {

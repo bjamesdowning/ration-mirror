@@ -25,6 +25,7 @@ final class DeepLinkRouter {
     private(set) var galleyImportPending = false
     private(set) var galleyImportURL: String?
     private(set) var galleyImportAutoStart = false
+    private(set) var galleyImportUserText: String?
     private(set) var manifestPlanWeekPending = false
     private(set) var manifestAddEntryPending: ManifestAddEntryPrefill?
     private(set) var cargoItemPending: String?
@@ -52,6 +53,7 @@ final class DeepLinkRouter {
         galleyImportPending = false
         galleyImportURL = nil
         galleyImportAutoStart = false
+        galleyImportUserText = nil
         manifestPlanWeekPending = false
         manifestAddEntryPending = nil
         cargoItemPending = nil
@@ -81,11 +83,12 @@ final class DeepLinkRouter {
         case .galleyGenerate:
             selectedTab = .galley
             galleyGeneratePending = true
-        case .galleyImport(let url, let autoStart):
+        case .galleyImport(let url, let autoStart, let userText):
             selectedTab = .galley
             galleyImportPending = true
             galleyImportURL = url
             galleyImportAutoStart = autoStart
+            galleyImportUserText = userText
         case .manifestPlanWeek:
             selectedTab = .manifest
             manifestPlanWeekPending = true
@@ -101,6 +104,7 @@ final class DeepLinkRouter {
         galleyImportPending = false
         galleyImportURL = nil
         galleyImportAutoStart = false
+        galleyImportUserText = nil
     }
     func acknowledgeManifestPlanWeek() { manifestPlanWeekPending = false }
     func acknowledgeManifestAddEntry() { manifestAddEntryPending = nil }

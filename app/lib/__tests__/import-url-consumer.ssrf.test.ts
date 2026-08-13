@@ -4,6 +4,7 @@ const updateQueueJobResult = vi.fn().mockResolvedValue(true);
 
 vi.mock("~/lib/queue-job.server", () => ({
 	updateQueueJobResult: (...args: unknown[]) => updateQueueJobResult(...args),
+	patchQueueJobProgress: vi.fn().mockResolvedValue(true),
 	runIdempotentAiJob: async (
 		_db: unknown,
 		_requestId: string,

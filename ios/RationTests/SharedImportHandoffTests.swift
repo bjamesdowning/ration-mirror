@@ -41,6 +41,26 @@ final class SharedImportHandoffTests: XCTestCase {
         XCTAssertNil(SharedImportHandoff.consumePending())
     }
 
+    func testConsumeReturnsUserTextThenClears() {
+        SharedImportHandoff.writePendingForTesting(
+            url: "https://www.tiktok.com/@x/video/1",
+            autoStart: true,
+            userText: "Creamy pasta 200g spaghetti"
+        )
+        let pending = SharedImportHandoff.consumePending()
+        XCTAssertEqual(pending?.userText, "Creamy pasta 200g spaghetti")
+        XCTAssertNil(SharedImportHandoff.consumePending()?.userText)
+    }
+
+    func testConsumeOmitsEmptyUserText() {
+        SharedImportHandoff.writePendingForTesting(
+            url: "https://example.com/recipe",
+            autoStart: false,
+            userText: nil
+        )
+        XCTAssertNil(SharedImportHandoff.consumePending()?.userText)
+    }
+
     func testClearRemovesPendingWithoutConsume() {
         SharedImportHandoff.writePendingForTesting(
             url: "https://example.com/pending",

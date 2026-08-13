@@ -42,7 +42,7 @@ export const FLAG_REGISTRY: Record<string, FlagRegistryEntry> = {
 	"ai-import-social": {
 		defaultEnabled: false,
 		description:
-			"Social URL import (TikTok / Instagram / YouTube via metadata + Supadata)",
+			"Social URL import (TikTok / Instagram / YouTube via metadata, captions, and spoken-audio ASR)",
 		clientVisible: true,
 		clientKey: "aiImportSocial",
 	},

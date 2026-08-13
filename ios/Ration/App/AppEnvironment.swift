@@ -13,7 +13,7 @@ final class AppEnvironment {
         case cargoItem(id: String)
         case meal(id: String)
         case galleyGenerate
-        case galleyImport(url: String?, autoStart: Bool)
+        case galleyImport(url: String?, autoStart: Bool, userText: String? = nil)
         case manifestPlanWeek
         /// Open Manifest Add-to-plan with meal + date prefilled (nutrition-cook-log-split).
         case manifestAddEntry(mealId: String, date: String)

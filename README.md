@@ -219,7 +219,7 @@ flowchart TB
 | `PLAN_WEEK_QUEUE` | Queue producer | Enqueue plan-week jobs; consumer runs Gemini for weekly meal schedule |
 | `IMPORT_URL_QUEUE` | Queue producer | Enqueue URL import jobs; consumer fetches page, runs Gemini extraction, creates meal |
 
-**Secrets (wrangler):** `SUPADATA_API_KEY` — recipe import web scrape + social metadata/transcripts. Optional `YOUTUBE_DATA_API_KEY` for YouTube description metadata. `CF_BROWSER_RENDERING_TOKEN` is unused by the import path.
+**Secrets (wrangler):** `SUPADATA_API_KEY` — recipe import web scrape + social metadata, native captions, and spoken-audio transcripts (ASR). Optional `YOUTUBE_DATA_API_KEY` for YouTube description metadata. `CF_BROWSER_RENDERING_TOKEN` is unused by the import path.
 
 **R2 lifecycle (`scan-pending/*`):** Failed/abandoned scans can leave orphaned objects under `scan-pending/*` in the `ration-storage` bucket. Cleanup is a native, zero-code **R2 Object Lifecycle Rule** (not application code), applied once per bucket by an operator:
 
@@ -635,16 +635,18 @@ Recipe import uses a queue to offload content acquisition, Gemini extraction, an
 | Lane | Acquisition | Flag |
 |------|-------------|------|
 | Website | Plain fetch (Schema.org JSON-LD prefer) → Supadata `web.scrape` → client HTML | `ai-import-web` |
-| Social | TikTok oEmbed / YouTube description → Supadata metadata → recipe-signal gate → optional native transcript | `ai-import-social` |
+| Social | TikTok oEmbed / YouTube description → Supadata metadata → recipe-signal gate → native captions → **ASR generate** when still thin | `ai-import-social` |
 | Photo | R2 upload → Gemini vision | `ai-import-photo` |
 
 Parent flag: `ai-import-url`. Secret: `SUPADATA_API_KEY` (optional `YOUTUBE_DATA_API_KEY` for richer YouTube metadata).
 
-**Completeness ladder (URL lanes):** Gemini returns full or skeleton recipes when possible. If acquisition or extraction cannot produce a usable skeleton, the job still **completes** with a **link-holder** meal (title from metadata/hostname, description + `customFields.sourceUrl` = source link). Holder/skeleton successes are not refunded. Photo lane without a durable HTTPS URL may still fail soft to retry.
+**Completeness ladder (URL lanes):** Gemini returns full or skeleton recipes when possible (ingredient names without amounts, or steps-only, still count as a completed import). Link holders are the **last** resort after the evidence ladder is exhausted (JSON-LD / HTML / scrape for web; captions + native transcript + spoken-audio ASR for social). Holder/skeleton successes are not refunded. Photo lane without a durable HTTPS URL may still fail soft to retry.
+
+Status polls include `progress` (`reading_page` | `listening_to_video` | `extracting`), `evidence` (caption / native captions / spoken audio / recipe card), and partial counts (`ingredientCount`, `stepCount`, `missingAmountCount`). Social jobs skip the 1-hour Gemini cache so thin extracts are not replayed.
 
 Some publishers **block automated fetches**. Clients may still offer assisted HTML or screenshot recovery:
 
-- **iOS** — Share Extension (`RationShare`) writes the recipe URL + auto-start flag to the App Group, then opens `ration://galley/import?…&auto=1` via Chrome/Readest-style responder-chain `openURL:options:completionHandler:` (nil completion). Ration switches to Galley Import and **starts the import job immediately** (processing wait screen), diverting only for AI consent or insufficient credits (paywall). If the host cannot open automatically, the extension keeps **Open Ration**; opening Ration later still consumes the pending App Group payload with auto-start. Meal detail shows **View source**. On-device page capture remains available when useful.
+- **iOS** — Share Extension (`RationShare`) writes the recipe URL, optional share-sheet caption (`userText`), and auto-start flag to the App Group, then opens `ration://galley/import?…&auto=1` via Chrome/Readest-style responder-chain `openURL:options:completionHandler:` (nil completion). Ration switches to Galley Import and **starts the import job immediately** (processing wait screen), diverting only for AI consent or insufficient credits (paywall). If the host cannot open automatically, the extension keeps **Open Ration**; opening Ration later still consumes the pending App Group payload with auto-start. Meal detail shows **View source**. On-device page capture remains available when useful.
 - **Web** — Import modal opens on the URL field (explainers behind Info). Paste-HTML recovery remains for power users. Soft social / photo misses may set **`softFailToPhoto`**.
 
 Client HTML / photos are stored briefly in **R2** (`import-page/{requestId}`, `import-photo/{requestId}`); queue payloads never carry HTML/media/transcript blobs.
@@ -727,7 +729,7 @@ The Galley holds two types: **Recipes** (full multi-ingredient meals) and **Prov
 **Key workflows:**
 - **Create** — Via `MealBuilder` form or AI generation. Ingredients can be linked to an existing cargo item (`cargoId`) or left as a free-text name. The link is optional — it enables quantity deduction on cook but is not required.
 - **AI generation** — `POST /api/meals/generate` (2 credits) sends pantry context to Gemini and returns 3 Vectorize-verified recipes.
-- **URL import** — `POST /api/meals/import` (3 credits) accepts `{ url }`, `{ url, pageHtml }`, `{ url, userText }` (social), or `{ photoBase64, photoMimeType }` and returns `{ status: "processing", requestId }`; client polls `GET /api/meals/import/status/:requestId` (includes `completeness`: `full` | `skeleton` | `link_holder`). Consumer routes by lane: website (plain fetch → Supadata `web.scrape` → client HTML), social (platform meta → Supadata `/metadata` → recipe-signal → optional native `/transcript` → Gemini), or photo (R2 → Gemini vision). URL lanes never-empty: thin/blocked/AI miss → link-holder meal. Verify → `POST /api/meals/import/confirm`. Soft social / photo misses may set `softFailToPhoto`. Duplicate URLs return `DUPLICATE_URL`. HTTPS-only + SSRF guard for URL lanes. Requires `SUPADATA_API_KEY` for scrape/metadata/transcript escalation. Parent flag `ai-import-url` plus lane flags `ai-import-web` / `ai-import-social` / `ai-import-photo`.
+- **URL import** — `POST /api/meals/import` (3 credits) accepts `{ url }`, `{ url, pageHtml }`, `{ url, userText }` (social), or `{ photoBase64, photoMimeType }` and returns `{ status: "processing", requestId }`; client polls `GET /api/meals/import/status/:requestId` (includes `completeness`: `full` | `skeleton` | `link_holder`, plus `progress`, `evidence`, and partial counts). Consumer routes by lane: website (JSON-LD including `@graph` → plain fetch → Supadata `web.scrape` → client HTML), social (platform meta → Supadata `/metadata` → recipe-signal → native `/transcript` → ASR `mode=generate` when still thin → Gemini), or photo (R2 → Gemini vision). URL lanes never-empty: thin/blocked/AI miss after the full evidence ladder → link-holder meal. Verify → `POST /api/meals/import/confirm`. Soft social / photo misses may set `softFailToPhoto`. Duplicate URLs return `DUPLICATE_URL`. HTTPS-only + SSRF guard for URL lanes. Requires `SUPADATA_API_KEY` for scrape/metadata/transcript escalation. Parent flag `ai-import-url` plus lane flags `ai-import-web` / `ai-import-social` / `ai-import-photo`.
 - **Cook** — `POST /api/meals/:id/cook` deducts all ingredients from cargo via the Vectorize-backed resolver (updates both `quantity` and `base_quantity`). Accepts a `servings` override to scale quantities.
 - **Match mode** — `GET /api/meals/match` returns meals ranked by how much of their ingredient list is already in the pantry, in either `strict` (100% match only) or `delta` (partial match, sorted by %) mode.
 - **Tags** — Shared org-wide registry via `tag` + `meal_tag` junction (same tags as cargo). Used for filtering in Galley, Manifest, Supply, and MCP `list_meals`.
@@ -939,7 +941,7 @@ Credits belong to the **organization**, not the user. All members of a group dra
 |-----------|------|-------|------------|
 | Receipt Scan | 2 cr | `POST /api/scan` | AI Gateway → Gemini 3.5 Flash-Lite |
 | Meal Generate | 2 cr | `POST /api/meals/generate` | AI Gateway → Gemini 3.5 Flash-Lite |
-| URL Recipe Import | 1 cr | `POST /api/meals/import` | AI Gateway → Gemini 3.5 Flash-Lite |
+| URL Recipe Import | 3 cr | `POST /api/meals/import` | AI Gateway → Gemini 3.5 Flash-Lite |
 | Weekly Meal Plan | 3 cr | `POST /api/meal-plans/:id/plan-week` | AI Gateway → Gemini 3.5 Flash-Lite |
 | Organize Cargo | 2 cr | *(reserved — not yet implemented)* | — |
 

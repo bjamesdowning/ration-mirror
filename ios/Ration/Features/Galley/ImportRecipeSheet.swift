@@ -12,6 +12,8 @@ struct ImportRecipeSheet: View {
     @State private var showingInfo = false
     @State private var didAutoStart = false
     var initialURL: String? = nil
+    /// Optional share-sheet caption text forwarded as `userText`.
+    var initialUserText: String? = nil
     /// When true (Share Extension handoff), start import after credit/consent gates.
     var autoStart: Bool = false
     var onComplete: () async -> Void = {}
@@ -39,11 +41,20 @@ struct ImportRecipeSheet: View {
                 case .idle:
                     idleContent
                 case .submitting, .processing:
-                    AIProcessingView(feature: .importRecipe, creditCost: creditCost)
+                    AIProcessingView(
+                        feature: .importRecipe,
+                        creditCost: creditCost,
+                        titleOverride: processingTitle,
+                        messageOverride: processingMessage
+                    )
                 case .capturing:
                     capturingContent
-                case let .verification(extracted, requestId):
-                    verificationContent(extracted, requestId: requestId)
+                case let .verification(extracted, requestId, softFailToPhoto):
+                    verificationContent(
+                        extracted,
+                        requestId: requestId,
+                        softFailToPhoto: softFailToPhoto
+                    )
                 case .confirming:
                     AIProcessingView(
                         feature: .importRecipe,
@@ -145,12 +156,37 @@ struct ImportRecipeSheet: View {
                 if let initialURL, !initialURL.isEmpty, model.url.isEmpty {
                     model.url = initialURL
                 }
+                if let initialUserText, !initialUserText.isEmpty, model.userText == nil {
+                    model.userText = initialUserText
+                }
                 if !linkImportEnabled, photoImportEnabled {
                     model.inputMode = .photo
                 }
                 attemptAutoStartIfNeeded()
             }
             .onDisappear { model.cancelActiveWork() }
+        }
+    }
+
+    private var processingMessage: String {
+        switch model.pollProgress {
+        case "listening_to_video":
+            "Transcribing spoken ingredients and steps."
+        case "extracting":
+            "Mapping ingredients and steps into a recipe."
+        case "reading_page":
+            "Reading the source and looking for a recipe."
+        default:
+            AIFeature.importRecipe.message
+        }
+    }
+
+    private var processingTitle: String? {
+        switch model.pollProgress {
+        case "listening_to_video":
+            "Listening to the video…"
+        default:
+            nil
         }
     }
 
@@ -333,7 +369,11 @@ struct ImportRecipeSheet: View {
         }
     }
 
-    private func verificationContent(_ extracted: ExtractedRecipePreview, requestId: String) -> some View {
+    private func verificationContent(
+        _ extracted: ExtractedRecipePreview,
+        requestId: String,
+        softFailToPhoto: Bool
+    ) -> some View {
         VStack(spacing: 16) {
             GlassCard {
                 VStack(alignment: .leading, spacing: 8) {
@@ -342,12 +382,11 @@ struct ImportRecipeSheet: View {
                         .foregroundStyle(Theme.hyperGreen)
                     Text("Review import").rationHeadline()
                     Text(extracted.name.capitalized).rationBody()
-                    if extracted.completeness == "link_holder" {
-                        Text("We saved the source link. Add ingredients later, or open the link for the full recipe.")
-                            .rationCaption()
-                            .foregroundStyle(Theme.muted)
-                    } else {
-                        Text("\(extracted.ingredientCount) ingredients")
+                    Text(verificationSummary(extracted, softFailToPhoto: softFailToPhoto))
+                        .rationCaption()
+                        .foregroundStyle(Theme.muted)
+                    if !extracted.evidenceLabels.isEmpty {
+                        Text(extracted.evidenceLabels.joined(separator: " · "))
                             .rationCaption()
                             .foregroundStyle(Theme.muted)
                     }
@@ -372,7 +411,41 @@ struct ImportRecipeSheet: View {
                 }
             }
             .buttonStyle(PrimaryButtonStyle())
+            if extracted.completeness == "link_holder",
+               softFailToPhoto,
+               photoImportEnabled
+            {
+                Button("Try a screenshot instead") {
+                    model.switchToPhotoImport()
+                }
+                .buttonStyle(SecondaryButtonStyle())
+            }
         }
+    }
+
+    private func verificationSummary(
+        _ extracted: ExtractedRecipePreview,
+        softFailToPhoto: Bool
+    ) -> String {
+        if extracted.completeness == "link_holder" {
+            if softFailToPhoto {
+                return "We couldn't hear a recipe in this video. Source link saved — try a screenshot if the steps are on screen."
+            }
+            return "We saved the source link. Add ingredients later, or open the link for the full recipe."
+        }
+        let ingredientWord = extracted.ingredientCount == 1 ? "ingredient" : "ingredients"
+        var summary = "\(extracted.ingredientCount) \(ingredientWord)"
+        if let missing = extracted.missingAmountCount, missing > 0 {
+            summary += " (\(missing) missing amounts)"
+        }
+        if let steps = extracted.stepCount {
+            let stepWord = steps == 1 ? "step" : "steps"
+            summary += ", \(steps) \(stepWord)"
+        }
+        if extracted.completeness == "skeleton" {
+            return "Partial recipe: \(summary). Review and add to Galley?"
+        }
+        return "\(summary) extracted. Add to your Galley?"
     }
 
     private func duplicateContent(existingId: String, existingName: String?) -> some View {

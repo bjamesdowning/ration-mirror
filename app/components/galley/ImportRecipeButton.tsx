@@ -19,6 +19,7 @@ import {
 	AIFeatureModal,
 } from "~/components/ai/AIFeatureModal";
 import { Toast } from "~/components/shell/Toast";
+import { importEvidenceSummary } from "~/lib/import/import-evidence";
 import { MAX_POLL_ATTEMPTS, startBackoffPollLoop } from "~/lib/polling";
 
 const NUTRITION_INGEST_HINT =
@@ -68,7 +69,7 @@ function buildImportIntroDescription(options: {
 	}
 	if (social) {
 		sourceParts.push(
-			"social posts using captions, descriptions, and transcripts when needed",
+			"social posts using captions, descriptions, and spoken audio when needed",
 		);
 	}
 	if (photo && !web && !social) {
@@ -197,9 +198,16 @@ export const ImportRecipeButton = forwardRef<
 		requestId: string;
 		mealName: string;
 		ingredientCount: number;
+		stepCount?: number;
+		missingAmountCount?: number;
 		completeness?: "full" | "skeleton" | "link_holder";
 		sourceUrl?: string;
+		evidence?: string[];
+		softFailToPhoto?: boolean;
 	} | null>(null);
+	const [pollProgress, setPollProgress] = useState<
+		"reading_page" | "listening_to_video" | "extracting" | null
+	>(null);
 	const [assistedFailed, setAssistedFailed] = useState(false);
 	const importInFlight = useRef(false);
 	const assistedSubmit = useRef(false);
@@ -240,6 +248,7 @@ export const ImportRecipeButton = forwardRef<
 			setPollRequestId(null);
 			setDuplicateData(null);
 			setVerificationData(null);
+			setPollProgress(null);
 			setAssistedFailed(false);
 			assistedSubmit.current = false;
 		},
@@ -266,6 +275,7 @@ export const ImportRecipeButton = forwardRef<
 		const d = importFetcher.data as Record<string, unknown>;
 		if (d.status === "processing" && typeof d.requestId === "string") {
 			setPollRequestId(d.requestId);
+			setPollProgress(null);
 			setDuplicateData(null);
 		} else if (d.code === "DUPLICATE_URL") {
 			setDuplicateData({
@@ -321,7 +331,12 @@ export const ImportRecipeButton = forwardRef<
 					status: "pending" | "completed" | "failed";
 					success?: boolean;
 					meal?: { id: string; name: string };
-					extractedRecipe?: { name?: string; ingredients?: unknown[] };
+					extractedRecipe?: {
+						name?: string;
+						ingredients?: unknown[];
+						directions?: unknown;
+						customFields?: Record<string, string>;
+					};
 					sourceUrl?: string;
 					completeness?: "full" | "skeleton" | "link_holder";
 					code?: string;
@@ -329,8 +344,16 @@ export const ImportRecipeButton = forwardRef<
 					existingMealId?: string;
 					existingMealName?: string;
 					softFailToPhoto?: boolean;
+					progress?: "reading_page" | "listening_to_video" | "extracting";
+					evidence?: string[];
+					ingredientCount?: number;
+					stepCount?: number;
+					missingAmountCount?: number;
 				};
-				if (data.status === "pending") return;
+				if (data.status === "pending") {
+					if (data.progress) setPollProgress(data.progress);
+					return;
+				}
 				if (
 					data.status === "completed" &&
 					data.success &&
@@ -341,17 +364,30 @@ export const ImportRecipeButton = forwardRef<
 					importInFlight.current = false;
 					assistedSubmit.current = false;
 					setAssistedFailed(false);
+					setPollProgress(null);
+					const ingredients = Array.isArray(data.extractedRecipe.ingredients)
+						? data.extractedRecipe.ingredients
+						: [];
+					const evidence =
+						data.evidence ??
+						(data.extractedRecipe.customFields?.importEvidence
+							? data.extractedRecipe.customFields.importEvidence
+									.split(",")
+									.filter(Boolean)
+							: undefined);
 					setVerificationData({
 						requestId: pollRequestId,
 						mealName:
 							typeof data.extractedRecipe.name === "string"
 								? data.extractedRecipe.name
 								: "Imported meal",
-						ingredientCount: Array.isArray(data.extractedRecipe.ingredients)
-							? data.extractedRecipe.ingredients.length
-							: 0,
+						ingredientCount: data.ingredientCount ?? ingredients.length,
+						stepCount: data.stepCount,
+						missingAmountCount: data.missingAmountCount,
 						completeness: data.completeness,
 						sourceUrl: data.sourceUrl,
+						evidence,
+						softFailToPhoto: data.softFailToPhoto === true,
 					});
 					setView("verification");
 				} else if (
@@ -411,7 +447,7 @@ export const ImportRecipeButton = forwardRef<
 			}
 		};
 
-		return startBackoffPollLoop(poll);
+		return startBackoffPollLoop(poll, { maxAttempts: 120 });
 	}, [pollRequestId, aiImportPhoto]);
 
 	// Handle confirm success: navigate to meal, close modal, show toast
@@ -591,6 +627,7 @@ export const ImportRecipeButton = forwardRef<
 		setPollRequestId(null);
 		setDuplicateData(null);
 		setVerificationData(null);
+		setPollProgress(null);
 		setAssistedFailed(false);
 		assistedSubmit.current = false;
 	};
@@ -611,9 +648,34 @@ export const ImportRecipeButton = forwardRef<
 
 	const completenessLabel = (c?: string) => {
 		if (c === "link_holder") return "Saved link";
-		if (c === "skeleton") return "Partial recipe";
-		return "Recipe";
+		if (c === "skeleton") return "Partial";
+		return "Full";
 	};
+
+	const processingCopy = (() => {
+		if (inputMode === "photo" && aiImportPhoto) {
+			return {
+				title: "Analyzing Recipe Photo...",
+				body: "Reading ingredients and steps from your image.",
+			};
+		}
+		if (pollProgress === "listening_to_video") {
+			return {
+				title: "Listening to the video…",
+				body: "Transcribing spoken ingredients and steps.",
+			};
+		}
+		if (pollProgress === "extracting") {
+			return {
+				title: "Extracting Meal...",
+				body: "Mapping ingredients and steps into a recipe.",
+			};
+		}
+		return {
+			title: "Extracting Meal...",
+			body: "Reading the source and looking for a recipe.",
+		};
+	})();
 
 	return (
 		<>
@@ -845,15 +907,9 @@ export const ImportRecipeButton = forwardRef<
 										)}
 									</div>
 									<h4 className="text-lg font-medium text-carbon dark:text-white">
-										{inputMode === "photo" && aiImportPhoto
-											? "Analyzing Recipe Photo..."
-											: "Extracting Meal..."}
+										{processingCopy.title}
 									</h4>
-									<p className="text-muted text-sm">
-										{inputMode === "photo" && aiImportPhoto
-											? "Reading ingredients and steps from your image."
-											: "Reading and analyzing the page."}
-									</p>
+									<p className="text-muted text-sm">{processingCopy.body}</p>
 								</div>
 							)}
 
@@ -870,17 +926,23 @@ export const ImportRecipeButton = forwardRef<
 									</h4>
 									{verificationData.completeness === "link_holder" ? (
 										<p className="text-sm text-muted max-w-sm">
-											We saved the source link. Add ingredients later, or open
-											the link for the full recipe.
+											{verificationData.softFailToPhoto
+												? "We couldn't hear a recipe in this video. Source link saved — try a screenshot if the steps are on screen."
+												: "We saved the source link. Add ingredients later, or open the link for the full recipe."}
 										</p>
 									) : verificationData.completeness === "skeleton" ? (
 										<p className="text-sm text-muted max-w-sm">
-											Partial recipe extracted (
-											{verificationData.ingredientCount}{" "}
+											Partial recipe: {verificationData.ingredientCount}{" "}
 											{verificationData.ingredientCount === 1
 												? "ingredient"
 												: "ingredients"}
-											). Review and add to Galley?
+											{verificationData.missingAmountCount
+												? ` (${verificationData.missingAmountCount} missing amounts)`
+												: ""}
+											{typeof verificationData.stepCount === "number"
+												? `, ${verificationData.stepCount} ${verificationData.stepCount === 1 ? "step" : "steps"}`
+												: ""}
+											. Review and add to Galley?
 										</p>
 									) : (
 										<p className="text-sm text-muted">
@@ -889,6 +951,14 @@ export const ImportRecipeButton = forwardRef<
 												? "ingredient"
 												: "ingredients"}{" "}
 											extracted. Add to your Galley?
+										</p>
+									)}
+									{importEvidenceSummary(verificationData.evidence).length >
+										0 && (
+										<p className="text-xs text-muted">
+											{importEvidenceSummary(verificationData.evidence).join(
+												" · ",
+											)}
 										</p>
 									)}
 									{verificationData.sourceUrl && (
@@ -922,6 +992,17 @@ export const ImportRecipeButton = forwardRef<
 											Dismiss
 										</button>
 									</div>
+									{verificationData.completeness === "link_holder" &&
+										verificationData.softFailToPhoto &&
+										aiImportPhoto && (
+											<button
+												type="button"
+												onClick={switchToPhotoMode}
+												className="text-sm text-hyper-green hover:underline"
+											>
+												Try a screenshot instead
+											</button>
+										)}
 								</div>
 							)}
 

@@ -30,8 +30,15 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
 	const { job } = await requireQueueJobForStatus({ params, request, context });
 
 	if (job.status === "pending") {
+		const pending = parseJobResultJson<{
+			progress?: "reading_page" | "listening_to_video" | "extracting";
+		}>(job.resultJson);
 		return data(
-			{ status: "pending", organizationId: job.organizationId },
+			{
+				status: "pending",
+				organizationId: job.organizationId,
+				progress: pending.progress,
+			},
 			{ headers: NO_STORE },
 		);
 	}
@@ -48,6 +55,11 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
 		existingMealId?: string;
 		existingMealName?: string;
 		softFailToPhoto?: boolean;
+		progress?: "reading_page" | "listening_to_video" | "extracting";
+		evidence?: string[];
+		ingredientCount?: number;
+		stepCount?: number;
+		missingAmountCount?: number;
 	}>(job.resultJson);
 
 	return data(
@@ -63,6 +75,11 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
 			existingMealId: result.existingMealId,
 			existingMealName: result.existingMealName,
 			softFailToPhoto: result.softFailToPhoto === true,
+			progress: result.progress,
+			evidence: result.evidence,
+			ingredientCount: result.ingredientCount,
+			stepCount: result.stepCount,
+			missingAmountCount: result.missingAmountCount,
 		},
 		{ headers: NO_STORE },
 	);

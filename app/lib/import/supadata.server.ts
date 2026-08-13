@@ -8,8 +8,10 @@ import { log } from "~/lib/logging.server";
 
 const SUPADATA_BASE = "https://api.supadata.ai/v1";
 const DEFAULT_TIMEOUT_MS = 45_000;
+const TRANSCRIPT_GENERATE_TIMEOUT_MS = 120_000;
 const TRANSCRIPT_POLL_MS = 2_000;
-const TRANSCRIPT_POLL_MAX = 30;
+/** Generate/ASR jobs can take up to ~2 minutes (Supadata docs). */
+const TRANSCRIPT_POLL_MAX = 60;
 
 export class SupadataError extends Error {
 	constructor(
@@ -307,7 +309,7 @@ async function pollTranscriptJob(
 const TRANSCRIPT_CACHE_TTL_SEC = 86_400;
 const TRANSCRIPT_CACHE_PREFIX = "supadata:transcript:";
 
-type TranscriptMode = "native" | "auto" | "generate";
+export type TranscriptMode = "native" | "auto" | "generate";
 
 function cacheKeyForUrl(url: string, mode: TranscriptMode): string {
 	return `${TRANSCRIPT_CACHE_PREFIX}${mode}:${encodeURIComponent(url)}`;
@@ -342,9 +344,14 @@ export async function fetchTranscript(
 		mode,
 	});
 
+	const requestTimeoutMs =
+		mode === "native" ? DEFAULT_TIMEOUT_MS : TRANSCRIPT_GENERATE_TIMEOUT_MS;
+
 	let response: Response;
 	try {
-		response = await supadataFetch(env, `/transcript?${qs}`);
+		response = await supadataFetch(env, `/transcript?${qs}`, {
+			timeoutMs: requestTimeoutMs,
+		});
 	} catch (err) {
 		if (err instanceof Error && err.name === "AbortError") {
 			throw new SupadataError("Supadata transcript timed out", "timeout");

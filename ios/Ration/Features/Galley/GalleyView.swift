@@ -15,6 +15,7 @@ struct GalleyView: View {
     @State private var showingGenerate = false
     @State private var showingImport = false
     @State private var importPrefillURL: String?
+    @State private var importPrefillUserText: String?
     @State private var importAutoStart = false
     @State private var path: [MealDetailRoute] = []
     @State private var availableTags: [String] = []
@@ -150,10 +151,12 @@ struct GalleyView: View {
             }
             .sheet(isPresented: $showingImport, onDismiss: {
                 importPrefillURL = nil
+                importPrefillUserText = nil
                 importAutoStart = false
             }) {
                 ImportRecipeSheet(
                     initialURL: importPrefillURL,
+                    initialUserText: importPrefillUserText,
                     autoStart: importAutoStart,
                     onComplete: { await reload() },
                     onImportedMeal: { meal in path = [MealDetailRoute(id: meal.id)] },
@@ -205,6 +208,7 @@ struct GalleyView: View {
                 if env.session.clientFlags.isAiImportUrlEnabled {
                     Button {
                         importPrefillURL = nil
+                        importPrefillUserText = nil
                         importAutoStart = false
                         showingImport = true
                     } label: {
@@ -274,6 +278,7 @@ struct GalleyView: View {
         .onChange(of: env.deepLinkRouter.galleyImportPending, initial: true) { _, pending in
             if pending {
                 importPrefillURL = env.deepLinkRouter.galleyImportURL
+                importPrefillUserText = env.deepLinkRouter.galleyImportUserText
                 importAutoStart = env.deepLinkRouter.galleyImportAutoStart
                 if env.session.clientFlags.isAiImportUrlEnabled {
                     showingImport = true

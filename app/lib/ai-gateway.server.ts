@@ -6,8 +6,10 @@ import { extractFinishReason, extractModelText } from "~/lib/ai.server";
 import {
 	AI_MODEL,
 	GATEWAY_FEATURE_CONFIG,
+	type GatewayCacheConfig,
 	type GatewayFeature,
 	getGenerationConfig,
+	type ThinkingLevel,
 } from "~/lib/ai-config.server";
 import { emitGeminiInvoke } from "~/lib/telemetry.server";
 
@@ -37,6 +39,10 @@ export interface BuildGatewayRequestOptions {
 	feature: GatewayFeature;
 	parts: GeminiContentPart[];
 	metadata: GatewayRequestMetadata;
+	/** Override feature cache policy (e.g. skip cache for social extracts). */
+	cache?: GatewayCacheConfig;
+	/** Override feature thinking level (e.g. LOW for spoken transcripts). */
+	thinkingLevel?: ThinkingLevel;
 }
 
 export interface GatewayRequestPayload {
@@ -81,6 +87,8 @@ export function buildGatewayRequest(
 	}
 
 	const config = GATEWAY_FEATURE_CONFIG[options.feature];
+	const cache = options.cache ?? config.cache;
+	const thinkingLevel = options.thinkingLevel ?? config.thinkingLevel;
 	const headers: Record<string, string> = {
 		"Content-Type": "application/json",
 		"cf-aig-authorization": `Bearer ${token}`,
@@ -96,10 +104,10 @@ export function buildGatewayRequest(
 		}),
 	};
 
-	if ("skip" in config.cache && config.cache.skip) {
+	if ("skip" in cache && cache.skip) {
 		headers["cf-aig-skip-cache"] = "true";
-	} else if ("ttlSeconds" in config.cache) {
-		headers["cf-aig-cache-ttl"] = String(config.cache.ttlSeconds);
+	} else if ("ttlSeconds" in cache) {
+		headers["cf-aig-cache-ttl"] = String(cache.ttlSeconds);
 	}
 
 	return {
@@ -107,7 +115,7 @@ export function buildGatewayRequest(
 		headers,
 		body: JSON.stringify({
 			contents: [{ parts: options.parts }],
-			...getGenerationConfig(config),
+			...getGenerationConfig({ ...config, thinkingLevel }),
 		}),
 	};
 }

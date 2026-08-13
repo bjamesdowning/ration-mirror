@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+	hasAnyCookingSignal,
 	hasStrongRecipeSignal,
 	scoreRecipeSignal,
 } from "~/lib/import/recipe-signal";
@@ -23,5 +24,14 @@ Pasta Carbonara
 		`.trim();
 		expect(scoreRecipeSignal(caption)).toBeGreaterThanOrEqual(4);
 		expect(hasStrongRecipeSignal(caption)).toBe(true);
+	});
+
+	it("detects any cooking signal on spoken transcripts", () => {
+		expect(
+			hasAnyCookingSignal(
+				"then add the pasta and boil until al dente before you serve",
+			),
+		).toBe(true);
+		expect(hasAnyCookingSignal("yummy!")).toBe(false);
 	});
 });

@@ -24,6 +24,8 @@ export type BuildImportHolderInput = {
 	ingredients?: HolderIngredientHint[];
 	steps?: string[];
 	importTag?: string;
+	/** Comma-separated acquire evidence keys. */
+	importEvidence?: string;
 };
 
 function hostnameOf(url: string): string {
@@ -134,6 +136,7 @@ export function buildImportHolderMeal(input: BuildImportHolderInput): {
 			sourceUrl: input.sourceUrl,
 			sourceKind: input.sourceKind,
 			importCompleteness: hasPartial ? "skeleton" : "link_holder",
+			...(input.importEvidence ? { importEvidence: input.importEvidence } : {}),
 		},
 		ingredients,
 		tags: [tag, hasPartial ? "partial-import" : "link-holder"],

@@ -123,6 +123,25 @@ export async function updateQueueJobResult(
 	return (write.meta.changes ?? 0) > 0;
 }
 
+/**
+ * Write a non-terminal progress payload while the job is still pending/processing.
+ * Completing the job overwrites result_json.
+ */
+export async function patchQueueJobProgress(
+	db: D1Database,
+	requestId: string,
+	progress: object,
+): Promise<boolean> {
+	const write = await db
+		.prepare(
+			`UPDATE queue_job SET result_json = ?
+			 WHERE request_id = ? AND status IN ('pending', 'processing')`,
+		)
+		.bind(JSON.stringify(progress), requestId)
+		.run();
+	return (write.meta.changes ?? 0) > 0;
+}
+
 /** Fetch job by requestId. Returns null if not found or expired. */
 export async function getQueueJob(
 	db: D1Database,

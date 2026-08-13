@@ -9,19 +9,19 @@ final class AppDeepLinkTests: XCTestCase {
         XCTAssertEqual(AppDeepLink.parse("ration://galley/generate"), .galleyGenerate)
         XCTAssertEqual(
             AppDeepLink.parse("ration://galley/import"),
-            .galleyImport(url: nil, autoStart: false)
+            .galleyImport(url: nil, autoStart: false, userText: nil)
         )
         XCTAssertEqual(
             AppDeepLink.parse("ration://galley/import?url=https%3A%2F%2Ftiktok.com%2F%40x%2Fvideo%2F1"),
-            .galleyImport(url: "https://tiktok.com/@x/video/1", autoStart: false)
+            .galleyImport(url: "https://tiktok.com/@x/video/1", autoStart: false, userText: nil)
         )
         XCTAssertEqual(
             AppDeepLink.parse("ration://galley/import?url=https%3A%2F%2Fx.com%2Fa&auto=1"),
-            .galleyImport(url: "https://x.com/a", autoStart: true)
+            .galleyImport(url: "https://x.com/a", autoStart: true, userText: nil)
         )
         XCTAssertEqual(
             AppDeepLink.parse("ration://galley/import?auto=true"),
-            .galleyImport(url: nil, autoStart: true)
+            .galleyImport(url: nil, autoStart: true, userText: nil)
         )
         XCTAssertEqual(AppDeepLink.parse("ration://manifest/plan-week"), .manifestPlanWeek)
         XCTAssertEqual(AppDeepLink.parse("RATION://Ask"), .ask)

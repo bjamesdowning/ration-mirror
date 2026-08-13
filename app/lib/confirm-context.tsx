@@ -16,6 +16,11 @@ export interface ConfirmOptions {
 	variant?: ConfirmVariant;
 	consequences?: string[];
 	requireTyped?: string;
+	/** Checkbox label; Confirm stays disabled until checked. */
+	requireAcknowledge?: string;
+	/** Extra action (e.g. Transfer credits). Resolves false after `onSecondary`. */
+	secondaryAction?: { label: string };
+	onSecondary?: () => void;
 }
 
 interface ConfirmState extends ConfirmOptions {

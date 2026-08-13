@@ -10,6 +10,7 @@ enum CreateGroupResult: Equatable {
 
 enum DeleteGroupOutcome: Equatable {
     case needsOrgSelection
+    case creditForfeitUnacknowledged(credits: Int)
     case failure(String)
 }
 
@@ -207,13 +208,20 @@ final class GroupSettingsViewModel {
         }
     }
 
-    func deleteGroup(api: RationAPI, env: AppEnvironment) async -> DeleteGroupOutcome {
+    func deleteGroup(
+        api: RationAPI,
+        env: AppEnvironment,
+        acknowledgeCreditForfeit: Bool = false
+    ) async -> DeleteGroupOutcome {
         guard let orgId = session?.organizations.first(where: \.isActive)?.id else {
             return .failure("No active group to delete.")
         }
         errorMessage = nil
         do {
-            let response = try await api.deleteGroup(organizationId: orgId)
+            let response = try await api.deleteGroup(
+                organizationId: orgId,
+                acknowledgeCreditForfeit: acknowledgeCreditForfeit ? true : nil
+            )
             env.nutrition.invalidate()
             env.nutritionConsent.invalidate()
             await env.snapshots.clearAll()
@@ -222,6 +230,9 @@ final class GroupSettingsViewModel {
             Haptics.success()
             return .needsOrgSelection
         } catch {
+            if let apiError = error as? APIError, apiError.isCreditForfeitUnacknowledged {
+                return .creditForfeitUnacknowledged(credits: apiError.serverCurrent ?? 0)
+            }
             let message = (error as? APIError)?.errorDescription ?? error.localizedDescription
             errorMessage = message
             return .failure(message)

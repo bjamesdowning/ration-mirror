@@ -7,7 +7,11 @@ struct GroupSettingsView: View {
     @State private var model = GroupSettingsViewModel()
     @State private var paywallContext: PaywallContext?
     @State private var showingDeleteConfirm = false
+    @State private var showingCreditDeleteSheet = false
     @State private var deleteConfirmText = ""
+    @State private var deleteCreditCount = 0
+    @State private var isDeletingGroup = false
+    @State private var pendingScrollToTransfer = false
     @State private var showingLeaveConfirm = false
     @State private var showingTransferConfirm = false
     @State private var transferConfirmText = ""
@@ -70,18 +74,33 @@ struct GroupSettingsView: View {
                 .textInputAutocapitalization(.never)
             Button("Delete Group", role: .destructive) {
                 Task {
-                    guard deleteConfirmText == "delete" else { return }
-                    switch await model.deleteGroup(api: env.api, env: env) {
-                    case .needsOrgSelection:
-                        dismiss()
-                    case .failure:
-                        break
-                    }
+                    guard GroupSettingsSupport.isTypedDeleteConfirm(deleteConfirmText) else { return }
+                    await performDelete(acknowledgeCreditForfeit: false)
                 }
             }
             Button("Cancel", role: .cancel) { deleteConfirmText = "" }
         } message: {
             Text("All members will lose access immediately. This cannot be undone.")
+        }
+        .sheet(isPresented: $showingCreditDeleteSheet) {
+            GroupDeleteCreditConfirmSheet(
+                credits: deleteCreditCount,
+                canTransfer: GroupSettingsSupport.canTransferCredits(
+                    organizations: model.session?.organizations ?? env.session.session?.organizations ?? []
+                ),
+                isDeleting: isDeletingGroup,
+                onTransfer: {
+                    showingCreditDeleteSheet = false
+                    pendingScrollToTransfer = true
+                },
+                onDelete: { acknowledged in
+                    await performDelete(acknowledgeCreditForfeit: acknowledged)
+                },
+                onCancel: {
+                    showingCreditDeleteSheet = false
+                    deleteConfirmText = ""
+                }
+            )
         }
         .alert("Transfer ownership?", isPresented: $showingTransferConfirm) {
             TextField("Type transfer to confirm", text: $transferConfirmText)
@@ -111,7 +130,8 @@ struct GroupSettingsView: View {
 
     @ViewBuilder
     private var content: some View {
-        List {
+        ScrollViewReader { proxy in
+            List {
             if let error = model.errorMessage {
                 Section {
                     Text(error).foregroundStyle(Theme.danger).font(Typography.caption())
@@ -158,6 +178,7 @@ struct GroupSettingsView: View {
                         )
                     }
                 )
+                .id("transfer-credits")
             }
 
             if GroupSettingsSupport.canTransferOwnership(
@@ -187,6 +208,15 @@ struct GroupSettingsView: View {
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
         .background(Theme.ceramic)
+        .onChange(of: pendingScrollToTransfer) { _, shouldScroll in
+            guard shouldScroll else { return }
+            pendingScrollToTransfer = false
+            DispatchQueue.main.async {
+                withAnimation {
+                    proxy.scrollTo("transfer-credits", anchor: .center)
+                }
+            }
+        }
         .overlay {
             if env.session.isSwitchingOrg {
                 ProgressView("Switching…")
@@ -231,6 +261,29 @@ struct GroupSettingsView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("You will lose access to this group's cargo immediately.")
+        }
+        }
+    }
+
+    private func performDelete(acknowledgeCreditForfeit: Bool) async {
+        isDeletingGroup = true
+        defer { isDeletingGroup = false }
+        switch await model.deleteGroup(
+            api: env.api,
+            env: env,
+            acknowledgeCreditForfeit: acknowledgeCreditForfeit
+        ) {
+        case .needsOrgSelection:
+            showingCreditDeleteSheet = false
+            dismiss()
+        case .creditForfeitUnacknowledged(let credits):
+            showingDeleteConfirm = false
+            deleteCreditCount = credits > 0
+                ? credits
+                : (env.session.activeOrg?.credits ?? deleteCreditCount)
+            showingCreditDeleteSheet = true
+        case .failure:
+            break
         }
     }
 
@@ -540,16 +593,26 @@ struct GroupSettingsView: View {
 
     @ViewBuilder
     private var deleteGroupSection: some View {
+        let credits = env.session.activeOrg?.credits ?? 0
         Section {
             Button("Delete group", role: .destructive) {
                 deleteConfirmText = ""
-                showingDeleteConfirm = true
+                if GroupSettingsSupport.requiresCreditForfeitAck(credits: credits) {
+                    deleteCreditCount = credits
+                    showingCreditDeleteSheet = true
+                } else {
+                    showingDeleteConfirm = true
+                }
             }
             .destructiveDeleteTint()
         } header: {
             Text("Danger zone")
         } footer: {
-            Text("Permanently delete this group and all its data. You will return to the group picker immediately. This cannot be undone.")
+            if GroupSettingsSupport.requiresCreditForfeitAck(credits: credits) {
+                Text(GroupSettingsSupport.groupDeleteCreditFooter(credits: credits))
+            } else {
+                Text("Permanently delete this group and all its data. You will return to the group picker immediately. This cannot be undone.")
+            }
         }
     }
 

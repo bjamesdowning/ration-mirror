@@ -23,6 +23,7 @@ export type MobileCreateGroupInput = z.infer<typeof MobileCreateGroupSchema>;
 export const MobileDeleteGroupSchema = z.object({
 	organizationId: z.string().min(1, "Organization ID is required"),
 	confirmSlug: z.string().optional(),
+	acknowledgeCreditForfeit: z.boolean().optional(),
 });
 
 export type MobileDeleteGroupInput = z.infer<typeof MobileDeleteGroupSchema>;

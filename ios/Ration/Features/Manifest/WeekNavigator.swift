@@ -454,41 +454,50 @@ struct WeekNavigator: View {
         let energy = lines.first { $0.key == "energy" }
         let macros = lines.filter { $0.key != "energy" }
 
-        let content = VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
             if let energy {
-                HStack(spacing: 8) {
-                    Label(energy.displayText, systemImage: "bolt.fill")
-                        .font(Typography.dataCaption())
-                        .foregroundStyle(Theme.muted)
-                    Spacer(minLength: 0)
+                nutrientTapWrap {
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack(spacing: 8) {
+                            Label(energy.displayText, systemImage: "bolt.fill")
+                                .font(Typography.dataCaption())
+                                .foregroundStyle(Theme.muted)
+                            Spacer(minLength: 0)
+                        }
+                        ThinProgressBar(progress: NutritionGoalProgress.clamped(energy.ratio), height: 3)
+                    }
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(energy.accessibilityText)
                 }
-                ThinProgressBar(progress: NutritionGoalProgress.clamped(energy.ratio), height: 3)
             }
             if !macros.isEmpty {
-                HStack(spacing: 10) {
+                HStack(alignment: .top, spacing: 8) {
                     ForEach(macros, id: \.key) { line in
-                        Text("\(line.label) \(Int(line.actual.rounded()))/\(Int(line.target.rounded()))")
-                            .font(Typography.dataCaption())
-                            .foregroundStyle(Theme.muted)
+                        nutrientTapWrap {
+                            MacroProgressDial(
+                                label: line.label,
+                                actualText: "\(Int(line.actual.rounded()))",
+                                targetText: "/\(Int(line.target.rounded()))",
+                                progress: NutritionGoalProgress.clamped(line.ratio),
+                                overTarget: line.isOverTarget,
+                                accessibilityText: line.accessibilityText
+                            )
+                        }
                     }
-                    Spacer(minLength: 0)
                 }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
 
-        let a11y = lines.map(\.displayText).joined(separator: ", ")
-
+    @ViewBuilder
+    private func nutrientTapWrap<Content: View>(@ViewBuilder content: () -> Content) -> some View {
         if let onTapNutrientLine {
-            Button(action: onTapNutrientLine) { content }
+            Button(action: onTapNutrientLine, label: content)
                 .buttonStyle(.borderless)
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel(a11y)
                 .accessibilityHint("Opens Nutrition Goals")
         } else {
-            content
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel(a11y)
+            content()
         }
     }
 

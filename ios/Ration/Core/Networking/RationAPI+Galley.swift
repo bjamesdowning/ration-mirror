@@ -168,10 +168,18 @@ extension RationAPI {
         )
     }
 
-    func deleteGroup(organizationId: String, confirmSlug: String? = nil) async throws -> DeleteGroupResponse {
+    func deleteGroup(
+        organizationId: String,
+        confirmSlug: String? = nil,
+        acknowledgeCreditForfeit: Bool? = nil
+    ) async throws -> DeleteGroupResponse {
         try await client.post(
             "groups/delete",
-            body: DeleteGroupRequest(organizationId: organizationId, confirmSlug: confirmSlug)
+            body: DeleteGroupRequest(
+                organizationId: organizationId,
+                confirmSlug: confirmSlug,
+                acknowledgeCreditForfeit: acknowledgeCreditForfeit
+            )
         )
     }
 

@@ -98,6 +98,42 @@ final class NutritionGoalProgressTests: XCTestCase {
         XCTAssertEqual(lines[0].displayText, "1240 / 2000 kcal")
         XCTAssertEqual(lines[1].displayText, "95 / 150 g")
         XCTAssertNil(lines.first { $0.key == "carbs" })
+        XCTAssertFalse(lines[1].isOverTarget)
+        XCTAssertEqual(
+            lines[1].accessibilityText,
+            "Protein, 95 of 150 grams, 63 percent"
+        )
+    }
+
+    func testManifestStripLineMarksOverTargetAndSpeaksIt() {
+        let day = NutritionDayTotals(
+            date: "2026-08-13",
+            energyKcal: 6088,
+            proteinG: 95,
+            carbsG: 97,
+            fatG: 454,
+            fiberG: 16,
+            coverageAvg: 1,
+            entryCount: 3
+        )
+        let goal = NutritionSummary.Goal(
+            dailyEnergyKcal: 2000,
+            proteinG: 105,
+            carbsG: 50,
+            fatG: 50,
+            fiberG: 50,
+            effectiveFrom: "2026-01-01",
+            effectiveTo: nil
+        )
+        let lines = NutritionGoalProgress.manifestStripLines(day: day, goal: goal)
+        let fat = lines.first { $0.key == "fat" }
+        XCTAssertEqual(fat?.isOverTarget, true)
+        XCTAssertEqual(
+            fat?.accessibilityText,
+            "Fat, 454 of 50 grams, 908 percent, over target"
+        )
+        let protein = lines.first { $0.key == "protein" }
+        XCTAssertEqual(protein?.isOverTarget, false)
     }
 
     func testManifestStripLinesEmptyWithoutGoal() {

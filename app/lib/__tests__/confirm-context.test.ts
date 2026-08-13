@@ -65,12 +65,17 @@ describe("ConfirmOptions shape", () => {
 				"Your remaining credit balance (non-refundable)",
 			],
 			requireTyped: "delete",
+			requireAcknowledge:
+				"I understand these credits will be deleted and are not refunded",
+			secondaryAction: { label: "Transfer credits" },
 			confirmLabel: "Delete My Account",
 			cancelLabel: "Cancel",
 			variant: "danger",
 		};
 		expect(full.consequences).toHaveLength(2);
 		expect(full.requireTyped).toBe("delete");
+		expect(full.requireAcknowledge).toContain("not refunded");
+		expect(full.secondaryAction?.label).toBe("Transfer credits");
 	});
 
 	it("consequences array is preserved as-is", () => {

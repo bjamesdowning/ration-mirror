@@ -17,7 +17,7 @@ To **switch** which group is active while you work, see *Switching groups*. Invi
 - **Leave group** — **Admins and members** leave the active group from Settings → Danger Zone (or iOS Group Settings). **Owners cannot leave** — transfer ownership first, then leave, or delete the group. You cannot leave a **personal** group.
 - **Transfer credits between orgs** — An **owner** moves credits from a group they own to another group they belong to. Amounts are capped by the source balance.
 - **Org supply planning horizon** — Owners and admins set how many days ahead Manifest meals feed Supply (**1–30**, default **7**) via Supply options or Group Settings. Members see the active window read-only. See *Supply (shopping list)*.
-- **Delete group** — Owners can delete a non-personal group (with confirmation). **Personal** groups are not deleted standalone; removing them requires **account purge**. Deletion removes that group’s kitchen data; members’ **personal nutrition intake** is retained (see *Nutrition goals and tracking*).
+- **Delete group** — Owners can delete a non-personal group (typed confirmation). **Personal** groups are not deleted standalone; removing them requires **account purge**. Deletion removes that group’s kitchen data and **forfeits remaining AI credits** (not refunded). If the group still has credits, the owner must acknowledge forfeiture — or transfer credits to another group first. Members’ **personal nutrition intake** is retained (see *Nutrition goals and tracking*).
 
 ## Membership exit
 

@@ -100,6 +100,12 @@ enum APIError: Error, LocalizedError, Sendable {
         return nil
     }
 
+    /// 400 — group still has credits; client must acknowledge non-refundable forfeiture.
+    var isCreditForfeitUnacknowledged: Bool {
+        guard statusCode == 400 else { return false }
+        return code == "credit_forfeit_unacknowledged"
+    }
+
     /// 403 capacity gate — structured `capacity_exceeded` or string prefix form.
     var isCapacityExceeded: Bool {
         guard statusCode == 403 else { return false }

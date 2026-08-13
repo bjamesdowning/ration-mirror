@@ -12,6 +12,7 @@ export function ConfirmDialog() {
 	const { pending, close } = useConfirm();
 	const dialogRef = useRef<HTMLDialogElement>(null);
 	const [typedValue, setTypedValue] = useState("");
+	const [acknowledged, setAcknowledged] = useState(false);
 
 	useEffect(() => {
 		const dialog = dialogRef.current;
@@ -19,6 +20,7 @@ export function ConfirmDialog() {
 
 		if (pending) {
 			setTypedValue("");
+			setAcknowledged(false);
 			dialog.showModal();
 		} else {
 			dialog.close();
@@ -31,6 +33,11 @@ export function ConfirmDialog() {
 
 	const handleConfirm = () => {
 		close(true);
+	};
+
+	const handleSecondary = () => {
+		pending?.onSecondary?.();
+		close(false);
 	};
 
 	const handleBackdropClick = (e: React.MouseEvent<HTMLDialogElement>) => {
@@ -54,10 +61,14 @@ export function ConfirmDialog() {
 		variant,
 		consequences,
 		requireTyped,
+		requireAcknowledge,
+		secondaryAction,
 	} = pending;
 	const buttonClass = variantButtonClasses[variant ?? "default"];
 	const isTypedGated = !!requireTyped;
 	const isTypedMatch = isTypedConfirmMatch(requireTyped, typedValue);
+	const isAckGated = !!requireAcknowledge;
+	const canConfirm = isTypedMatch && (!isAckGated || acknowledged);
 
 	return (
 		// biome-ignore lint/a11y/useKeyWithClickEvents: Escape is handled by onCancel; backdrop click has no keyboard equivalent
@@ -100,6 +111,22 @@ export function ConfirmDialog() {
 						</div>
 					)}
 
+					{isAckGated && (
+						<label
+							htmlFor="confirm-acknowledge"
+							className="flex items-start gap-3 text-sm text-carbon dark:text-white/80 cursor-pointer"
+						>
+							<input
+								id="confirm-acknowledge"
+								type="checkbox"
+								checked={acknowledged}
+								onChange={(e) => setAcknowledged(e.target.checked)}
+								className="mt-0.5 h-4 w-4 shrink-0 rounded border-platinum accent-danger"
+							/>
+							<span>{requireAcknowledge}</span>
+						</label>
+					)}
+
 					{isTypedGated && (
 						<div className="space-y-1.5">
 							<label
@@ -128,22 +155,33 @@ export function ConfirmDialog() {
 					)}
 				</div>
 
-				<div className="flex gap-3 justify-end px-6 pb-6">
-					<button
-						type="button"
-						onClick={handleCancel}
-						className="px-4 py-2.5 text-sm font-medium text-muted hover:text-carbon dark:hover:text-white border border-platinum dark:border-white/20 rounded-lg transition-colors"
-					>
-						{cancelLabel}
-					</button>
-					<button
-						type="button"
-						onClick={handleConfirm}
-						disabled={!isTypedMatch}
-						className={`px-6 py-2.5 text-sm font-semibold rounded-lg transition-all disabled:opacity-40 disabled:cursor-not-allowed ${buttonClass}`}
-					>
-						{confirmLabel}
-					</button>
+				<div className="flex flex-col gap-3 px-6 pb-6">
+					{secondaryAction && (
+						<button
+							type="button"
+							onClick={handleSecondary}
+							className="w-full px-4 py-2.5 text-sm font-medium text-hyper-green hover:text-hyper-green/80 border border-hyper-green/30 rounded-lg transition-colors"
+						>
+							{secondaryAction.label}
+						</button>
+					)}
+					<div className="flex gap-3 justify-end">
+						<button
+							type="button"
+							onClick={handleCancel}
+							className="px-4 py-2.5 text-sm font-medium text-muted hover:text-carbon dark:hover:text-white border border-platinum dark:border-white/20 rounded-lg transition-colors"
+						>
+							{cancelLabel}
+						</button>
+						<button
+							type="button"
+							onClick={handleConfirm}
+							disabled={!canConfirm}
+							className={`px-6 py-2.5 text-sm font-semibold rounded-lg transition-all disabled:opacity-40 disabled:cursor-not-allowed ${buttonClass}`}
+						>
+							{confirmLabel}
+						</button>
+					</div>
 				</div>
 			</div>
 		</dialog>

@@ -52,8 +52,39 @@ enum NutritionGoalProgress {
 
         var ratio: Double { actual / target }
 
+        var isOverTarget: Bool { ratio > 1 }
+
         var displayText: String {
             "\(Int(actual.rounded())) / \(Int(target.rounded())) \(unit)"
+        }
+
+        var spokenUnit: String {
+            switch unit {
+            case "g": return "grams"
+            case "kcal": return "calories"
+            default: return unit
+            }
+        }
+
+        var accessibilityName: String {
+            switch key {
+            case "energy": return "Calories"
+            case "protein": return "Protein"
+            case "carbs": return "Carbs"
+            case "fat": return "Fat"
+            case "fiber": return "Fiber"
+            default: return label
+            }
+        }
+
+        var accessibilityText: String {
+            let percent = Int((ratio * 100).rounded())
+            var text =
+                "\(accessibilityName), \(Int(actual.rounded())) of \(Int(target.rounded())) \(spokenUnit), \(percent) percent"
+            if isOverTarget {
+                text += ", over target"
+            }
+            return text
         }
     }
 

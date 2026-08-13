@@ -3,6 +3,7 @@ import { z } from "zod";
 import { AIConsentRequiredError } from "./ai-consent.server";
 import { CapacityExceededError } from "./capacity.server";
 import { FeatureEnablementAffirmationError } from "./feature-enablement.server";
+import { CreditForfeitUnacknowledgedError } from "./group-delete-credits";
 import { GroupMembershipError } from "./group-membership.server";
 import { log } from "./logging.server";
 import { NutritionConsentError } from "./nutrition/consent.server";
@@ -238,6 +239,18 @@ export function handleApiError(error: unknown) {
 	// Re-throw RR data() responses so the framework handles them
 	if (isDataWithResponseInit(error)) {
 		throw error;
+	}
+
+	if (error instanceof CreditForfeitUnacknowledgedError) {
+		return data(
+			{
+				error: error.message,
+				code: error.code,
+				credits: error.credits,
+				current: error.credits,
+			},
+			{ status: error.status },
+		);
 	}
 
 	if (error instanceof CapacityExceededError) {

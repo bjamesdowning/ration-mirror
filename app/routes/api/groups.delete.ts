@@ -3,8 +3,10 @@ import { data, redirect } from "react-router";
 import * as schema from "~/db/schema";
 import { requireAuth } from "~/lib/auth.server";
 import { handleApiError } from "~/lib/error-handler";
+import { parseAcknowledgeCreditForfeit } from "~/lib/group-delete-credits";
 import { log, redactId } from "~/lib/logging.server";
 import {
+	assertCreditForfeitAcknowledged,
 	assertNotPersonalGroup,
 	beginOrganizationPurge,
 	PersonalGroupDeleteBlockedError,
@@ -56,6 +58,11 @@ export async function action({ request, context }: Route.ActionArgs) {
 		}
 		throw error;
 	}
+
+	const acknowledged = parseAcknowledgeCreditForfeit(
+		formData.get("acknowledgeCreditForfeit"),
+	);
+	await assertCreditForfeitAcknowledged(env, organizationId, acknowledged);
 
 	log.info("[DeleteGroup] Request to delete org", {
 		orgId: redactId(organizationId),

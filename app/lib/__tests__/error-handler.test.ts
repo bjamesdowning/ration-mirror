@@ -322,6 +322,25 @@ describe("runAdminLoader", () => {
 });
 
 describe("handleApiError", () => {
+	it("returns structured 400 details for CreditForfeitUnacknowledgedError", async () => {
+		const { CreditForfeitUnacknowledgedError } = await import(
+			"~/lib/group-delete-credits"
+		);
+		const result = handleApiError(
+			new CreditForfeitUnacknowledgedError(680),
+		) as unknown as {
+			data: { error: string; code: string; credits: number; current: number };
+			init: { status: number };
+		};
+
+		expect(result.init.status).toBe(400);
+		expect(result.data).toMatchObject({
+			code: "credit_forfeit_unacknowledged",
+			credits: 680,
+			current: 680,
+		});
+	});
+
 	it("returns structured 403 details for CapacityExceededError", () => {
 		const result = handleApiError(
 			new CapacityExceededError({

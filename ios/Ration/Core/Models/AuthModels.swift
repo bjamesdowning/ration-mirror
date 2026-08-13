@@ -213,6 +213,7 @@ struct TransferGroupOwnershipResponse: Codable, Sendable {
 struct DeleteGroupRequest: Encodable, Sendable {
     let organizationId: String
     var confirmSlug: String?
+    var acknowledgeCreditForfeit: Bool?
 }
 
 struct DeleteGroupResponse: Codable, Sendable {

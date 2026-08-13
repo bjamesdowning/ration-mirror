@@ -74,6 +74,38 @@ final class GroupSettingsViewModelTests: XCTestCase {
         XCTAssertFalse(GroupSettingsSupport.canTransferCredits(organizations: noCredits))
     }
 
+    func testRequiresCreditForfeitAckOnlyWhenBalanceIsPositive() {
+        XCTAssertTrue(GroupSettingsSupport.requiresCreditForfeitAck(credits: 680))
+        XCTAssertTrue(GroupSettingsSupport.requiresCreditForfeitAck(credits: 1))
+        XCTAssertFalse(GroupSettingsSupport.requiresCreditForfeitAck(credits: 0))
+    }
+
+    func testIsTypedDeleteConfirmIsCaseInsensitive() {
+        XCTAssertTrue(GroupSettingsSupport.isTypedDeleteConfirm("delete"))
+        XCTAssertTrue(GroupSettingsSupport.isTypedDeleteConfirm("DELETE"))
+        XCTAssertTrue(GroupSettingsSupport.isTypedDeleteConfirm(" Delete "))
+        XCTAssertFalse(GroupSettingsSupport.isTypedDeleteConfirm("delet"))
+        XCTAssertFalse(GroupSettingsSupport.isTypedDeleteConfirm(""))
+    }
+
+    func testGroupDeleteCreditWarningAdvisesTransferWhenPossible() {
+        let withTransfer = GroupSettingsSupport.groupDeleteCreditWarning(credits: 680, canTransfer: true)
+        XCTAssertTrue(withTransfer.contains("680"))
+        XCTAssertTrue(withTransfer.contains("not refunded"))
+        XCTAssertTrue(withTransfer.contains("Transfer"))
+
+        let noTransfer = GroupSettingsSupport.groupDeleteCreditWarning(credits: 12, canTransfer: false)
+        XCTAssertTrue(noTransfer.contains("12"))
+        XCTAssertTrue(noTransfer.contains("not refunded"))
+        XCTAssertFalse(noTransfer.contains("Transfer them to another group"))
+    }
+
+    func testGroupDeleteCreditFooterMentionsBalance() {
+        let footer = GroupSettingsSupport.groupDeleteCreditFooter(credits: 42)
+        XCTAssertTrue(footer.contains("42"))
+        XCTAssertTrue(footer.contains("not refunded"))
+    }
+
     func testMaxTransferAmountCapsAtSourceBalanceAndApiLimit() {
         XCTAssertEqual(GroupSettingsSupport.maxTransferAmount(sourceCredits: 5), 5)
         XCTAssertEqual(GroupSettingsSupport.maxTransferAmount(sourceCredits: 50_000), 10_000)

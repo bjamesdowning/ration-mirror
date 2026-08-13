@@ -48,6 +48,14 @@ import {
 	buildWebFlagContext,
 	isFeatureEnabled,
 } from "~/lib/feature-flags/flags.server";
+import {
+	CREDIT_FORFEIT_ACKNOWLEDGE_LABEL,
+	CREDIT_FORFEIT_UNACKNOWLEDGED,
+	groupDeleteCreditConsequence,
+	groupDeleteCreditFooter,
+	groupDeleteCreditWarning,
+	requiresCreditForfeitAck,
+} from "~/lib/group-delete-credits";
 import { log } from "~/lib/logging.server";
 import { getTodayISO } from "~/lib/manifest-dates";
 import { getActiveNutritionGoal } from "~/lib/nutrition/persist.server";
@@ -651,6 +659,7 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 			if (hash === "api" || hash === "connected-agents") return "developer";
 			if (hash === "nutrition-goals" || hash === "feature-enablement")
 				return "preferences";
+			if (hash === "transfer-credits") return "group";
 			const valid: SectionId[] = [
 				"account",
 				"group",
@@ -832,6 +841,17 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 							}
 							accountDeletion={loaderData.accountDeletion}
 							tierExpiresAt={loaderData.tierExpiresAt}
+							credits={loaderData.credits}
+							canTransferCredits={
+								requiresCreditForfeitAck(loaderData.credits) &&
+								userMemberships.length >= 2
+							}
+							onTransferCredits={() => {
+								if (typeof window !== "undefined") {
+									window.history.replaceState(null, "", "#transfer-credits");
+								}
+								setActiveSection("group");
+							}}
 						/>
 					)}
 				</div>
@@ -1232,6 +1252,16 @@ function GroupSection({
 	const [groupImageError, setGroupImageError] = useState(
 		"Unable to upload group image.",
 	);
+
+	useEffect(() => {
+		if (typeof window === "undefined") return;
+		if (window.location.hash !== "#transfer-credits") return;
+		requestAnimationFrame(() => {
+			document
+				.getElementById("transfer-credits")
+				?.scrollIntoView({ behavior: "smooth", block: "start" });
+		});
+	}, []);
 	// Optimistic override until loader revalidation returns new logo
 	const [pendingUploadUrl, setPendingUploadUrl] = useState<string | null>(null);
 	const [isUploadingGroupImage, setIsUploadingGroupImage] = useState(false);
@@ -2394,6 +2424,9 @@ function DangerSection({
 	transferRecipientEligibility,
 	accountDeletion,
 	tierExpiresAt,
+	credits,
+	canTransferCredits,
+	onTransferCredits,
 }: {
 	isOwner: boolean;
 	organizationId: string;
@@ -2410,6 +2443,9 @@ function DangerSection({
 	>;
 	accountDeletion: ReturnType<typeof evaluateAccountDeletionEligibility>;
 	tierExpiresAt: Date | string | null;
+	credits: number;
+	canTransferCredits: boolean;
+	onTransferCredits: () => void;
 }) {
 	const { confirm } = useConfirm();
 	const navigate = useNavigate();
@@ -2460,6 +2496,14 @@ function DangerSection({
 		typeof deleteGroupFetcher.data?.error === "string"
 			? deleteGroupFetcher.data.error
 			: undefined;
+	const deleteNeedsCreditAck =
+		deleteGroupFetcher.data?.code === CREDIT_FORFEIT_UNACKNOWLEDGED;
+
+	useEffect(() => {
+		if (deleteNeedsCreditAck) {
+			revalidator.revalidate();
+		}
+	}, [deleteNeedsCreditAck, revalidator]);
 
 	const leaveGroupError =
 		typeof leaveGroupFetcher.data?.error === "string"
@@ -2770,6 +2814,11 @@ function DangerSection({
 									meals, lists). You will be sent to the group switcher
 									immediately. This cannot be undone.
 								</p>
+								{requiresCreditForfeitAck(credits) && (
+									<p className="text-sm text-warning mb-4 max-w-md">
+										{groupDeleteCreditFooter(credits)}
+									</p>
+								)}
 								{deleteGroupError && (
 									<p className="text-sm text-danger mb-3 max-w-md">
 										{deleteGroupError}
@@ -2779,18 +2828,34 @@ function DangerSection({
 									type="button"
 									disabled={isDeletingGroup}
 									onClick={async () => {
+										const hasCredits = requiresCreditForfeitAck(credits);
 										if (
 											!(await confirm({
 												title: "Delete this group permanently?",
-												message:
-													"All members will lose access immediately. This cannot be undone.",
+												message: hasCredits
+													? `${groupDeleteCreditWarning(credits, canTransferCredits)} All members will lose access immediately. This cannot be undone.`
+													: "All members will lose access immediately. This cannot be undone.",
 												consequences: [
 													"All shared inventory items",
 													"All meal plans and recipes",
 													"All supply lists",
 													"All member invitations and access",
+													...(hasCredits
+														? [groupDeleteCreditConsequence(credits)]
+														: []),
 												],
 												requireTyped: "delete",
+												requireAcknowledge: hasCredits
+													? CREDIT_FORFEIT_ACKNOWLEDGE_LABEL
+													: undefined,
+												secondaryAction:
+													hasCredits && canTransferCredits
+														? { label: "Transfer credits" }
+														: undefined,
+												onSecondary:
+													hasCredits && canTransferCredits
+														? onTransferCredits
+														: undefined,
 												confirmLabel: "Delete Group",
 												variant: "danger",
 											}))
@@ -2798,6 +2863,9 @@ function DangerSection({
 											return;
 										const formData = new FormData();
 										formData.set("organizationId", organizationId);
+										if (hasCredits) {
+											formData.set("acknowledgeCreditForfeit", "true");
+										}
 										deleteGroupFetcher.submit(formData, {
 											method: "post",
 											action: "/api/groups/delete",
@@ -2930,7 +2998,7 @@ function TransferCreditsSection({
 	if (!canShow) return null;
 
 	return (
-		<div className="glass-panel rounded-xl p-6">
+		<div id="transfer-credits" className="glass-panel rounded-xl p-6">
 			<h3 className="text-xs text-label text-muted mb-1">Transfer Credits</h3>
 			<p className="text-sm text-muted mb-4">
 				Move credits from groups you own to other groups you belong to.

@@ -49,6 +49,28 @@ enum GroupSettingsSupport {
         return ownerWithCredits && organizations.count >= 2
     }
 
+    static func requiresCreditForfeitAck(credits: Int) -> Bool {
+        credits > 0
+    }
+
+    static func isTypedDeleteConfirm(_ text: String) -> Bool {
+        text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "delete"
+    }
+
+    static func groupDeleteCreditWarning(credits: Int, canTransfer: Bool) -> String {
+        if canTransfer {
+            return "This group has \(credits) credits. Credits belong to the group and are not refunded. Transfer them to another group first, or they will be permanently deleted with this group."
+        }
+        return "This group has \(credits) credits. They will be permanently deleted and are not refunded."
+    }
+
+    static func groupDeleteCreditFooter(credits: Int) -> String {
+        "This group has \(credits) credits. Transfer them above before deleting, or they will be permanently deleted and not refunded."
+    }
+
+    static let creditForfeitAcknowledgeLabel =
+        "I understand these credits will be deleted and are not refunded"
+
     /// Clamps a transfer amount to `[1, min(sourceCredits, 10_000)]`.
     static func clampedTransferAmount(_ amount: Int, sourceCredits: Int) -> Int {
         let maxAmount = min(max(sourceCredits, 1), 10_000)

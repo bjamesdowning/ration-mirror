@@ -3,6 +3,11 @@ import { drizzle } from "drizzle-orm/d1";
 import * as schema from "~/db/schema";
 import { purgeCopilotConversationsForOrganization } from "~/lib/copilot/purge.server";
 import { retryOnD1Contention } from "~/lib/error-handler";
+import {
+	CreditForfeitUnacknowledgedError,
+	creditForfeitAckRequired,
+} from "~/lib/group-delete-credits";
+import { checkBalance } from "~/lib/ledger.server";
 import { log, redactId } from "~/lib/logging.server";
 import {
 	isPersonalOrganization,
@@ -56,6 +61,21 @@ export async function assertNotPersonalGroup(
 	if (!org) return;
 	if (isPersonalOrganization(org, ownerUserId)) {
 		throw new PersonalGroupDeleteBlockedError();
+	}
+}
+
+/**
+ * Group credits are kitchen-owned and destroyed with the org (no refund).
+ * Owners may still delete, but a positive balance requires an explicit ack.
+ */
+export async function assertCreditForfeitAcknowledged(
+	env: Env,
+	organizationId: string,
+	acknowledged: boolean,
+): Promise<void> {
+	const credits = await checkBalance(env, organizationId);
+	if (creditForfeitAckRequired(credits, acknowledged)) {
+		throw new CreditForfeitUnacknowledgedError(credits);
 	}
 }
 

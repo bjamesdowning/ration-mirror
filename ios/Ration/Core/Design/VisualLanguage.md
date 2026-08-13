@@ -15,7 +15,8 @@ Symbol-first UI patterns for Ration native. Piloted on Supply (v1.4.4), rolled o
 
 | Component | File | Usage |
 |-----------|------|-------|
-| `ThinProgressBar` | `ThinProgressBar.swift` | Supply shopping progress |
+| `ThinProgressBar` | `ThinProgressBar.swift` | Supply shopping progress; Manifest calorie goal |
+| `MacroProgressDial` | `MacroProgressDial.swift` | Manifest protein / carbs / fat / fiber vs daily goals |
 | `IconFAB` / `IconFABButton` | `IconFAB.swift` | Cargo, Galley, Manifest, Hub scan |
 | `SlotGlyphView` | `SlotGlyph.swift` | Manifest meal-plan rows |
 | `SyncIndicatorIcon` | `SyncIndicator.swift` | Offline/stale toolbar affordance |

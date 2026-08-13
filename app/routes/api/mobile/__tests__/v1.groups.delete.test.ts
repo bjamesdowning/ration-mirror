@@ -6,6 +6,7 @@ const checkRateLimit = vi.fn();
 const findFirstMember = vi.fn();
 const findFirstOrg = vi.fn();
 const assertNotPersonalGroup = vi.fn();
+const assertCreditForfeitAcknowledged = vi.fn();
 const beginOrganizationPurge = vi.fn();
 
 vi.mock("~/lib/mobile/auth.server", () => ({
@@ -35,6 +36,8 @@ vi.mock("~/lib/organizations.server", () => {
 	return {
 		assertNotPersonalGroup: (...args: unknown[]) =>
 			assertNotPersonalGroup(...args),
+		assertCreditForfeitAcknowledged: (...args: unknown[]) =>
+			assertCreditForfeitAcknowledged(...args),
 		beginOrganizationPurge: (...args: unknown[]) =>
 			beginOrganizationPurge(...args),
 		PersonalGroupDeleteBlockedError,
@@ -74,6 +77,7 @@ describe("POST /api/mobile/v1/groups/delete", () => {
 			findFirstMember,
 			findFirstOrg,
 			assertNotPersonalGroup,
+			assertCreditForfeitAcknowledged,
 			beginOrganizationPurge,
 			waitUntil,
 		]) {
@@ -95,6 +99,7 @@ describe("POST /api/mobile/v1/groups/delete", () => {
 		findFirstMember.mockResolvedValue({ role: "owner" });
 		findFirstOrg.mockResolvedValue({ slug: "home-kitchen" });
 		assertNotPersonalGroup.mockResolvedValue(undefined);
+		assertCreditForfeitAcknowledged.mockResolvedValue(undefined);
 		beginOrganizationPurge.mockResolvedValue({ jobId: "job-1" });
 	});
 
@@ -157,5 +162,49 @@ describe("POST /api/mobile/v1/groups/delete", () => {
 			} as never),
 		).rejects.toMatchObject({ init: { status: 403 } });
 		expect(beginOrganizationPurge).not.toHaveBeenCalled();
+	});
+
+	it("returns 400 when remaining credits are not acknowledged", async () => {
+		const { CreditForfeitUnacknowledgedError } = await import(
+			"~/lib/group-delete-credits"
+		);
+		assertCreditForfeitAcknowledged.mockRejectedValue(
+			new CreditForfeitUnacknowledgedError(680),
+		);
+		const { action } = await import("~/routes/api/mobile/v1.groups.delete");
+		const result = (await action({
+			request: deleteRequest(),
+			context: ctx,
+			params: {},
+		} as never)) as unknown as {
+			data: { code: string; credits: number };
+			init: { status: number };
+		};
+		expect(result.init.status).toBe(400);
+		expect(result.data).toMatchObject({
+			code: "credit_forfeit_unacknowledged",
+			credits: 680,
+		});
+		expect(beginOrganizationPurge).not.toHaveBeenCalled();
+	});
+
+	it("begins purge when credit forfeiture is acknowledged", async () => {
+		const { action } = await import("~/routes/api/mobile/v1.groups.delete");
+		const result = (await action({
+			request: deleteRequest({
+				organizationId: orgId,
+				acknowledgeCreditForfeit: true,
+			}),
+			context: ctx,
+			params: {},
+		} as never)) as { success: boolean };
+
+		expect(result.success).toBe(true);
+		expect(assertCreditForfeitAcknowledged).toHaveBeenCalledWith(
+			env,
+			orgId,
+			true,
+		);
+		expect(beginOrganizationPurge).toHaveBeenCalled();
 	});
 });

@@ -8,6 +8,7 @@ import {
 	requireMobileActiveGroup,
 } from "~/lib/mobile/auth.server";
 import {
+	assertCreditForfeitAcknowledged,
 	assertNotPersonalGroup,
 	beginOrganizationPurge,
 	PersonalGroupDeleteBlockedError,
@@ -44,7 +45,8 @@ export async function action({ request, context }: Route.ActionArgs) {
 			return handleApiError(parsed.error);
 		}
 
-		const { organizationId, confirmSlug } = parsed.data;
+		const { organizationId, confirmSlug, acknowledgeCreditForfeit } =
+			parsed.data;
 
 		const membership = await db.query.member.findFirst({
 			where: (m, { and, eq }) =>
@@ -79,6 +81,12 @@ export async function action({ request, context }: Route.ActionArgs) {
 			}
 			throw error;
 		}
+
+		await assertCreditForfeitAcknowledged(
+			env,
+			organizationId,
+			acknowledgeCreditForfeit === true,
+		);
 
 		log.info("[MobileDeleteGroup] Request to delete org", {
 			orgId: redactId(organizationId),

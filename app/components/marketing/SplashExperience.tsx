@@ -7,17 +7,15 @@ import {
 	ScanLine,
 	Users,
 } from "lucide-react";
-import { useState } from "react";
 import { Link } from "react-router";
 import {
 	APP_STORE_URL,
 	HELP_DOCS_URL,
 	YOUTUBE_CHANNEL_URL,
 } from "~/lib/marketing";
-import { ExplainerTourButton, ExplainerVideoDialog } from "./ExplainerVideo";
+import { ExplainerVideo } from "./ExplainerVideo";
 import { Reveal } from "./Reveal";
 import { SplashFuelStory } from "./SplashFuelStory";
-import { SplashHeroCanvas } from "./SplashHeroCanvas";
 import { SplashKitchens } from "./SplashKitchens";
 import { SplashLoop } from "./SplashLoop";
 import { SplashStickyCta } from "./SplashStickyCta";
@@ -278,8 +276,6 @@ function CapabilityProof() {
 }
 
 export function SplashExperience() {
-	const [tourOpen, setTourOpen] = useState(false);
-
 	return (
 		<>
 			<section className="splash-hero" aria-labelledby="splash-title">
@@ -324,12 +320,11 @@ export function SplashExperience() {
 							or start free on the web
 						</a>
 					</div>
-					<ExplainerTourButton onClick={() => setTourOpen(true)} />
 					<a href="#how-it-works" className="splash-scroll-cue">
 						See how the loop works <ArrowDown aria-hidden size={15} />
 					</a>
 				</div>
-				<SplashHeroCanvas />
+				<ExplainerVideo />
 			</section>
 			<WhyRation />
 			<SplashLoop />
@@ -337,10 +332,6 @@ export function SplashExperience() {
 			<SplashKitchens />
 			<Interfaces />
 			<CapabilityProof />
-			<ExplainerVideoDialog
-				open={tourOpen}
-				onClose={() => setTourOpen(false)}
-			/>
 			<SplashStickyCta />
 		</>
 	);

@@ -1,7 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-	HERO_BEAT_MS,
-	HERO_BEATS,
 	LOOP_STAGES,
 	loopStageIndex,
 	stageShowsFuel,
@@ -24,14 +22,6 @@ describe("splash-story", () => {
 		expect(stageShowsFuel("supply")).toBe(false);
 		expect(stageShowsFuel("manifest")).toBe(true);
 		expect(stageShowsFuel("dock")).toBe(true);
-	});
-
-	it("sequences a 10–12s hero loop across kitchen then fuel", () => {
-		expect(HERO_BEATS).toHaveLength(7);
-		expect(HERO_BEATS[0]?.id).toBe("scan");
-		expect(HERO_BEATS.at(-1)?.id).toBe("fuel");
-		expect(HERO_BEATS.length * HERO_BEAT_MS).toBeGreaterThanOrEqual(10_000);
-		expect(HERO_BEATS.length * HERO_BEAT_MS).toBeLessThanOrEqual(12_000);
 	});
 
 	it("resolves loop stage indexes for scroll sync", () => {

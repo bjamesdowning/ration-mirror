@@ -1,5 +1,3 @@
-export const HERO_BEAT_MS = 1600;
-
 export const LOOP_STAGES = [
 	{
 		id: "cargo",
@@ -45,18 +43,6 @@ export const LOOP_STAGES = [
 ] as const;
 
 export type LoopStageId = (typeof LOOP_STAGES)[number]["id"];
-
-export const HERO_BEATS = [
-	{ id: "scan", label: "Scan a receipt" },
-	{ id: "cargo", label: "Stock lands in Cargo" },
-	{ id: "galley", label: "Meals match what's here" },
-	{ id: "manifest", label: "The week fills in" },
-	{ id: "supply", label: "Shop only the gaps" },
-	{ id: "cook", label: "Cook deducts stock" },
-	{ id: "fuel", label: "Daily Fuel updates" },
-] as const;
-
-export type HeroBeatId = (typeof HERO_BEATS)[number]["id"];
 
 const FUEL_STAGE_IDS: ReadonlySet<LoopStageId> = new Set(["manifest", "dock"]);
 

@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import type { HeroBeatId, LoopStageId } from "~/lib/splash-story";
+import type { LoopStageId } from "~/lib/splash-story";
 
 export function SplashPhone({
 	children,
@@ -136,23 +136,6 @@ function SupplyScreen() {
 	);
 }
 
-function ScanScreen() {
-	return (
-		<>
-			<StatusBar title="Scan" />
-			<div className="splash-os-scan">
-				<div className="splash-os-receipt">
-					<p>Chicken thighs</p>
-					<p>Greek yogurt</p>
-					<p>Baby spinach</p>
-					<p>Lemons</p>
-				</div>
-				<span className="splash-os-scanline" />
-			</div>
-		</>
-	);
-}
-
 function CookScreen() {
 	return (
 		<>
@@ -170,55 +153,14 @@ function CookScreen() {
 	);
 }
 
-function FuelScreen() {
+export function SplashKitchenScreen({ stage }: { stage: LoopStageId }) {
 	return (
-		<>
-			<StatusBar title="Daily Fuel" />
-			<div className="splash-os-fuel">
-				<div className="splash-os-kcal">
-					<strong>1,240</strong>
-					<span>/ 2,000 kcal</span>
-					<div className="splash-os-meter" data-fill="62">
-						<span />
-					</div>
-				</div>
-				<div className="splash-os-macros">
-					<span>
-						<em>P</em> 96g
-					</span>
-					<span>
-						<em>C</em> 118g
-					</span>
-					<span>
-						<em>F</em> 41g
-					</span>
-				</div>
-				<small>From meals you cooked. Only you see this.</small>
-			</div>
-		</>
-	);
-}
-
-export function SplashKitchenScreen({
-	beat,
-	stage,
-}: {
-	beat?: HeroBeatId;
-	stage?: LoopStageId;
-}) {
-	const key = beat ?? stage ?? "cargo";
-
-	return (
-		<div className="splash-os" data-screen={key}>
-			{key === "scan" ? <ScanScreen /> : null}
-			{key === "cargo" ? <CargoScreen /> : null}
-			{key === "galley" ? <GalleyScreen /> : null}
-			{key === "manifest" ? (
-				<ManifestScreen showFuel={stage === "manifest"} />
-			) : null}
-			{key === "supply" ? <SupplyScreen /> : null}
-			{key === "cook" || key === "dock" ? <CookScreen /> : null}
-			{key === "fuel" ? <FuelScreen /> : null}
+		<div className="splash-os" data-screen={stage}>
+			{stage === "cargo" ? <CargoScreen /> : null}
+			{stage === "galley" ? <GalleyScreen /> : null}
+			{stage === "manifest" ? <ManifestScreen showFuel /> : null}
+			{stage === "supply" ? <SupplyScreen /> : null}
+			{stage === "dock" ? <CookScreen /> : null}
 		</div>
 	);
 }

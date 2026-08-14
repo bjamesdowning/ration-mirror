@@ -731,11 +731,6 @@
   }
 }
 
-@keyframes splashScan {
-  0% { transform: translateX(0); }
-  70%, 100% { transform: translateX(540%); }
-}
-
 @media (prefers-reduced-motion: reduce) {
   .splash-page *,
   .splash-page *::before,
@@ -1107,8 +1102,21 @@
   }
 
   .splash-story-step {
+    display: none;
     min-height: 0;
-    padding-block: 2.5rem;
+    padding-block: 1.5rem;
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+
+  .splash-story-step[data-active="true"] {
+    display: flex;
+    transform: none;
+  }
+
+  .splash-story-step[hidden] {
+    display: none !important;
   }
 
   .splash-interface {
@@ -1349,7 +1357,6 @@
 
   .splash-os,
   .splash-kitchen-panel,
-  .splash-os-scanline,
   .splash-fuel-fill {
     animation: none !important;
     transition: none !important;
@@ -1368,89 +1375,90 @@
   margin-top: 0.08em;
 }
 
-.splash-tour-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.55rem;
-  min-height: 2.75rem;
-  margin-top: 1.15rem;
-  color: var(--text-muted);
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  background: transparent;
+.splash-video {
+  width: min(100%, 20rem);
+  justify-self: center;
+  margin: 0;
+}
+
+.splash-video-frame {
+  position: relative;
+  overflow: hidden;
+  aspect-ratio: 9 / 16;
+  border: 0.5rem solid #111111;
+  border-radius: 2.5rem;
+  background: #111111;
+  box-shadow: 0 2.5rem 7rem color-mix(in srgb, var(--text-primary) 20%, transparent);
+}
+
+.splash-video-frame iframe,
+.splash-video-facade,
+.splash-video-facade img,
+.splash-video-scrim {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.splash-video-frame iframe {
   border: 0;
-  padding: 0;
+}
+
+.splash-video-facade {
   cursor: pointer;
+  border: 0;
+  background: #111111;
+  padding: 0;
 }
 
-.splash-tour-link:hover {
-  color: var(--text-primary);
+.splash-video-facade img {
+  object-fit: cover;
 }
 
-.splash-tour-link:focus-visible {
-  outline: 3px solid rgba(0, 224, 136, 0.35);
-  outline-offset: 3px;
+.splash-video-scrim {
+  background:
+    linear-gradient(to top, rgba(17, 17, 17, 0.58), transparent 45%),
+    radial-gradient(circle at center, transparent 0, rgba(17, 17, 17, 0.08) 68%);
+  transition: background 180ms ease;
 }
 
-.splash-tour-play {
-  width: 1.45rem;
-  height: 1.45rem;
+.splash-video-play {
+  position: absolute;
+  inset: 50% auto auto 50%;
+  width: 4.5rem;
+  aspect-ratio: 1;
   display: grid;
   place-items: center;
-  border-radius: 999px;
+  border-radius: 50%;
   background: #00E088;
   color: #111111;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 0 0.75rem rgba(0, 224, 136, 0.14);
+  transition: transform 180ms ease, box-shadow 180ms ease;
 }
 
-.splash-hero-canvas {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.85rem;
-  justify-self: center;
+.splash-video-facade:hover .splash-video-play {
+  transform: translate(-50%, -50%) scale(1.06);
+  box-shadow: 0 0 0 1rem rgba(0, 224, 136, 0.12);
 }
 
-.splash-hero-canvas .splash-phone,
-.splash-hero-canvas-caption,
-.splash-hero-beats {
-  position: relative;
-  z-index: 1;
-  flex-shrink: 0;
+.splash-video-facade:focus-visible {
+  outline: 3px solid #00E088;
+  outline-offset: -0.75rem;
 }
 
-.splash-hero-canvas-caption {
+.splash-video figcaption {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  justify-content: center;
+  gap: 0.55rem;
+  margin-top: 1rem;
   color: var(--text-muted);
   font-size: 0.67rem;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-}
-
-.splash-hero-beats {
-  display: flex;
-  gap: 0.35rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.splash-hero-beats li {
-  width: 0.45rem;
-  height: 0.45rem;
-  border-radius: 999px;
-  background: var(--border-color);
-  transition: background var(--splash-micro) var(--splash-ease),
-    transform var(--splash-micro) var(--splash-ease);
-}
-
-.splash-hero-beats li[data-active="true"] {
-  background: #00E088;
-  transform: scale(1.25);
 }
 
 .splash-phone {
@@ -1525,8 +1533,7 @@
 }
 
 .splash-os-list li,
-.splash-os-card,
-.splash-os-receipt {
+.splash-os-card {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1570,8 +1577,7 @@
 
 .splash-os-card p,
 .splash-os-card small,
-.splash-os-footnote,
-.splash-os-fuel small {
+.splash-os-footnote {
   color: var(--text-muted);
   font-size: 0.6rem;
   line-height: 1.45;
@@ -1597,7 +1603,6 @@
   width: 83%;
 }
 
-.splash-os[data-screen="fuel"] .splash-os-meter > span,
 .splash-fuel-kcal-meter[data-active="true"] > span {
   width: 62%;
 }
@@ -1623,27 +1628,6 @@
   background: color-mix(in srgb, #00E088 18%, var(--bg-surface));
   color: var(--text-primary);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, #00E088 45%, transparent);
-}
-
-.splash-os-scan {
-  position: relative;
-  overflow: hidden;
-  flex: 1;
-}
-
-.splash-os-receipt {
-  flex-direction: column;
-  align-items: stretch;
-  min-height: 11rem;
-}
-
-.splash-os-scanline {
-  position: absolute;
-  inset: 0 auto auto 0;
-  width: 100%;
-  height: 18%;
-  background: linear-gradient(to bottom, transparent, rgba(0, 224, 136, 0.28), transparent);
-  animation: splashScan 2.4s ease-in-out infinite;
 }
 
 .splash-os-delta {
@@ -1676,47 +1660,6 @@
   color: #00E088;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-}
-
-.splash-os-fuel {
-  display: flex;
-  flex-direction: column;
-  gap: 0.85rem;
-}
-
-.splash-os-kcal strong {
-  color: var(--text-primary);
-  font-size: 1.35rem;
-}
-
-.splash-os-kcal span {
-  color: var(--text-muted);
-  font-size: 0.62rem;
-}
-
-.splash-os-macros {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.4rem;
-}
-
-.splash-os-macros span {
-  display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
-  border-radius: 0.7rem;
-  background: var(--bg-surface);
-  padding: 0.45rem;
-  color: var(--text-primary);
-  font-size: 0.62rem;
-  font-weight: 700;
-}
-
-.splash-os-macros em {
-  color: #00E088;
-  font-style: normal;
-  font-size: 0.5rem;
-  letter-spacing: 0.06em;
 }
 
 .splash-loop-rail {
@@ -1981,64 +1924,6 @@
   display: none;
 }
 
-.splash-tour-dialog {
-  width: min(42rem, calc(100vw - 1.5rem));
-  max-width: 42rem;
-  padding: 0;
-  border: 0;
-  background: transparent;
-}
-
-.splash-tour-dialog::backdrop {
-  background: rgba(17, 17, 17, 0.62);
-  backdrop-filter: blur(10px);
-}
-
-.splash-tour-panel {
-  overflow: hidden;
-  border: 1px solid var(--border-color);
-  border-radius: 1.35rem;
-  background: var(--bg-primary);
-}
-
-.splash-tour-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  padding: 0.85rem 1rem;
-  color: var(--text-primary);
-  font-size: 0.78rem;
-  font-weight: 700;
-}
-
-.splash-tour-close {
-  display: grid;
-  place-items: center;
-  width: 2.25rem;
-  height: 2.25rem;
-  border: 0;
-  border-radius: 0.7rem;
-  background: var(--bg-surface);
-  color: var(--text-primary);
-  cursor: pointer;
-}
-
-.splash-tour-frame {
-  position: relative;
-  aspect-ratio: 9 / 16;
-  max-height: min(72vh, 36rem);
-  background: #111111;
-}
-
-.splash-tour-frame iframe {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  border: 0;
-}
-
 @media (max-width: 900px) {
   .splash-hero {
     min-height: auto;
@@ -2046,10 +1931,8 @@
     padding-bottom: 3rem;
   }
 
-  .splash-hero-canvas {
-    width: min(100%, 16rem);
-    max-height: none;
-    overflow: visible;
+  .splash-video {
+    width: min(100%, 18rem);
   }
 
   .splash-phone {
@@ -2066,15 +1949,14 @@
 
   .splash-loop-rail {
     display: flex;
-    position: sticky;
-    z-index: 6;
-    top: 4.15rem;
+    position: relative;
+    z-index: 1;
+    top: auto;
     gap: 0.4rem;
     overflow-x: auto;
     margin: 0 -1.5rem 1.25rem;
     padding: 0.65rem 1.5rem;
     background: color-mix(in srgb, var(--bg-primary) 92%, transparent);
-    backdrop-filter: blur(14px);
     scrollbar-width: none;
   }
 
@@ -2140,12 +2022,13 @@
     display: none;
   }
 
-  .splash-tour-link {
-    width: 100%;
+  .splash-video {
+    width: min(84vw, 17rem);
   }
 
-  .splash-hero-canvas {
-    max-height: none;
+  .splash-video-frame {
+    border-width: 0.4rem;
+    border-radius: 2.1rem;
   }
 
   .splash-phone-compact {

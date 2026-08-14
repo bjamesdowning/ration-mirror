@@ -10,6 +10,8 @@ import { LOOP_STAGES, stageShowsFuel } from "~/lib/splash-story";
 import { Reveal } from "./Reveal";
 import { SplashKitchenScreen, SplashPhone } from "./SplashKitchenScreen";
 
+const COMPACT_QUERY = "(max-width: 900px)";
+
 const stageIcons = {
 	cargo: PackageSearch,
 	galley: CookingPot,
@@ -20,12 +22,20 @@ const stageIcons = {
 
 export function SplashLoop() {
 	const [activeIndex, setActiveIndex] = useState(0);
+	const [isCompact, setIsCompact] = useState(false);
 	const stageRefs = useRef<Array<HTMLElement | null>>([]);
 	const active = LOOP_STAGES[activeIndex] ?? LOOP_STAGES[0];
 
 	useEffect(() => {
-		if (!("IntersectionObserver" in window)) return;
-		const isCompact = window.matchMedia("(max-width: 900px)").matches;
+		const media = window.matchMedia(COMPACT_QUERY);
+		const sync = () => setIsCompact(media.matches);
+		sync();
+		media.addEventListener("change", sync);
+		return () => media.removeEventListener("change", sync);
+	}, []);
+
+	useEffect(() => {
+		if (isCompact || !("IntersectionObserver" in window)) return;
 		const observer = new IntersectionObserver(
 			(entries) => {
 				const visible = entries
@@ -37,7 +47,7 @@ export function SplashLoop() {
 				}
 			},
 			{
-				rootMargin: isCompact ? "-28% 0px -48% 0px" : "-30% 0px -45% 0px",
+				rootMargin: "-30% 0px -45% 0px",
 				threshold: [0.15, 0.5, 0.8],
 			},
 		);
@@ -46,9 +56,13 @@ export function SplashLoop() {
 			if (stage) observer.observe(stage);
 		}
 		return () => observer.disconnect();
-	}, []);
+	}, [isCompact]);
 
-	const scrollToStage = (index: number) => {
+	const selectStage = (index: number) => {
+		if (window.matchMedia(COMPACT_QUERY).matches) {
+			setActiveIndex(index);
+			return;
+		}
 		stageRefs.current[index]?.scrollIntoView({
 			behavior: "smooth",
 			block: "center",
@@ -80,7 +94,7 @@ export function SplashLoop() {
 						type="button"
 						aria-current={activeIndex === index}
 						data-active={activeIndex === index}
-						onClick={() => scrollToStage(index)}
+						onClick={() => selectStage(index)}
 					>
 						{stage.number} {stage.title}
 					</button>
@@ -113,6 +127,7 @@ export function SplashLoop() {
 								ref={(node) => {
 									stageRefs.current[index] = node;
 								}}
+								hidden={isCompact && activeIndex !== index}
 								data-stage-index={index}
 								data-active={activeIndex === index}
 								className="splash-story-step"

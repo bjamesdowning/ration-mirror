@@ -30,7 +30,6 @@ test.describe("home", () => {
 			"src",
 			/https:\/\/www\.youtube-nocookie\.com\/embed\/yWXekcWGQQA/,
 		);
-		await page.getByRole("button", { name: "Close explainer video" }).click();
 		await expect(
 			page.getByRole("heading", {
 				name: /One loop: Cargo.*Galley.*Manifest.*Supply.*Dock/i,

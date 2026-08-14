@@ -4,7 +4,6 @@ import SwiftUI
 /// never touches Cargo, other members' data, or shared plan state.
 struct ManifestPlateUpSheet: View {
     let entry: ManifestEntry
-    var hasIntakeConsent: Bool
     /// Returns an error message on failure, or `nil` on success.
     let onSave: (_ servings: Double, _ notes: String?, _ amount: Double, _ unit: IntakeLoggedUnit) async -> String?
     var onRemove: (() async -> Void)?
@@ -22,12 +21,10 @@ struct ManifestPlateUpSheet: View {
 
     init(
         entry: ManifestEntry,
-        hasIntakeConsent: Bool,
         onSave: @escaping (_ servings: Double, _ notes: String?, _ amount: Double, _ unit: IntakeLoggedUnit) async -> String?,
         onRemove: (() async -> Void)? = nil
     ) {
         self.entry = entry
-        self.hasIntakeConsent = hasIntakeConsent
         self.onSave = onSave
         self.onRemove = onRemove
         let initialServings = entry.personalIntake?.servings ?? 1.0
@@ -43,6 +40,7 @@ struct ManifestPlateUpSheet: View {
     }
 
     private var notesEnabled: Bool { env.session.clientFlags.isNutritionIntakeNotesEnabled }
+    private var hasIntakeConsent: Bool { env.nutritionConsent.hasActiveIntakeConsent }
     private var massUnit: IntakeLoggedUnit {
         IntakeAmount.massUnit(forDisplayMode: env.unitDisplayMode.mode)
     }
@@ -108,9 +106,13 @@ struct ManifestPlateUpSheet: View {
                         unit: $unit,
                         servings: $servings,
                         gramsPerServing: entry.gramsPerServing,
-                        massUnit: massUnit,
-                        enabled: hasIntakeConsent
+                        massUnit: massUnit
                     )
+                } header: {
+                    Text("How much did you eat?")
+                }
+
+                Section {
                     if hasAnyNutritionEstimate {
                         IntakeMacroPreview(
                             energyKcal: estimatedEnergyKcal,
@@ -127,6 +129,8 @@ struct ManifestPlateUpSheet: View {
                             unavailableMessage: "Nutrition unavailable for this meal."
                         )
                     }
+                } header: {
+                    Text("This portion")
                 } footer: {
                     if hasAnyNutritionEstimate {
                         Text("Estimates scale with portion. Saving logs these nutrients to your private intake.")
@@ -173,6 +177,16 @@ struct ManifestPlateUpSheet: View {
             .sheet(isPresented: $showingFeatureEnablement) {
                 PrivacySettingsView()
             }
+            .task {
+                await refreshConsentIfNeeded()
+            }
+        }
+    }
+
+    @MainActor
+    private func refreshConsentIfNeeded() async {
+        if env.nutritionConsent.consents.isEmpty || env.nutritionConsent.syncedAt == nil {
+            try? await env.nutritionConsent.refresh(api: env.api, snapshots: env.snapshots)
         }
     }
 

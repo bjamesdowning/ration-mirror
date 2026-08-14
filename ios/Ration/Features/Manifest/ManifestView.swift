@@ -147,7 +147,6 @@ struct ManifestView: View {
             .sheet(item: $pendingEatEntry) { entry in
                 ManifestPlateUpSheet(
                     entry: entry,
-                    hasIntakeConsent: model.manifest?.intakeConsentGranted ?? false,
                 onSave: { servings, notes, amount, unit in
                     await handleLogServing(
                         entry,

@@ -27,7 +27,7 @@ Flags off: Manifest nutrition chrome is unchanged (no preference strip).
 **Cook / Log split (when enabled for your account):**
 
 - **Cook** — Shared household action: deducts Cargo once and marks the plan entry *Prepared*. Does **not** write personal nutrition.
-- **Log my serving** / **Edit serving** — Private to you. Opens plate-up for **how much you ate**: fraction chips (¼ ⅓ ½ ¾ 1 1½ 2), a typed amount (0.01–100 servings), and optional **g / oz** when the meal has recipe-ingredient mass (`gramsPerServing`). Macros are `perServing × servings`. Mass is ingredient grams, not cooked plated weight. Records a snapshot on your private intake row (including the unit you used, for edit round-trip).
+- **Log my serving** / **Edit serving** — Private to you. Opens plate-up for **how much you ate**: type any amount (0.01–100 servings) or use the stepper; optional **g / oz** when the meal has recipe-ingredient mass (`gramsPerServing`). Macros are `perServing × servings` and update live. Mass is ingredient grams, not cooked plated weight. Records a snapshot on your private intake row (including the unit you used, for edit round-trip).
 - **Explicit Macro Tracking** — First personal log requires Macro Tracking to be enabled in Settings → Feature enablement when that section is shown (versioned nutrition purposes under the hood). Consent is **not** an inline Eat field and is not implied by Cook, Prepared status, or saving goals.
 - **Remove my log** — Clears your personal intake for that entry without undoing Cook/Prepared.
 

@@ -58,6 +58,8 @@ export { sha256Hex } from "./hash";
 export {
 	amountFromServings,
 	canLogIntakeByMass,
+	clampedIntakeResolve,
+	clampedIntakeStep,
 	clampIntakeServings,
 	coerceIntakeLoggedUnit,
 	formatIntakeServings,

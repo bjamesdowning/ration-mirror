@@ -9,54 +9,32 @@ struct IntakeAmountEditor: View {
     var enabled: Bool = true
 
     private var massEnabled: Bool { IntakeAmount.canLogByMass(gramsPerServing) }
-    private var step: Double { IntakeAmount.step(for: unit) }
     private var servingHint: String? {
         guard massEnabled, let gramsPerServing else { return nil }
         return "1 serving ≈ \(Int(gramsPerServing.rounded())) g from recipe ingredients"
     }
 
+    private var unitLabel: String {
+        unit == .serving ? "servings" : unit.rawValue
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("How much did you eat?")
-                .font(Typography.caption())
-                .foregroundStyle(Theme.muted)
-                .textCase(.uppercase)
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(IntakeAmount.presets, id: \.label) { preset in
-                        let selected = unit == .serving && abs(servings - preset.value) < 0.005
-                        Button(preset.label) {
-                            apply(amount: preset.value, unit: .serving)
-                        }
-                        .buttonStyle(.bordered)
-                        .tint(selected ? Theme.hyperGreen : Theme.muted)
-                        .disabled(!enabled)
-                    }
-                }
-            }
-            HStack(spacing: 8) {
-                Button {
-                    apply(amount: IntakeAmount.roundLoggedAmount(amount - step, unit: unit), unit: unit)
-                } label: {
-                    Text("−")
-                        .font(Typography.mono(22))
-                        .frame(minWidth: 44, minHeight: 44)
-                }
-                .disabled(!enabled)
+            HStack(spacing: 12) {
                 TextField("Amount", value: amountBinding, format: .number)
                     .keyboardType(.decimalPad)
-                    .multilineTextAlignment(.center)
-                    .font(Typography.mono(18))
+                    .multilineTextAlignment(.trailing)
+                    .font(Typography.mono(22))
                     .disabled(!enabled)
                     .accessibilityLabel("Amount eaten")
-                Button {
-                    apply(amount: IntakeAmount.roundLoggedAmount(amount + step, unit: unit), unit: unit)
-                } label: {
-                    Text("+")
-                        .font(Typography.mono(22))
-                        .frame(minWidth: 44, minHeight: 44)
-                }
-                .disabled(!enabled)
+                    .accessibilityIdentifier("manifest.eat.amount")
+                Text(unitLabel)
+                    .rationCaption()
+                    .foregroundStyle(Theme.muted)
+                Stepper("Adjust amount eaten", onIncrement: { applyStep(1) }, onDecrement: { applyStep(-1) })
+                    .labelsHidden()
+                    .disabled(!enabled)
+                    .fixedSize()
             }
             if massEnabled {
                 Picker("Unit", selection: unitBinding) {
@@ -65,6 +43,7 @@ struct IntakeAmountEditor: View {
                 }
                 .pickerStyle(.segmented)
                 .disabled(!enabled)
+                .accessibilityLabel("Amount unit")
             }
             if let servingHint {
                 Text(servingHint)
@@ -97,12 +76,24 @@ struct IntakeAmountEditor: View {
         )
     }
 
+    private func applyStep(_ direction: Int) {
+        let resolved = IntakeAmount.clampedStep(
+            amount: amount,
+            unit: unit,
+            direction: direction,
+            gramsPerServing: gramsPerServing
+        )
+        amount = resolved.loggedAmount
+        unit = resolved.loggedUnit
+        servings = resolved.servings
+    }
+
     private func apply(amount nextAmount: Double, unit nextUnit: IntakeLoggedUnit) {
-        guard let resolved = IntakeAmount.resolve(
+        let resolved = IntakeAmount.clampedResolve(
             amount: nextAmount,
             unit: nextUnit,
             gramsPerServing: gramsPerServing
-        ) else { return }
+        )
         amount = resolved.loggedAmount
         unit = resolved.loggedUnit
         servings = resolved.servings

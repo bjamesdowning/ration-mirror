@@ -313,7 +313,7 @@ separate explicit consent path (in-form Save; grant must leave goals consent **a
 
 **Cross-org personal diary (iOS 1.4.15, flag `nutritionCrossOrgDiary`):** NutritionStore cache is user-global across kitchen switches when the flag is on. Manifest `dayIntakeRows` powers the day intake log (kitchen name chips); per-entry `personalIntake` markers stay active-kitchen scoped.
 
-**Eat macros + optional notes (iOS 1.4.9):** Shared `IntakeMacroPreview` on Manifest Eat and Cargo Quick Eat. Optional private notes (≤280) when `nutritionIntakeNotes` / `nutrition-intake-notes` is on. Hub/Manifest decode hardened for string aggregates and ISO `personalIntake.occurredAt`.
+**Eat macros + optional notes (iOS 1.4.9 / quantity 1.4.29):** Shared `IntakeMacroPreview` on Manifest Eat and Cargo Quick Eat. Eat amount is a decimal field plus system `Stepper` (0.01–100 servings; g/oz when recipe mass is known) — no fraction chips. Optional private notes (≤280) when `nutritionIntakeNotes` / `nutrition-intake-notes` is on. Hub/Manifest decode hardened for string aggregates and ISO `personalIntake.occurredAt`. Galley Cook → Eat reads live Macro Tracking consent from `NutritionConsentStore`.
 
 **Nutrition goals + cargo override (iOS):** Nutrition Goals uses in-form Save (enabled when ≥1 target and Macro Tracking is on). Soft-gates to Feature enablement when Macro Tracking is off. Cargo/Scan nutrition
 editors only send `user_override` when macros are explicitly edited — qty/unit-only saves

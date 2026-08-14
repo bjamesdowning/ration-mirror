@@ -86,6 +86,58 @@ enum IntakeAmount {
         }
     }
 
+    /// Always returns a value inside servings bounds (0.01...100). Out-of-range
+    /// input clamps to the nearest valid bound instead of failing.
+    static func clampedResolve(
+        amount: Double,
+        unit: IntakeLoggedUnit,
+        gramsPerServing: Double?
+    ) -> (servings: Double, loggedAmount: Double, loggedUnit: IntakeLoggedUnit) {
+        if let resolved = resolve(amount: amount, unit: unit, gramsPerServing: gramsPerServing) {
+            return resolved
+        }
+        let rawServings: Double
+        if unit == .serving {
+            rawServings = amount
+        } else if canLogByMass(gramsPerServing),
+                  let gramsPerServing,
+                  let grams = grams(fromAmount: max(amount, 0), unit: unit),
+                  gramsPerServing > 0
+        {
+            rawServings = grams / gramsPerServing
+        } else {
+            rawServings = amount
+        }
+        let finite = rawServings.isFinite && rawServings > 0 ? rawServings : servingsMin
+        let clampedServings = min(max(normalizeServings(finite), servingsMin), servingsMax)
+        let loggedUnit: IntakeLoggedUnit =
+            unit == .serving || canLogByMass(gramsPerServing) ? unit : .serving
+        if let logged = self.amount(
+            fromServings: clampedServings,
+            unit: loggedUnit,
+            gramsPerServing: gramsPerServing
+        ), let resolved = resolve(
+            amount: logged,
+            unit: loggedUnit,
+            gramsPerServing: gramsPerServing
+        ) {
+            return resolved
+        }
+        return (clampedServings, clampedServings, .serving)
+    }
+
+    /// Step `direction` (−1 or +1) by the unit's increment, clamped to servings bounds.
+    static func clampedStep(
+        amount: Double,
+        unit: IntakeLoggedUnit,
+        direction: Int,
+        gramsPerServing: Double?
+    ) -> (servings: Double, loggedAmount: Double, loggedUnit: IntakeLoggedUnit) {
+        let dir = direction >= 0 ? 1.0 : -1.0
+        let proposed = roundLoggedAmount(amount + dir * step(for: unit), unit: unit)
+        return clampedResolve(amount: proposed, unit: unit, gramsPerServing: gramsPerServing)
+    }
+
     static func formatServings(_ value: Double) -> String {
         let snapped = normalizeServings(value)
         for preset in presets where abs(snapped - preset.value) < 0.005 {

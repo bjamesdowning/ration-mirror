@@ -224,6 +224,9 @@ export function PlateUpDialog({
 
 				{isEat ? (
 					<div className="rounded-lg border border-platinum p-3 space-y-2">
+						<p className="text-[10px] font-mono font-semibold uppercase tracking-widest text-muted">
+							This portion
+						</p>
 						{hasMacroPreview ? (
 							<>
 								{scaledEnergy != null ? (

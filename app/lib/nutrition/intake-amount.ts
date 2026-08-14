@@ -200,6 +200,87 @@ export function roundLoggedAmount(
 	return normalizeIntakeServings(amount);
 }
 
+export type ClampedIntakeAmount = {
+	servings: number;
+	amount: number;
+	unit: IntakeLoggedUnit;
+};
+
+/**
+ * Always returns a value inside servings bounds (0.01...100). Out-of-range
+ * input clamps to the nearest valid bound instead of failing.
+ */
+export function clampedIntakeResolve(
+	amount: number,
+	unit: IntakeLoggedUnit,
+	gramsPerServing: number | null,
+): ClampedIntakeAmount {
+	const resolved = resolveIntakeAmount({ amount, unit }, { gramsPerServing });
+	if (resolved.ok) {
+		return {
+			servings: resolved.servings,
+			amount: resolved.loggedAmount,
+			unit: resolved.loggedUnit,
+		};
+	}
+
+	let rawServings: number;
+	if (unit === "serving") {
+		rawServings = amount;
+	} else if (canLogIntakeByMass(gramsPerServing) && gramsPerServing != null) {
+		const grams = gramsFromLoggedMass(Math.max(amount, 0), unit);
+		rawServings =
+			grams != null && gramsPerServing > 0
+				? grams / gramsPerServing
+				: INTAKE_SERVINGS_MIN;
+	} else {
+		rawServings = amount;
+	}
+
+	const { servings } = clampIntakeServings(
+		Number.isFinite(rawServings) && rawServings > 0
+			? rawServings
+			: INTAKE_SERVINGS_MIN,
+	);
+	const loggedUnit: IntakeLoggedUnit =
+		unit === "serving" || canLogIntakeByMass(gramsPerServing)
+			? unit
+			: "serving";
+	const loggedAmount = amountFromServings(
+		servings,
+		loggedUnit,
+		gramsPerServing,
+	);
+	if (loggedAmount != null) {
+		const again = resolveIntakeAmount(
+			{ amount: loggedAmount, unit: loggedUnit },
+			{ gramsPerServing },
+		);
+		if (again.ok) {
+			return {
+				servings: again.servings,
+				amount: again.loggedAmount,
+				unit: again.loggedUnit,
+			};
+		}
+	}
+	return { servings, amount: servings, unit: "serving" };
+}
+
+/** Step `direction` (−1 or +1) by the unit's increment, clamped to servings bounds. */
+export function clampedIntakeStep(
+	amount: number,
+	unit: IntakeLoggedUnit,
+	direction: 1 | -1,
+	gramsPerServing: number | null,
+): ClampedIntakeAmount {
+	const proposed = roundLoggedAmount(
+		amount + direction * intakeAmountStep(unit),
+		unit,
+	);
+	return clampedIntakeResolve(proposed, unit, gramsPerServing);
+}
+
 /**
  * Clamp plate-up servings to intake schema bounds (Quick Eat derived servings).
  * Does not snap to half-units.

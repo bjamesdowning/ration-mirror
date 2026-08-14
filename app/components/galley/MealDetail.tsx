@@ -220,6 +220,10 @@ export function MealDetail({
 		error?: string;
 	}>();
 	const intakeFetcher = useFetcher();
+	const featuresFetcher = useFetcher<{
+		macroTracking?: boolean;
+		consents?: Array<{ purpose: string; state: string }>;
+	}>();
 	const cookPartialToast = useToast({ duration: 5000 });
 	const lastCookFeedback = useRef<unknown>(null);
 	const lastEatOffer = useRef<unknown>(null);
@@ -233,7 +237,6 @@ export function MealDetail({
 		mealFatGPerServing?: number | null;
 		gramsPerServing?: number | null;
 	} | null>(null);
-	const [intakeConsentGranted, setIntakeConsentGranted] = useState(false);
 	const isCooking = fetcher.state !== "idle";
 	const isDeleting = deleteFetcher.state !== "idle";
 	const isCooked = fetcher.data?.result?.cooked === true;
@@ -261,6 +264,11 @@ export function MealDetail({
 	const nutritionIntakeNotes =
 		rootData?.clientFlags?.nutritionIntakeNotes === true;
 	const offerEatEnabled = cookLogSplit && nutritionManifest;
+	const intakeConsentGranted =
+		featuresFetcher.data?.macroTracking === true ||
+		featuresFetcher.data?.consents?.some(
+			(consent) => consent.purpose === "intake" && consent.state === "active",
+		) === true;
 
 	const handleServingsChange = (next: number) => {
 		const clamped = Math.max(MIN_SERVINGS, Math.min(MAX_SERVINGS, next));
@@ -403,14 +411,11 @@ export function MealDetail({
 	}, [fetcher.state, fetcher.data, offerEatEnabled]);
 
 	useEffect(() => {
-		if (intakeFetcher.state !== "idle") return;
-		const data = intakeFetcher.data as
-			| { intakeConsentGranted?: boolean; error?: string }
-			| undefined;
-		if (data?.intakeConsentGranted === true && !data.error) {
-			setIntakeConsentGranted(true);
+		if (!offerEatEnabled) return;
+		if (featuresFetcher.state === "idle" && featuresFetcher.data == null) {
+			featuresFetcher.load("/api/privacy/features");
 		}
-	}, [intakeFetcher.state, intakeFetcher.data]);
+	}, [featuresFetcher, offerEatEnabled]);
 
 	const cookSuccessMessage = isCooked
 		? fetcher.data?.result?.partialCook

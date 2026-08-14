@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
 	amountFromServings,
 	canLogIntakeByMass,
+	clampedIntakeResolve,
+	clampedIntakeStep,
 	clampIntakeServings,
 	formatIntakeServings,
 	formatLoggedIntake,
@@ -192,5 +194,61 @@ describe("display helpers", () => {
 	it("converts servings back to grams", () => {
 		expect(amountFromServings(0.5, "g", 310)).toBe(155);
 		expect(amountFromServings(1, "serving", 310)).toBe(1);
+	});
+});
+
+describe("clampedIntakeResolve / clampedIntakeStep", () => {
+	it("keeps a valid serving amount", () => {
+		expect(clampedIntakeResolve(1.5, "serving", null)).toEqual({
+			servings: 1.5,
+			amount: 1.5,
+			unit: "serving",
+		});
+	});
+
+	it("clamps below minimum and above maximum", () => {
+		expect(clampedIntakeResolve(0, "serving", null)).toEqual({
+			servings: INTAKE_SERVINGS_MIN,
+			amount: INTAKE_SERVINGS_MIN,
+			unit: "serving",
+		});
+		expect(clampedIntakeResolve(150, "serving", null)).toEqual({
+			servings: INTAKE_SERVINGS_MAX,
+			amount: INTAKE_SERVINGS_MAX,
+			unit: "serving",
+		});
+	});
+
+	it("steps a quarter serving up", () => {
+		expect(clampedIntakeStep(1, "serving", 1, null)).toEqual({
+			servings: 1.25,
+			amount: 1.25,
+			unit: "serving",
+		});
+	});
+
+	it("does not drop below the minimum when stepping down", () => {
+		expect(clampedIntakeStep(0.25, "serving", -1, null).servings).toBe(
+			INTAKE_SERVINGS_MIN,
+		);
+	});
+
+	it("does not exceed the maximum when stepping up", () => {
+		expect(clampedIntakeStep(100, "serving", 1, null).servings).toBe(
+			INTAKE_SERVINGS_MAX,
+		);
+	});
+
+	it("steps grams and converts back to servings", () => {
+		const result = clampedIntakeStep(180, "g", 1, 310);
+		expect(result.unit).toBe("g");
+		expect(result.amount).toBe(190);
+		expect(result.servings).toBeCloseTo(190 / 310, 4);
+	});
+
+	it("scales macros with the stepped quantity", () => {
+		const stepped = clampedIntakeStep(1, "serving", 1, null);
+		expect(500 * stepped.servings).toBe(625);
+		expect(20 * stepped.servings).toBe(25);
 	});
 });

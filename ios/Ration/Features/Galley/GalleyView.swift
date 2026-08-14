@@ -29,7 +29,6 @@ struct GalleyView: View {
     @State private var editingMeal: Meal?
     @State private var paywallContext: PaywallContext?
     @State private var pendingEatEntry: ManifestEntry?
-    @State private var intakeConsentGranted = false
 
     private var organizationId: String? {
         env.session.activeOrganizationId
@@ -300,7 +299,6 @@ struct GalleyView: View {
         .sheet(item: $pendingEatEntry) { entry in
             ManifestPlateUpSheet(
                 entry: entry,
-                hasIntakeConsent: intakeConsentGranted,
                 onSave: { servings, notes, amount, unit in
                     await logServingFromGalley(
                         entry: entry,
@@ -331,9 +329,6 @@ struct GalleyView: View {
                 amount: amount,
                 unit: unit
             )
-            if result.intakeConsentGranted == true {
-                intakeConsentGranted = true
-            }
             if let dayTotals = result.dayTotals, !dayTotals.isEmpty {
                 env.configureNutritionScope()
                 let day = LocalDay.todayISO()

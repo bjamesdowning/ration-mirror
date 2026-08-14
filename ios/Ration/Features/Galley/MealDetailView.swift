@@ -23,7 +23,6 @@ struct MealDetailView: View {
     @State private var cookConfirmationMessage: String?
     @State private var showCookConfirmation = false
     @State private var pendingEatEntry: ManifestEntry?
-    @State private var intakeConsentGranted = false
     @Environment(\.dismiss) private var dismiss
 
     private var cookLogSplitEnabled: Bool {
@@ -190,7 +189,6 @@ struct MealDetailView: View {
         .sheet(item: $pendingEatEntry) { entry in
             ManifestPlateUpSheet(
                 entry: entry,
-                hasIntakeConsent: intakeConsentGranted,
                 onSave: { servings, notes, amount, unit in
                     await logServing(
                         entry: entry,
@@ -444,9 +442,6 @@ struct MealDetailView: View {
                 amount: amount,
                 unit: unit
             )
-            if result.intakeConsentGranted == true {
-                intakeConsentGranted = true
-            }
             if let dayTotals = result.dayTotals, !dayTotals.isEmpty {
                 env.configureNutritionScope()
                 let day = LocalDay.todayISO()

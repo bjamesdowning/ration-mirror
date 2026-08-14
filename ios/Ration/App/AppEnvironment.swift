@@ -164,6 +164,7 @@ final class AppEnvironment {
                 scope: privateScope
             )
             await nutritionConsent.restoreCache(snapshots: snapshots)
+            try? await nutritionConsent.refresh(api: api, snapshots: snapshots)
         }
     }
 }

@@ -83,6 +83,7 @@ import {
 	InsufficientCreditsError,
 } from "../app/lib/ledger.server";
 import { log, redactId } from "../app/lib/logging.server";
+import { fetchLogContext, runWithOpsEnv } from "../app/lib/ops-context.server";
 import { checkRateLimit } from "../app/lib/rate-limiter.server";
 import { APP_VERSION } from "../app/lib/version";
 
@@ -1048,170 +1049,187 @@ export default {
 		env: Cloudflare.Env,
 		ctx: ExecutionContext,
 	): Promise<Response> {
-		const url = new URL(request.url);
-		if (request.method === "OPTIONS") {
-			if (!isTrustedOrigin(request, env)) {
-				return new Response(null, { status: 403 });
-			}
-			return new Response(null, {
-				status: 204,
-				headers: corsHeaders(request, env),
-			});
-		}
-		if (!url.pathname.startsWith("/copilot")) {
-			return new Response("Not Found", { status: 404 });
-		}
-		if (!isTrustedOrigin(request, env)) {
-			return new Response("Forbidden", { status: 403 });
-		}
+		return runWithOpsEnv(
+			env,
+			async () => {
+				const url = new URL(request.url);
+				if (request.method === "OPTIONS") {
+					if (!isTrustedOrigin(request, env)) {
+						return new Response(null, { status: 403 });
+					}
+					return new Response(null, {
+						status: 204,
+						headers: corsHeaders(request, env),
+					});
+				}
+				if (!url.pathname.startsWith("/copilot")) {
+					return new Response("Not Found", { status: 404 });
+				}
+				if (!isTrustedOrigin(request, env)) {
+					return new Response("Forbidden", { status: 403 });
+				}
 
-		try {
-			const identity = await authenticateCopilot(env, request);
-			const flagContext = buildFlagContext(request, env, {
-				user: { id: identity.userId },
-			});
-			const featureEnablementOn = await isFeatureEnabled(
-				env,
-				"feature-enablement-consent",
-				flagContext,
-			);
-			// Mobile always requires AI consent; web only when feature-enablement-consent is on.
-			if (identity.source === "mobile" || featureEnablementOn) {
-				const settings = await getUserSettings(env.DB, identity.userId);
-				const consentAt = settings.aiConsentAt;
-				if (typeof consentAt !== "string" || consentAt.trim().length === 0) {
+				try {
+					const identity = await authenticateCopilot(env, request);
+					const flagContext = buildFlagContext(request, env, {
+						user: { id: identity.userId },
+					});
+					const featureEnablementOn = await isFeatureEnabled(
+						env,
+						"feature-enablement-consent",
+						flagContext,
+					);
+					// Mobile always requires AI consent; web only when feature-enablement-consent is on.
+					if (identity.source === "mobile" || featureEnablementOn) {
+						const settings = await getUserSettings(env.DB, identity.userId);
+						const consentAt = settings.aiConsentAt;
+						if (
+							typeof consentAt !== "string" ||
+							consentAt.trim().length === 0
+						) {
+							return jsonResponse(
+								request,
+								env,
+								{ error: "ai_consent_required" },
+								{ status: 403 },
+							);
+						}
+					}
+					const enabled = await isFeatureEnabled(
+						env,
+						"ration-copilot",
+						flagContext,
+					);
+					if (!enabled) {
+						return new Response("Not Found", { status: 404 });
+					}
+
+					const rl = await checkRateLimit(
+						env.RATION_KV,
+						"copilot_connect",
+						identity.userId,
+					);
+					if (!rl.allowed) {
+						return jsonResponse(
+							request,
+							env,
+							{ error: "rate_limited" },
+							{
+								status: 429,
+								headers: { "Retry-After": String(rl.retryAfter ?? 5) },
+							},
+						);
+					}
+
+					const conversationId = parseConversationId(url);
+					const charge = await ensureCopilotConversationOpen(
+						env,
+						identity,
+						conversationId,
+						{
+							request,
+							source: identity.source,
+						},
+					);
+					if (charge.mode === "onboarding_briefing") {
+						writeCopilotMetric(
+							env,
+							"onboarding_briefing_started",
+							identity,
+							conversationId,
+						);
+					}
+					const agentName = encodeAgentName({ ...identity, conversationId });
+					ctx.waitUntil(
+						Promise.all(
+							[
+								`copilot:user-conversation:${identity.userId}:${conversationId}`,
+								`copilot:org-conversation:${identity.organizationId}:${conversationId}`,
+							].map((key) =>
+								env.RATION_KV.put(key, agentName, {
+									expirationTtl: 60 * 60 * 24 * 30,
+								}),
+							),
+						),
+					);
+					writeCopilotMetric(
+						env,
+						"conversation_open",
+						identity,
+						conversationId,
+					);
+					const routedUrl = new URL(request.url);
+					// PartyServer resolves the namespace segment via
+					// camelCaseToKebabCase(bindingName). The Durable Object binding is
+					// "PROJECT_THINK", which maps to "project-think". This must match the
+					// binding name (not the class name) or routing returns 400.
+					routedUrl.pathname = `/agents/project-think/${agentName}`;
+					const routedRequest = new Request(routedUrl, request);
+					const response = await routeAgentRequest(routedRequest, env, {
+						cors: true,
+					});
+					return response ?? new Response("Not Found", { status: 404 });
+				} catch (error) {
+					if (error instanceof CopilotNeedsConsentError) {
+						return jsonResponse(
+							request,
+							env,
+							{ error: "copilot_consent_required", resetAt: error.resetAt },
+							{ status: 402 },
+						);
+					}
+					if (error instanceof InsufficientCreditsError) {
+						return jsonResponse(
+							request,
+							env,
+							{ error: "insufficient_credits", required: error.required },
+							{ status: 402 },
+						);
+					}
+					if (
+						error instanceof Error &&
+						error.message === "invalid_conversation_id"
+					) {
+						return jsonResponse(
+							request,
+							env,
+							{ error: "invalid_conversation_id" },
+							{ status: 400 },
+						);
+					}
+					if (
+						error instanceof Error &&
+						(error.message === "copilot_unauthorized" ||
+							error.message.includes("mobile access token"))
+					) {
+						return jsonResponse(
+							request,
+							env,
+							{ error: "unauthorized" },
+							{ status: 401 },
+						);
+					}
+					if (
+						error instanceof Error &&
+						error.message === "copilot_forbidden_org"
+					) {
+						return jsonResponse(
+							request,
+							env,
+							{ error: "forbidden_org" },
+							{ status: 403 },
+						);
+					}
+					log.error("[Copilot] Worker error", error);
 					return jsonResponse(
 						request,
 						env,
-						{ error: "ai_consent_required" },
-						{ status: 403 },
+						{ error: "internal_error" },
+						{ status: 500 },
 					);
 				}
-			}
-			const enabled = await isFeatureEnabled(
-				env,
-				"ration-copilot",
-				flagContext,
-			);
-			if (!enabled) {
-				return new Response("Not Found", { status: 404 });
-			}
-
-			const rl = await checkRateLimit(
-				env.RATION_KV,
-				"copilot_connect",
-				identity.userId,
-			);
-			if (!rl.allowed) {
-				return jsonResponse(
-					request,
-					env,
-					{ error: "rate_limited" },
-					{
-						status: 429,
-						headers: { "Retry-After": String(rl.retryAfter ?? 5) },
-					},
-				);
-			}
-
-			const conversationId = parseConversationId(url);
-			const charge = await ensureCopilotConversationOpen(
-				env,
-				identity,
-				conversationId,
-				{
-					request,
-					source: identity.source,
-				},
-			);
-			if (charge.mode === "onboarding_briefing") {
-				writeCopilotMetric(
-					env,
-					"onboarding_briefing_started",
-					identity,
-					conversationId,
-				);
-			}
-			const agentName = encodeAgentName({ ...identity, conversationId });
-			ctx.waitUntil(
-				Promise.all(
-					[
-						`copilot:user-conversation:${identity.userId}:${conversationId}`,
-						`copilot:org-conversation:${identity.organizationId}:${conversationId}`,
-					].map((key) =>
-						env.RATION_KV.put(key, agentName, {
-							expirationTtl: 60 * 60 * 24 * 30,
-						}),
-					),
-				),
-			);
-			writeCopilotMetric(env, "conversation_open", identity, conversationId);
-			const routedUrl = new URL(request.url);
-			// PartyServer resolves the namespace segment via
-			// camelCaseToKebabCase(bindingName). The Durable Object binding is
-			// "PROJECT_THINK", which maps to "project-think". This must match the
-			// binding name (not the class name) or routing returns 400.
-			routedUrl.pathname = `/agents/project-think/${agentName}`;
-			const routedRequest = new Request(routedUrl, request);
-			const response = await routeAgentRequest(routedRequest, env, {
-				cors: true,
-			});
-			return response ?? new Response("Not Found", { status: 404 });
-		} catch (error) {
-			if (error instanceof CopilotNeedsConsentError) {
-				return jsonResponse(
-					request,
-					env,
-					{ error: "copilot_consent_required", resetAt: error.resetAt },
-					{ status: 402 },
-				);
-			}
-			if (error instanceof InsufficientCreditsError) {
-				return jsonResponse(
-					request,
-					env,
-					{ error: "insufficient_credits", required: error.required },
-					{ status: 402 },
-				);
-			}
-			if (
-				error instanceof Error &&
-				error.message === "invalid_conversation_id"
-			) {
-				return jsonResponse(
-					request,
-					env,
-					{ error: "invalid_conversation_id" },
-					{ status: 400 },
-				);
-			}
-			if (
-				error instanceof Error &&
-				(error.message === "copilot_unauthorized" ||
-					error.message.includes("mobile access token"))
-			) {
-				return jsonResponse(
-					request,
-					env,
-					{ error: "unauthorized" },
-					{ status: 401 },
-				);
-			}
-			if (error instanceof Error && error.message === "copilot_forbidden_org") {
-				return jsonResponse(
-					request,
-					env,
-					{ error: "forbidden_org" },
-					{ status: 403 },
-				);
-			}
-			log.error("[Copilot] Worker error", error);
-			return jsonResponse(
-				request,
-				env,
-				{ error: "internal_error" },
-				{ status: 500 },
-			);
-		}
+			},
+			fetchLogContext(request, "ration-copilot"),
+		);
 	},
 } satisfies ExportedHandler<Cloudflare.Env>;

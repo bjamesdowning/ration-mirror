@@ -98,7 +98,10 @@ describe("processRevenueCatWebhookEvent", () => {
 		expect(result).toEqual({ handled: true, fulfilled: false });
 		expect(mockAddCredits).not.toHaveBeenCalled();
 		expect(warnSpy).toHaveBeenCalledWith(
-			expect.stringContaining("RevenueCat credit pack not fulfilled"),
+			expect.objectContaining({
+				level: "warn",
+				msg: "RevenueCat credit pack not fulfilled",
+			}),
 		);
 		warnSpy.mockRestore();
 	});

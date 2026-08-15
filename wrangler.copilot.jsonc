@@ -5,7 +5,19 @@
 	"compatibility_date": "2026-03-01",
 	"compatibility_flags": ["nodejs_compat"],
 	"observability": {
-		"enabled": true
+		"enabled": true,
+		"logs": {
+			"enabled": true,
+			"invocation_logs": true,
+			"head_sampling_rate": 1
+		},
+		"traces": {
+			"enabled": true,
+			"head_sampling_rate": 0.1
+		}
+	},
+	"version_metadata": {
+		"binding": "CF_VERSION_METADATA"
 	},
 	"routes": [
 		{

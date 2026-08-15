@@ -9,6 +9,7 @@ An AI-powered pantry, meal-planning, and macro-tracking application built as a C
 ## Table of Contents
 
 - [1. Infrastructure Overview](#1-infrastructure-overview)
+  - [1.2 Observability](#12-observability)
 - [2. User Request Lifecycle](#2-user-request-lifecycle)
 - [3. Core User Workflows](#3-core-user-workflows)
   - [3.1 Receipt Scan (Queue + AI Gateway + D1 + R2 + Vectorize)](#31-receipt-scan-queue--ai-gateway--d1--r2--vectorize)
@@ -213,6 +214,7 @@ flowchart TB
 | `PROJECT_THINK` | Durable Object | Copilot-only — one `ProjectThinkAgent` isolate per `{org}:{user}:{tier}:{conversationId}` |
 | `COPILOT_ANALYTICS` | Analytics Engine | Copilot-only — conversation, tool, and billing telemetry (`ration_copilot` dataset) |
 | `RATION_ANALYTICS` | Analytics Engine | Main + MCP Workers — ops counters (`ration_ops` / `ration_ops_dev`): 503, 429, queue retries, Gemini invoke, credit deduct/refund, signup, credit purchase |
+| `CF_VERSION_METADATA` | Version metadata | Worker version id/tag on logs (`ration`, `ration-mcp`, `ration-copilot`) |
 | AI Gateway | External fetch | Proxied LLM calls to Google AI Studio — `gemini-3.5-flash-lite` for scan, generate, plan, import, nutrition estimate |
 | `SCAN_QUEUE` | Queue producer | Enqueue scan jobs; consumer runs AI vision + D1/Vectorize |
 | `MEAL_GENERATE_QUEUE` | Queue producer | Enqueue meal generation jobs; consumer runs LLM + Vectorize verification |
@@ -231,6 +233,12 @@ npx wrangler r2 bucket lifecycle add ration-storage \
 ```
 
 Apply the same rule to `ration-storage-dev` for dev/prod parity. Verify with `npx wrangler r2 bucket lifecycle list ration-storage`. This rule has not yet been applied in this environment — track it as an outstanding operator action, not a code deliverable.
+
+### 1.2 Observability
+
+Workers Logs, Analytics Engine, AI Gateway analytics, and sampled traces — all Cloudflare-native. Structured server logs emit JSON objects via [`app/lib/logging.server.ts`](app/lib/logging.server.ts) so fields (`level`, `msg`, `event`, `cfRay`) are indexed. Traces are enabled at 10% head sampling (`observability.traces` in Wrangler). Field dictionary, Query Builder recipes, redaction rules, and cost notes: [`docs/dev/logging.md`](docs/dev/logging.md). Launch SLOs: [`docs/fin/51-reliability-and-async-jobs.md`](docs/fin/51-reliability-and-async-jobs.md).
+
+There is no Logpush, Tail Worker, or third-party APM. Invocation logs may still include `Authorization` headers (platform limitation); custom `log.*` lines must never add tokens.
 
 **Ration Copilot:** Intercom/Fin has been replaced by the first-party **Ask Ration** experience. Web uses the hub header launcher and [`AskPanel`](app/components/support/AskPanel.tsx); iOS uses native [`AskView`](ios/Ration/Features/Ask/AskView.swift). Both stream over WebSocket to `ration-copilot` at `copilot.ration.mayutic.com`. See [§14 Ration Copilot](#14-ration-copilot) for architecture, auth, billing, tools, and deployment.
 
@@ -1624,7 +1632,7 @@ flowchart TB
 | **AI Gateway** | Managed proxy with queuing, retry, caching, guardrails, spend limits. | Upstream Google AI Studio rate limits. | Centralized `callGemini` client with per-feature `cf-aig-*` headers. Credit system + KV rate limits. Async consumer failures refund credits via `failAiJobWithRefund`. |
 | **R2** | S3-compatible, globally distributed. | Not a hot-path service. | Used only for exports and scan image storage. |
 | **Stripe** | Stripe's infrastructure (99.999% SLA). | Webhook delivery latency. | KV idempotency ensures exactly-once processing. Timestamp validation rejects stale replays. |
-| **Analytics Engine** | Account-scoped datasets; `writeDataPoint` is fire-and-forget. | Query quota / cardinality. | Main+MCP: `RATION_ANALYTICS` → `ration_ops` (503/429/queue/Gemini/credits/signup/credit_purchase). Copilot: `COPILOT_ANALYTICS` → `ration_copilot`. No PII in points. Sibling `monitor` queries these aggregates via the Analytics Engine SQL API. Launch SLOs in [`docs/fin/51`](docs/fin/51-reliability-and-async-jobs.md). |
+| **Analytics Engine** | Account-scoped datasets; `writeDataPoint` is fire-and-forget. | Query quota / cardinality. | Main+MCP: `RATION_ANALYTICS` → `ration_ops` (503/429/queue/Gemini/credits/signup/credit_purchase). Copilot: `COPILOT_ANALYTICS` → `ration_copilot`. No PII in points. Sibling `monitor` queries these aggregates via the Analytics Engine SQL API. Launch SLOs in [`docs/fin/51`](docs/fin/51-reliability-and-async-jobs.md). Indexed JSON logs + sampled traces: [`docs/dev/logging.md`](docs/dev/logging.md). |
 
 ---
 

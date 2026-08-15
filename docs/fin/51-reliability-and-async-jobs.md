@@ -20,7 +20,7 @@ Answer “Are we healthy?” from the Cloudflare dashboard + Analytics Engine wi
 2. **Queues** — monitor depth on `ration-scan`, `ration-meal-generate`, `ration-plan-week`, `ration-import-url` during launch week.
 3. **AI Gateway → ration-gateway** — set a spend limit + notification (hard backstop for Gemini).
 4. **Billing → Billable Usage → Budget alert** — e.g. $50 / $100 projected monthly.
-5. **Notifications** — Workers error-rate alerts; after deploy, optional AE SQL alerts on `ration_ops`.
+5. **Workers Logs + traces** — `ration` / `ration-mcp` / `ration-copilot` Observability. JSON `log.*` fields (`level`, `event`, `cfRay`) plus sampled traces (10%). Recipes: [`docs/dev/logging.md`](../dev/logging.md). No Logpush.
 
 ### Analytics Engine (`ration_ops`)
 
@@ -35,6 +35,19 @@ Main + MCP Workers write low-cardinality counters via `RATION_ANALYTICS` (`app/l
 | `refund` / `credit` | `refund` / `credit_deduct` | Ledger paths |
 
 **No PII** in points (no emails, raw UUIDs, or secrets). Query via Analytics Engine SQL API against dataset `ration_ops` (prod) / `ration_ops_dev` (dev).
+
+### Workers Logs Query Builder
+
+Indexed custom fields after the JSON logger (`level`, `msg`, `event`, `cfRay`). Full dictionary: [`docs/dev/logging.md`](../dev/logging.md).
+
+| Intent | Filter |
+|--------|--------|
+| Errors | `level eq error` |
+| MCP write audit | `event eq mcp_audit` |
+| Queue consumer throw | `event eq queue_consumer_error` |
+| One request | `$workers.event.rayId eq <cf-ray>` |
+
+Traces: 10% of invocations (`observability.traces.head_sampling_rate: 0.1`). Free in beta until 1 Oct 2026; then spans share the Workers Logs event quota. Do not sample logs.
 
 ### SLO signals
 

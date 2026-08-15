@@ -7,13 +7,13 @@ import {
 	detectAndRecordExpiredCargo,
 	purgeExpiredKitchenEvents,
 } from "../app/lib/kitchen-events.server";
-import { log } from "../app/lib/logging.server";
+import { log, redactJobRequestId } from "../app/lib/logging.server";
 import {
 	purgeExpiredNutritionIntake,
 	purgeExpiredNutritionRecomputeJobs,
 } from "../app/lib/nutrition/persist.server";
 import { repairDueNutritionRecomputeJobs } from "../app/lib/nutrition/recompute-consumer.server";
-import { runWithOpsEnv } from "../app/lib/ops-context.server";
+import { fetchLogContext, runWithOpsEnv } from "../app/lib/ops-context.server";
 import { retryFailedPurgeJobs } from "../app/lib/purge-retry-cron.server";
 import { sendReengagementEmails } from "../app/lib/reengagement-cron.server";
 import { emitQueueConsumerError } from "../app/lib/telemetry.server";
@@ -59,37 +59,42 @@ function applySecurityHeaders(response: Response): Response {
 
 export default {
 	async fetch(request, env, ctx) {
-		return runWithOpsEnv(env, async () => {
-			const url = new URL(request.url);
+		return runWithOpsEnv(
+			env,
+			async () => {
+				const url = new URL(request.url);
 
-			// Browser and tooling probes for unknown well-known paths (e.g. Chrome
-			// DevTools, iOS browser detection) are not routed through React Router to
-			// avoid "No route matches URL" errors surfacing as visible error pages.
-			if (
-				url.pathname.startsWith("/.well-known/") &&
-				!isRegisteredWellKnownPath(url.pathname)
-			) {
-				return new Response(null, { status: 404 });
-			}
+				// Browser and tooling probes for unknown well-known paths (e.g. Chrome
+				// DevTools, iOS browser detection) are not routed through React Router to
+				// avoid "No route matches URL" errors surfacing as visible error pages.
+				if (
+					url.pathname.startsWith("/.well-known/") &&
+					!isRegisteredWellKnownPath(url.pathname)
+				) {
+					return new Response(null, { status: 404 });
+				}
 
-			const context = {
-				request,
-				env,
-				waitUntil: ctx.waitUntil.bind(ctx),
-				passThroughOnException: ctx.passThroughOnException.bind(ctx),
-				functionPath: "",
-				params: {},
-				data: {},
-				next: () => Promise.resolve(new Response("Not found", { status: 404 })),
-				cloudflare: {
+				const context = {
+					request,
 					env,
-					ctx,
-					cf: request.cf,
-				},
-			};
-			const response = await handleRequest(context);
-			return applySecurityHeaders(response);
-		});
+					waitUntil: ctx.waitUntil.bind(ctx),
+					passThroughOnException: ctx.passThroughOnException.bind(ctx),
+					functionPath: "",
+					params: {},
+					data: {},
+					next: () =>
+						Promise.resolve(new Response("Not found", { status: 404 })),
+					cloudflare: {
+						env,
+						ctx,
+						cf: request.cf,
+					},
+				};
+				const response = await handleRequest(context);
+				return applySecurityHeaders(response);
+			},
+			fetchLogContext(request, "ration"),
+		);
 	},
 
 	/**
@@ -97,26 +102,41 @@ export default {
 	 * Unknown queues are logged and acked to avoid infinite retries.
 	 */
 	async queue(batch: MessageBatch, env: Env, _ctx: ExecutionContext) {
-		return runWithOpsEnv(env, async () => {
-			const queueName = batch.queue;
-			const handler = AI_QUEUE_HANDLERS[queueName];
+		const queueName = batch.queue;
+		const handler = AI_QUEUE_HANDLERS[queueName];
 
-			for (const msg of batch.messages) {
-				try {
-					if (handler) {
-						await handler(env, msg.body);
-						msg.ack();
-					} else {
-						log.warn("Unknown queue", { queue: queueName });
-						msg.ack(); // ack to avoid infinite retries
+		for (const msg of batch.messages) {
+			await runWithOpsEnv(
+				env,
+				async () => {
+					try {
+						if (handler) {
+							await handler(env, msg.body);
+							msg.ack();
+						} else {
+							log.warn("Unknown queue", {
+								event: "unknown_queue",
+								queue: queueName,
+							});
+							msg.ack(); // ack to avoid infinite retries
+						}
+					} catch (err) {
+						log.error("Queue consumer error", err, {
+							event: "queue_consumer_error",
+							queue: queueName,
+						});
+						emitQueueConsumerError(queueName);
+						msg.retry();
 					}
-				} catch (err) {
-					log.error("Queue consumer error", { queue: queueName, err });
-					emitQueueConsumerError(queueName);
-					msg.retry();
-				}
-			}
-		});
+				},
+				{
+					handler: "queue",
+					worker: "ration",
+					queue: queueName,
+					jobRequestId: redactJobRequestId(msg.body),
+				},
+			);
+		}
 	},
 
 	/**
@@ -133,28 +153,40 @@ export default {
 	 * Cron: "0 3 * * *" (03:00 UTC daily — low-traffic window)
 	 */
 	async scheduled(event: ScheduledController, env: Env, ctx: ExecutionContext) {
+		const cronLog = {
+			handler: "scheduled" as const,
+			worker: "ration",
+			cron: event.cron,
+		};
+		const runCron = (fn: () => Promise<unknown>) =>
+			ctx.waitUntil(runWithOpsEnv(env, fn, cronLog));
+
 		if (event.cron === "* * * * *") {
-			ctx.waitUntil(repairDueNutritionRecomputeJobs(env));
-			ctx.waitUntil(
+			runCron(() => repairDueNutritionRecomputeJobs(env));
+			runCron(() =>
 				purgeExpiredNutritionIntake(env.DB, new Date()).catch((err) => {
-					log.error("[CRON] Nutrition intake purge failed", err);
+					log.error("[CRON] Nutrition intake purge failed", err, {
+						event: "cron_purge_failed",
+					});
 				}),
 			);
-			ctx.waitUntil(
+			runCron(() =>
 				purgeExpiredNutritionRecomputeJobs(env.DB, new Date()).catch((err) => {
-					log.error("[CRON] Nutrition recompute job purge failed", err);
+					log.error("[CRON] Nutrition recompute job purge failed", err, {
+						event: "cron_purge_failed",
+					});
 				}),
 			);
 			return;
 		}
-		ctx.waitUntil(purgeExpiredSessions(env));
-		ctx.waitUntil(purgeExpiredQueueJobs(env));
-		ctx.waitUntil(purgeOrphanAgentKitchens(env));
-		ctx.waitUntil(sendReengagementEmails(env));
-		ctx.waitUntil(retryFailedPurgeJobs(env));
-		ctx.waitUntil(runKitchenEventExpiryDetection(env));
-		ctx.waitUntil(runKitchenEventRetentionPurge(env));
-		ctx.waitUntil(runCargoStatusRefresh(env));
+		runCron(() => purgeExpiredSessions(env));
+		runCron(() => purgeExpiredQueueJobs(env));
+		runCron(() => purgeOrphanAgentKitchens(env));
+		runCron(() => sendReengagementEmails(env));
+		runCron(() => retryFailedPurgeJobs(env));
+		runCron(() => runKitchenEventExpiryDetection(env));
+		runCron(() => runKitchenEventRetentionPurge(env));
+		runCron(() => runCargoStatusRefresh(env));
 	},
 } satisfies ExportedHandler<Env>;
 
@@ -171,7 +203,9 @@ async function purgeExpiredSessions(env: Env): Promise<void> {
 			log.info("[CRON] Purged expired sessions", { deleted });
 		}
 	} catch (err) {
-		log.error("[CRON] Session purge failed", err);
+		log.error("[CRON] Session purge failed", err, {
+			event: "cron_purge_failed",
+		});
 	}
 }
 
@@ -188,7 +222,9 @@ async function purgeExpiredQueueJobs(env: Env): Promise<void> {
 			log.info("[CRON] Purged expired queue jobs", { deleted });
 		}
 	} catch (err) {
-		log.error("[CRON] Queue job purge failed", err);
+		log.error("[CRON] Queue job purge failed", err, {
+			event: "cron_purge_failed",
+		});
 	}
 }
 
@@ -199,7 +235,9 @@ async function runKitchenEventExpiryDetection(env: Env): Promise<void> {
 			log.info("[CRON] Recorded cargo_expired events", { recorded });
 		}
 	} catch (err) {
-		log.error("[CRON] Kitchen event expiry detection failed", err);
+		log.error("[CRON] Kitchen event expiry detection failed", err, {
+			event: "cron_purge_failed",
+		});
 	}
 }
 
@@ -210,7 +248,9 @@ async function runKitchenEventRetentionPurge(env: Env): Promise<void> {
 			log.info("[CRON] Purged expired kitchen events", { deleted });
 		}
 	} catch (err) {
-		log.error("[CRON] Kitchen event retention purge failed", err);
+		log.error("[CRON] Kitchen event retention purge failed", err, {
+			event: "cron_purge_failed",
+		});
 	}
 	// Nutrition intake + recompute-job retention run on the minute cron (bounded batches).
 }
@@ -222,6 +262,8 @@ async function runCargoStatusRefresh(env: Env): Promise<void> {
 			log.info("[CRON] Refreshed stale cargo statuses", { updated });
 		}
 	} catch (err) {
-		log.error("[CRON] Cargo status refresh failed", err);
+		log.error("[CRON] Cargo status refresh failed", err, {
+			event: "cron_purge_failed",
+		});
 	}
 }

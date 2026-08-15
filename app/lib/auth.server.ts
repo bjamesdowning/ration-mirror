@@ -18,11 +18,17 @@ import * as schema from "../db/schema";
 import { buildPersonalOrgRecords } from "./agent/org-records.server";
 import { resolveAppleSocialProvider } from "./apple-web-login.server";
 import {
+	createBetterAuthSecondaryStorage,
+	invalidateBetterAuthSessionCache,
+} from "./auth-secondary-storage.server";
+import { isTransientAuthSessionLookupError } from "./auth-session-lookup.server";
+import {
 	buildMagicLinkEmail,
 	buildWelcomeEmail,
 	sendEmail,
 	shouldSkipEmailSend,
 } from "./email.server";
+import { flattenErrorText, throwServerBusy } from "./error-handler";
 import { log, redactId } from "./logging.server";
 import { magicLinkVerifyToContinueUrl } from "./magic-link-interstitial.server";
 import {
@@ -124,6 +130,11 @@ export function createAuth(env: Cloudflare.Env) {
 				oauthRefreshToken: schema.oauthRefreshToken,
 			},
 		}),
+		// KV read-through cache; D1 remains authoritative for revoke/purge.
+		secondaryStorage: createBetterAuthSecondaryStorage(env.RATION_KV),
+		session: {
+			storeSessionInDatabase: true,
+		},
 		user: {
 			additionalFields: {
 				settings: {
@@ -453,6 +464,10 @@ export async function ensureActiveOrganization(
 					.update(schema.session)
 					.set({ activeOrganizationId: defaultGroupId })
 					.where(eq(schema.session.id, session.session.id));
+				await invalidateBetterAuthSessionCache(
+					env.RATION_KV,
+					session.session.token,
+				);
 
 				log.info("[Auth] Auto-activated default group", {
 					groupId: redactId(defaultGroupId),
@@ -484,6 +499,10 @@ export async function ensureActiveOrganization(
 				.update(schema.session)
 				.set({ activeOrganizationId: personalGroup.id })
 				.where(eq(schema.session.id, session.session.id));
+			await invalidateBetterAuthSessionCache(
+				env.RATION_KV,
+				session.session.token,
+			);
 
 			log.info("[Auth] Auto-activated personal group", {
 				orgId: redactId(personalGroup.id),
@@ -507,9 +526,42 @@ export async function ensureActiveOrganization(
 	return { session };
 }
 
+async function getSessionWithD1Retry(
+	auth: Auth,
+	request: Request,
+): Promise<Awaited<ReturnType<Auth["api"]["getSession"]>>> {
+	const maxAttempts = 3;
+	const delayMs = 100;
+	let lastError: unknown;
+
+	for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+		try {
+			return await auth.api.getSession({ headers: request.headers });
+		} catch (error) {
+			lastError = error;
+			if (
+				!isTransientAuthSessionLookupError(error) ||
+				attempt === maxAttempts
+			) {
+				break;
+			}
+			await new Promise((resolve) => setTimeout(resolve, delayMs * attempt));
+		}
+	}
+
+	if (isTransientAuthSessionLookupError(lastError)) {
+		log.warn("[Auth] Session lookup D1 contention or timeout", {
+			errorMessage: flattenErrorText(lastError),
+		});
+		throwServerBusy();
+	}
+
+	throw lastError;
+}
+
 export async function requireAuth(context: AppLoadContext, request: Request) {
 	const auth = getAuth(context.cloudflare.env);
-	const session = await auth.api.getSession({ headers: request.headers });
+	const session = await getSessionWithD1Retry(auth, request);
 
 	if (!session) {
 		throw redirect("/");
@@ -549,7 +601,7 @@ export async function getSessionForOAuthFlow(
 	request: Request,
 ) {
 	const auth = getAuth(context.cloudflare.env);
-	return auth.api.getSession({ headers: request.headers });
+	return getSessionWithD1Retry(auth, request);
 }
 
 export async function requireAdmin(context: AppLoadContext, request: Request) {

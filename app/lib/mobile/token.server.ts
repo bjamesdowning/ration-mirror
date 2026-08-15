@@ -3,6 +3,7 @@ import { drizzle } from "drizzle-orm/d1";
 import { jwtVerify, SignJWT } from "jose";
 import * as schema from "~/db/schema";
 import { recordLastActiveBillingOrg } from "~/lib/billing-idempotency.server";
+import { retryOnD1Contention } from "~/lib/error-handler";
 import {
 	MOBILE_ACCESS_TTL_SEC,
 	MOBILE_AUTH_CODE_TTL_SEC,
@@ -152,6 +153,15 @@ async function readRefreshGracePair(
  * mint two valid family members (RFC 9700 public-client rotation).
  */
 export async function rotateMobileRefreshToken(
+	env: Cloudflare.Env,
+	refreshToken: string,
+): Promise<MobileTokenPair> {
+	return retryOnD1Contention(() =>
+		rotateMobileRefreshTokenOnce(env, refreshToken),
+	);
+}
+
+async function rotateMobileRefreshTokenOnce(
 	env: Cloudflare.Env,
 	refreshToken: string,
 ): Promise<MobileTokenPair> {

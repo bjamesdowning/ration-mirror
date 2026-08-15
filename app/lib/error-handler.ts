@@ -94,6 +94,16 @@ export function isD1ContentionError(error: unknown): boolean {
 		msg.includes("a timeout occurred") ||
 		msg.includes("request timed out") ||
 		msg.includes("worker exceeded") ||
+		// Cloudflare Debug D1 retryable infra strings
+		// https://developers.cloudflare.com/d1/observability/debug-d1/
+		msg.includes("storage operation exceeded timeout") ||
+		msg.includes("network connection lost") ||
+		msg.includes("object to be reset") ||
+		msg.includes("d1 db is overloaded") ||
+		msg.includes("cannot resolve d1 db") ||
+		msg.includes("replica disconnected") ||
+		msg.includes("internal error in d1") ||
+		msg.includes("internal error while starting up d1") ||
 		// D1 HTTP error codes for timeouts
 		msg.includes("522") ||
 		msg.includes("524")
@@ -161,18 +171,7 @@ export function rethrowRouteLoaderError(error: unknown): never {
 		log.warn("[loader] D1 contention or timeout", {
 			errorMessage: flattenErrorText(error),
 		});
-		emitApiOutcome("503", "server_busy");
-		throw data(
-			{
-				error:
-					"The server is under heavy load. Please wait a moment and try again.",
-				code: "server_busy" as const,
-			},
-			{
-				status: 503,
-				headers: { "Retry-After": "5" },
-			},
-		);
+		throwServerBusy();
 	}
 
 	if (isD1SchemaError(error)) {
@@ -190,6 +189,22 @@ export function rethrowRouteLoaderError(error: unknown): never {
 	}
 
 	throw error;
+}
+
+/** Structured 503 for transient infra load — shared by loaders and auth session lookup. */
+export function throwServerBusy(): never {
+	emitApiOutcome("503", "server_busy");
+	throw data(
+		{
+			error:
+				"The server is under heavy load. Please wait a moment and try again.",
+			code: "server_busy" as const,
+		},
+		{
+			status: 503,
+			headers: { "Retry-After": "5" },
+		},
+	);
 }
 
 /**

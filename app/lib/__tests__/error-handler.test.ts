@@ -80,6 +80,46 @@ describe("isD1ContentionError", () => {
 		expect(isD1ContentionError(new Error("524 a timeout occurred"))).toBe(true);
 	});
 
+	it("returns true for Cloudflare Debug D1 retryable infra strings", () => {
+		expect(
+			isD1ContentionError(
+				new Error(
+					"D1_ERROR: D1 DB storage operation exceeded timeout which caused object to be reset.",
+				),
+			),
+		).toBe(true);
+		expect(isD1ContentionError(new Error("Network connection lost."))).toBe(
+			true,
+		);
+		expect(
+			isD1ContentionError(
+				new Error("Internal error in D1 DB storage caused object to be reset."),
+			),
+		).toBe(true);
+		expect(
+			isD1ContentionError(
+				new Error("D1 DB is overloaded. Requests queued for too long."),
+			),
+		).toBe(true);
+		expect(
+			isD1ContentionError(
+				new Error(
+					"Cannot resolve D1 DB due to transient issue on remote node.",
+				),
+			),
+		).toBe(true);
+		expect(
+			isD1ContentionError(new Error("Replica disconnected from primary.")),
+		).toBe(true);
+		expect(
+			isD1ContentionError(
+				new Error(
+					"Internal error while starting up D1 DB storage caused object to be reset.",
+				),
+			),
+		).toBe(true);
+	});
+
 	it("returns true for SQLITE_RANGE (too many bound parameters)", () => {
 		expect(
 			isD1ContentionError(

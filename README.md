@@ -304,6 +304,7 @@ sequenceDiagram
 **Key design decisions:**
 
 - **Auth instance caching** — The Better Auth instance is cached at module level in [`app/lib/auth.server.ts`](app/lib/auth.server.ts) (keyed on `BETTER_AUTH_SECRET`) to avoid re-constructing the Drizzle adapter and plugin chain on every request within the same isolate lifetime.
+- **Session secondary storage** — Better Auth `secondaryStorage` on `RATION_KV` (prefix `ba:ss:`) caches session lookups; D1 remains authoritative via `storeSessionInDatabase: true`. `getSession` retries transient D1 failures and maps exhausted contention to `503 server_busy` (not logout). Account revoke clears KV session keys alongside D1.
 - **`ensureActiveOrganization()`** — Runs on every authenticated request. If no active org is set on the session, it falls back to the user's `defaultGroupId` preference, then to their personal group. This is transparent to the user and prevents a class of "missing group context" bugs on fresh sessions.
 - **Bot-aware SSR** — The `entry.server.tsx` waits for `allReady` on bot user-agents, ensuring crawlers receive fully rendered HTML. For real users, streaming begins immediately.
 - **`shouldRevalidate` on hub layout** — The `/hub` layout route forces revalidation when `?transaction=success` is in the URL so that tier and credit balance reflect a just-completed Stripe checkout without requiring a hard reload.

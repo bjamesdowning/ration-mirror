@@ -301,6 +301,43 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 	private turnDeflectionMetricEmitted = false;
 	private turnSystemPrompt = "";
 
+	constructor(ctx: DurableObjectState, env: Cloudflare.Env) {
+		super(ctx, env);
+		// Eagerly migrate Think workflow-notification SQLite so concurrent
+		// alarm/drain paths cannot race ahead of lazy CREATE TABLE IF NOT EXISTS.
+		void this.ctx.blockConcurrencyWhile(async () => {
+			this.ctx.storage.sql.exec(`
+				CREATE TABLE IF NOT EXISTS cf_think_workflow_notifications (
+					notification_id TEXT PRIMARY KEY,
+					submission_id TEXT NOT NULL,
+					workflow_name TEXT NOT NULL,
+					workflow_id TEXT NOT NULL,
+					event_type TEXT NOT NULL,
+					payload_json TEXT NOT NULL,
+					attempts INTEGER NOT NULL DEFAULT 0,
+					last_error TEXT,
+					created_at INTEGER NOT NULL,
+					updated_at INTEGER NOT NULL,
+					delivered_at INTEGER
+				)
+			`);
+			try {
+				this.ctx.storage.sql.exec(
+					"ALTER TABLE cf_think_workflow_notifications ADD COLUMN delivered_at INTEGER",
+				);
+			} catch (error) {
+				const message = (
+					error instanceof Error ? error.message : String(error)
+				).toLowerCase();
+				if (!message.includes("duplicate column")) throw error;
+			}
+			this.ctx.storage.sql.exec(`
+				CREATE INDEX IF NOT EXISTS cf_think_workflow_notifications_created_idx
+				ON cf_think_workflow_notifications (delivered_at, created_at, notification_id)
+			`);
+		});
+	}
+
 	private persistUsageConfig(): void {
 		this.configure<CopilotAgentUsageConfig>({
 			totalUsageTokens: this.totalUsageTokens,

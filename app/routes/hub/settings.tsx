@@ -44,6 +44,7 @@ import {
 import { useConfirm } from "~/lib/confirm-context";
 import { toExpiryDate } from "~/lib/date-utils";
 import { getUserDisplayName } from "~/lib/display-name";
+import { runRouteLoader } from "~/lib/error-handler";
 import {
 	buildWebFlagContext,
 	isFeatureEnabled,
@@ -56,7 +57,6 @@ import {
 	groupDeleteCreditWarning,
 	requiresCreditForfeitAck,
 } from "~/lib/group-delete-credits";
-import { log } from "~/lib/logging.server";
 import { getTodayISO } from "~/lib/manifest-dates";
 import { getActiveNutritionGoal } from "~/lib/nutrition/persist.server";
 import { listConnectedAgentGrants } from "~/lib/oauth.server";
@@ -218,7 +218,7 @@ const NAV_ITEMS: { id: SectionId; label: string; icon: React.ReactNode }[] = [
 // ─── Loader ───────────────────────────────────────────────────────────────────
 
 export async function loader(args: Route.LoaderArgs) {
-	try {
+	return runRouteLoader(async () => {
 		const {
 			session: { user: authUser },
 			groupId,
@@ -435,11 +435,7 @@ export async function loader(args: Route.LoaderArgs) {
 			nutritionGoalsEnabled,
 			nutritionGoal,
 		};
-	} catch (error) {
-		log.error("[Settings] Loader failed", error);
-		if (error instanceof Response) throw error;
-		throw data({ error: "Failed to load settings" }, { status: 500 });
-	}
+	});
 }
 
 // ─── Action ───────────────────────────────────────────────────────────────────

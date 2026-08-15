@@ -3,6 +3,7 @@ import { drizzle } from "drizzle-orm/d1";
 import * as schema from "~/db/schema";
 import { evaluateAccountDeletionEligibility } from "~/lib/account-deletion-gate";
 import { revokeAppleTokensForUser } from "~/lib/apple-token-revoke.server";
+import { clearBetterAuthSecondarySessionsForUser } from "~/lib/auth-secondary-storage.server";
 import { reconcileSubscriptionCancelAtPeriodEnd } from "~/lib/billing.server";
 import { purgeCopilotConversationsForUser } from "~/lib/copilot/purge.server";
 import { retryOnD1Contention } from "~/lib/error-handler";
@@ -119,6 +120,15 @@ export async function revokeUserAccess(
 	userId: string,
 ): Promise<void> {
 	const db = drizzle(env.DB, { schema });
+	const sessionRows = await db
+		.select({ token: schema.session.token })
+		.from(schema.session)
+		.where(eq(schema.session.userId, userId));
+	await clearBetterAuthSecondarySessionsForUser(
+		env.RATION_KV,
+		userId,
+		sessionRows.map((row) => row.token),
+	);
 	await db.batch([
 		db.delete(schema.session).where(eq(schema.session.userId, userId)),
 		db
@@ -266,6 +276,15 @@ export async function purgeUserAccount(
 	}
 
 	try {
+		const remainingSessions = await db
+			.select({ token: schema.session.token })
+			.from(schema.session)
+			.where(eq(schema.session.userId, userId));
+		await clearBetterAuthSecondarySessionsForUser(
+			env.RATION_KV,
+			userId,
+			remainingSessions.map((row) => row.token),
+		);
 		await db.batch([
 			db.delete(schema.member).where(eq(schema.member.userId, userId)),
 			db

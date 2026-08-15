@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+	ADMIN_USER_HYDRATION_MAX_IDS,
 	computeLastActiveMs,
 	computeLastLoginMs,
 	DEFAULT_ADMIN_USERS_LIMIT,
@@ -8,7 +9,10 @@ import {
 	resolvePlatform,
 } from "../admin-users";
 import {
+	adminUserHydrationIds,
+	assertBoundedAdminUserIds,
 	buildUserSearchFilter,
+	hydrateAdminUserRows,
 	mergeLoggedInUsers,
 } from "../admin-users.server";
 
@@ -179,5 +183,109 @@ describe("admin user list defaults", () => {
 		expect(DEFAULT_ADMIN_USERS_SORT).toBe("createdAt");
 		expect(DEFAULT_ADMIN_USERS_ORDER).toBe("desc");
 		expect(DEFAULT_ADMIN_USERS_LIMIT).toBe(25);
+	});
+});
+
+describe("adminUserHydrationIds", () => {
+	it("returns null for an empty page so wave 2 is skipped", () => {
+		expect(adminUserHydrationIds([])).toBeNull();
+	});
+
+	it("returns the same ids when within the hydration cap", () => {
+		const ids = ["u1", "u2", "u3"];
+		expect(adminUserHydrationIds(ids)).toEqual(ids);
+	});
+
+	it("accepts the schema max page size", () => {
+		const ids = Array.from(
+			{ length: ADMIN_USER_HYDRATION_MAX_IDS },
+			(_, i) => `u${i}`,
+		);
+		expect(adminUserHydrationIds(ids)).toHaveLength(
+			ADMIN_USER_HYDRATION_MAX_IDS,
+		);
+	});
+
+	it("refuses unbounded id lists", () => {
+		const ids = Array.from(
+			{ length: ADMIN_USER_HYDRATION_MAX_IDS + 1 },
+			(_, i) => `u${i}`,
+		);
+		expect(() => adminUserHydrationIds(ids)).toThrow(
+			/refused 101 ids \(max 100\)/,
+		);
+		expect(() => assertBoundedAdminUserIds(ids)).toThrow(
+			/refused 101 ids \(max 100\)/,
+		);
+	});
+});
+
+describe("hydrateAdminUserRows", () => {
+	const pageRows = [
+		{
+			id: "u1",
+			name: "Alice",
+			email: "alice@test.com",
+			isAdmin: true,
+			createdAt: new Date("2026-01-01T00:00:00Z"),
+			settings: { lastActiveAt: "2026-07-03T12:00:00.000Z" },
+		},
+		{
+			id: "u2",
+			name: "Bob",
+			email: "bob@test.com",
+			isAdmin: false,
+			createdAt: new Date("2026-02-01T00:00:00Z"),
+			settings: null,
+		},
+	];
+
+	it("merges session, mobile, api-key, and settings activity", () => {
+		const result = hydrateAdminUserRows(
+			pageRows,
+			[
+				{
+					userId: "u1",
+					maxLogin: 1_783_120_000,
+					maxActive: 1_700_000_000,
+				},
+			],
+			[{ userId: "u1", maxLogin: 1_783_121_000 }],
+			[{ userId: "u2", maxActive: 1_783_122_000 }],
+		);
+
+		expect(result).toHaveLength(2);
+		expect(result[0].lastLoginAt).toEqual(new Date(1_783_121_000_000));
+		expect(result[0].lastActiveAt).toEqual(
+			new Date("2026-07-03T12:00:00.000Z"),
+		);
+		expect(result[1].lastLoginAt).toBeNull();
+		expect(result[1].lastActiveAt).toEqual(new Date(1_783_122_000_000));
+		expect(result[0].isAdmin).toBe(true);
+		expect(result[1].name).toBe("Bob");
+	});
+
+	it("returns null activity dates when no aggregates exist", () => {
+		const result = hydrateAdminUserRows(
+			[
+				{
+					id: "u3",
+					name: "Carol",
+					email: "carol@test.com",
+					isAdmin: false,
+					createdAt: null,
+					settings: {},
+				},
+			],
+			[],
+			[],
+			[],
+		);
+		expect(result[0].lastLoginAt).toBeNull();
+		expect(result[0].lastActiveAt).toBeNull();
+	});
+
+	it("returns an empty list for an empty page", () => {
+		expect(hydrateAdminUserRows([], [], [], [])).toEqual([]);
 	});
 });

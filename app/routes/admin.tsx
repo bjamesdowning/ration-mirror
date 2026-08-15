@@ -88,6 +88,21 @@ export async function action(args: Route.ActionArgs) {
 	}
 }
 
+export function shouldRevalidate({
+	formMethod,
+	formAction,
+	defaultShouldRevalidate,
+}: {
+	formMethod?: string;
+	formAction?: string;
+	defaultShouldRevalidate: boolean;
+}) {
+	if (formAction || (formMethod && formMethod !== "GET")) {
+		return defaultShouldRevalidate;
+	}
+	return false;
+}
+
 // ── Components ────────────────────────────────────────────────────────────────
 
 /** Loader/fetcher JSON turns Date fields into ISO strings before SSR render. */
@@ -462,6 +477,7 @@ export default function AdminDashboard({ loaderData }: Route.ComponentProps) {
 	}, []);
 
 	const metricsLoadedRef = useRef(false);
+	const requestedUsersUrlRef = useRef<string | null>(null);
 	useEffect(() => {
 		if (!metricsLoadedRef.current) {
 			metricsLoadedRef.current = true;
@@ -509,11 +525,15 @@ export default function AdminDashboard({ loaderData }: Route.ComponentProps) {
 		[usersQuery],
 	);
 
+	const usersLoad = usersFetcher.load;
 	const loadUsers = useCallback(
-		(query: UsersQueryState) => {
-			usersFetcher.load(buildAdminUsersUrl(query));
+		(query: UsersQueryState, options?: { force?: boolean }) => {
+			const url = buildAdminUsersUrl(query);
+			if (!options?.force && requestedUsersUrlRef.current === url) return;
+			requestedUsersUrlRef.current = url;
+			usersLoad(url);
 		},
-		[usersFetcher],
+		[usersLoad],
 	);
 
 	useEffect(() => {
@@ -528,15 +548,17 @@ export default function AdminDashboard({ loaderData }: Route.ComponentProps) {
 	}, [searchQuery]);
 
 	useEffect(() => {
-		if (!needsClientFetch) {
-			setUsersData(initialUsers);
-			setRateLimitMessage(null);
-			setRateLimitRetryAt(null);
-			return;
-		}
+		if (needsClientFetch) return;
+		requestedUsersUrlRef.current = null;
+		setUsersData(initialUsers);
+		setRateLimitMessage(null);
+		setRateLimitRetryAt(null);
+	}, [needsClientFetch, initialUsers]);
 
+	useEffect(() => {
+		if (!needsClientFetch) return;
 		loadUsers(usersQuery);
-	}, [needsClientFetch, usersQuery, loadUsers, initialUsers]);
+	}, [needsClientFetch, usersQuery, loadUsers]);
 
 	useEffect(() => {
 		if (usersFetcher.state !== "idle" || !usersFetcher.data) return;
@@ -561,7 +583,7 @@ export default function AdminDashboard({ loaderData }: Route.ComponentProps) {
 
 		const delayMs = Math.max(0, rateLimitRetryAt - Date.now());
 		const timer = setTimeout(() => {
-			loadUsers(usersQuery);
+			loadUsers(usersQuery, { force: true });
 		}, delayMs);
 
 		return () => clearTimeout(timer);
@@ -627,7 +649,7 @@ export default function AdminDashboard({ loaderData }: Route.ComponentProps) {
 
 		revalidator.revalidate();
 		if (needsClientFetch) {
-			loadUsers(usersQuery);
+			loadUsers(usersQuery, { force: true });
 		}
 	}, [
 		toggleFetcher.state,

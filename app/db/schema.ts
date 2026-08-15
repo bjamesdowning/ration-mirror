@@ -857,6 +857,7 @@ export const apiKey = sqliteTable(
 	(table) => [
 		index("api_key_prefix_idx").on(table.keyPrefix),
 		index("api_key_org_idx").on(table.organizationId),
+		index("api_key_user_id_idx").on(table.userId),
 	],
 );
 

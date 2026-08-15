@@ -1422,7 +1422,7 @@ flowchart TB
     ApiKeyRequired --> K5["/api/v1/supply/export"]
 ```
 
-**Admin dashboard (`/admin`):** God-mode metrics for `user.is_admin = true`. The page loader fetches critical counts and the first user page; heavy engagement metrics load progressively from `GET /api/admin/metrics` (KV-cached, rate-limited). If `/admin` fails in production, tail worker logs (`bunx wrangler tail`) and smoke-test D1 query shapes with `bun run verify:admin-d1` (remote prod DB).
+**Admin dashboard (`/admin`):** God-mode metrics for `user.is_admin = true`. The page loader fetches critical counts and the first user page; heavy engagement metrics load progressively from `GET /api/admin/metrics` (KV-cached, rate-limited). The user table is paged on `user` then hydrated for the current page's session, mobile-token, and API-key activity — do not `GROUP BY` those tables in full. If `/admin` fails in production, tail worker logs (`bunx wrangler tail`) and smoke-test D1 query shapes with `bun run verify:admin-d1` (remote prod DB).
 
 **Guard functions** (all in `app/lib/auth.server.ts` / `app/lib/api-key.server.ts`):
 

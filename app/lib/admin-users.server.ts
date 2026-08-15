@@ -5,6 +5,7 @@ import {
 	desc,
 	eq,
 	gt,
+	inArray,
 	isNull,
 	like,
 	max,
@@ -14,6 +15,8 @@ import {
 import type { DrizzleD1Database } from "drizzle-orm/d1";
 import * as schema from "../db/schema";
 import type {
+	AdminUserActivityAggregate,
+	AdminUserPageRow,
 	AdminUserRow,
 	AdminUserSort,
 	AdminUsersListParams,
@@ -21,10 +24,19 @@ import type {
 	LoggedInUserRow,
 	LoggedInUsersResult,
 } from "./admin-users";
-import { resolvePlatform } from "./admin-users";
+import {
+	ADMIN_USER_HYDRATION_MAX_IDS,
+	computeLastActiveMs,
+	computeLastLoginMs,
+	resolvePlatform,
+} from "./admin-users";
+import { chunkedQuery } from "./query-utils.server";
+import { timestampToMs } from "./user-activity.server";
 
 export type {
+	AdminUserActivityAggregate,
 	AdminUserOrder,
+	AdminUserPageRow,
 	AdminUserRow,
 	AdminUserSort,
 	AdminUsersListParams,
@@ -34,6 +46,7 @@ export type {
 	LoggedInUsersResult,
 } from "./admin-users";
 export {
+	ADMIN_USER_HYDRATION_MAX_IDS,
 	computeLastActiveMs,
 	computeLastLoginMs,
 	DEFAULT_ADMIN_USERS_LIMIT,
@@ -41,8 +54,6 @@ export {
 	DEFAULT_ADMIN_USERS_SORT,
 	resolvePlatform,
 } from "./admin-users";
-
-import { timestampToMs } from "./user-activity.server";
 
 /** D1 returns MAX(timestamp) as unix seconds, not Date. */
 type SessionLastSeen = Date | number | string;
@@ -142,77 +153,122 @@ export function buildUserSearchFilter(q?: string) {
 	return or(like(schema.user.name, pattern), like(schema.user.email, pattern));
 }
 
-function sessionAggSubquery(db: DrizzleD1Database<typeof schema>) {
-	return db
-		.select({
-			userId: schema.session.userId,
-			maxLogin: max(schema.session.createdAt).as("session_max_login"),
-			maxActive: max(schema.session.updatedAt).as("session_max_active"),
-		})
-		.from(schema.session)
-		.groupBy(schema.session.userId)
-		.as("session_agg");
-}
-
-function mobileAggSubquery(db: DrizzleD1Database<typeof schema>) {
-	return db
-		.select({
-			userId: schema.mobileRefreshToken.userId,
-			maxLogin: max(schema.mobileRefreshToken.createdAt).as("mobile_max_login"),
-		})
-		.from(schema.mobileRefreshToken)
-		.groupBy(schema.mobileRefreshToken.userId)
-		.as("mobile_agg");
-}
-
-function apiKeyAggSubquery(db: DrizzleD1Database<typeof schema>) {
-	return db
-		.select({
-			userId: schema.apiKey.userId,
-			maxActive: max(schema.apiKey.lastUsedAt).as("api_key_max_active"),
-		})
-		.from(schema.apiKey)
-		.groupBy(schema.apiKey.userId)
-		.as("api_key_agg");
-}
-
-function lastLoginUnixExpr(
-	sessionAgg: ReturnType<typeof sessionAggSubquery>,
-	mobileAgg: ReturnType<typeof mobileAggSubquery>,
-) {
-	return sql<number>`MAX(COALESCE(${sessionAgg.maxLogin}, 0), COALESCE(${mobileAgg.maxLogin}, 0))`;
-}
-
-function lastActiveUnixExpr(
-	sessionAgg: ReturnType<typeof sessionAggSubquery>,
-	apiKeyAgg: ReturnType<typeof apiKeyAggSubquery>,
-) {
+function lastLoginCorrelatedExpr() {
 	return sql<number>`MAX(
-		COALESCE(${sessionAgg.maxActive}, 0),
-		COALESCE(${apiKeyAgg.maxActive}, 0),
+		COALESCE(
+			(
+				SELECT MAX(${schema.session.createdAt})
+				FROM ${schema.session}
+				WHERE ${schema.session.userId} = ${schema.user.id}
+			),
+			0
+		),
+		COALESCE(
+			(
+				SELECT MAX(${schema.mobileRefreshToken.createdAt})
+				FROM ${schema.mobileRefreshToken}
+				WHERE ${schema.mobileRefreshToken.userId} = ${schema.user.id}
+			),
+			0
+		)
+	)`;
+}
+
+function lastActiveCorrelatedExpr() {
+	return sql<number>`MAX(
+		COALESCE(
+			(
+				SELECT MAX(${schema.session.updatedAt})
+				FROM ${schema.session}
+				WHERE ${schema.session.userId} = ${schema.user.id}
+			),
+			0
+		),
+		COALESCE(
+			(
+				SELECT MAX(${schema.apiKey.lastUsedAt})
+				FROM ${schema.apiKey}
+				WHERE ${schema.apiKey.userId} = ${schema.user.id}
+			),
+			0
+		),
 		COALESCE(unixepoch(json_extract(${schema.user.settings}, '$.lastActiveAt')), 0)
 	)`;
 }
 
-/** Resolve ORDER BY expression for admin user list (JOIN-based aggregates). */
-export function adminUserSortExpression(
-	sort: AdminUserSort,
-	aggregates: {
-		sessionAgg: ReturnType<typeof sessionAggSubquery>;
-		mobileAgg: ReturnType<typeof mobileAggSubquery>;
-		apiKeyAgg: ReturnType<typeof apiKeyAggSubquery>;
-	},
-) {
+/** ORDER BY for the user-table page query. lastLogin/lastActive use indexed correlated MAX, not full-table GROUP BY joins. */
+export function adminUserSortExpression(sort: AdminUserSort) {
 	switch (sort) {
 		case "name":
 			return schema.user.name;
 		case "createdAt":
 			return schema.user.createdAt;
 		case "lastLogin":
-			return lastLoginUnixExpr(aggregates.sessionAgg, aggregates.mobileAgg);
+			return lastLoginCorrelatedExpr();
 		case "lastActive":
-			return lastActiveUnixExpr(aggregates.sessionAgg, aggregates.apiKeyAgg);
+			return lastActiveCorrelatedExpr();
 	}
+}
+
+export function assertBoundedAdminUserIds(ids: string[]): string[] {
+	if (ids.length > ADMIN_USER_HYDRATION_MAX_IDS) {
+		throw new Error(
+			`Admin user hydration refused ${ids.length} ids (max ${ADMIN_USER_HYDRATION_MAX_IDS})`,
+		);
+	}
+	return ids;
+}
+
+/** Returns null when wave 2 should be skipped (empty page). */
+export function adminUserHydrationIds(ids: string[]): string[] | null {
+	const bounded = assertBoundedAdminUserIds(ids);
+	if (bounded.length === 0) return null;
+	return bounded;
+}
+
+function settingsLastActiveMs(
+	settings: AdminUserPageRow["settings"] | unknown,
+): number {
+	if (!settings || typeof settings !== "object") return 0;
+	const iso = (settings as { lastActiveAt?: string }).lastActiveAt;
+	if (!iso) return 0;
+	const parsed = new Date(iso).getTime();
+	return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+export function hydrateAdminUserRows(
+	pageRows: AdminUserPageRow[],
+	sessionRows: AdminUserActivityAggregate[],
+	mobileRows: AdminUserActivityAggregate[],
+	apiKeyRows: AdminUserActivityAggregate[],
+): AdminUserRow[] {
+	const sessionByUser = new Map(sessionRows.map((row) => [row.userId, row]));
+	const mobileByUser = new Map(mobileRows.map((row) => [row.userId, row]));
+	const apiKeyByUser = new Map(apiKeyRows.map((row) => [row.userId, row]));
+
+	return pageRows.map((row) => {
+		const session = sessionByUser.get(row.id);
+		const mobile = mobileByUser.get(row.id);
+		const apiKey = apiKeyByUser.get(row.id);
+		const lastLoginMs = computeLastLoginMs(
+			timestampToMs(session?.maxLogin),
+			timestampToMs(mobile?.maxLogin),
+		);
+		const lastActiveMs = computeLastActiveMs(
+			timestampToMs(session?.maxActive),
+			timestampToMs(apiKey?.maxActive),
+			settingsLastActiveMs(row.settings),
+		);
+		return {
+			id: row.id,
+			name: row.name,
+			email: row.email,
+			isAdmin: row.isAdmin,
+			createdAt: row.createdAt,
+			lastLoginAt: lastLoginMs > 0 ? new Date(lastLoginMs) : null,
+			lastActiveAt: lastActiveMs > 0 ? new Date(lastActiveMs) : null,
+		};
+	});
 }
 
 export async function getLoggedInUsers(
@@ -279,55 +335,74 @@ export async function listAdminUsers(
 	const { page, limit, sort, order } = params;
 	const searchFilter = buildUserSearchFilter(params.q);
 	const whereClause = searchFilter ?? undefined;
-
-	const [totalResult] = await db
-		.select({ count: count() })
-		.from(schema.user)
-		.where(whereClause);
-
-	const total = totalResult?.count ?? 0;
-	const totalPages = total > 0 ? Math.ceil(total / limit) : 0;
 	const offset = (page - 1) * limit;
-
-	const sessionAgg = sessionAggSubquery(db);
-	const mobileAgg = mobileAggSubquery(db);
-	const apiKeyAgg = apiKeyAggSubquery(db);
-	const aggregates = { sessionAgg, mobileAgg, apiKeyAgg };
-
 	const orderFn = order === "asc" ? asc : desc;
-	const rows = await db
-		.select({
-			id: schema.user.id,
-			name: schema.user.name,
-			email: schema.user.email,
-			isAdmin: schema.user.isAdmin,
-			createdAt: schema.user.createdAt,
-			lastLoginUnix: lastLoginUnixExpr(sessionAgg, mobileAgg),
-			lastActiveUnix: lastActiveUnixExpr(sessionAgg, apiKeyAgg),
-		})
-		.from(schema.user)
-		.leftJoin(sessionAgg, eq(schema.user.id, sessionAgg.userId))
-		.leftJoin(mobileAgg, eq(schema.user.id, mobileAgg.userId))
-		.leftJoin(apiKeyAgg, eq(schema.user.id, apiKeyAgg.userId))
-		.where(whereClause)
-		.orderBy(orderFn(adminUserSortExpression(sort, aggregates)))
-		.limit(limit)
-		.offset(offset);
 
-	const users: AdminUserRow[] = rows.map((row) => ({
-		id: row.id,
-		name: row.name,
-		email: row.email,
-		isAdmin: row.isAdmin,
-		createdAt: row.createdAt,
-		lastLoginAt: unixToDate(row.lastLoginUnix),
-		lastActiveAt: unixToDate(row.lastActiveUnix),
-	}));
+	const [totalResult, pageRows] = await Promise.all([
+		db.select({ count: count() }).from(schema.user).where(whereClause),
+		db
+			.select({
+				id: schema.user.id,
+				name: schema.user.name,
+				email: schema.user.email,
+				isAdmin: schema.user.isAdmin,
+				createdAt: schema.user.createdAt,
+				settings: schema.user.settings,
+			})
+			.from(schema.user)
+			.where(whereClause)
+			.orderBy(orderFn(adminUserSortExpression(sort)))
+			.limit(limit)
+			.offset(offset),
+	]);
 
-	return { users, total, page, limit, totalPages };
-}
+	const total = totalResult[0]?.count ?? 0;
+	const totalPages = total > 0 ? Math.ceil(total / limit) : 0;
+	const hydrationIds = adminUserHydrationIds(pageRows.map((row) => row.id));
 
-function unixToDate(value: unknown): Date | null {
-	const ms = timestampToMs(value);
-	return ms > 0 ? new Date(ms) : null;
+	if (!hydrationIds) {
+		return { users: [], total, page, limit, totalPages };
+	}
+
+	const [sessionRows, mobileRows, apiKeyRows] = await Promise.all([
+		chunkedQuery(hydrationIds, (chunk) =>
+			db
+				.select({
+					userId: schema.session.userId,
+					maxLogin: max(schema.session.createdAt),
+					maxActive: max(schema.session.updatedAt),
+				})
+				.from(schema.session)
+				.where(inArray(schema.session.userId, chunk))
+				.groupBy(schema.session.userId),
+		),
+		chunkedQuery(hydrationIds, (chunk) =>
+			db
+				.select({
+					userId: schema.mobileRefreshToken.userId,
+					maxLogin: max(schema.mobileRefreshToken.createdAt),
+				})
+				.from(schema.mobileRefreshToken)
+				.where(inArray(schema.mobileRefreshToken.userId, chunk))
+				.groupBy(schema.mobileRefreshToken.userId),
+		),
+		chunkedQuery(hydrationIds, (chunk) =>
+			db
+				.select({
+					userId: schema.apiKey.userId,
+					maxActive: max(schema.apiKey.lastUsedAt),
+				})
+				.from(schema.apiKey)
+				.where(inArray(schema.apiKey.userId, chunk))
+				.groupBy(schema.apiKey.userId),
+		),
+	]);
+
+	return {
+		users: hydrateAdminUserRows(pageRows, sessionRows, mobileRows, apiKeyRows),
+		total,
+		page,
+		limit,
+		totalPages,
+	};
 }

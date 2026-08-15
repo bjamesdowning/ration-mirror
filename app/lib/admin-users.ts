@@ -21,6 +21,24 @@ export const DEFAULT_ADMIN_USERS_LIMIT = 25;
 export const DEFAULT_ADMIN_USERS_SORT: AdminUserSort = "createdAt";
 export const DEFAULT_ADMIN_USERS_ORDER: AdminUserOrder = "desc";
 
+/** Matches `AdminUsersListSchema` max `limit` — hydration must never scan all users. */
+export const ADMIN_USER_HYDRATION_MAX_IDS = 100;
+
+export interface AdminUserPageRow {
+	id: string;
+	name: string;
+	email: string;
+	isAdmin: boolean;
+	createdAt: Date | null;
+	settings: { lastActiveAt?: string } | null;
+}
+
+export interface AdminUserActivityAggregate {
+	userId: string;
+	maxLogin?: unknown;
+	maxActive?: unknown;
+}
+
 export interface AdminUsersListParams {
 	q?: string;
 	page: number;

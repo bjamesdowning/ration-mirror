@@ -99,33 +99,57 @@ async function main() {
 		),
 	);
 
-	assertOk(
-		"admin user list aggregates",
+	const pageRows = assertOk(
+		"admin user page (OFFSET 25)",
 		d1Remote(
-			`SELECT u.id, u.name, u.email, u.is_admin, u.created_at,
-        MAX(COALESCE(session_agg.session_max_login, 0), COALESCE(mobile_agg.mobile_max_login, 0)) as last_login_unix,
-        MAX(
-          COALESCE(session_agg.session_max_active, 0),
-          COALESCE(api_key_agg.api_key_max_active, 0),
-          COALESCE(unixepoch(json_extract(u.settings, '$.lastActiveAt')), 0)
-        ) as last_active_unix
-      FROM user u
-      LEFT JOIN (
-        SELECT user_id, MAX(created_at) as session_max_login, MAX(updated_at) as session_max_active
-        FROM session GROUP BY user_id
-      ) session_agg ON u.id = session_agg.user_id
-      LEFT JOIN (
-        SELECT user_id, MAX(created_at) as mobile_max_login
-        FROM mobile_refresh_token GROUP BY user_id
-      ) mobile_agg ON u.id = mobile_agg.user_id
-      LEFT JOIN (
-        SELECT user_id, MAX(last_used_at) as api_key_max_active
-        FROM api_key GROUP BY user_id
-      ) api_key_agg ON u.id = api_key_agg.user_id
-      ORDER BY u.created_at DESC
-      LIMIT 25`,
+			"SELECT id, name, email, is_admin, created_at, settings FROM user ORDER BY created_at DESC LIMIT 25 OFFSET 25",
 		),
 	);
+
+	const pageIds = pageRows.map((row) => String(row.id));
+	const explainId = pageIds[0] ?? "missing-user-id";
+	const escapedExplainId = explainId.replaceAll("'", "''");
+
+	if (pageIds.length > 0) {
+		const inList = pageIds
+			.map((id) => `'${id.replaceAll("'", "''")}'`)
+			.join(",");
+		assertOk(
+			"session hydration for page ids",
+			d1Remote(
+				`SELECT user_id, MAX(created_at) as max_login, MAX(updated_at) as max_active FROM session WHERE user_id IN (${inList}) GROUP BY user_id`,
+			),
+		);
+		assertOk(
+			"mobile hydration for page ids",
+			d1Remote(
+				`SELECT user_id, MAX(created_at) as max_login FROM mobile_refresh_token WHERE user_id IN (${inList}) GROUP BY user_id`,
+			),
+		);
+		assertOk(
+			"api_key hydration for page ids",
+			d1Remote(
+				`SELECT user_id, MAX(last_used_at) as max_active FROM api_key WHERE user_id IN (${inList}) GROUP BY user_id`,
+			),
+		);
+	}
+
+	const planRows = assertOk(
+		"session hydration EXPLAIN QUERY PLAN",
+		d1Remote(
+			`EXPLAIN QUERY PLAN SELECT user_id, MAX(created_at), MAX(updated_at) FROM session WHERE user_id IN ('${escapedExplainId}') GROUP BY user_id`,
+		),
+	);
+	const planText = planRows
+		.map((row) => String(row.detail ?? Object.values(row).join(" ")))
+		.join(" ")
+		.toLowerCase();
+	if (!planText.includes("session_user_id_idx")) {
+		throw new Error(
+			`Expected session_user_id_idx in hydration plan, got: ${planText}`,
+		);
+	}
+	console.log("✓ session hydration uses session_user_id_idx");
 
 	console.log("\nAll admin D1 queries verified successfully.");
 }

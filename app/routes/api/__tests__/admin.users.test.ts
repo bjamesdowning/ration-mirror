@@ -124,4 +124,25 @@ describe("GET /api/admin/users", () => {
 		});
 		expect(listAdminUsers).not.toHaveBeenCalled();
 	});
+
+	it("returns 503 without throwing when listAdminUsers hits D1 contention", async () => {
+		listAdminUsers.mockRejectedValue(
+			new Error("SQLITE_BUSY: database is busy"),
+		);
+
+		const { loader } = await import("~/routes/api/admin.users");
+		const result = (await loader({
+			request: getRequest("?page=2"),
+			context: ctx,
+			params: {},
+		} as never)) as {
+			init?: { status: number };
+			data: Record<string, unknown>;
+		};
+
+		expect(result.init?.status).toBe(503);
+		expect(result.data).toMatchObject({
+			code: "server_busy",
+		});
+	});
 });

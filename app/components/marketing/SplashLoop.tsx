@@ -6,9 +6,18 @@ import {
 	ShoppingBasket,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { LOOP_STAGES, stageShowsFuel } from "~/lib/splash-story";
+import {
+	LOOP_STAGES,
+	type LoopStageId,
+	stageShowsFuel,
+} from "~/lib/splash-story";
 import { Reveal } from "./Reveal";
-import { SplashKitchenScreen, SplashPhone } from "./SplashKitchenScreen";
+import {
+	SplashKitchenScreen,
+	SplashPhone,
+	SplashStageCanvas,
+} from "./SplashKitchenScreen";
+import { usePrefersReducedMotion } from "./useSplashPlayback";
 
 const COMPACT_QUERY = "(max-width: 900px)";
 
@@ -24,6 +33,7 @@ export function SplashLoop() {
 	const [activeIndex, setActiveIndex] = useState(0);
 	const [isCompact, setIsCompact] = useState(false);
 	const stageRefs = useRef<Array<HTMLElement | null>>([]);
+	const reducedMotion = usePrefersReducedMotion();
 	const active = LOOP_STAGES[activeIndex] ?? LOOP_STAGES[0];
 
 	useEffect(() => {
@@ -35,7 +45,7 @@ export function SplashLoop() {
 	}, []);
 
 	useEffect(() => {
-		if (isCompact || !("IntersectionObserver" in window)) return;
+		if (!("IntersectionObserver" in window)) return;
 		const observer = new IntersectionObserver(
 			(entries) => {
 				const visible = entries
@@ -46,10 +56,15 @@ export function SplashLoop() {
 					setActiveIndex(Number(index));
 				}
 			},
-			{
-				rootMargin: "-30% 0px -45% 0px",
-				threshold: [0.15, 0.5, 0.8],
-			},
+			isCompact
+				? {
+						rootMargin: "-35% 0px -35% 0px",
+						threshold: [0.25, 0.5, 0.75],
+					}
+				: {
+						rootMargin: "-30% 0px -45% 0px",
+						threshold: [0.15, 0.5, 0.8],
+					},
 		);
 
 		for (const stage of stageRefs.current) {
@@ -59,23 +74,21 @@ export function SplashLoop() {
 	}, [isCompact]);
 
 	const selectStage = (index: number) => {
-		if (window.matchMedia(COMPACT_QUERY).matches) {
-			setActiveIndex(index);
-			return;
-		}
+		setActiveIndex(index);
+		const compact = window.matchMedia(COMPACT_QUERY).matches;
 		stageRefs.current[index]?.scrollIntoView({
-			behavior: "smooth",
-			block: "center",
+			behavior: reducedMotion ? "auto" : "smooth",
+			block: compact ? "start" : "center",
 		});
 	};
 
 	return (
 		<section
 			id="how-it-works"
-			className="splash-section scroll-mt-24"
+			className="splash-section splash-loop scroll-mt-24"
 			aria-labelledby="loop-heading"
 		>
-			<Reveal className="splash-section-heading">
+			<Reveal className="splash-section-heading splash-loop-intro">
 				<p className="text-label text-hyper-green">How it works</p>
 				<h2 id="loop-heading">
 					One loop: Cargo → Galley → Manifest → Supply → Dock
@@ -86,20 +99,29 @@ export function SplashLoop() {
 				</p>
 			</Reveal>
 
-			<fieldset className="splash-loop-rail">
-				<legend className="sr-only">Kitchen loop</legend>
-				{LOOP_STAGES.map((stage, index) => (
-					<button
-						key={stage.id}
-						type="button"
-						aria-current={activeIndex === index}
-						data-active={activeIndex === index}
-						onClick={() => selectStage(index)}
-					>
-						{stage.number} {stage.title}
-					</button>
-				))}
-			</fieldset>
+			<nav className="splash-loop-hud" aria-label="Kitchen loop progress">
+				<p>
+					<span className="text-label text-hyper-green">How it works</span>
+					<span aria-hidden>·</span>
+					<span>
+						{active.number} {active.title}
+					</span>
+				</p>
+				<fieldset className="splash-loop-progress">
+					<legend className="sr-only">Kitchen loop stages</legend>
+					{LOOP_STAGES.map((stage, index) => (
+						<button
+							key={stage.id}
+							type="button"
+							aria-label={`${stage.number} ${stage.title}`}
+							aria-current={activeIndex === index ? true : undefined}
+							data-active={activeIndex === index}
+							data-complete={index <= activeIndex}
+							onClick={() => selectStage(index)}
+						/>
+					))}
+				</fieldset>
+			</nav>
 
 			<div className="splash-story-grid">
 				<div className="splash-story-sticky">
@@ -107,30 +129,22 @@ export function SplashLoop() {
 						<SplashPhone compact>
 							<SplashKitchenScreen stage={active.id} />
 						</SplashPhone>
-						<div className="splash-stage-readout" aria-live="polite">
-							<span>{active.signal}</span>
-							{stageShowsFuel(active.id) ? (
-								<small>Daily Fuel · only you</small>
-							) : (
-								<small>Shared kitchen</small>
-							)}
-							<div className="splash-scan-line" aria-hidden />
-						</div>
+						<StageReadout live stageId={active.id} signal={active.signal} />
 					</div>
 				</div>
 				<div className="splash-story-copy">
 					{LOOP_STAGES.map((stage, index) => {
 						const Icon = stageIcons[stage.id];
+						const isLast = index === LOOP_STAGES.length - 1;
 						return (
 							<article
 								key={stage.id}
 								ref={(node) => {
 									stageRefs.current[index] = node;
 								}}
-								hidden={isCompact && activeIndex !== index}
 								data-stage-index={index}
 								data-active={activeIndex === index}
-								className="splash-story-step"
+								className="splash-story-step splash-loop-panel"
 							>
 								<div className="splash-step-index">
 									<span>{stage.number}</span>
@@ -138,12 +152,49 @@ export function SplashLoop() {
 								</div>
 								<h3>{stage.title}</h3>
 								<p className="splash-step-verb">{stage.verb}</p>
-								<p>{stage.detail}</p>
+								<p className="splash-step-detail">{stage.detail}</p>
+								<div className="splash-loop-panel-demo">
+									<SplashStageCanvas>
+										<SplashKitchenScreen stage={stage.id} />
+									</SplashStageCanvas>
+									<StageReadout stageId={stage.id} signal={stage.signal} />
+									{isLast ? null : (
+										<p className="splash-loop-next-cue">
+											<span className="sr-only">Scroll to the next stage</span>
+											<ArrowDown aria-hidden size={18} />
+										</p>
+									)}
+								</div>
 							</article>
 						);
 					})}
 				</div>
 			</div>
 		</section>
+	);
+}
+
+function StageReadout({
+	stageId,
+	signal,
+	live = false,
+}: {
+	stageId: LoopStageId;
+	signal: string;
+	live?: boolean;
+}) {
+	return (
+		<div
+			className="splash-stage-readout"
+			aria-live={live ? "polite" : undefined}
+		>
+			<span>{signal}</span>
+			{stageShowsFuel(stageId) ? (
+				<small>Daily Fuel · only you</small>
+			) : (
+				<small>Shared kitchen</small>
+			)}
+			<div className="splash-scan-line" aria-hidden />
+		</div>
 	);
 }

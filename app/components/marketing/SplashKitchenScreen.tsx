@@ -21,6 +21,15 @@ export function SplashPhone({
 	);
 }
 
+/** Full-width kitchen UI without device chrome — used on compact loop chapters. */
+export function SplashStageCanvas({ children }: { children: ReactNode }) {
+	return (
+		<div className="splash-stage-canvas" aria-hidden>
+			{children}
+		</div>
+	);
+}
+
 function StatusBar({ title }: { title: string }) {
 	return (
 		<div className="splash-os-bar">

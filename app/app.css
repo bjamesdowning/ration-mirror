@@ -561,12 +561,17 @@
   font-weight: 700;
 }
 
-.splash-story-step > p:last-child {
+.splash-step-detail {
   max-width: 29rem;
   margin-top: 0.45rem;
   color: var(--text-muted);
   font-size: 0.88rem;
   line-height: 1.65;
+}
+
+.splash-loop-hud,
+.splash-loop-panel-demo {
+  display: none;
 }
 
 .splash-story-sticky {
@@ -1089,34 +1094,154 @@
   }
 
   .splash-story-sticky {
+    display: none;
+  }
+
+  .splash-loop-intro {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .splash-loop-hud {
+    display: flex;
+    position: sticky;
+    z-index: 30;
+    top: 4rem;
+    flex-direction: column;
+    gap: 0.15rem;
+    margin: 0 -0.25rem -4.75rem;
+    border-bottom: 1px solid var(--border-color);
+    background: color-mix(in srgb, var(--bg-primary) 92%, transparent);
+    padding: 0.45rem 0.25rem 0.2rem;
+    backdrop-filter: blur(16px);
+  }
+
+  .splash-loop-hud > p {
+    display: flex;
+    align-items: baseline;
+    gap: 0.45rem;
+    color: var(--text-primary);
+    font-size: 0.78rem;
+    font-weight: 700;
+  }
+
+  .splash-loop-progress {
+    display: flex;
+    gap: 0.35rem;
+    margin: 0;
+    border: 0;
+    padding: 0;
+    min-inline-size: 0;
+  }
+
+  .splash-loop-progress button {
     position: relative;
-    z-index: auto;
-    top: auto;
-    width: 100%;
-    min-height: 0;
-    height: auto;
-    overflow: visible;
-    display: grid;
-    place-items: center;
-    background: none;
+    flex: 1;
+    height: 2.75rem;
+    min-height: 2.75rem;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    padding: 0;
+    cursor: pointer;
+  }
+
+  .splash-loop-progress button::after {
+    content: "";
+    position: absolute;
+    right: 0;
+    left: 0;
+    top: 50%;
+    height: 0.32rem;
+    border-radius: 999px;
+    background: var(--border-color);
+    transform: translateY(-50%);
+  }
+
+  .splash-loop-progress button[data-complete="true"]::after {
+    background: #00E088;
   }
 
   .splash-story-step {
-    display: none;
-    min-height: 0;
-    padding-block: 1.5rem;
+    min-height: 100dvh;
+    justify-content: flex-start;
+    border-left: 0;
+    padding: 4.75rem 0 1.35rem;
     opacity: 1;
     transform: none;
-    transition: none;
+    scroll-snap-align: start;
+    scroll-snap-stop: always;
   }
 
   .splash-story-step[data-active="true"] {
-    display: flex;
     transform: none;
   }
 
-  .splash-story-step[hidden] {
-    display: none !important;
+  .splash-loop-panel-demo {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 12rem;
+    margin-top: 1rem;
+  }
+
+  .splash-loop-next-cue {
+    display: grid;
+    place-items: center;
+    margin: 0.65rem 0 0;
+    color: #00E088;
+    animation: splashNudge 1.8s ease-in-out infinite;
+  }
+
+  .splash-loop-panel-demo .splash-os[data-screen="galley"] .splash-os-meter > span {
+    width: 0;
+  }
+
+  .splash-story-step[data-active="true"] .splash-loop-panel-demo .splash-os[data-screen="galley"] .splash-os-meter > span {
+    width: 83%;
+  }
+
+  .splash-loop-panel-demo .splash-os-list li {
+    opacity: 0;
+    transform: translateY(0.45rem);
+  }
+
+  .splash-story-step[data-active="true"] .splash-loop-panel-demo .splash-os-list li {
+    animation: splashOsIn 400ms var(--splash-ease) forwards;
+  }
+
+  .splash-story-step[data-active="true"] .splash-loop-panel-demo .splash-os-list li:nth-child(2) {
+    animation-delay: 70ms;
+  }
+
+  .splash-story-step[data-active="true"] .splash-loop-panel-demo .splash-os-list li:nth-child(3) {
+    animation-delay: 140ms;
+  }
+
+  .splash-story-step[data-active="true"] .splash-loop-panel-demo .splash-os {
+    animation: splashOsIn 400ms var(--splash-ease);
+  }
+
+  .splash-loop-panel-demo .splash-stage-canvas {
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+  }
+
+  .splash-loop-panel-demo .splash-stage-readout {
+    border-bottom-left-radius: var(--splash-radius);
+    border-bottom-right-radius: var(--splash-radius);
+  }
+
+  .splash-loop-progress button:focus-visible {
+    outline: 2px solid #00E088;
+    outline-offset: 2px;
   }
 
   .splash-interface {
@@ -1230,18 +1355,22 @@
     line-height: 1.02;
   }
 
-  .splash-story-sticky {
-    margin-inline: -1rem;
-    width: calc(100% + 2rem);
-  }
-
   .splash-story-step {
-    min-height: 0;
-    padding: 2.25rem 0 2.25rem 1.25rem;
+    padding-left: 0;
   }
 
   .splash-story-step h3 {
-    font-size: 2.2rem;
+    margin-top: 0.45rem;
+    font-size: clamp(1.55rem, 7vw, 2rem);
+  }
+
+  .splash-step-verb {
+    margin-top: 0.3rem;
+  }
+
+  .splash-step-detail {
+    margin-top: 0.3rem;
+    font-size: 0.82rem;
   }
 
   .splash-interface {
@@ -1363,11 +1492,12 @@
   }
 }
 
-/* Splash v3: product-as-demo canvas, Daily Fuel, kitchens, mobile stage rail. */
+/* Splash v3: product-as-demo canvas, Daily Fuel, kitchens, mobile loop chapters. */
 .splash-page {
   --splash-ease: cubic-bezier(0.22, 1, 0.36, 1);
   --splash-micro: 180ms;
   --splash-stage: 700ms;
+  --splash-header: 4rem;
 }
 
 .splash-hero h1 span {
@@ -1497,6 +1627,20 @@
   overflow: hidden;
   border-radius: 1.7rem;
   background: var(--bg-primary);
+}
+
+.splash-stage-canvas {
+  flex: 1 1 auto;
+  min-height: 12rem;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  border-radius: var(--splash-radius);
+  background: var(--bg-surface);
+}
+
+.splash-stage-canvas .splash-os {
+  min-height: 100%;
+  padding: 1.1rem 1rem 0.85rem;
 }
 
 .splash-os {
@@ -1660,12 +1804,6 @@
   color: #00E088;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-}
-
-.splash-loop-rail {
-  display: none;
-  border: 0;
-  min-inline-size: 0;
 }
 
 .splash-loop-stage {
@@ -1833,8 +1971,7 @@
   min-inline-size: 0;
 }
 
-.splash-kitchen-switch button,
-.splash-loop-rail button {
+.splash-kitchen-switch button {
   min-height: 2.5rem;
   border: 1px solid var(--border-color);
   border-radius: 999px;
@@ -1846,8 +1983,7 @@
   cursor: pointer;
 }
 
-.splash-kitchen-switch button[data-active="true"],
-.splash-loop-rail button[data-active="true"] {
+.splash-kitchen-switch button[data-active="true"] {
   border-color: color-mix(in srgb, #00E088 50%, var(--border-color));
   background: color-mix(in srgb, #00E088 12%, transparent);
   color: var(--text-primary);
@@ -1939,34 +2075,9 @@
     width: min(100%, 11.25rem);
   }
 
-  .splash-loop-stage {
-    overflow: hidden;
-  }
-
-  .splash-loop-stage .splash-phone {
-    margin: 0.85rem auto 0.65rem;
-  }
-
-  .splash-loop-rail {
-    display: flex;
-    position: relative;
-    z-index: 1;
-    top: auto;
-    gap: 0.4rem;
-    overflow-x: auto;
-    margin: 0 -1.5rem 1.25rem;
-    padding: 0.65rem 1.5rem;
-    background: color-mix(in srgb, var(--bg-primary) 92%, transparent);
-    scrollbar-width: none;
-  }
-
-  .splash-loop-rail::-webkit-scrollbar {
-    display: none;
-  }
-
-  .splash-loop-rail button {
-    flex: none;
-    white-space: nowrap;
+  html:has(.splash-page) {
+    scroll-snap-type: y proximity;
+    scroll-padding-top: var(--splash-header, 4rem);
   }
 
   .splash-fuel-grid,
@@ -2009,6 +2120,23 @@
     color: var(--text-primary);
     font-size: 0.72rem;
     font-weight: 700;
+  }
+}
+
+@media (max-width: 900px) and (prefers-reduced-motion: reduce) {
+  html:has(.splash-page) {
+    scroll-snap-type: none;
+  }
+
+  .splash-story-step {
+    min-height: auto;
+    scroll-snap-align: none;
+    scroll-snap-stop: normal;
+  }
+
+  .splash-loop-panel-demo .splash-os-list li {
+    opacity: 1;
+    transform: none;
   }
 }
 

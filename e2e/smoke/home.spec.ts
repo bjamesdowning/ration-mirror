@@ -78,3 +78,34 @@ test.describe("home", () => {
 		).toBeVisible();
 	});
 });
+
+test.describe("home loop on compact viewport", () => {
+	test.use({ viewport: { width: 390, height: 844 } });
+
+	test("loop stages keep copy and kitchen UI in the same viewport", async ({
+		page,
+	}) => {
+		await page.goto("/");
+		const section = page.locator("#how-it-works");
+		await section.scrollIntoViewIfNeeded();
+
+		for (const title of ["Cargo", "Galley", "Manifest", "Supply", "Dock"]) {
+			await expect(
+				section.getByRole("heading", { name: title, exact: true }),
+			).toBeVisible();
+		}
+
+		await expect(
+			page.getByRole("navigation", { name: "Kitchen loop progress" }),
+		).toBeVisible();
+
+		const galley = section.locator("article[data-stage-index='1']");
+		await galley.scrollIntoViewIfNeeded();
+
+		const verb = galley.getByText("See what you can cook.");
+		const ui = galley.locator(".splash-os[data-screen='galley']");
+		await expect(verb).toBeInViewport();
+		await expect(ui).toBeInViewport();
+		await expect(galley.locator(".splash-phone")).toHaveCount(0);
+	});
+});

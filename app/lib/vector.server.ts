@@ -11,6 +11,16 @@ const EMBEDDING_MODEL = "@cf/google/embeddinggemma-300m";
 const EMBED_CACHE_TTL = 60 * 60 * 24 * 7; // 7 days
 const EMBED_CACHE_PREFIX = "vec:";
 
+/**
+ * Workers `deleteByIds` / `getByIds` payload cap.
+ * Production: VECTOR_DELETE_ERROR (code = 40007) "too many ids in payload; max id count is 100".
+ * Public limits docs list upsert batch 1000 but omit this delete cap.
+ */
+export const VECTORIZE_DELETE_BY_IDS_MAX = 100;
+
+/** Documented Workers upsert batch. @see https://developers.cloudflare.com/vectorize/platform/limits/ */
+export const VECTORIZE_UPSERT_MAX = 1000;
+
 /** Similarity thresholds per context */
 export const SIMILARITY_THRESHOLDS = {
 	/** Universal threshold for ingredient → cargo resolution across all features */
@@ -212,8 +222,7 @@ export async function upsertCargoVectors(
 		}
 	}
 	if (toUpsert.length === 0) return;
-	for (let i = 0; i < toUpsert.length; i += 1000) {
-		const chunk = toUpsert.slice(i, i + 1000);
+	for (const chunk of chunkArray(toUpsert, VECTORIZE_UPSERT_MAX)) {
 		try {
 			await env.VECTORIZE.upsert(chunk);
 		} catch (err) {
@@ -228,7 +237,9 @@ export async function deleteCargoVectors(
 	itemIds: string[],
 ): Promise<void> {
 	if (!env.VECTORIZE || itemIds.length === 0) return;
-	await env.VECTORIZE.deleteByIds(itemIds);
+	for (const chunk of chunkArray(itemIds, VECTORIZE_DELETE_BY_IDS_MAX)) {
+		await env.VECTORIZE.deleteByIds(chunk);
+	}
 }
 
 export interface SimilarCargoMatch {

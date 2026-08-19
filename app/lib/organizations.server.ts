@@ -22,7 +22,8 @@ import {
 import { deleteR2Prefix } from "~/lib/r2-cleanup.server";
 import { deleteCargoVectors } from "~/lib/vector.server";
 
-const CARGO_VECTOR_DELETE_CHUNK = 500;
+/** D1 page size when listing cargo IDs for Vectorize wipe (not a Vectorize limit). */
+const CARGO_ID_PAGE_SIZE = 500;
 
 function wrapPurgeStep(step: string, error: unknown): Error {
 	const message = error instanceof Error ? error.message : String(error);
@@ -91,7 +92,7 @@ async function deleteOrganizationCargoVectors(
 			.select({ id: schema.cargo.id })
 			.from(schema.cargo)
 			.where(eq(schema.cargo.organizationId, organizationId))
-			.limit(CARGO_VECTOR_DELETE_CHUNK)
+			.limit(CARGO_ID_PAGE_SIZE)
 			.offset(offset);
 
 		if (rows.length === 0) break;
@@ -102,7 +103,7 @@ async function deleteOrganizationCargoVectors(
 		);
 
 		offset += rows.length;
-		if (rows.length < CARGO_VECTOR_DELETE_CHUNK) break;
+		if (rows.length < CARGO_ID_PAGE_SIZE) break;
 	}
 }
 

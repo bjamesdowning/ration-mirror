@@ -127,7 +127,7 @@ describe("deleteCargoVectors", () => {
 		const { deleteCargoVectors } = await import("../vector.server");
 		const vectorize = createMockVectorize();
 		vi.mocked(vectorize.deleteByIds)
-			.mockResolvedValueOnce({ mutationId: "ok" })
+			.mockResolvedValueOnce({ ids: [], count: 0 })
 			.mockRejectedValueOnce(new Error("VECTOR_DELETE_ERROR"));
 		const env = createMockEnv();
 		env.VECTORIZE = vectorize;

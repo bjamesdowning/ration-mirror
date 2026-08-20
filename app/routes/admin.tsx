@@ -29,7 +29,16 @@ import {
 } from "../lib/admin-users";
 import { requireAdmin } from "../lib/auth.server";
 import { handleApiError, runAdminLoader } from "../lib/error-handler";
-import { ToggleAdminSchema } from "../lib/schemas/admin";
+import { log, redactId } from "../lib/logging.server";
+import {
+	getPurgeJob,
+	listFailedPurgeJobs,
+	matchesPurgeRetryConfirmation,
+	toAdminFailedPurgeJobView,
+} from "../lib/purge-pending.server";
+import { attemptPurgeJobRetry } from "../lib/purge-retry-cron.server";
+import { checkRateLimit, rateLimitResponse } from "../lib/rate-limiter.server";
+import { RetryPurgeJobSchema, ToggleAdminSchema } from "../lib/schemas/admin";
 import type { Route } from "./+types/admin";
 
 export async function loader(args: Route.LoaderArgs) {
@@ -37,9 +46,13 @@ export async function loader(args: Route.LoaderArgs) {
 		const adminUser = await requireAdmin(args.context, args.request);
 		const db = drizzle(args.context.cloudflare.env.DB, { schema });
 		const dashboard = await loadCriticalAdminDashboard(db);
+		const failedPurgeJobs = (
+			await listFailedPurgeJobs(args.context.cloudflare.env.RATION_KV)
+		).map(toAdminFailedPurgeJobView);
 
 		return {
 			currentUserId: adminUser.id,
+			failedPurgeJobs,
 			...dashboard,
 		};
 	});
@@ -54,6 +67,62 @@ export async function action(args: Route.ActionArgs) {
 
 	try {
 		const formData = await args.request.formData();
+		const intent = String(formData.get("intent") ?? "");
+
+		if (intent === "retry-purge-job") {
+			const { jobId, confirmValue } = RetryPurgeJobSchema.parse({
+				intent,
+				jobId: formData.get("jobId"),
+				confirmValue: formData.get("confirmValue"),
+			});
+
+			const rateLimitResult = await checkRateLimit(
+				args.context.cloudflare.env.RATION_KV,
+				"admin_purge_retry",
+				adminUser.id,
+			);
+			if (!rateLimitResult.allowed) {
+				return rateLimitResponse(
+					rateLimitResult,
+					"Too many purge retries. Please try again later.",
+				);
+			}
+
+			const job = await getPurgeJob(
+				args.context.cloudflare.env.RATION_KV,
+				jobId,
+			);
+			if (!job || job.status !== "failed") {
+				return data({ error: "Purge job not found" }, { status: 404 });
+			}
+			if (!matchesPurgeRetryConfirmation(job, confirmValue)) {
+				return data(
+					{
+						error:
+							job.kind === "account"
+								? "Confirmation email does not match this job"
+								: "Confirmation organization id does not match this job",
+					},
+					{ status: 400 },
+				);
+			}
+
+			log.info("[Admin] Accepted failed purge retry", {
+				event: "admin_purge_retry",
+				adminUserId: redactId(adminUser.id),
+				jobId: redactId(job.id),
+				kind: job.kind,
+			});
+
+			args.context.cloudflare.ctx.waitUntil(
+				attemptPurgeJobRetry(args.context.cloudflare.env, job, "admin").then(
+					() => undefined,
+				),
+			);
+
+			return data({ success: true, accepted: true, jobId: job.id });
+		}
+
 		const { userId } = ToggleAdminSchema.parse({
 			intent: formData.get("intent"),
 			userId: formData.get("userId"),
@@ -446,11 +515,18 @@ export default function AdminDashboard({ loaderData }: Route.ComponentProps) {
 		loggedInUsers,
 		totalLoggedIn,
 		initialUsers,
+		failedPurgeJobs,
 	} = loaderData;
 
 	const metricsFetcher = useFetcher<AdminHeavyMetricsResponse>();
 	const usersFetcher = useFetcher<UsersFetcherData>();
 	const toggleFetcher = useFetcher();
+	const purgeRetryFetcher = useFetcher<{
+		success?: boolean;
+		accepted?: boolean;
+		jobId?: string;
+		error?: string;
+	}>();
 	const revalidator = useRevalidator();
 	const pendingToggleUserIdRef = useRef<string | null>(null);
 	const [searchQuery, setSearchQuery] = useState("");
@@ -660,6 +736,16 @@ export default function AdminDashboard({ loaderData }: Route.ComponentProps) {
 		revalidator,
 	]);
 
+	useEffect(() => {
+		if (
+			purgeRetryFetcher.state !== "idle" ||
+			!purgeRetryFetcher.data?.accepted
+		) {
+			return;
+		}
+		revalidator.revalidate();
+	}, [purgeRetryFetcher.state, purgeRetryFetcher.data, revalidator]);
+
 	const users = usersData.users;
 	const usersTotal = usersData.total;
 	const usersTotalPages = usersData.totalPages;
@@ -831,6 +917,91 @@ export default function AdminDashboard({ loaderData }: Route.ComponentProps) {
 							iconPath="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"
 						/>
 					</div>
+				</section>
+
+				{/* Failed purges */}
+				<section>
+					<SectionHeading>Failed purges</SectionHeading>
+					<p className="text-sm text-muted mb-4">
+						Background account and group wipes that failed after access was
+						revoked. Retry runs the existing durable job — type the account
+						email (or organization id for group jobs) to confirm.
+					</p>
+					{purgeRetryFetcher.data?.error ? (
+						<p className="text-sm text-danger mb-4">
+							{purgeRetryFetcher.data.error}
+						</p>
+					) : null}
+					{purgeRetryFetcher.data?.accepted ? (
+						<p className="text-sm text-hyper-green mb-4">
+							Retry accepted. The wipe continues in the background.
+						</p>
+					) : null}
+					{failedPurgeJobs.length === 0 ? (
+						<div className="glass-panel rounded-2xl p-6">
+							<p className="text-sm text-muted">No failed purge jobs.</p>
+						</div>
+					) : (
+						<div className="space-y-4">
+							{failedPurgeJobs.map((job) => (
+								<div key={job.id} className="glass-panel rounded-2xl p-6">
+									<div className="flex flex-wrap items-baseline justify-between gap-2 mb-3">
+										<p className="text-sm font-medium">
+											{job.kind === "account" ? "Account" : "Group"} ·{" "}
+											<span className="font-mono text-muted">
+												{job.redactedId}
+											</span>
+										</p>
+										<p className="text-xs text-muted">
+											{job.attemptCount} attempt
+											{job.attemptCount === 1 ? "" : "s"} ·{" "}
+											{formatDateTime(job.updatedAt)}
+										</p>
+									</div>
+									{job.email ? (
+										<p className="text-sm text-muted mb-2">{job.email}</p>
+									) : null}
+									{job.errorMessage ? (
+										<pre className="text-xs text-muted whitespace-pre-wrap break-words mb-4 font-mono">
+											{job.errorMessage}
+										</pre>
+									) : null}
+									<purgeRetryFetcher.Form
+										method="post"
+										className="flex flex-col sm:flex-row gap-3"
+									>
+										<input
+											type="hidden"
+											name="intent"
+											value="retry-purge-job"
+										/>
+										<input type="hidden" name="jobId" value={job.id} />
+										<input
+											type="text"
+											name="confirmValue"
+											required
+											autoComplete="off"
+											placeholder={
+												job.kind === "account"
+													? "Type the account email"
+													: "Type the organization id"
+											}
+											className="flex-1 px-3 py-2 rounded-lg border border-carbon/10 bg-ceramic text-sm"
+										/>
+										<button
+											type="submit"
+											disabled={purgeRetryFetcher.state !== "idle"}
+											className="px-4 py-2 bg-hyper-green/10 text-hyper-green rounded-lg font-medium text-sm hover:bg-hyper-green/20 transition-colors disabled:opacity-50"
+										>
+											{purgeRetryFetcher.state !== "idle"
+												? "Retrying…"
+												: "Retry wipe"}
+										</button>
+									</purgeRetryFetcher.Form>
+								</div>
+							))}
+						</div>
+					)}
 				</section>
 
 				{/* Logged In Now */}

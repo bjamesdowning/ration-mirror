@@ -7,6 +7,14 @@ export const ToggleAdminSchema = z.object({
 
 export type ToggleAdminInput = z.infer<typeof ToggleAdminSchema>;
 
+export const RetryPurgeJobSchema = z.object({
+	intent: z.literal("retry-purge-job"),
+	jobId: z.string().uuid(),
+	confirmValue: z.string().trim().min(1).max(320),
+});
+
+export type RetryPurgeJobInput = z.infer<typeof RetryPurgeJobSchema>;
+
 export const AdminUsersListSchema = z.object({
 	q: z.string().optional(),
 	page: z.coerce.number().int().min(1).default(1),

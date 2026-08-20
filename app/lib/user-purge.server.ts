@@ -1,12 +1,12 @@
 import { eq, like, or } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/d1";
+import { type DrizzleD1Database, drizzle } from "drizzle-orm/d1";
 import * as schema from "~/db/schema";
 import { evaluateAccountDeletionEligibility } from "~/lib/account-deletion-gate";
 import { revokeAppleTokensForUser } from "~/lib/apple-token-revoke.server";
 import { clearBetterAuthSecondarySessionsForUser } from "~/lib/auth-secondary-storage.server";
 import { reconcileSubscriptionCancelAtPeriodEnd } from "~/lib/billing.server";
 import { purgeCopilotConversationsForUser } from "~/lib/copilot/purge.server";
-import { retryOnD1Contention } from "~/lib/error-handler";
+import { flattenErrorText, retryOnD1Contention } from "~/lib/error-handler";
 import { redactAllNutritionPayloadsForUser } from "~/lib/kitchen-event-purge.server";
 import { log, redactId } from "~/lib/logging.server";
 import { eraseNutritionData } from "~/lib/nutrition/consent.server";
@@ -156,9 +156,45 @@ async function cancelStripeBillingBestEffort(
 	}
 }
 
-function wrapUserPurgeStep(step: string, error: unknown): Error {
-	const message = error instanceof Error ? error.message : String(error);
-	return new Error(`${step}: ${message}`, { cause: error });
+export function wrapUserPurgeStep(step: string, error: unknown): Error {
+	return new Error(`${step}: ${flattenErrorText(error)}`, { cause: error });
+}
+
+/**
+ * SQLite `ON DELETE NO ACTION` leftovers in shared kitchens (and columns added
+ * via ALTER without ON DELETE) block `DELETE FROM user`. Null them explicitly
+ * instead of relying on a Drizzle FK migration SQLite cannot apply in place.
+ */
+export function leftoverUserFkNullStatements(
+	db: DrizzleD1Database<typeof schema>,
+	userId: string,
+) {
+	return [
+		db
+			.update(schema.mealPlanEntry)
+			.set({ cookedByUserId: null })
+			.where(eq(schema.mealPlanEntry.cookedByUserId, userId)),
+		db
+			.update(schema.ingredientNutritionMatch)
+			.set({ reviewedByUserId: null })
+			.where(eq(schema.ingredientNutritionMatch.reviewedByUserId, userId)),
+		db
+			.update(schema.nutritionIntake)
+			.set({ voidedByUserId: null })
+			.where(eq(schema.nutritionIntake.voidedByUserId, userId)),
+		db
+			.update(schema.agentRegistration)
+			.set({ claimedByUserId: null })
+			.where(eq(schema.agentRegistration.claimedByUserId, userId)),
+		db
+			.update(schema.nutritionRecomputeJob)
+			.set({ originatingUserId: null })
+			.where(eq(schema.nutritionRecomputeJob.originatingUserId, userId)),
+		db
+			.update(schema.tag)
+			.set({ createdBy: null })
+			.where(eq(schema.tag.createdBy, userId)),
+	];
 }
 
 /**
@@ -301,6 +337,7 @@ export async function purgeUserAccount(
 				.update(schema.kitchenEvent)
 				.set({ userId: null })
 				.where(eq(schema.kitchenEvent.userId, userId)),
+			...leftoverUserFkNullStatements(db, userId),
 			db.delete(schema.apiKey).where(eq(schema.apiKey.userId, userId)),
 			db
 				.delete(schema.verification)
@@ -333,10 +370,9 @@ export async function purgeUserAccount(
 			db
 				.delete(schema.oauthClient)
 				.where(eq(schema.oauthClient.userId, userId)),
+			db.delete(schema.user).where(eq(schema.user.id, userId)),
 			// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
 		] as [any, ...any[]]);
-
-		await db.delete(schema.user).where(eq(schema.user.id, userId));
 	} catch (error) {
 		throw wrapUserPurgeStep("user_wipe:d1", error);
 	}
@@ -385,8 +421,7 @@ export async function beginAccountPurge(
 				await clearPurgeJob(env.RATION_KV, jobId);
 				await clearUserPurgePending(env.RATION_KV, input.userId);
 			} catch (error) {
-				const errorMessage =
-					error instanceof Error ? error.message : String(error);
+				const errorMessage = flattenErrorText(error);
 				log.error("[Purge] Background account purge failed", {
 					userId: redactId(input.userId),
 					jobId: redactId(jobId),

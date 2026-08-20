@@ -1,6 +1,6 @@
 {
 	"name": "ration",
-	"version": "1.9.10",
+	"version": "1.9.11",
 	"private": true,
 	"license": "SEE LICENSE IN LICENSE",
 	"type": "module",
@@ -19,6 +19,8 @@
 		"lint": "biome check .",
 		"lint:fix": "biome check --write .",
 		"flag:check": "bun scripts/flag-check.ts",
+		"grant-admin": "bun scripts/grant-admin.ts",
+		"verify:admin-d1": "bun scripts/verify-admin-d1.ts",
 		"postinstall": "bun scripts/postinstall.ts",
 		"pretest:unit": "bun scripts/verify-test-deps.ts",
 		"pretest:e2e": "bun scripts/e2e-prep-local.ts",

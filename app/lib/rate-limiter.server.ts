@@ -422,6 +422,13 @@ export const RATE_LIMITS: Record<string, RateLimitConfig> = {
 		maxRequests: 30,
 		keyPrefix: "rate:admin_metrics",
 	},
+	/** Isolated GDPR wipe retry from God Mode — fail-closed, low QPS. */
+	admin_purge_retry: {
+		windowMs: 60_000,
+		maxRequests: 5,
+		keyPrefix: "rate:admin_purge_retry",
+		failClosed: true,
+	},
 	status_poll: {
 		windowMs: 60_000,
 		maxRequests: 60,

@@ -3,6 +3,7 @@ import { createRequestHandler } from "@react-router/cloudflare";
 import { purgeOrphanAgentKitchens } from "../app/lib/agent/orphan-cleanup.server";
 import { AI_QUEUE_HANDLERS } from "../app/lib/ai-queue-registry.server";
 import { refreshStaleCargoStatuses } from "../app/lib/cargo.server";
+import { runDailyD1HygieneThenPurgeRetry } from "../app/lib/cron-hygiene.server";
 import {
 	detectAndRecordExpiredCargo,
 	purgeExpiredKitchenEvents,
@@ -14,7 +15,6 @@ import {
 } from "../app/lib/nutrition/persist.server";
 import { repairDueNutritionRecomputeJobs } from "../app/lib/nutrition/recompute-consumer.server";
 import { fetchLogContext, runWithOpsEnv } from "../app/lib/ops-context.server";
-import { retryFailedPurgeJobs } from "../app/lib/purge-retry-cron.server";
 import { sendReengagementEmails } from "../app/lib/reengagement-cron.server";
 import { emitQueueConsumerError } from "../app/lib/telemetry.server";
 import { isRegisteredWellKnownPath } from "../app/lib/well-known-routes";
@@ -142,8 +142,7 @@ export default {
 	/**
 	 * Scheduled handler — runs on the CRON trigger configured in wrangler.jsonc.
 	 * Currently performs:
-	 *   - Session table cleanup: deletes expired sessions to prevent unbounded growth.
-	 *   - Queue job cleanup: deletes expired queue_job rows.
+	 *   - Session + queue_job hygiene (bounded DELETEs) then failed purge retry.
 	 *   - Orphan agent kitchen purge: 6-month idle pending_claim registrations.
 	 *   - Re-engagement emails: users inactive 30+ days (Hub, API, or MCP).
 	 *   - Flight Recorder: detect newly expired cargo + purge events past retention
@@ -179,54 +178,16 @@ export default {
 			);
 			return;
 		}
-		runCron(() => purgeExpiredSessions(env));
-		runCron(() => purgeExpiredQueueJobs(env));
-		runCron(() => purgeOrphanAgentKitchens(env));
+		runCron(async () => {
+			await runDailyD1HygieneThenPurgeRetry(env);
+			await purgeOrphanAgentKitchens(env);
+			await runKitchenEventExpiryDetection(env);
+			await runKitchenEventRetentionPurge(env);
+			await runCargoStatusRefresh(env);
+		});
 		runCron(() => sendReengagementEmails(env));
-		runCron(() => retryFailedPurgeJobs(env));
-		runCron(() => runKitchenEventExpiryDetection(env));
-		runCron(() => runKitchenEventRetentionPurge(env));
-		runCron(() => runCargoStatusRefresh(env));
 	},
 } satisfies ExportedHandler<Env>;
-
-async function purgeExpiredSessions(env: Env): Promise<void> {
-	const nowUnix = Math.floor(Date.now() / 1000);
-	try {
-		const result = await env.DB.prepare(
-			"DELETE FROM session WHERE expires_at < ?1;",
-		)
-			.bind(nowUnix)
-			.run();
-		const deleted = result.meta?.changes ?? 0;
-		if (deleted > 0) {
-			log.info("[CRON] Purged expired sessions", { deleted });
-		}
-	} catch (err) {
-		log.error("[CRON] Session purge failed", err, {
-			event: "cron_purge_failed",
-		});
-	}
-}
-
-async function purgeExpiredQueueJobs(env: Env): Promise<void> {
-	const nowUnix = Math.floor(Date.now() / 1000);
-	try {
-		const result = await env.DB.prepare(
-			"DELETE FROM queue_job WHERE expires_at < ?1;",
-		)
-			.bind(nowUnix)
-			.run();
-		const deleted = result.meta?.changes ?? 0;
-		if (deleted > 0) {
-			log.info("[CRON] Purged expired queue jobs", { deleted });
-		}
-	} catch (err) {
-		log.error("[CRON] Queue job purge failed", err, {
-			event: "cron_purge_failed",
-		});
-	}
-}
 
 async function runKitchenEventExpiryDetection(env: Env): Promise<void> {
 	try {

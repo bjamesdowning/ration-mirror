@@ -118,6 +118,64 @@ export async function clearPurgeJob(
 	await kv.delete(purgeJobKey(jobId));
 }
 
+export async function getPurgeJob(
+	kv: KVNamespace,
+	jobId: string,
+): Promise<PurgeJobRecord | null> {
+	const raw = await kv.get(purgeJobKey(jobId));
+	if (!raw) return null;
+	try {
+		return JSON.parse(raw) as PurgeJobRecord;
+	} catch {
+		return null;
+	}
+}
+
+export function matchesPurgeRetryConfirmation(
+	job: PurgeJobRecord,
+	confirmValue: string,
+): boolean {
+	const trimmed = confirmValue.trim();
+	if (!trimmed) return false;
+	if (job.kind === "account") {
+		const email = job.email;
+		return (
+			typeof email === "string" && email.toLowerCase() === trimmed.toLowerCase()
+		);
+	}
+	return Boolean(job.organizationId) && job.organizationId === trimmed;
+}
+
+export type AdminFailedPurgeJobView = {
+	id: string;
+	kind: PurgeJobKind;
+	redactedId: string;
+	email: string | null;
+	organizationId: string | null;
+	attemptCount: number;
+	errorMessage: string | null;
+	updatedAt: string;
+};
+
+export function toAdminFailedPurgeJobView(
+	job: PurgeJobRecord,
+): AdminFailedPurgeJobView {
+	const rawId =
+		job.kind === "account"
+			? (job.userId ?? job.id)
+			: (job.organizationId ?? job.id);
+	return {
+		id: job.id,
+		kind: job.kind,
+		redactedId: redactId(rawId),
+		email: job.email ?? null,
+		organizationId: job.kind === "group" ? (job.organizationId ?? null) : null,
+		attemptCount: job.attemptCount,
+		errorMessage: job.errorMessage ?? null,
+		updatedAt: job.updatedAt,
+	};
+}
+
 export async function listFailedPurgeJobs(
 	kv: KVNamespace,
 	limit = 50,

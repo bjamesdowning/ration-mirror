@@ -2376,7 +2376,7 @@ CORS allows trusted origins only (`https://ration.mayutic.com`, local dev hosts,
 
 ### 14.4 Model, presets, and inference
 
-- **Model:** hardcoded `google/gemini-3.7-flash` via **AI Gateway** `ration-gateway` (Think `LanguageModel` from [`model.server.ts`](app/lib/copilot/model.server.ts); the Copilot worker `AI` binding is transport only). Kill switch is Flagship `ration-copilot` (404). Missing `AI_GATEWAY_ID` fails closed.
+- **Model:** hardcoded `google/gemini-3.7-flash` via **AI Gateway** `ration-gateway` (Think `LanguageModel` from [`model.server.ts`](app/lib/copilot/model.server.ts); the Copilot worker `AI` binding is transport only — there is no separate AI Gateway binding). Catalog **run path** responses are OpenAI Chat Completions wire, so the factory registers `workers-ai-provider/openai` plus `/google`. Kill switch is Flagship `ration-copilot` (404). Missing `AI_GATEWAY_ID` fails closed.
 - **Presets** ([`model-profiles.ts`](app/lib/copilot/model-profiles.ts)):
 
 | Preset | thinkingLevel | maxSteps | maxOutputTokens | stall | Use case |

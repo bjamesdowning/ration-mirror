@@ -19,6 +19,10 @@ vi.mock("workers-ai-provider/google", () => ({
 	google: { id: "google-plugin" },
 }));
 
+vi.mock("workers-ai-provider/openai", () => ({
+	openai: { id: "openai-plugin" },
+}));
+
 describe("createCopilotGatewayModel", () => {
 	beforeEach(() => {
 		mockCreateWorkersAI.mockClear();
@@ -44,7 +48,7 @@ describe("createCopilotGatewayModel", () => {
 		).toThrow("copilot_gateway_unconfigured");
 	});
 
-	it("pins ration-gateway with google plugin, skipCache, and no extra retries", () => {
+	it("pins ration-gateway with openai+google plugins, skipCache, and no extra retries", () => {
 		const binding = { run: vi.fn() } as unknown as Ai;
 		const model = createCopilotGatewayModel({
 			AI: binding,
@@ -54,7 +58,7 @@ describe("createCopilotGatewayModel", () => {
 
 		expect(mockCreateWorkersAI).toHaveBeenCalledWith({
 			binding,
-			providers: [{ id: "google-plugin" }],
+			providers: [{ id: "openai-plugin" }, { id: "google-plugin" }],
 			gateway: {
 				id: "ration-gateway",
 				skipCache: true,

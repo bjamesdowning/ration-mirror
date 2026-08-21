@@ -40,6 +40,10 @@ final class AuthManager {
     private var accessExpiry: Date?
     private var refreshTask: Task<String, Error>?
     private var exchangeTask: Task<Void, Error>?
+    /// Apple only sends `fullName` on the first authorization. Keep it across
+    /// Sign In → Create Account so a retry cannot insert an empty display name.
+    private var appleGivenName: String?
+    private var appleFamilyName: String?
 
     private static let refreshKey = "refresh_token"
     private static let pkceVerifierKey = "pkce_verifier"
@@ -95,11 +99,17 @@ final class AuthManager {
         if let accessToken {
             body["accessToken"] = accessToken
         }
-        if provider == "apple", givenName != nil || familyName != nil {
-            var fullName: [String: String] = [:]
-            if let givenName { fullName["givenName"] = givenName }
-            if let familyName { fullName["familyName"] = familyName }
-            body["fullName"] = fullName
+        if provider == "apple" {
+            if let givenName, !givenName.isEmpty { appleGivenName = givenName }
+            if let familyName, !familyName.isEmpty { appleFamilyName = familyName }
+            let resolvedGiven = givenName ?? appleGivenName
+            let resolvedFamily = familyName ?? appleFamilyName
+            if resolvedGiven != nil || resolvedFamily != nil {
+                var fullName: [String: String] = [:]
+                if let resolvedGiven { fullName["givenName"] = resolvedGiven }
+                if let resolvedFamily { fullName["familyName"] = resolvedFamily }
+                body["fullName"] = fullName
+            }
         }
 
         let pair = try await postTokenDictionary(body: body, endpoint: "auth/social")
@@ -318,6 +328,8 @@ final class AuthManager {
         refreshToken = nil
         // M-12: an abandoned magic-link request otherwise leaves this orphaned in Keychain indefinitely.
         Keychain.delete(Self.pkceVerifierKey)
+        appleGivenName = nil
+        appleFamilyName = nil
         clearAuthError()
         phase = .signedOut
         await onSignedOut?()

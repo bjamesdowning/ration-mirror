@@ -125,7 +125,7 @@
 				"max_batch_size": 5,
 				"max_batch_timeout": 2,
 				"max_retries": 5,
-				"max_concurrency": 4,
+				"max_concurrency": 2,
 				"dead_letter_queue": "ration-nutrition-recompute-dlq-dev",
 				"retry_delay": 15
 			}

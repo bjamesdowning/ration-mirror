@@ -215,7 +215,7 @@
 				"max_batch_size": 5,
 				"max_batch_timeout": 2,
 				"max_retries": 5,
-				"max_concurrency": 4,
+				"max_concurrency": 2,
 				"dead_letter_queue": "ration-nutrition-recompute-dlq",
 				"retry_delay": 15
 			}
@@ -223,15 +223,17 @@
 	},
 	/**
 	 * Scheduled Triggers (CRON)
-	 * https://developers.cloudflare.com/workers/platform/triggers/cron-triggers/
+	 * https://developers.cloudflare.com/workers/configuration/cron-triggers/
 	 *
-	 * session-purge: runs daily at 03:00 UTC to delete expired sessions and
-	 * prevent the session table from growing unbounded at scale.
-	 * Also runs Flight Recorder expiry detection + kitchen_event retention purge.
-	 * Minute cron: nutrition recompute outbox repair / expired lease recovery.
+	 * 03:00 UTC daily: serialized D1 hygiene (sessions, queue_job, nutrition
+	 * retention DELETEs, Flight Recorder, cargo status) then GDPR purge retry.
+	 * Re-engagement email is a separate waitUntil (not main D1).
+	 *
+	 * Every 5 minutes: nutrition recompute outbox sweeper only (missed queue
+	 * wakes + expired leases). Queue retry_delay owns hot-path retries.
 	 */
 	"triggers": {
-		"crons": ["0 3 * * *", "* * * * *"]
+		"crons": ["0 3 * * *", "*/5 * * * *"]
 	},
 	/**
 	 * Dev Environment — isolated Cloudflare resources for remote dev testing.

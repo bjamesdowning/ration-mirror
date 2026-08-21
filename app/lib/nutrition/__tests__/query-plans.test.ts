@@ -4,6 +4,11 @@
  */
 import { describe, expect, it } from "vitest";
 import { createSqliteD1 } from "~/test/helpers/sqlite-d1";
+import {
+	NUTRITION_RECOMPUTE_SWEEP_FAILED_SQL,
+	NUTRITION_RECOMPUTE_SWEEP_LEASE_SQL,
+	NUTRITION_RECOMPUTE_SWEEP_PENDING_SQL,
+} from "../recompute-consumer.server";
 
 async function explain(db: D1Database, sql: string): Promise<string> {
 	const rows = await db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all<{
@@ -17,6 +22,46 @@ function assertNoFullScan(plan: string): void {
 	expect(plan.toLowerCase()).not.toMatch(
 		/scan table nutrition_recompute_job\b/,
 	);
+}
+
+function bindSweepSql(sql: string, values: number[]): string {
+	let bound = sql;
+	values.forEach((value, index) => {
+		bound = bound.replace(`?${index + 1}`, String(value));
+	});
+	return bound;
+}
+
+async function createRecomputeJobTable(db: D1Database): Promise<void> {
+	await db
+		.prepare(
+			`CREATE TABLE nutrition_recompute_job (
+          job_key TEXT PRIMARY KEY,
+          status TEXT NOT NULL,
+          dispatch_after INTEGER NOT NULL,
+          lease_expires_at INTEGER,
+          expires_at INTEGER
+        )`,
+		)
+		.run();
+	await db
+		.prepare(
+			`CREATE INDEX nutrition_recompute_due_idx
+         ON nutrition_recompute_job (status, dispatch_after, job_key)`,
+		)
+		.run();
+	await db
+		.prepare(
+			`CREATE INDEX nutrition_recompute_lease_idx
+         ON nutrition_recompute_job (status, lease_expires_at)`,
+		)
+		.run();
+	await db
+		.prepare(
+			`CREATE INDEX nutrition_recompute_expiry_idx
+         ON nutrition_recompute_job (status, expires_at)`,
+		)
+		.run();
 }
 
 describe("nutrition query plans", () => {
@@ -125,6 +170,45 @@ describe("nutrition query plans", () => {
 		);
 		expect(plan.toLowerCase()).toMatch(
 			/nutrition_recompute_due_idx|using index/,
+		);
+		assertNoFullScan(plan);
+	});
+
+	it("sweeper pending SQL uses the due index", async () => {
+		const { database: db } = createSqliteD1();
+		await createRecomputeJobTable(db);
+		const plan = await explain(
+			db,
+			bindSweepSql(NUTRITION_RECOMPUTE_SWEEP_PENDING_SQL, [1, 25]),
+		);
+		expect(plan.toLowerCase()).toMatch(
+			/nutrition_recompute_due_idx|using index/,
+		);
+		assertNoFullScan(plan);
+	});
+
+	it("sweeper expired-lease SQL uses the lease index", async () => {
+		const { database: db } = createSqliteD1();
+		await createRecomputeJobTable(db);
+		const plan = await explain(
+			db,
+			bindSweepSql(NUTRITION_RECOMPUTE_SWEEP_LEASE_SQL, [1, 25]),
+		);
+		expect(plan.toLowerCase()).toMatch(
+			/nutrition_recompute_lease_idx|using index/,
+		);
+		assertNoFullScan(plan);
+	});
+
+	it("sweeper failed SQL uses the expiry index", async () => {
+		const { database: db } = createSqliteD1();
+		await createRecomputeJobTable(db);
+		const plan = await explain(
+			db,
+			bindSweepSql(NUTRITION_RECOMPUTE_SWEEP_FAILED_SQL, [1, 2, 25]),
+		);
+		expect(plan.toLowerCase()).toMatch(
+			/nutrition_recompute_expiry_idx|nutrition_recompute_due_idx|using index/,
 		);
 		assertNoFullScan(plan);
 	});

@@ -240,6 +240,36 @@ describe("authenticateMobileSocial", () => {
 		});
 	});
 
+	it("rethrows D1 object-reset so signup is 503 server_busy, not 401", async () => {
+		const busy = new Error(
+			"D1_ERROR: D1 DB storage operation exceeded timeout which caused object to be reset.",
+		);
+		signInSocial.mockRejectedValue(busy);
+
+		await expect(
+			authenticateMobileSocial(env, {
+				provider: "apple",
+				idToken: googleIdToken("downing@mayutic.com"),
+				nonce: "raw-nonce",
+				intent: "signUp",
+				tosAccepted: true,
+			}),
+		).rejects.toBe(busy);
+	});
+
+	it("rethrows SQLITE_BUSY so signup is 503 server_busy, not 401", async () => {
+		const busy = new Error("D1_ERROR: SQLITE_BUSY: database is locked");
+		signInSocial.mockRejectedValue(busy);
+
+		await expect(
+			authenticateMobileSocial(env, {
+				provider: "google",
+				idToken: googleIdToken("user@example.com"),
+				intent: "signIn",
+			}),
+		).rejects.toBe(busy);
+	});
+
 	it("provisions a personal org when none exists yet", async () => {
 		findFirstOrg.mockResolvedValue(null);
 

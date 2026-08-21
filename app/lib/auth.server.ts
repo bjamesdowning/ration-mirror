@@ -22,6 +22,7 @@ import {
 	invalidateBetterAuthSessionCache,
 } from "./auth-secondary-storage.server";
 import { isTransientAuthSessionLookupError } from "./auth-session-lookup.server";
+import { resolveCreatedUserName } from "./display-name";
 import {
 	buildMagicLinkEmail,
 	buildWelcomeEmail,
@@ -295,10 +296,15 @@ export function createAuth(env: Cloudflare.Env) {
 							typeof user.email === "string" ? user.email : null,
 							request,
 						);
+						const name = resolveCreatedUserName({
+							name: typeof user.name === "string" ? user.name : null,
+							email: typeof user.email === "string" ? user.email : null,
+						});
 						if (intent) {
 							return {
 								data: {
 									...user,
+									name,
 									tosAcceptedAt: new Date(),
 									tosVersion: intent.tosVersion,
 								},
@@ -309,6 +315,7 @@ export function createAuth(env: Cloudflare.Env) {
 							return {
 								data: {
 									...user,
+									name,
 									tosAcceptedAt: new Date(),
 									tosVersion: CURRENT_TOS_VERSION,
 								},

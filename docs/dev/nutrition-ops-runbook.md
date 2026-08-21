@@ -40,12 +40,13 @@ Symptoms:
 
 - **Oldest pending job > 120s**: check consumer logs, D1 contention, Flagship `nutrition-async-recompute` still on for cohort.
 - **DLQ growth**: inspect wake payload validity; lease claim conflicts; FDC DB binding missing (`unavailable` resolves).
-- **Queue send failures**: mutations still succeed; minute cron redispatches due outbox rows.
+- **Queue send failures**: mutations still succeed; the 5-minute sweeper redispatches due outbox rows (pending, expired leases, failed with `dispatch_after` due). Retention DELETEs run on the daily 03:00 hygiene chain, not the sweeper.
+- Consumer `max_concurrency` is **2** so extra workers do not fight the main D1 primary. Queue `retry_delay: 15` / `max_retries: 5` / DLQ own the hot path.
 
 Recovery:
 
 1. Confirm `NUTRITION_RECOMPUTE_QUEUE` binding + consumer registered in `AI_QUEUE_HANDLERS`.
-2. Leave user edits alone — repair cron wakes due/failed/expired-lease jobs.
+2. Leave user edits alone — the 5-minute sweeper wakes due/failed/expired-lease jobs (25 keys per run). Queue retry drains the backlog.
 3. Kill-switch: disable `nutrition-async-recompute` (sync fallback remains if engine on).
 
 ## Ambiguous intake / undo replay

@@ -4,6 +4,10 @@
  */
 
 import { log } from "~/lib/logging.server";
+import {
+	purgeExpiredNutritionIntake,
+	purgeExpiredNutritionRecomputeJobs,
+} from "~/lib/nutrition/persist.server";
 import { retryFailedPurgeJobs } from "~/lib/purge-retry-cron.server";
 
 export const CRON_EXPIRED_ROW_DELETE_BATCH = 500;
@@ -89,11 +93,38 @@ export async function purgeExpiredQueueJobs(
 	}
 }
 
-/** Session + queue hygiene first, then GDPR purge retry — one D1 writer at a time. */
+/** Session + queue + nutrition retention, then GDPR purge retry — one D1 writer at a time. */
 export async function runDailyD1HygieneThenPurgeRetry(
 	env: Cloudflare.Env,
 ): Promise<void> {
 	await purgeExpiredSessions(env);
 	await purgeExpiredQueueJobs(env);
+	await purgeExpiredNutritionRetention(env);
 	await retryFailedPurgeJobs(env);
+}
+
+async function purgeExpiredNutritionRetention(
+	env: Cloudflare.Env,
+): Promise<void> {
+	const now = new Date();
+	try {
+		const deleted = await purgeExpiredNutritionIntake(env.DB, now);
+		if (deleted > 0) {
+			log.info("[CRON] Purged expired nutrition intake", { deleted });
+		}
+	} catch (err) {
+		log.error("[CRON] Nutrition intake purge failed", err, {
+			event: "cron_purge_failed",
+		});
+	}
+	try {
+		const deleted = await purgeExpiredNutritionRecomputeJobs(env.DB, now);
+		if (deleted > 0) {
+			log.info("[CRON] Purged expired nutrition recompute jobs", { deleted });
+		}
+	} catch (err) {
+		log.error("[CRON] Nutrition recompute job purge failed", err, {
+			event: "cron_purge_failed",
+		});
+	}
 }

@@ -9,10 +9,6 @@ import {
 	purgeExpiredKitchenEvents,
 } from "../app/lib/kitchen-events.server";
 import { log, redactJobRequestId } from "../app/lib/logging.server";
-import {
-	purgeExpiredNutritionIntake,
-	purgeExpiredNutritionRecomputeJobs,
-} from "../app/lib/nutrition/persist.server";
 import { repairDueNutritionRecomputeJobs } from "../app/lib/nutrition/recompute-consumer.server";
 import { fetchLogContext, runWithOpsEnv } from "../app/lib/ops-context.server";
 import { sendReengagementEmails } from "../app/lib/reengagement-cron.server";
@@ -140,16 +136,14 @@ export default {
 	},
 
 	/**
-	 * Scheduled handler — runs on the CRON trigger configured in wrangler.jsonc.
-	 * Currently performs:
-	 *   - Session + queue_job hygiene (bounded DELETEs) then failed purge retry.
-	 *   - Orphan agent kitchen purge: 6-month idle pending_claim registrations.
-	 *   - Re-engagement emails: users inactive 30+ days (Hub, API, or MCP).
-	 *   - Flight Recorder: detect newly expired cargo + purge events past retention
-	 *     (also purges expired nutrition_intake in the same retention job family).
-	 *   - Cargo status hygiene: refresh write-time status from expiresAt.
+	 * Scheduled handler — runs on CRON triggers in wrangler.jsonc.
 	 *
-	 * Cron: "0 3 * * *" (03:00 UTC daily — low-traffic window)
+	 *   Every 5 minutes — nutrition recompute outbox sweeper (missed wakes /
+	 *     expired leases). Awaited in-handler so it is one D1 writer, not
+	 *     parallel waitUntil.
+	 *   03:00 UTC daily — serialized D1 hygiene (sessions, queue_job, nutrition
+	 *     retention, orphan kitchens, Flight Recorder, cargo status) then
+	 *     re-engagement email on a separate waitUntil.
 	 */
 	async scheduled(event: ScheduledController, env: Env, ctx: ExecutionContext) {
 		const cronLog = {
@@ -160,21 +154,19 @@ export default {
 		const runCron = (fn: () => Promise<unknown>) =>
 			ctx.waitUntil(runWithOpsEnv(env, fn, cronLog));
 
-		if (event.cron === "* * * * *") {
-			runCron(() => repairDueNutritionRecomputeJobs(env));
-			runCron(() =>
-				purgeExpiredNutritionIntake(env.DB, new Date()).catch((err) => {
-					log.error("[CRON] Nutrition intake purge failed", err, {
-						event: "cron_purge_failed",
-					});
-				}),
-			);
-			runCron(() =>
-				purgeExpiredNutritionRecomputeJobs(env.DB, new Date()).catch((err) => {
-					log.error("[CRON] Nutrition recompute job purge failed", err, {
-						event: "cron_purge_failed",
-					});
-				}),
+		if (event.cron === "*/5 * * * *") {
+			await runWithOpsEnv(
+				env,
+				async () => {
+					try {
+						await repairDueNutritionRecomputeJobs(env);
+					} catch (err) {
+						log.error("[CRON] Nutrition recompute repair failed", err, {
+							event: "cron_purge_failed",
+						});
+					}
+				},
+				cronLog,
 			);
 			return;
 		}
@@ -213,7 +205,6 @@ async function runKitchenEventRetentionPurge(env: Env): Promise<void> {
 			event: "cron_purge_failed",
 		});
 	}
-	// Nutrition intake + recompute-job retention run on the minute cron (bounded batches).
 }
 
 async function runCargoStatusRefresh(env: Env): Promise<void> {

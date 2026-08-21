@@ -85,6 +85,8 @@ struct SignInView: View {
     @State private var tosAccepted = false
     @State private var socialLoading: SocialProvider?
     @State private var appleCoordinator = AppleSignInCoordinator()
+    @State private var appleGivenName: String?
+    @State private var appleFamilyName: String?
 
     private enum SocialProvider {
         case apple
@@ -235,6 +237,13 @@ struct SignInView: View {
             }
             .frame(height: 50)
             .opacity(canProceed ? 1 : 0.5)
+            .overlay {
+                if socialLoading == .apple {
+                    ProgressView()
+                        .tint(.white)
+                        .allowsHitTesting(false)
+                }
+            }
             // ASAuthorizationAppleIDButton's type is fixed at init; recreate on mode change.
             .id(mode)
 
@@ -428,6 +437,45 @@ struct SignInView: View {
         }
     }
 
+    private func persistAppleFullName(givenName: String?, familyName: String?) {
+        if let givenName, !givenName.isEmpty { appleGivenName = givenName }
+        if let familyName, !familyName.isEmpty { appleFamilyName = familyName }
+    }
+
+    private func submitSocialWithBusyRetry(
+        provider: String,
+        idToken: String,
+        nonce: String? = nil,
+        accessToken: String? = nil,
+        givenName: String? = nil,
+        familyName: String? = nil,
+        retryOnBusy: Bool
+    ) async throws {
+        do {
+            try await env.auth.signInWithSocial(
+                provider: provider,
+                idToken: idToken,
+                nonce: nonce,
+                accessToken: accessToken,
+                givenName: givenName,
+                familyName: familyName,
+                intent: authIntent,
+                tosAccepted: tosAccepted
+            )
+        } catch let error as APIError where error.isServerBusy && retryOnBusy {
+            try await Task.sleep(for: .seconds(5))
+            try await submitSocialWithBusyRetry(
+                provider: provider,
+                idToken: idToken,
+                nonce: nonce,
+                accessToken: accessToken,
+                givenName: givenName,
+                familyName: familyName,
+                retryOnBusy: false
+            )
+        }
+    }
+
     private func signInWithApple() async {
         guard canProceed else { return }
         errorMessage = nil
@@ -436,20 +484,23 @@ struct SignInView: View {
         defer { socialLoading = nil }
         do {
             let result = try await appleCoordinator.signIn()
-            try await env.auth.signInWithSocial(
+            persistAppleFullName(givenName: result.givenName, familyName: result.familyName)
+            try await submitSocialWithBusyRetry(
                 provider: "apple",
                 idToken: result.identityToken,
                 nonce: result.rawNonce,
-                givenName: result.givenName,
-                familyName: result.familyName,
-                intent: authIntent,
-                tosAccepted: tosAccepted
+                givenName: result.givenName ?? appleGivenName,
+                familyName: result.familyName ?? appleFamilyName,
+                retryOnBusy: true
             )
         } catch let error as APIError where error.code == "cancelled" {
             return
         } catch let error as APIError where error.code == "account_not_found" {
             errorMessage = error.errorDescription
             mode = .signUp
+        } catch let error as APIError where error.isServerBusy {
+            errorMessage = error.errorDescription
+                ?? "The server is under heavy load. Please wait a moment and try again."
         } catch {
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
         }
@@ -463,18 +514,20 @@ struct SignInView: View {
         defer { socialLoading = nil }
         do {
             let result = try await GoogleSignInService.signIn()
-            try await env.auth.signInWithSocial(
+            try await submitSocialWithBusyRetry(
                 provider: "google",
                 idToken: result.idToken,
                 accessToken: result.accessToken,
-                intent: authIntent,
-                tosAccepted: tosAccepted
+                retryOnBusy: true
             )
         } catch let error as APIError where error.code == "cancelled" {
             return
         } catch let error as APIError where error.code == "account_not_found" {
             errorMessage = error.errorDescription
             mode = .signUp
+        } catch let error as APIError where error.isServerBusy {
+            errorMessage = error.errorDescription
+                ?? "The server is under heavy load. Please wait a moment and try again."
         } catch {
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
         }

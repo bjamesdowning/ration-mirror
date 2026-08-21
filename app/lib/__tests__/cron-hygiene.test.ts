@@ -6,6 +6,10 @@ import {
 	EXPIRED_QUEUE_JOB_DELETE_SQL,
 	EXPIRED_SESSION_DELETE_SQL,
 } from "../cron-hygiene.server";
+import {
+	EXPIRED_NUTRITION_INTAKE_DELETE_SQL,
+	EXPIRED_NUTRITION_RECOMPUTE_JOB_DELETE_SQL,
+} from "../nutrition/persist.server";
 
 describe("bounded expired-row deletes", () => {
 	it("uses subquery LIMIT rather than unbounded DELETE", () => {
@@ -18,6 +22,18 @@ describe("bounded expired-row deletes", () => {
 		);
 		expect(EXPIRED_QUEUE_JOB_DELETE_SQL).toMatch(/LIMIT \?2/i);
 		expect(CRON_EXPIRED_ROW_DELETE_BATCH).toBe(500);
+		expect(EXPIRED_NUTRITION_INTAKE_DELETE_SQL).toContain(
+			"DELETE FROM nutrition_intake",
+		);
+		expect(EXPIRED_NUTRITION_INTAKE_DELETE_SQL).toContain("WHERE id IN");
+		expect(EXPIRED_NUTRITION_INTAKE_DELETE_SQL).toMatch(/LIMIT \?2/i);
+		expect(EXPIRED_NUTRITION_RECOMPUTE_JOB_DELETE_SQL).toContain(
+			"DELETE FROM nutrition_recompute_job",
+		);
+		expect(EXPIRED_NUTRITION_RECOMPUTE_JOB_DELETE_SQL).toContain(
+			"WHERE job_key IN",
+		);
+		expect(EXPIRED_NUTRITION_RECOMPUTE_JOB_DELETE_SQL).toMatch(/LIMIT \?3/i);
 	});
 
 	it("deletes expired sessions in batches until the table is clean", async () => {

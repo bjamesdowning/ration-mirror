@@ -145,4 +145,12 @@ enum APIError: Error, LocalizedError, Sendable {
         guard statusCode == 409 else { return false }
         return code == "nutrition_updating"
     }
+
+    /// 503 D1 contention / overload — retry shortly; not a credential failure.
+    var isServerBusy: Bool {
+        if case let .server(status, _, code, _, _, _, _, _, _, _) = self {
+            return status == 503 || code == "server_busy"
+        }
+        return false
+    }
 }

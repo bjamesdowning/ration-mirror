@@ -117,7 +117,7 @@ Detailed FDC pin, queue/DLQ, undo replay, and alert checklist: [nutrition-ops-ru
 - Producer upserts `nutrition_recompute_job` and bumps `meal.nutrition_revision` / `nutrition_status=pending` without touching `meal.updated_at`.
 - Queue wake payload is `{ schemaVersion: 1, type: "nutrition.recompute.wake", jobKey, sentAt }` only — no org/user/nutrient fields.
 - Consumer claims a 120s lease, recomputes, and commits only when source revision + lease still match.
-- Minute cron redispatches due/failed/expired-lease jobs (bounded). Queue send failures leave the outbox repairable.
+- 5-minute sweeper redispatches due pending, expired-lease, and backoff-due failed jobs (bounded 25 keys). Queue send failures leave the outbox repairable. Daily 03:00 cron owns intake / recompute-job retention DELETEs.
 - With the flag off (or queue unbound), meal writes keep the synchronous recompute fallback.
 
 ## USDA / FDC reference DB (Checkpoint 5)

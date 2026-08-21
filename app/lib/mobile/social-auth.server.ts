@@ -3,6 +3,7 @@ import { drizzle } from "drizzle-orm/d1";
 import * as schema from "~/db/schema";
 import { buildPersonalOrgRecords } from "~/lib/agent/org-records.server";
 import { getAuth } from "~/lib/auth.server";
+import { isD1ContentionError } from "~/lib/error-handler";
 import { log, redactId } from "~/lib/logging.server";
 import {
 	issueMobileTokenPair,
@@ -280,6 +281,10 @@ export async function authenticateMobileSocial(
 	} catch (error) {
 		if (signupEmail) {
 			await clearSignupIntentForEmail(env.RATION_KV, signupEmail);
+		}
+		// D1 blips during user INSERT must not look like bad credentials.
+		if (isD1ContentionError(error)) {
+			throw error;
 		}
 		if (!isSignUp && isSignupDisabledError(error)) {
 			throw new MobileSocialAuthError(

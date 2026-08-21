@@ -1035,6 +1035,25 @@ export const NUTRITION_RECOMPUTE_COMPLETED_RETENTION_DAYS = 15;
 export const NUTRITION_RECOMPUTE_FAILED_RETENTION_DAYS = 30;
 export const NUTRITION_RECOMPUTE_JOB_PURGE_BATCH = 500;
 
+export const EXPIRED_NUTRITION_INTAKE_DELETE_SQL = `DELETE FROM nutrition_intake
+       WHERE id IN (
+         SELECT id FROM nutrition_intake
+         WHERE occurred_at < ?1
+         ORDER BY occurred_at ASC
+         LIMIT ?2
+       )`;
+
+export const EXPIRED_NUTRITION_RECOMPUTE_JOB_DELETE_SQL = `DELETE FROM nutrition_recompute_job
+       WHERE job_key IN (
+         SELECT job_key FROM nutrition_recompute_job
+         WHERE (
+           (status = 'completed' AND coalesce(completed_at, updated_at) < ?1)
+           OR (status = 'failed' AND updated_at < ?2)
+         )
+         ORDER BY updated_at ASC
+         LIMIT ?3
+       )`;
+
 /**
  * Delete intake rows older than retention (default 396 days) in bounded ID batches.
  */
@@ -1047,15 +1066,7 @@ export async function purgeExpiredNutritionIntake(
 	const cutoff = nutritionIntakeRetentionCutoff(now, retentionDays);
 	const cutoffUnix = Math.floor(cutoff.getTime() / 1000);
 	const result = await db
-		.prepare(
-			`DELETE FROM nutrition_intake
-       WHERE id IN (
-         SELECT id FROM nutrition_intake
-         WHERE occurred_at < ?1
-         ORDER BY occurred_at ASC
-         LIMIT ?2
-       )`,
-		)
+		.prepare(EXPIRED_NUTRITION_INTAKE_DELETE_SQL)
 		.bind(cutoffUnix, limit)
 		.run();
 	return result.meta?.changes ?? 0;
@@ -1077,18 +1088,7 @@ export async function purgeExpiredNutritionRecomputeJobs(
 			1000,
 	);
 	const result = await db
-		.prepare(
-			`DELETE FROM nutrition_recompute_job
-       WHERE job_key IN (
-         SELECT job_key FROM nutrition_recompute_job
-         WHERE (
-           (status = 'completed' AND coalesce(completed_at, updated_at) < ?1)
-           OR (status = 'failed' AND updated_at < ?2)
-         )
-         ORDER BY updated_at ASC
-         LIMIT ?3
-       )`,
-		)
+		.prepare(EXPIRED_NUTRITION_RECOMPUTE_JOB_DELETE_SQL)
 		.bind(completedCutoff, failedCutoff, limit)
 		.run();
 	return result.meta?.changes ?? 0;

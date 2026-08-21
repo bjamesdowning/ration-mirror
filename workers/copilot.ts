@@ -34,6 +34,7 @@ import {
 	persistConversationCharge,
 	reconcileAndPersistCopilotConversationUsage,
 } from "../app/lib/copilot/gate.server";
+import { copilotInferenceErrorContext } from "../app/lib/copilot/inference-error";
 import { detectBlockedCopilotIntent } from "../app/lib/copilot/intent-guard.server";
 import { createCopilotGatewayModel } from "../app/lib/copilot/model.server";
 import {
@@ -507,14 +508,10 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 	}
 
 	onChatError(error: unknown, ctx?: ChatErrorContext): unknown {
-		const status =
-			error && typeof error === "object" && "statusCode" in error
-				? Number((error as { statusCode?: unknown }).statusCode)
-				: undefined;
 		log.error("[Copilot] inference failed", error, {
 			event: "copilot_inference",
 			classification: ctx?.classification,
-			...(Number.isFinite(status) ? { status } : {}),
+			...copilotInferenceErrorContext(error),
 		});
 		return super.onChatError(error, ctx);
 	}

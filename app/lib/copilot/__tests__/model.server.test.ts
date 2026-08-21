@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+	COPILOT_GATEWAY_MODEL_OPTIONS,
 	CopilotGatewayUnconfiguredError,
 	createCopilotGatewayModel,
 } from "../model.server";
@@ -48,7 +49,7 @@ describe("createCopilotGatewayModel", () => {
 		).toThrow("copilot_gateway_unconfigured");
 	});
 
-	it("pins ration-gateway with openai+google plugins, skipCache, and no extra retries", () => {
+	it("pins ration-gateway BYOK (gateway transport) with openai+google plugins", () => {
 		const binding = { run: vi.fn() } as unknown as Ai;
 		const model = createCopilotGatewayModel({
 			AI: binding,
@@ -66,7 +67,11 @@ describe("createCopilotGatewayModel", () => {
 				metadata: { feature: "copilot", env: "production" },
 			},
 		});
-		expect(mockModelFactory).toHaveBeenCalledWith(COPILOT_GEMINI_MODEL_ID);
+		expect(mockModelFactory).toHaveBeenCalledWith(
+			COPILOT_GEMINI_MODEL_ID,
+			COPILOT_GATEWAY_MODEL_OPTIONS,
+		);
+		expect(COPILOT_GATEWAY_MODEL_OPTIONS.transport).toBe("gateway");
 		expect(model).toEqual({ modelId: COPILOT_GEMINI_MODEL_ID });
 	});
 });

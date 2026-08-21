@@ -18,13 +18,26 @@ export type CopilotGatewayEnv = {
 };
 
 /**
+ * Per-call options that pin Copilot onto google-ai-studio BYOK.
+ *
+ * Default catalog `env.AI.run` is Unified Billing. With no prepaid gateway
+ * credits that returns "Insufficient balance; add money to your gateway or
+ * use BYOK". Native gateway transport uses the stored Google key (same as
+ * scan) and is the path that honors `providerOptions.google.thinkingConfig`.
+ */
+export const COPILOT_GATEWAY_MODEL_OPTIONS = {
+	transport: "gateway" as const,
+	skipCache: true,
+};
+
+/**
  * Think LanguageModel for Copilot: Gemini 3.7 Flash through ration-gateway.
  * Returns a LanguageModel (not a string) so Think does not fall back to its
  * default openai/anthropic provider on the account "default" gateway.
  *
- * Both plugins are required: the default `env.AI.run` catalog path emits
- * OpenAI Chat Completions bytes for `google/…`, so the openai plugin parses
- * the stream. The google plugin covers the native gateway path (thoughts).
+ * The google plugin parses native generateContent on `transport: "gateway"`.
+ * openai stays registered so a catalog run-path regression is parseable
+ * instead of failing with a missing-plugin error.
  */
 export function createCopilotGatewayModel(
 	env: CopilotGatewayEnv,
@@ -48,5 +61,5 @@ export function createCopilotGatewayModel(
 		},
 	});
 
-	return workersai(COPILOT_GEMINI_MODEL_ID);
+	return workersai(COPILOT_GEMINI_MODEL_ID, COPILOT_GATEWAY_MODEL_OPTIONS);
 }

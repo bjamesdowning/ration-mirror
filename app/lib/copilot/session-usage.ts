@@ -28,8 +28,8 @@ export type SessionLimitWarning = {
 
 const SOFT_TOKEN_RATIO = 0.5;
 const URGENT_TOKEN_RATIO = 0.85;
-const SOFT_MESSAGE_COUNT = 30;
-const URGENT_MESSAGE_COUNT = 36;
+const SOFT_MESSAGE_COUNT = 60;
+const URGENT_MESSAGE_COUNT = 72;
 
 export function formatCopilotTokenCount(tokens: number): string {
 	const normalized = Math.max(0, Math.ceil(tokens));

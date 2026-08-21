@@ -1,6 +1,6 @@
 {
 	"name": "ration",
-	"version": "1.9.11",
+	"version": "1.9.12",
 	"private": true,
 	"license": "SEE LICENSE IN LICENSE",
 	"type": "module",
@@ -46,6 +46,7 @@
 		"deploy:copilot": "wrangler deploy --config wrangler.copilot.jsonc --env=''"
 	},
 	"dependencies": {
+		"@ai-sdk/google": "^3",
 		"@ai-sdk/react": "^3",
 		"@better-auth/oauth-provider": "1.6.23",
 		"@cloudflare/ai-chat": "^0.9.3",

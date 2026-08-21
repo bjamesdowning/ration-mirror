@@ -1,4 +1,5 @@
 import {
+	type ChatErrorContext,
 	type PrepareStepContext,
 	type StepContext,
 	Think,
@@ -34,13 +35,13 @@ import {
 	reconcileAndPersistCopilotConversationUsage,
 } from "../app/lib/copilot/gate.server";
 import { detectBlockedCopilotIntent } from "../app/lib/copilot/intent-guard.server";
+import { createCopilotGatewayModel } from "../app/lib/copilot/model.server";
 import {
 	COPILOT_MODEL_PRESETS,
 	type CopilotModelPreset,
+	copilotTurnInference,
 	ONBOARDING_BRIEFING_MODEL_PRESET,
-	resolveCopilotModelId,
 	resolveCopilotModelPreset,
-	workersAiProviderOptions,
 } from "../app/lib/copilot/model-profiles";
 import {
 	detectNativeFeatureSuggestion,
@@ -277,6 +278,9 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 	private boundChargeOpenedAt: number | null = null;
 	/** Soft-deny onboarding turns must not burn the free grant. */
 	private onboardingTurnDenied = false;
+	private copilotLanguageModel: ReturnType<
+		typeof createCopilotGatewayModel
+	> | null = null;
 	/** Active allowlisted onboarding turn (for tool hard-allowlist). */
 	private onboardingActiveTurn: OnboardingBriefingTurn | null = null;
 	/** Count the free grant once per allowlisted user turn (not per agent step). */
@@ -491,8 +495,28 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 	}
 
 	getModel() {
-		// Cloudflare Workers AI — @cf/openai/gpt-oss-120b (Workers AI billing).
-		return resolveCopilotModelId(this.env);
+		try {
+			this.copilotLanguageModel ??= createCopilotGatewayModel(this.env);
+			return this.copilotLanguageModel;
+		} catch (error) {
+			log.error("[Copilot] inference failed", error, {
+				event: "copilot_inference",
+			});
+			throw error;
+		}
+	}
+
+	onChatError(error: unknown, ctx?: ChatErrorContext): unknown {
+		const status =
+			error && typeof error === "object" && "statusCode" in error
+				? Number((error as { statusCode?: unknown }).statusCode)
+				: undefined;
+		log.error("[Copilot] inference failed", error, {
+			event: "copilot_inference",
+			classification: ctx?.classification,
+			...(Number.isFinite(status) ? { status } : {}),
+		});
+		return super.onChatError(error, ctx);
 	}
 
 	getSystemPrompt() {
@@ -647,6 +671,7 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 				);
 			}
 			const profile = COPILOT_MODEL_PRESETS[preset];
+			const inference = copilotTurnInference(profile);
 			const maxOutputTokens =
 				briefingTurn === "bootstrap"
 					? ONBOARDING_BRIEFING_MAX_OUTPUT_TOKENS
@@ -657,10 +682,9 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 				activeTools: policy.activeTools,
 				maxSteps: policy.maxSteps,
 				maxOutputTokens,
-				temperature: profile.temperature,
-				topP: profile.topP,
-				sendReasoning: false,
-				providerOptions: workersAiProviderOptions(profile),
+				sendReasoning: inference.sendReasoning,
+				providerOptions: inference.providerOptions,
+				chatStreamStallTimeoutMs: inference.chatStreamStallTimeoutMs,
 			};
 		}
 		if (this.billingBlocked) {
@@ -785,6 +809,7 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 		}
 
 		const profile = COPILOT_MODEL_PRESETS[preset];
+		const inference = copilotTurnInference(profile);
 
 		const scopedTools = resolveCopilotActiveTools(
 			Object.keys(ctx.tools),
@@ -802,12 +827,11 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 		return {
 			system: this.turnSystemPrompt,
 			activeTools: scopedTools,
-			maxSteps: profile.maxSteps,
-			maxOutputTokens: profile.maxOutputTokens,
-			temperature: profile.temperature,
-			topP: profile.topP,
-			sendReasoning: true,
-			providerOptions: workersAiProviderOptions(profile),
+			maxSteps: inference.maxSteps,
+			maxOutputTokens: inference.maxOutputTokens,
+			sendReasoning: inference.sendReasoning,
+			providerOptions: inference.providerOptions,
+			chatStreamStallTimeoutMs: inference.chatStreamStallTimeoutMs,
 			stopWhen: () => this.billingBlocked,
 		};
 	}

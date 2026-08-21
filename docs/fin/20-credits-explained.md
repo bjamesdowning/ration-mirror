@@ -18,7 +18,7 @@ Deductions are applied safely at the database layer so you cannot go **negative*
 
 URL imports that complete as a partial skeleton or **saved-link holder** still consume the 3 credits (you get a meal to review). Only hard failures (auth, insufficient credits, invalid URL) refund.
 | AI plan week | 3 |
-| Ask Ration (Copilot) | 1 credit per 20,000 tokens per conversation (minimum 1); capped at 128,000 tokens per chat (max 7 credits) |
+| Ask Ration (Copilot) | 1 credit per 20,000 tokens per conversation (minimum 1); capped at 256,000 tokens per chat (max 13 credits) |
 
 **Note:** Internal roadmaps may reserve costs for future features—always check **Pricing** in the app for the live matrix.
 

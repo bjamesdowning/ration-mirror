@@ -61,7 +61,7 @@ const baseCopilotStatus = {
 	conversationFloorCost: 1,
 	sessionIdleMs: 1_200_000,
 	tokensPerCredit: 20_000,
-	sessionMaxTokens: 128_000,
+	sessionMaxTokens: 256_000,
 	onboardingBriefingEligible: false,
 	onboardingBriefingConsumed: false,
 };
@@ -110,7 +110,7 @@ describe("getBillingAccountSummary", () => {
 			"https://ration.mayutic.com/hub/settings",
 		);
 		expect(summary.copilot.tokensPerCredit).toBe(20_000);
-		expect(summary.copilot.sessionMaxTokens).toBe(128_000);
+		expect(summary.copilot.sessionMaxTokens).toBe(256_000);
 		expect(BillingAccountSummarySchema.safeParse(summary).success).toBe(true);
 	});
 

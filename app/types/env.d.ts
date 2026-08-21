@@ -63,8 +63,6 @@ declare namespace Cloudflare {
 		PROJECT_THINK?: DurableObjectNamespace;
 		/** Optional Analytics Engine dataset for copilot metrics. */
 		COPILOT_ANALYTICS?: AnalyticsEngineDataset;
-		/** Optional Copilot Workers AI model id (default @cf/openai/gpt-oss-120b). */
-		COPILOT_MODEL_ID?: string;
 		/**
 		 * Main + MCP Workers Analytics Engine — ops counters (503/429/queue/Gemini).
 		 * Dataset: `ration_ops` (prod) / `ration_ops_dev` (dev).

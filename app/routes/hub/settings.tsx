@@ -2171,7 +2171,7 @@ function HelpSection() {
 									<strong className="font-medium text-carbon">
 										1 credit per 20,000 tokens
 									</strong>{" "}
-									(minimum 1 per chat). Each chat is capped at 128,000 tokens —
+									(minimum 1 per chat). Each chat is capped at 256,000 tokens —
 									start a new chat to continue. Tool calls and long answers
 									increase token use.
 								</p>

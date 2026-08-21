@@ -30,15 +30,16 @@
 	},
 	"vars": {
 		"BETTER_AUTH_URL": "https://ration.mayutic.com",
-		"RATION_ENV": "production"
+		"RATION_ENV": "production",
+		"AI_GATEWAY_ACCOUNT_ID": "841fa4c177353aa4844f0c7439b59f86",
+		"AI_GATEWAY_ID": "ration-gateway"
 	},
 	/**
 	 * Secrets (set via CLI, not in this file):
 	 *   - BETTER_AUTH_SECRET
 	 *   - COPILOT_PURGE_SECRET (dedicated internal purge token; falls back to BETTER_AUTH_SECRET if absent)
 	 *   - REVENUECAT_API_KEY (live get_billing_summary store/management URLs)
-	 * Optional vars:
-	 *   - COPILOT_MODEL_ID (default @cf/openai/gpt-oss-120b via Workers AI binding)
+	 * Inference: google/gemini-3.7-flash via AI Gateway (AI_GATEWAY_ID).
 	 */
 	"durable_objects": {
 		"bindings": [{ "name": "PROJECT_THINK", "class_name": "ProjectThinkAgent" }]
@@ -100,7 +101,9 @@
 			"name": "ration-copilot-dev",
 			"vars": {
 				"BETTER_AUTH_URL": "http://localhost:8787",
-				"RATION_ENV": "development"
+				"RATION_ENV": "development",
+				"AI_GATEWAY_ACCOUNT_ID": "841fa4c177353aa4844f0c7439b59f86",
+				"AI_GATEWAY_ID": "ration-gateway"
 			},
 			"d1_databases": [
 				{

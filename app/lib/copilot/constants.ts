@@ -19,14 +19,14 @@ export const ONBOARDING_BRIEFING_MAX_TURNS = 2;
 export const ONBOARDING_BRIEFING_PENDING_TTL_SEC = 300;
 export const ONBOARDING_BRIEFING_ACCOUNT_MAX_AGE_MS = 72 * 60 * 60 * 1000;
 /** Fast-level output budget — do not lower aggressively (truncation/errors hurt reliability). */
-export const ONBOARDING_BRIEFING_MAX_OUTPUT_TOKENS = 2048;
+export const ONBOARDING_BRIEFING_MAX_OUTPUT_TOKENS = 8192;
 export const ONBOARDING_BRIEFING_INTRO_MAX_STEPS = 3;
 export const ONBOARDING_BRIEFING_SEED_MAX_STEPS = 8;
 
 export const COPILOT_SESSION_IDLE_MS = 20 * 60 * 1000;
-export const COPILOT_SESSION_MAX_MESSAGES = 120;
-/** gpt-oss-120b context window — linear billing caps sessions here (1 cr / 20k → max 7 cr/chat). */
-export const COPILOT_SESSION_MAX_TOKENS = 128_000;
+export const COPILOT_SESSION_MAX_MESSAGES = 240;
+/** Billing hard stop (not the Gemini 1M window). 1 cr / 20k → max 13 cr/chat. */
+export const COPILOT_SESSION_MAX_TOKENS = 256_000;
 export const COPILOT_TOKENS_PER_CREDIT = 20_000;
 
 export function creditsForCopilotTokens(totalTokens: number): number {

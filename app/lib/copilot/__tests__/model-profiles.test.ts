@@ -1,13 +1,14 @@
 import { describe, expect, it } from "vitest";
+import { ONBOARDING_BRIEFING_MAX_OUTPUT_TOKENS } from "../constants";
 import {
-	COPILOT_DEFAULT_MODEL_ID,
 	COPILOT_DEFAULT_MODEL_PRESET,
+	COPILOT_GEMINI_MODEL_ID,
 	COPILOT_MODEL_PRESETS,
+	copilotTurnInference,
+	googleThinkingProviderOptions,
 	ONBOARDING_BRIEFING_MODEL_PRESET,
 	parseCopilotModelPreset,
-	resolveCopilotModelId,
 	resolveCopilotModelPreset,
-	workersAiProviderOptions,
 } from "../model-profiles";
 
 describe("parseCopilotModelPreset", () => {
@@ -37,39 +38,51 @@ describe("resolveCopilotModelPreset", () => {
 });
 
 describe("COPILOT_MODEL_PRESETS", () => {
-	it("defaults to gpt-oss-120b on Workers AI", () => {
-		expect(COPILOT_DEFAULT_MODEL_ID).toBe("@cf/openai/gpt-oss-120b");
-		expect(resolveCopilotModelId({})).toBe("@cf/openai/gpt-oss-120b");
-		expect(resolveCopilotModelId({ COPILOT_MODEL_ID: " minimax/m3 " })).toBe(
-			"minimax/m3",
-		);
+	it("hardcodes Gemini 3.7 Flash", () => {
+		expect(COPILOT_GEMINI_MODEL_ID).toBe("google/gemini-3.7-flash");
 	});
 
-	it("fast omits reasoning_effort", () => {
-		expect(COPILOT_MODEL_PRESETS.fast.reasoningEffort).toBeNull();
-		expect(workersAiProviderOptions(COPILOT_MODEL_PRESETS.fast)).toEqual({
-			"workers-ai": {},
+	it("fast uses low thinking with thought summaries", () => {
+		expect(COPILOT_MODEL_PRESETS.fast.thinkingLevel).toBe("low");
+		expect(googleThinkingProviderOptions(COPILOT_MODEL_PRESETS.fast)).toEqual({
+			google: {
+				thinkingConfig: { thinkingLevel: "low", includeThoughts: true },
+			},
+		});
+		expect(copilotTurnInference(COPILOT_MODEL_PRESETS.fast)).toMatchObject({
+			sendReasoning: true,
+			maxSteps: 8,
+			maxOutputTokens: 8192,
+			chatStreamStallTimeoutMs: 45_000,
 		});
 	});
 
-	it("deep sets high reasoning_effort for gpt-oss", () => {
-		expect(COPILOT_MODEL_PRESETS.deep.reasoningEffort).toBe("high");
-		expect(workersAiProviderOptions(COPILOT_MODEL_PRESETS.deep)).toEqual({
-			"workers-ai": { reasoning_effort: "high" },
+	it("deep uses high thinking with thought summaries", () => {
+		expect(COPILOT_MODEL_PRESETS.deep.thinkingLevel).toBe("high");
+		expect(googleThinkingProviderOptions(COPILOT_MODEL_PRESETS.deep)).toEqual({
+			google: {
+				thinkingConfig: { thinkingLevel: "high", includeThoughts: true },
+			},
+		});
+		expect(copilotTurnInference(COPILOT_MODEL_PRESETS.deep)).toMatchObject({
+			sendReasoning: true,
+			maxSteps: 16,
+			maxOutputTokens: 16384,
+			chatStreamStallTimeoutMs: 90_000,
 		});
 	});
 
-	it("deep allows longer multi-step tool runs", () => {
-		expect(COPILOT_MODEL_PRESETS.deep.maxSteps).toBe(25);
-		expect(COPILOT_MODEL_PRESETS.deep.maxOutputTokens).toBe(16384);
+	it("does not emit workers-ai reasoning_effort", () => {
+		const fast = googleThinkingProviderOptions(COPILOT_MODEL_PRESETS.fast);
+		const deep = googleThinkingProviderOptions(COPILOT_MODEL_PRESETS.deep);
+		expect(fast).not.toHaveProperty("workers-ai");
+		expect(deep).not.toHaveProperty("workers-ai");
 	});
 
-	it("fast keeps a lower step and output budget", () => {
-		expect(COPILOT_MODEL_PRESETS.fast.maxSteps).toBe(16);
-		expect(COPILOT_MODEL_PRESETS.fast.maxOutputTokens).toBe(4096);
-	});
-
-	it("onboarding briefing forces fast preset", () => {
+	it("onboarding briefing forces fast preset with matching output budget", () => {
 		expect(ONBOARDING_BRIEFING_MODEL_PRESET).toBe("fast");
+		expect(ONBOARDING_BRIEFING_MAX_OUTPUT_TOKENS).toBe(
+			COPILOT_MODEL_PRESETS.fast.maxOutputTokens,
+		);
 	});
 });

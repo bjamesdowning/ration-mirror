@@ -14,7 +14,7 @@ import {
 describe("formatCopilotTokenCount", () => {
 	it("formats large counts in kilo units", () => {
 		expect(formatCopilotTokenCount(42_500)).toBe("43k");
-		expect(formatCopilotTokenCount(128_000)).toBe("128k");
+		expect(formatCopilotTokenCount(256_000)).toBe("256k");
 		expect(formatCopilotTokenCount(500_000)).toBe("500k");
 	});
 
@@ -98,6 +98,26 @@ describe("evaluateSessionLimitWarning", () => {
 			emittedUrgent: false,
 		});
 		expect(warning?.severity).toBe("soft");
+	});
+
+	it("returns soft warning at 60 messages", () => {
+		const warning = evaluateSessionLimitWarning({
+			totalTokens: 1_000,
+			messageCount: 60,
+			emittedSoft: false,
+			emittedUrgent: false,
+		});
+		expect(warning?.severity).toBe("soft");
+	});
+
+	it("returns urgent warning at 72 messages", () => {
+		const warning = evaluateSessionLimitWarning({
+			totalTokens: 1_000,
+			messageCount: 72,
+			emittedSoft: true,
+			emittedUrgent: false,
+		});
+		expect(warning?.severity).toBe("urgent");
 	});
 
 	it("returns urgent warning at 85% tokens", () => {

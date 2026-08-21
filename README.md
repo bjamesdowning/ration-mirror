@@ -170,7 +170,7 @@ flowchart TB
     end
 
     subgraph AI["Cloudflare AI"]
-        AIBinding["Workers AI — Embeddings + Copilot gpt-oss-120b"]
+        AIBinding["Workers AI — Embeddings"]
         Vectorize[("Vectorize — ration-cargo")]
         AIGateway["AI Gateway → Google AI Studio"]
         AISearch["AI Search — ration-docs"]
@@ -197,6 +197,7 @@ flowchart TB
     CopilotHandler --> Vectorize
     CopilotHandler --> AISearch
     CopilotHandler --> ThinkDO
+    CopilotHandler --> AIGateway
 ```
 
 ### Bindings Reference
@@ -208,7 +209,7 @@ flowchart TB
 | `RATION_KV` | KV Namespace | Rate limiting counters, webhook idempotency keys, tier cache, vector embedding cache |
 | `STORAGE` | R2 Bucket | Object storage for scan images and data exports |
 | `ASSETS` | Static Assets | Built client-side bundle (`./build/client`) served at the edge |
-| `AI` | Workers AI | Embedding generation (`@cf/google/embeddinggemma-300m`, 768-dim) on `ration` / `ration-mcp`; Copilot inference via `@cf/openai/gpt-oss-120b` on `ration-copilot` |
+| `AI` | Workers AI | Embedding generation (`@cf/google/embeddinggemma-300m`, 768-dim) on `ration` / `ration-mcp`; Copilot Gemini 3.7 Flash via AI Gateway (`ration-gateway`) on `ration-copilot` |
 | `VECTORIZE` | Vectorize Index | Semantic ingredient search (`ration-cargo`, cosine similarity) |
 | `AI_SEARCH` | AI Search namespace | Copilot-only — hybrid retrieval over `ration-docs` (support docs + blog) |
 | `PROJECT_THINK` | Durable Object | Copilot-only — one `ProjectThinkAgent` isolate per `{org}:{user}:{tier}:{conversationId}` |
@@ -2375,15 +2376,15 @@ CORS allows trusted origins only (`https://ration.mayutic.com`, local dev hosts,
 
 ### 14.4 Model, presets, and inference
 
-- **Model:** `@cf/openai/gpt-oss-120b` via **Cloudflare Workers AI** (Workers AI billing on the Copilot worker’s `AI` binding). Optional `COPILOT_MODEL_ID` to override.
+- **Model:** hardcoded `google/gemini-3.7-flash` via **AI Gateway** `ration-gateway` (Think `LanguageModel` from [`model.server.ts`](app/lib/copilot/model.server.ts); the Copilot worker `AI` binding is transport only). Kill switch is Flagship `ration-copilot` (404). Missing `AI_GATEWAY_ID` fails closed.
 - **Presets** ([`model-profiles.ts`](app/lib/copilot/model-profiles.ts)):
 
-| Preset | reasoning_effort | maxSteps | maxOutputTokens | Use case |
-|--------|------------------|----------|-----------------|----------|
-| **Fast** (default) | omitted (model default) | 16 | 4096 | Quick answers, lower token use |
-| **Deep** | `high` via `providerOptions["workers-ai"]` | 25 | 16384 | Multi-step planning |
+| Preset | thinkingLevel | maxSteps | maxOutputTokens | stall | Use case |
+|--------|---------------|----------|-----------------|-------|----------|
+| **Fast** (default) | `low` | 8 | 8192 | 45s | Quick answers, lower token use |
+| **Deep** | `high` | 16 | 16384 | 90s | Multi-step planning |
 
-Fast/Deep use the same gpt-oss model. Deep injects Workers AI `reasoning_effort: "high"`; Fast leaves reasoning at the model default. `sendReasoning: true` surfaces reasoning parts (Show thinking UI). Temporal context (today's UTC date) is appended each turn via [`formatCopilotTemporalContextAppend`](app/lib/agent/temporal-context.server.ts).
+Fast/Deep use the same Gemini 3.7 Flash model. `providerOptions.google.thinkingConfig` sets `thinkingLevel` and `includeThoughts: true`. Think `sendReasoning: true` on **Ask and onboarding** streams `reasoning-*` frames into the Show thinking UI. Temperature / topP are omitted (Gemini 3+). Temporal context (today's UTC date) is appended each turn via [`formatCopilotTemporalContextAppend`](app/lib/agent/temporal-context.server.ts).
 
 **System prompt:** [`getCopilotSystemPrompt`](app/lib/copilot/system-prompt.server.ts) — kitchen scope only, declines code/general knowledge, mandates `search_docs` for product questions, remaining-macros + Quick Eat workflows, URL/scan native redirects only, expired-is-expired expiry guidance, bulk import/remove rules (≥2 items), and post-mutation action reporting. Copilot kitchen tools are credit-free; the Ask conversation meter is the only Copilot charge.
 
@@ -2439,8 +2440,8 @@ Billing is **per conversation**, not per message. Constants live in [`constants.
 | Free tier allowance | **0** — first conversation charges credits |
 | Floor cost | **1** credit (`AI_COSTS.COPILOT_TURN`) preauthorized at open |
 | Token reconciliation | **1 credit per 20,000 tokens** (linear, minimum 1 per chat) |
-| Session token cap | **128,000** tokens — gpt-oss context hard stop, start new chat (max **7** credits/chat at 1/20k) |
-| Session message cap | **120** messages |
+| Session token cap | **256,000** tokens — billing hard stop, start new chat (max **13** credits/chat at 1/20k) |
+| Session message cap | **240** messages |
 | Session idle TTL | **20 minutes** on KV conversation charge records and client session snapshots |
 | Cumulative token meter | Persisted on KV charge + Think config; restored on DO wake / client reconnect |
 | Crew after allowance | Requires **auto-deduct consent** (`POST /api/copilot/consent`) or returns **402** `copilot_consent_required` |

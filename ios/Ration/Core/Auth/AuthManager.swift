@@ -1,6 +1,41 @@
 import Foundation
 import Observation
 
+/// Process-level “no account” copy so a recreated `AuthManager` (iPad Sign in
+/// with Apple tearing down `WindowGroup` `@State`) still switches to Create Account.
+enum AuthAccountNotFoundStore {
+    private static var message: String?
+
+    static func save(_ message: String) {
+        Self.message = message
+    }
+
+    static func load() -> String? {
+        message
+    }
+
+    static func clear() {
+        message = nil
+    }
+}
+
+/// Apple sends `fullName` only on the first authorization. Keep it across
+/// AuthManager recreation so Create Account can still send it.
+enum AuthAppleFullNameStore {
+    static var givenName: String?
+    static var familyName: String?
+
+    static func save(givenName: String?, familyName: String?) {
+        if let givenName, !givenName.isEmpty { Self.givenName = givenName }
+        if let familyName, !familyName.isEmpty { Self.familyName = familyName }
+    }
+
+    static func clear() {
+        givenName = nil
+        familyName = nil
+    }
+}
+
 /// Owns the mobile token lifecycle: code exchange, refresh-token rotation,
 /// Keychain persistence, and the published `isAuthenticated` gate.
 ///
@@ -16,8 +51,14 @@ final class AuthManager {
         case signedIn
     }
 
+    /// Durable Sign In → Create Account handoff. Survives `SignInView` teardown.
+    enum PendingAuthNotice: Equatable {
+        case accountNotFound(String)
+    }
+
     private(set) var phase: Phase = .loading
     private(set) var authErrorMessage: String?
+    private(set) var pendingAuthNotice: PendingAuthNotice?
 
     /// Invoked at the end of `signOutLocal()`, after token state is cleared.
     /// Wired once in `AppEnvironment.init()` to run the same full-wipe
@@ -53,6 +94,17 @@ final class AuthManager {
 
     init(urlSession: URLSession = URLSession(configuration: .ephemeral)) {
         self.session = urlSession
+        // No token → signed-out immediately so a recreated scene (iPad Sign in
+        // with Apple) never flashes the Calibrating splash.
+        if Keychain.get(Self.refreshKey) == nil {
+            phase = .signedOut
+        }
+        if let message = AuthAccountNotFoundStore.load() {
+            pendingAuthNotice = .accountNotFound(message)
+            authErrorMessage = message
+        }
+        appleGivenName = AuthAppleFullNameStore.givenName
+        appleFamilyName = AuthAppleFullNameStore.familyName
     }
 
     // MARK: Bootstrap
@@ -63,6 +115,9 @@ final class AuthManager {
             phase = .signedOut
             return
         }
+        if phase != .signedIn {
+            phase = .loading
+        }
         refreshToken = stored
         do {
             _ = try await refreshAccessToken()
@@ -70,6 +125,26 @@ final class AuthManager {
         } catch {
             await signOutLocal()
         }
+    }
+
+    /// Records “no account” so Create Account + copy survive view recreation.
+    func recordAccountNotFound(_ message: String?) {
+        let trimmed = message?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let text = trimmed.isEmpty ? APIError.accountNotFoundDefaultMessage : trimmed
+        pendingAuthNotice = .accountNotFound(text)
+        AuthAccountNotFoundStore.save(text)
+        authErrorMessage = text
+        phase = .signedOut
+    }
+
+    /// Consume once when Sign In appears (or after a living-view catch).
+    @discardableResult
+    func consumePendingAuthNotice() -> PendingAuthNotice? {
+        let notice = pendingAuthNotice
+            ?? AuthAccountNotFoundStore.load().map { .accountNotFound($0) }
+        pendingAuthNotice = nil
+        AuthAccountNotFoundStore.clear()
+        return notice
     }
 
     // MARK: Social sign-in
@@ -102,19 +177,27 @@ final class AuthManager {
         if provider == "apple" {
             if let givenName, !givenName.isEmpty { appleGivenName = givenName }
             if let familyName, !familyName.isEmpty { appleFamilyName = familyName }
-            let resolvedGiven = givenName ?? appleGivenName
-            let resolvedFamily = familyName ?? appleFamilyName
-            if resolvedGiven != nil || resolvedFamily != nil {
-                var fullName: [String: String] = [:]
-                if let resolvedGiven { fullName["givenName"] = resolvedGiven }
-                if let resolvedFamily { fullName["familyName"] = resolvedFamily }
-                body["fullName"] = fullName
+            AuthAppleFullNameStore.save(givenName: givenName, familyName: familyName)
+            if SocialAuthClientPolicy.shouldSendAppleFullName(intent: intent) {
+                let resolvedGiven = givenName ?? appleGivenName
+                let resolvedFamily = familyName ?? appleFamilyName
+                if resolvedGiven != nil || resolvedFamily != nil {
+                    var fullName: [String: String] = [:]
+                    if let resolvedGiven { fullName["givenName"] = resolvedGiven }
+                    if let resolvedFamily { fullName["familyName"] = resolvedFamily }
+                    body["fullName"] = fullName
+                }
             }
         }
 
-        let pair = try await postTokenDictionary(body: body, endpoint: "auth/social")
-        try apply(pair)
-        phase = .signedIn
+        do {
+            let pair = try await postTokenDictionary(body: body, endpoint: "auth/social")
+            try apply(pair)
+            phase = .signedIn
+        } catch let error as APIError where error.isAccountNotFound {
+            recordAccountNotFound(error.errorDescription)
+            throw error
+        }
     }
 
     // MARK: App Review login
@@ -176,6 +259,9 @@ final class AuthManager {
         } catch {
             // Drop unused verifier so a failed Sign In (e.g. account_not_found) does not leave PKCE state.
             Keychain.delete(Self.pkceVerifierKey)
+            if let apiError = error as? APIError, apiError.isAccountNotFound {
+                recordAccountNotFound(apiError.errorDescription)
+            }
             throw error
         }
     }
@@ -330,6 +416,9 @@ final class AuthManager {
         Keychain.delete(Self.pkceVerifierKey)
         appleGivenName = nil
         appleFamilyName = nil
+        AuthAppleFullNameStore.clear()
+        pendingAuthNotice = nil
+        AuthAccountNotFoundStore.clear()
         clearAuthError()
         phase = .signedOut
         await onSignedOut?()
@@ -344,6 +433,9 @@ final class AuthManager {
         accessToken = pair.accessToken
         refreshToken = pair.refreshToken
         accessExpiry = Date().addingTimeInterval(TimeInterval(pair.expiresIn))
+        pendingAuthNotice = nil
+        AuthAccountNotFoundStore.clear()
+        AuthAppleFullNameStore.clear()
     }
 
     private func postToken(body: [String: String]) async throws -> TokenPair {
@@ -400,8 +492,7 @@ final class AuthManager {
         }
         guard (200..<300).contains(http.statusCode) else {
             let body = try? JSON.decoder.decode(APIErrorBody.self, from: data)
-            if http.statusCode == 401 { throw APIError.unauthorized }
-            throw APIError.server(status: http.statusCode, message: body?.error, code: body?.code)
+            throw APIError.fromHTTP(status: http.statusCode, body: body)
         }
     }
 }

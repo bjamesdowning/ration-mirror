@@ -43,4 +43,14 @@ final class AuthFlowModeTests: XCTestCase {
             )
         )
     }
+
+    func testBusyRetryIsSignUpOnly() {
+        XCTAssertFalse(SocialAuthClientPolicy.shouldRetryBusyOnce(intent: "signIn"))
+        XCTAssertTrue(SocialAuthClientPolicy.shouldRetryBusyOnce(intent: "signUp"))
+    }
+
+    func testAppleFullNameSendsOnSignUpOnly() {
+        XCTAssertFalse(SocialAuthClientPolicy.shouldSendAppleFullName(intent: "signIn"))
+        XCTAssertTrue(SocialAuthClientPolicy.shouldSendAppleFullName(intent: "signUp"))
+    }
 }

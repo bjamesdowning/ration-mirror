@@ -126,7 +126,11 @@ struct SignInView: View {
             .scrollDismissesKeyboard(.interactively)
         }
         .task {
+            applyPendingAuthNotice()
             await loadClientFlags()
+        }
+        .onAppear {
+            applyPendingAuthNotice()
         }
         .onChange(of: email) { _, newValue in
             if !AppReviewLoginGate.shouldShowPassword(
@@ -378,10 +382,19 @@ struct SignInView: View {
         errorMessage ?? env.auth.authErrorMessage
     }
 
+    private func applyPendingAuthNotice() {
+        guard case let .accountNotFound(message) = env.auth.consumePendingAuthNotice() else {
+            return
+        }
+        errorMessage = message
+        mode = .signUp
+    }
+
     private func resetFormForModeChange() {
         linkSent = false
         errorMessage = nil
         env.auth.clearAuthError()
+        _ = env.auth.consumePendingAuthNotice()
         tosAccepted = false
         password = ""
     }
@@ -412,9 +425,12 @@ struct SignInView: View {
                 tosAccepted: tosAccepted
             )
             linkSent = true
-        } catch let error as APIError where error.code == "account_not_found" {
-            errorMessage = error.errorDescription
-            mode = .signUp
+        } catch let error as APIError where error.isAccountNotFound {
+            applyPendingAuthNotice()
+            if errorMessage == nil {
+                errorMessage = error.errorDescription
+                mode = .signUp
+            }
         } catch {
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
         }
@@ -491,13 +507,16 @@ struct SignInView: View {
                 nonce: result.rawNonce,
                 givenName: result.givenName ?? appleGivenName,
                 familyName: result.familyName ?? appleFamilyName,
-                retryOnBusy: true
+                retryOnBusy: SocialAuthClientPolicy.shouldRetryBusyOnce(intent: authIntent)
             )
         } catch let error as APIError where error.code == "cancelled" {
             return
-        } catch let error as APIError where error.code == "account_not_found" {
-            errorMessage = error.errorDescription
-            mode = .signUp
+        } catch let error as APIError where error.isAccountNotFound {
+            applyPendingAuthNotice()
+            if errorMessage == nil {
+                errorMessage = error.errorDescription
+                mode = .signUp
+            }
         } catch let error as APIError where error.isServerBusy {
             errorMessage = error.errorDescription
                 ?? "The server is under heavy load. Please wait a moment and try again."
@@ -518,13 +537,16 @@ struct SignInView: View {
                 provider: "google",
                 idToken: result.idToken,
                 accessToken: result.accessToken,
-                retryOnBusy: true
+                retryOnBusy: SocialAuthClientPolicy.shouldRetryBusyOnce(intent: authIntent)
             )
         } catch let error as APIError where error.code == "cancelled" {
             return
-        } catch let error as APIError where error.code == "account_not_found" {
-            errorMessage = error.errorDescription
-            mode = .signUp
+        } catch let error as APIError where error.isAccountNotFound {
+            applyPendingAuthNotice()
+            if errorMessage == nil {
+                errorMessage = error.errorDescription
+                mode = .signUp
+            }
         } catch let error as APIError where error.isServerBusy {
             errorMessage = error.errorDescription
                 ?? "The server is under heavy load. Please wait a moment and try again."

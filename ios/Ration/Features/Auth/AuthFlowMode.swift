@@ -51,3 +51,18 @@ enum AuthFlowMode: String, CaseIterable, Identifiable {
         emailValid && canProceed(tosAccepted: tosAccepted, mode: mode)
     }
 }
+
+/// Client rules for native social auth (Apple / Google).
+enum SocialAuthClientPolicy {
+    /// One automatic retry on D1 `server_busy` — Create Account only.
+    /// Sign In must surface `account_not_found` immediately.
+    static func shouldRetryBusyOnce(intent: String) -> Bool {
+        intent == "signUp"
+    }
+
+    /// Apple sends `fullName` only on the first authorization. Attach it solely
+    /// on Create Account so Sign In cannot look like implicit registration.
+    static func shouldSendAppleFullName(intent: String) -> Bool {
+        intent == "signUp"
+    }
+}

@@ -216,6 +216,25 @@ describe("authenticateMobileSocial", () => {
 		});
 	});
 
+	it("maps USER_NOT_FOUND on Sign In to account_not_found", async () => {
+		signInSocial.mockRejectedValue({
+			code: "USER_NOT_FOUND",
+			message: "User not found",
+		});
+
+		await expect(
+			authenticateMobileSocial(env, {
+				provider: "apple",
+				idToken: googleIdToken("new@example.com"),
+				nonce: "raw-nonce",
+				intent: "signIn",
+			}),
+		).rejects.toMatchObject({
+			code: "account_not_found",
+			status: 404,
+		});
+	});
+
 	it("returns generic authentication failure when Better Auth rejects token", async () => {
 		signInSocial.mockRejectedValue(new Error("invalid token"));
 

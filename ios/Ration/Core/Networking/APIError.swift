@@ -146,11 +146,33 @@ enum APIError: Error, LocalizedError, Sendable {
         return code == "nutrition_updating"
     }
 
+    /// Stable machine code for Sign In when no Ration user exists yet.
+    static let accountNotFoundCode = "account_not_found"
+    static let accountNotFoundDefaultMessage =
+        "No account found. Create an account instead."
+
+    var isAccountNotFound: Bool {
+        code == Self.accountNotFoundCode
+    }
+
     /// 503 D1 contention / overload — retry shortly; not a credential failure.
+    /// Match the `server_busy` code only: other 503s (`no_organization`) are
+    /// setup failures and must not trigger a Sign In busy-retry.
     var isServerBusy: Bool {
-        if case let .server(status, _, code, _, _, _, _, _, _, _) = self {
-            return status == 503 || code == "server_busy"
+        code == "server_busy"
+    }
+
+    /// Maps a non-2xx mobile API envelope. Preserves machine `code` so Sign In
+    /// `account_not_found` is not collapsed to a generic session-expired 401.
+    static func fromHTTP(status: Int, body: APIErrorBody?) -> APIError {
+        let code = body?.code
+        let message = body?.error ?? body?.message
+        if let code, !code.isEmpty {
+            return .server(status: status, message: message, code: code)
         }
-        return false
+        if status == 401 {
+            return .unauthorized
+        }
+        return .server(status: status, message: message, code: nil)
     }
 }

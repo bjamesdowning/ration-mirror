@@ -9,9 +9,12 @@ const issueMobileTokenPair = vi.fn();
 const findFirstUser = vi.fn();
 const findFirstMember = vi.fn();
 const findFirstOrg = vi.fn();
+const insertValues = vi.fn();
 const updateUser = vi.fn().mockReturnValue({ where: vi.fn() });
 const kvPut = vi.fn().mockResolvedValue(undefined);
 const kvDelete = vi.fn().mockResolvedValue(undefined);
+
+let memberPresent = true;
 
 vi.mock("~/lib/auth.server", () => ({
 	getAuth: () => ({
@@ -41,7 +44,7 @@ vi.mock("drizzle-orm/d1", () => ({
 				}),
 			}),
 		}),
-		insert: vi.fn().mockReturnValue({ values: vi.fn() }),
+		insert: vi.fn().mockReturnValue({ values: insertValues }),
 		batch: vi.fn().mockResolvedValue(undefined),
 		update: () => ({ set: () => ({ where: updateUser }) }),
 	}),
@@ -63,13 +66,24 @@ const env = {
 describe("authenticateMobileSocial", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
+		memberPresent = true;
 		signInSocial.mockResolvedValue({ user: { id: "user-1" } });
 		findFirstUser.mockResolvedValue({
 			tosAcceptedAt: new Date("2026-01-01"),
 			name: "Existing User",
 			email: "user@example.com",
 		});
-		findFirstOrg.mockResolvedValue({ id: "org-1" });
+		findFirstOrg.mockResolvedValue({
+			id: "org-1",
+			slug: "personal-user-1",
+			metadata: { isPersonal: true },
+		});
+		findFirstMember.mockImplementation(async () =>
+			memberPresent ? { id: "m-1" } : undefined,
+		);
+		insertValues.mockImplementation(async () => {
+			memberPresent = true;
+		});
 		issueMobileTokenPair.mockResolvedValue({
 			accessToken: "access",
 			refreshToken: "refresh",
@@ -198,11 +212,8 @@ describe("authenticateMobileSocial", () => {
 		});
 	});
 
-	it("maps signup_disabled on Sign In to account_not_found", async () => {
-		signInSocial.mockRejectedValue({
-			code: "signup_disabled",
-			message: "Signup is disabled",
-		});
+	it("returns 404 account_not_found without calling Better Auth when Sign In email is unknown", async () => {
+		findFirstUser.mockResolvedValue(undefined);
 
 		await expect(
 			authenticateMobileSocial(env, {
@@ -213,10 +224,55 @@ describe("authenticateMobileSocial", () => {
 		).rejects.toMatchObject({
 			code: "account_not_found",
 			status: 404,
+			message: "No account found. Create an account instead.",
+		});
+		expect(signInSocial).not.toHaveBeenCalled();
+		expect(issueMobileTokenPair).not.toHaveBeenCalled();
+	});
+
+	it("does not forward Apple fullName to Better Auth on Sign In", async () => {
+		await authenticateMobileSocial(env, {
+			provider: "apple",
+			idToken: googleIdToken("user@example.com"),
+			nonce: "raw-nonce",
+			intent: "signIn",
+			fullName: { givenName: "Ada", familyName: "Lovelace" },
+		});
+
+		expect(signInSocial).toHaveBeenCalledWith({
+			body: {
+				provider: "apple",
+				idToken: {
+					token: expect.any(String),
+					nonce: "raw-nonce",
+				},
+			},
 		});
 	});
 
-	it("maps USER_NOT_FOUND on Sign In to account_not_found", async () => {
+	it("maps signup_disabled on Sign In to account_not_found", async () => {
+		signInSocial.mockRejectedValue({
+			code: "signup_disabled",
+			message: "Signup is disabled",
+		});
+
+		await expect(
+			authenticateMobileSocial(env, {
+				provider: "google",
+				idToken: googleIdToken("user@example.com"),
+				intent: "signIn",
+			}),
+		).rejects.toMatchObject({
+			code: "account_not_found",
+			status: 404,
+		});
+	});
+
+	it("maps USER_NOT_FOUND on Sign In without email to account_not_found, never 401", async () => {
+		const payload = btoa(JSON.stringify({ sub: "hide-my-email" }))
+			.replace(/\+/g, "-")
+			.replace(/\//g, "_")
+			.replace(/=+$/, "");
 		signInSocial.mockRejectedValue({
 			code: "USER_NOT_FOUND",
 			message: "User not found",
@@ -225,7 +281,7 @@ describe("authenticateMobileSocial", () => {
 		await expect(
 			authenticateMobileSocial(env, {
 				provider: "apple",
-				idToken: googleIdToken("new@example.com"),
+				idToken: `hdr.${payload}.sig`,
 				nonce: "raw-nonce",
 				intent: "signIn",
 			}),
@@ -233,6 +289,20 @@ describe("authenticateMobileSocial", () => {
 			code: "account_not_found",
 			status: 404,
 		});
+		expect(signInSocial).toHaveBeenCalled();
+	});
+
+	it("inserts a member for an existing personal org before minting tokens", async () => {
+		memberPresent = false;
+
+		await authenticateMobileSocial(env, {
+			provider: "google",
+			idToken: googleIdToken("user@example.com"),
+			intent: "signIn",
+		});
+
+		expect(insertValues).toHaveBeenCalled();
+		expect(issueMobileTokenPair).toHaveBeenCalledWith(env, "user-1", "org-1");
 	});
 
 	it("returns generic authentication failure when Better Auth rejects token", async () => {

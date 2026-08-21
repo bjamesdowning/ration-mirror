@@ -12,6 +12,7 @@ import {
 	MOBILE_REFRESH_GRACE_TTL_SEC,
 	MOBILE_REFRESH_TTL_SEC,
 } from "~/lib/mobile/constants";
+import { repairPersonalOrgMembership } from "~/lib/mobile/personal-org-repair.server";
 import { RATION_ORG_CLAIM } from "~/lib/oauth.constants";
 import { hashOAuthStoredToken } from "~/lib/oauth-token-hash.server";
 import { hasOrgMembership } from "~/lib/org-membership.server";
@@ -186,6 +187,14 @@ async function rotateMobileRefreshTokenOnce(
 	if (row.revokedAt) {
 		const grace = await readRefreshGracePair(env.RATION_KV, tokenHash);
 		if (grace) return grace;
+		const retryGrace = await readRefreshGracePair(env.RATION_KV, tokenHash);
+		if (retryGrace) return retryGrace;
+		const revokedAgeMs = Date.now() - row.revokedAt.getTime();
+		if (revokedAgeMs < MOBILE_REFRESH_GRACE_TTL_SEC * 1000) {
+			// Concurrent rotate after Apple's sheet: the winner claimed this
+			// row but KV grace may not be visible yet. Do not wipe the family.
+			throw new Error("server_busy");
+		}
 		await db
 			.update(schema.mobileRefreshToken)
 			.set({ revokedAt: new Date() })
@@ -194,6 +203,7 @@ async function rotateMobileRefreshTokenOnce(
 	}
 
 	// Membership before claim so a transient D1 blip cannot strand a claimed token.
+	// Repair a missing personal-org member row instead of 401-logout on 1.3.x.
 	await assertMobileOrgMembership(env, row.userId, row.organizationId);
 
 	const claimedAt = new Date();
@@ -206,11 +216,12 @@ async function rotateMobileRefreshTokenOnce(
 	if ((claim.meta.changes ?? 0) === 0) {
 		const grace = await readRefreshGracePair(env.RATION_KV, tokenHash);
 		if (grace) return grace;
-		await db
-			.update(schema.mobileRefreshToken)
-			.set({ revokedAt: new Date() })
-			.where(eq(schema.mobileRefreshToken.familyId, row.familyId));
-		throw new Error("invalid_refresh_token");
+		const retryGrace = await readRefreshGracePair(env.RATION_KV, tokenHash);
+		if (retryGrace) return retryGrace;
+		// Concurrent rotate lost the claim. Do not wipe the family — iOS 1.3.x
+		// bootstrap() always refreshes when the Apple sheet returns, and a
+		// missing KV grace pair used to revoke the just-minted session.
+		throw new Error("server_busy");
 	}
 
 	try {
@@ -304,7 +315,13 @@ export async function assertMobileOrgMembership(
 	organizationId: string,
 ): Promise<void> {
 	const ok = await hasOrgMembership(env.DB, userId, organizationId);
-	if (!ok) {
+	if (ok) return;
+	const repaired = await repairPersonalOrgMembership(
+		env,
+		userId,
+		organizationId,
+	);
+	if (!repaired) {
 		throw new Error("forbidden_org");
 	}
 }

@@ -3,8 +3,14 @@ import { drizzle } from "drizzle-orm/d1";
 import * as schema from "~/db/schema";
 import { buildPersonalOrgRecords } from "~/lib/agent/org-records.server";
 import { getAuth } from "~/lib/auth.server";
+import {
+	ACCOUNT_NOT_FOUND_CODE,
+	ACCOUNT_NOT_FOUND_MESSAGE,
+	userExistsByEmail,
+} from "~/lib/auth-sign-in-guard.server";
 import { isD1ContentionError } from "~/lib/error-handler";
 import { log, redactId } from "~/lib/logging.server";
+import { repairPersonalOrgMembership } from "~/lib/mobile/personal-org-repair.server";
 import {
 	issueMobileTokenPair,
 	type MobileTokenPair,
@@ -60,8 +66,16 @@ async function resolveActiveOrganizationId(
 	const personalGroup = await db.query.organization.findFirst({
 		where: like(schema.organization.slug, `personal-${userId}`),
 	});
+	if (!personalGroup) return null;
 
-	return personalGroup?.id ?? null;
+	const personalMembership = await db.query.member.findFirst({
+		where: (member, { and, eq }) =>
+			and(
+				eq(member.organizationId, personalGroup.id),
+				eq(member.userId, userId),
+			),
+	});
+	return personalMembership ? personalGroup.id : null;
 }
 
 /** Ensures a personal org exists — idempotent fallback if the signup hook is still in flight. */
@@ -93,6 +107,18 @@ async function ensureOrganizationForUser(
 		where: like(schema.organization.slug, slug),
 	});
 	if (personalGroup) {
+		const repaired = await repairPersonalOrgMembership(
+			env,
+			userId,
+			personalGroup.id,
+		);
+		if (!repaired) {
+			throw new MobileSocialAuthError(
+				"no_organization",
+				503,
+				"Account setup incomplete. Please try again.",
+			);
+		}
 		await trySeedStarterMeal(db, personalGroup.id, email, userId);
 		return personalGroup.id;
 	}
@@ -209,7 +235,7 @@ function isSignupDisabledError(error: unknown): boolean {
 	return (
 		code === "signup_disabled" ||
 		code === "USER_NOT_FOUND" ||
-		/signup.?disabled|no account found/i.test(message)
+		/signup.?disabled|no account found|user not found/i.test(message)
 	);
 }
 
@@ -225,6 +251,20 @@ export async function authenticateMobileSocial(
 	const intent = input.intent ?? "signIn";
 	const isSignUp = intent === "signUp";
 	let signupEmail: string | null = null;
+
+	if (!isSignUp) {
+		const signInEmail = emailFromIdTokenPayload(input.idToken);
+		if (signInEmail) {
+			const exists = await userExistsByEmail(env.DB, signInEmail);
+			if (!exists) {
+				throw new MobileSocialAuthError(
+					ACCOUNT_NOT_FOUND_CODE,
+					404,
+					ACCOUNT_NOT_FOUND_MESSAGE,
+				);
+			}
+		}
+	}
 
 	if (isSignUp) {
 		if (input.tosAccepted !== true) {
@@ -248,6 +288,18 @@ export async function authenticateMobileSocial(
 		await putSignupIntentForEmail(env.RATION_KV, email);
 	}
 
+	const appleFullName =
+		isSignUp && input.provider === "apple" && input.fullName
+			? {
+					user: {
+						name: {
+							firstName: input.fullName.givenName,
+							lastName: input.fullName.familyName,
+						},
+					},
+				}
+			: {};
+
 	const idTokenBody =
 		input.provider === "google"
 			? {
@@ -257,16 +309,7 @@ export async function authenticateMobileSocial(
 			: {
 					token: input.idToken,
 					nonce: input.nonce,
-					...(input.fullName
-						? {
-								user: {
-									name: {
-										firstName: input.fullName.givenName,
-										lastName: input.fullName.familyName,
-									},
-								},
-							}
-						: {}),
+					...appleFullName,
 				};
 
 	let signInResult: Awaited<ReturnType<typeof auth.api.signInSocial>>;
@@ -288,9 +331,9 @@ export async function authenticateMobileSocial(
 		}
 		if (!isSignUp && isSignupDisabledError(error)) {
 			throw new MobileSocialAuthError(
-				"account_not_found",
+				ACCOUNT_NOT_FOUND_CODE,
 				404,
-				"No account found. Create an account instead.",
+				ACCOUNT_NOT_FOUND_MESSAGE,
 			);
 		}
 		if (isSignUp && isSignupDisabledError(error)) {
@@ -339,7 +382,7 @@ export async function authenticateMobileSocial(
 		await stampTosIfMissing(env, user.id);
 	}
 
-	if (input.provider === "apple" && input.fullName) {
+	if (isSignUp && input.provider === "apple" && input.fullName) {
 		const parts = [input.fullName.givenName, input.fullName.familyName].filter(
 			Boolean,
 		);
@@ -350,12 +393,16 @@ export async function authenticateMobileSocial(
 		);
 	}
 
-	const organizationId = await ensureOrganizationForUser(
-		env,
-		user.id,
-		user.name ?? "My",
-	);
-	if (!organizationId) {
+	let organizationId: string;
+	try {
+		organizationId = await ensureOrganizationForUser(
+			env,
+			user.id,
+			user.name ?? "My",
+		);
+	} catch (error) {
+		if (error instanceof MobileSocialAuthError) throw error;
+		if (isD1ContentionError(error)) throw error;
 		throw new MobileSocialAuthError(
 			"no_organization",
 			503,

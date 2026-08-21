@@ -71,6 +71,16 @@ export async function action({ request, context }: Route.ActionArgs) {
 				{ status: 401 },
 			);
 		}
+		if (e instanceof Error && e.message === "server_busy") {
+			throw data(
+				{
+					error:
+						"The server is under heavy load. Please wait a moment and try again.",
+					code: "server_busy",
+				},
+				{ status: 503, headers: { "Retry-After": "5" } },
+			);
+		}
 		return handleApiError(e);
 	}
 }

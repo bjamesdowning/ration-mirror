@@ -227,6 +227,7 @@ describe("hydrateAdminUserRows", () => {
 			name: "Alice",
 			email: "alice@test.com",
 			isAdmin: true,
+			tier: "free",
 			createdAt: new Date("2026-01-01T00:00:00Z"),
 			settings: { lastActiveAt: "2026-07-03T12:00:00.000Z" },
 		},
@@ -235,6 +236,7 @@ describe("hydrateAdminUserRows", () => {
 			name: "Bob",
 			email: "bob@test.com",
 			isAdmin: false,
+			tier: "crew_member",
 			createdAt: new Date("2026-02-01T00:00:00Z"),
 			settings: null,
 		},
@@ -262,7 +264,9 @@ describe("hydrateAdminUserRows", () => {
 		expect(result[1].lastLoginAt).toBeNull();
 		expect(result[1].lastActiveAt).toEqual(new Date(1_783_122_000_000));
 		expect(result[0].isAdmin).toBe(true);
+		expect(result[0].tier).toBe("free");
 		expect(result[1].name).toBe("Bob");
+		expect(result[1].tier).toBe("crew_member");
 	});
 
 	it("returns null activity dates when no aggregates exist", () => {
@@ -273,6 +277,7 @@ describe("hydrateAdminUserRows", () => {
 					name: "Carol",
 					email: "carol@test.com",
 					isAdmin: false,
+					tier: "free",
 					createdAt: null,
 					settings: {},
 				},

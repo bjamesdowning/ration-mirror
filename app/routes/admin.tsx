@@ -10,6 +10,7 @@ import {
 } from "react-router";
 
 import * as schema from "../db/schema";
+import { handleAdminDeleteAccount } from "../lib/admin-account-purge.server";
 import type { AdminHeavyMetricsResponse } from "../lib/admin-loader.server";
 import { loadCriticalAdminDashboard } from "../lib/admin-loader.server";
 import type {
@@ -20,6 +21,7 @@ import type {
 	OrgEngagementMedians,
 	PlatformSplitResult,
 } from "../lib/admin-metrics.server";
+import { shouldAdminRevalidate } from "../lib/admin-revalidate";
 import {
 	type AdminUserRow,
 	type AdminUsersListResult,
@@ -38,7 +40,11 @@ import {
 } from "../lib/purge-pending.server";
 import { attemptPurgeJobRetry } from "../lib/purge-retry-cron.server";
 import { checkRateLimit, rateLimitResponse } from "../lib/rate-limiter.server";
-import { RetryPurgeJobSchema, ToggleAdminSchema } from "../lib/schemas/admin";
+import {
+	DeleteAccountSchema,
+	RetryPurgeJobSchema,
+	ToggleAdminSchema,
+} from "../lib/schemas/admin";
 import type { Route } from "./+types/admin";
 
 export async function loader(args: Route.LoaderArgs) {
@@ -123,6 +129,38 @@ export async function action(args: Route.ActionArgs) {
 			return data({ success: true, accepted: true, jobId: job.id });
 		}
 
+		if (intent === "delete-account") {
+			const { userId, confirmEmail } = DeleteAccountSchema.parse({
+				intent,
+				userId: formData.get("userId"),
+				confirmEmail: formData.get("confirmEmail"),
+			});
+
+			const result = await handleAdminDeleteAccount({
+				env: args.context.cloudflare.env,
+				ctx: args.context.cloudflare.ctx,
+				adminUserId: adminUser.id,
+				userId,
+				confirmEmail,
+			});
+
+			if (result.kind === "rate_limited") {
+				return rateLimitResponse(
+					result.result,
+					"Too many account deletions. Please try again later.",
+				);
+			}
+			if (result.kind === "denied") {
+				return data({ error: result.error }, { status: result.status });
+			}
+
+			return data({
+				success: true,
+				accepted: true,
+				jobId: result.jobId,
+			});
+		}
+
 		const { userId } = ToggleAdminSchema.parse({
 			intent: formData.get("intent"),
 			userId: formData.get("userId"),
@@ -160,16 +198,20 @@ export async function action(args: Route.ActionArgs) {
 export function shouldRevalidate({
 	formMethod,
 	formAction,
+	formData,
 	defaultShouldRevalidate,
 }: {
 	formMethod?: string;
 	formAction?: string;
+	formData?: FormData;
 	defaultShouldRevalidate: boolean;
 }) {
-	if (formAction || (formMethod && formMethod !== "GET")) {
-		return defaultShouldRevalidate;
-	}
-	return false;
+	return shouldAdminRevalidate({
+		formMethod,
+		formAction,
+		formData,
+		defaultShouldRevalidate,
+	});
 }
 
 // ── Components ────────────────────────────────────────────────────────────────
@@ -520,7 +562,13 @@ export default function AdminDashboard({ loaderData }: Route.ComponentProps) {
 
 	const metricsFetcher = useFetcher<AdminHeavyMetricsResponse>();
 	const usersFetcher = useFetcher<UsersFetcherData>();
-	const toggleFetcher = useFetcher();
+	const toggleFetcher = useFetcher<{ success?: boolean; error?: string }>();
+	const deleteFetcher = useFetcher<{
+		success?: boolean;
+		accepted?: boolean;
+		jobId?: string;
+		error?: string;
+	}>();
 	const purgeRetryFetcher = useFetcher<{
 		success?: boolean;
 		accepted?: boolean;
@@ -529,6 +577,7 @@ export default function AdminDashboard({ loaderData }: Route.ComponentProps) {
 	}>();
 	const revalidator = useRevalidator();
 	const pendingToggleUserIdRef = useRef<string | null>(null);
+	const pendingDeleteUserIdRef = useRef<string | null>(null);
 	const [searchQuery, setSearchQuery] = useState("");
 	const [usersQuery, setUsersQuery] =
 		useState<UsersQueryState>(INITIAL_USERS_QUERY);
@@ -537,6 +586,8 @@ export default function AdminDashboard({ loaderData }: Route.ComponentProps) {
 	const [rateLimitMessage, setRateLimitMessage] = useState<string | null>(null);
 	const [rateLimitRetryAt, setRateLimitRetryAt] = useState<number | null>(null);
 	const [confirmingUserId, setConfirmingUserId] = useState<string | null>(null);
+	const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
+	const [toggleFeedback, setToggleFeedback] = useState<string | null>(null);
 	const [revealedEmailIds, setRevealedEmailIds] = useState<Set<string>>(
 		new Set(),
 	);
@@ -686,6 +737,7 @@ export default function AdminDashboard({ loaderData }: Route.ComponentProps) {
 			if (user.id === currentUserId) return;
 			if (confirmingUserId === user.id) {
 				pendingToggleUserIdRef.current = user.id;
+				setToggleFeedback(null);
 				toggleFetcher.submit(
 					{ intent: "toggle-admin", userId: user.id },
 					{ method: "POST" },
@@ -693,6 +745,7 @@ export default function AdminDashboard({ loaderData }: Route.ComponentProps) {
 				setConfirmingUserId(null);
 			} else {
 				setConfirmingUserId(user.id);
+				setDeletingUserId(null);
 			}
 		},
 		[currentUserId, confirmingUserId, toggleFetcher],
@@ -702,28 +755,45 @@ export default function AdminDashboard({ loaderData }: Route.ComponentProps) {
 		setTimeout(() => setConfirmingUserId(null), 150);
 	}, []);
 
+	const handleDeleteClick = useCallback(
+		(user: AdminUserRow) => {
+			if (user.id === currentUserId || user.isAdmin) return;
+			setDeletingUserId(user.id);
+			setConfirmingUserId(null);
+			setToggleFeedback(null);
+		},
+		[currentUserId],
+	);
+
 	useEffect(() => {
-		if (
-			toggleFetcher.state !== "idle" ||
-			!(toggleFetcher.data as { success?: boolean } | undefined)?.success
-		) {
+		if (toggleFetcher.state !== "idle" || !toggleFetcher.data) {
+			return;
+		}
+
+		if (toggleFetcher.data.error) {
+			setToggleFeedback(null);
+			pendingToggleUserIdRef.current = null;
+			return;
+		}
+
+		if (!toggleFetcher.data.success) {
 			return;
 		}
 
 		const toggledUserId = pendingToggleUserIdRef.current;
-		if (toggledUserId) {
-			setUsersData((prev) => ({
-				...prev,
-				users: prev.users.map((user) =>
-					user.id === toggledUserId
-						? { ...user, isAdmin: !user.isAdmin }
-						: user,
-				),
-			}));
-			pendingToggleUserIdRef.current = null;
+		if (!toggledUserId) {
+			return;
 		}
 
-		revalidator.revalidate();
+		setUsersData((prev) => ({
+			...prev,
+			users: prev.users.map((user) =>
+				user.id === toggledUserId ? { ...user, isAdmin: !user.isAdmin } : user,
+			),
+		}));
+		setToggleFeedback("Admin status updated.");
+		pendingToggleUserIdRef.current = null;
+
 		if (needsClientFetch) {
 			loadUsers(usersQuery, { force: true });
 		}
@@ -733,8 +803,39 @@ export default function AdminDashboard({ loaderData }: Route.ComponentProps) {
 		usersQuery,
 		loadUsers,
 		needsClientFetch,
-		revalidator,
 	]);
+
+	useEffect(() => {
+		if (deleteFetcher.state !== "idle" || !deleteFetcher.data) {
+			return;
+		}
+
+		if (deleteFetcher.data.error) {
+			pendingDeleteUserIdRef.current = null;
+			return;
+		}
+
+		if (!deleteFetcher.data.accepted) {
+			return;
+		}
+
+		const deletedUserId = pendingDeleteUserIdRef.current;
+		if (!deletedUserId) {
+			return;
+		}
+
+		setUsersData((prev) => {
+			const nextTotal = Math.max(0, prev.total - 1);
+			return {
+				...prev,
+				users: prev.users.filter((user) => user.id !== deletedUserId),
+				total: nextTotal,
+				totalPages: nextTotal > 0 ? Math.ceil(nextTotal / prev.limit) : 0,
+			};
+		});
+		pendingDeleteUserIdRef.current = null;
+		setDeletingUserId(null);
+	}, [deleteFetcher.state, deleteFetcher.data]);
 
 	useEffect(() => {
 		if (
@@ -752,6 +853,13 @@ export default function AdminDashboard({ loaderData }: Route.ComponentProps) {
 	const { page, sort, order } = usersQuery;
 	const isLoadingUsers = usersFetcher.state === "loading";
 	const isRateLimited = rateLimitMessage !== null;
+	const toggleInFlight = toggleFetcher.state !== "idle";
+	const deleteInFlight = deleteFetcher.state !== "idle";
+	const togglingUserId = String(toggleFetcher.formData?.get("userId") ?? "");
+	const deletingUser =
+		deletingUserId == null
+			? null
+			: (users.find((user) => user.id === deletingUserId) ?? null);
 
 	const pageStart =
 		usersTotal === 0 ? 0 : (page - 1) * DEFAULT_ADMIN_USERS_LIMIT + 1;
@@ -1384,9 +1492,28 @@ export default function AdminDashboard({ loaderData }: Route.ComponentProps) {
 				<section>
 					<SectionHeading>Users</SectionHeading>
 					<p className="text-sm text-muted mb-4">
-						Browse all users, search by name or email, and manage admin
-						privileges.
+						Browse all users, search by name or email, manage admin privileges,
+						and run the standard account wipe.
 					</p>
+					{toggleFeedback ? (
+						<p className="text-sm text-hyper-green mb-4">{toggleFeedback}</p>
+					) : null}
+					{toggleFetcher.data?.error ? (
+						<p className="text-sm text-danger mb-4">
+							{toggleFetcher.data.error}
+						</p>
+					) : null}
+					{deleteFetcher.data?.error ? (
+						<p className="text-sm text-danger mb-4">
+							{deleteFetcher.data.error}
+						</p>
+					) : null}
+					{deleteFetcher.data?.accepted ? (
+						<p className="text-sm text-hyper-green mb-4">
+							Wipe accepted — running in the background. Failures appear under
+							Failed purges.
+						</p>
+					) : null}
 					<div className="glass-panel rounded-2xl p-6">
 						<input
 							type="search"
@@ -1413,6 +1540,55 @@ export default function AdminDashboard({ loaderData }: Route.ComponentProps) {
 						{isLoadingUsers && (
 							<div className="text-sm text-muted mb-4">Loading users...</div>
 						)}
+						{deletingUser ? (
+							<div className="mb-6 rounded-lg border border-danger/30 bg-danger/5 p-4">
+								<p className="text-sm font-medium text-carbon mb-2">
+									Delete {deletingUser.name}?
+								</p>
+								<p className="text-sm text-muted mb-3">
+									This runs the same hard wipe as Settings / iOS: sessions,
+									personal data, solo kitchens, nutrition, Copilot, and R2.
+									Stripe subscriptions are cancelled now. App Store billing may
+									continue until the user cancels in Manage Subscriptions.
+									{deletingUser.tier === "crew_member"
+										? " This account is Crew."
+										: ""}
+								</p>
+								<deleteFetcher.Form
+									method="post"
+									className="flex flex-col sm:flex-row gap-3"
+									onSubmit={() => {
+										pendingDeleteUserIdRef.current = deletingUser.id;
+									}}
+								>
+									<input type="hidden" name="intent" value="delete-account" />
+									<input type="hidden" name="userId" value={deletingUser.id} />
+									<input
+										type="email"
+										name="confirmEmail"
+										required
+										autoComplete="off"
+										placeholder="Type the account email"
+										className="flex-1 px-3 py-2 rounded-lg border border-carbon/10 bg-ceramic text-sm"
+									/>
+									<button
+										type="submit"
+										disabled={deleteInFlight}
+										className="px-4 py-2 bg-danger/10 text-danger rounded-lg font-medium text-sm hover:bg-danger/20 transition-colors disabled:opacity-50"
+									>
+										{deleteInFlight ? "Deleting…" : "Delete account"}
+									</button>
+									<button
+										type="button"
+										onClick={() => setDeletingUserId(null)}
+										disabled={deleteInFlight}
+										className="px-4 py-2 btn-secondary rounded-lg font-medium text-sm disabled:opacity-50"
+									>
+										Cancel
+									</button>
+								</deleteFetcher.Form>
+							</div>
+						) : null}
 						<div className="max-h-[32rem] overflow-y-auto overflow-x-auto">
 							<table className="w-full text-left">
 								<thead className="sticky top-0 bg-ceramic/95 backdrop-blur-sm z-10">
@@ -1493,8 +1669,8 @@ export default function AdminDashboard({ loaderData }: Route.ComponentProps) {
 											const isSelf = user.id === currentUserId;
 											const isConfirming = confirmingUserId === user.id;
 											const isSubmitting =
-												toggleFetcher.state === "submitting" &&
-												toggleFetcher.formData?.get("userId") === user.id;
+												toggleInFlight && togglingUserId === user.id;
+											const isDeleteOpen = deletingUserId === user.id;
 											return (
 												<tr
 													key={user.id}
@@ -1544,27 +1720,50 @@ export default function AdminDashboard({ loaderData }: Route.ComponentProps) {
 																You
 															</span>
 														) : (
-															<button
-																type="button"
-																onClick={() => handleToggleClick(user)}
-																onBlur={handleConfirmBlur}
-																disabled={isSubmitting}
-																className={`inline-flex items-center px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-																	isConfirming
-																		? "bg-warning/20 text-warning hover:bg-warning/30"
-																		: user.isAdmin
-																			? "bg-danger/10 text-danger hover:bg-danger/20"
-																			: "bg-hyper-green/10 text-hyper-green hover:bg-hyper-green/20"
-																}`}
-															>
-																{isSubmitting
-																	? "Updating..."
-																	: isConfirming
-																		? "Confirm?"
-																		: user.isAdmin
-																			? "Revoke Admin"
-																			: "Grant Admin"}
-															</button>
+															<div className="flex flex-col items-start gap-2">
+																<button
+																	type="button"
+																	onClick={() => handleToggleClick(user)}
+																	onBlur={handleConfirmBlur}
+																	disabled={toggleInFlight}
+																	className={`inline-flex items-center px-3 py-1.5 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 ${
+																		isConfirming
+																			? "bg-warning/20 text-warning hover:bg-warning/30"
+																			: user.isAdmin
+																				? "bg-danger/10 text-danger hover:bg-danger/20"
+																				: "bg-hyper-green/10 text-hyper-green hover:bg-hyper-green/20"
+																	}`}
+																>
+																	{isSubmitting
+																		? "Updating..."
+																		: isConfirming
+																			? "Confirm?"
+																			: user.isAdmin
+																				? "Revoke Admin"
+																				: "Grant Admin"}
+																</button>
+																{user.isAdmin ? (
+																	<span
+																		className="text-xs text-muted"
+																		title="Revoke admin before deleting this account"
+																	>
+																		Revoke admin to delete
+																	</span>
+																) : (
+																	<button
+																		type="button"
+																		onClick={() => handleDeleteClick(user)}
+																		disabled={deleteInFlight}
+																		className={`inline-flex items-center px-3 py-1.5 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 ${
+																			isDeleteOpen
+																				? "bg-warning/20 text-warning"
+																				: "bg-danger/10 text-danger hover:bg-danger/20"
+																		}`}
+																	>
+																		{isDeleteOpen ? "Confirm below" : "Delete"}
+																	</button>
+																)}
+															</div>
 														)}
 													</td>
 												</tr>

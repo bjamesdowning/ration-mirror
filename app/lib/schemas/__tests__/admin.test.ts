@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { RetryPurgeJobSchema, ToggleAdminSchema } from "../admin";
+import {
+	DeleteAccountSchema,
+	RetryPurgeJobSchema,
+	ToggleAdminSchema,
+} from "../admin";
 
 describe("ToggleAdminSchema", () => {
 	it("accepts a toggle-admin intent", () => {
@@ -25,6 +29,32 @@ describe("RetryPurgeJobSchema", () => {
 				intent: "retry-purge-job",
 				jobId: "not-a-uuid",
 				confirmValue: "a@b.com",
+			}),
+		).toThrow();
+	});
+});
+
+describe("DeleteAccountSchema", () => {
+	it("trims the confirmation email", () => {
+		expect(
+			DeleteAccountSchema.parse({
+				intent: "delete-account",
+				userId: "user_1",
+				confirmEmail: "  alice@test.com  ",
+			}),
+		).toEqual({
+			intent: "delete-account",
+			userId: "user_1",
+			confirmEmail: "alice@test.com",
+		});
+	});
+
+	it("rejects an empty confirmation email", () => {
+		expect(() =>
+			DeleteAccountSchema.parse({
+				intent: "delete-account",
+				userId: "user_1",
+				confirmEmail: "   ",
 			}),
 		).toThrow();
 	});

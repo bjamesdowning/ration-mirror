@@ -264,6 +264,7 @@ export function hydrateAdminUserRows(
 			name: row.name,
 			email: row.email,
 			isAdmin: row.isAdmin,
+			tier: row.tier,
 			createdAt: row.createdAt,
 			lastLoginAt: lastLoginMs > 0 ? new Date(lastLoginMs) : null,
 			lastActiveAt: lastActiveMs > 0 ? new Date(lastActiveMs) : null,
@@ -346,6 +347,7 @@ export async function listAdminUsers(
 				name: schema.user.name,
 				email: schema.user.email,
 				isAdmin: schema.user.isAdmin,
+				tier: schema.user.tier,
 				createdAt: schema.user.createdAt,
 				settings: schema.user.settings,
 			})

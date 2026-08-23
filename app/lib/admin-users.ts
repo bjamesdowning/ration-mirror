@@ -29,6 +29,7 @@ export interface AdminUserPageRow {
 	name: string;
 	email: string;
 	isAdmin: boolean;
+	tier: string;
 	createdAt: Date | null;
 	settings: { lastActiveAt?: string } | null;
 }
@@ -52,6 +53,7 @@ export interface AdminUserRow {
 	name: string;
 	email: string;
 	isAdmin: boolean;
+	tier: string;
 	createdAt: Date | null;
 	lastLoginAt: Date | null;
 	lastActiveAt: Date | null;

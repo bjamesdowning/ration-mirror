@@ -441,5 +441,18 @@ export async function beginAccountPurge(
 	return { jobId };
 }
 
+/**
+ * Operator wipe: same Stripe-cancel-then-purge path as Settings/iOS, without
+ * the Crew auto-renew eligibility gate (GDPR Art. 17 / support).
+ */
+export async function beginAdminAccountPurge(
+	env: Cloudflare.Env,
+	ctx: { waitUntil: (promise: Promise<unknown>) => void },
+	input: PurgeUserInput & { stripeCustomerId?: string | null },
+): Promise<{ jobId: string }> {
+	await cancelStripeBeforeAccountPurge(env, input.stripeCustomerId ?? null);
+	return beginAccountPurge(env, ctx, input);
+}
+
 /** Prefer beginAccountPurge from call sites. */
 export { beginAccountPurge as scheduleAccountPurge };

@@ -151,7 +151,7 @@ If you have questions or wish to exercise your rights, please contact us directl
 
 We will retain your Personal Data only for as long as is necessary for the purposes set out in this Privacy Policy. We will retain and use your Personal Data to the extent necessary to comply with our legal obligations, resolve disputes, and enforce our legal agreements and policies.
 
-**Right to be Forgotten:** You have the right to request the deletion of your account and all associated data. Upon such request, we will permanently purge your Personal Data, Usage Data, Cargo Data, Visual Data, nutrition goals and intake records, and copilot conversation state from our systems (D1 Databases, Vectorize Indexes, R2 Storage, and copilot Durable Objects). You can initiate this process through the "Purge Account" function in your profile settings.
+**Right to be Forgotten:** You have the right to request the deletion of your account and all associated data. Upon such request, we will permanently purge your Personal Data, Usage Data, Cargo Data, Visual Data, nutrition goals and intake records, and copilot conversation state from our systems (D1 Databases, Vectorize Indexes, R2 Storage, and copilot Durable Objects). You can initiate this process through the "Purge Account" function in your profile settings. Operators may also fulfil a verified erasure request through God Mode using that same purge pipeline; in-app deletion in Settings (and the iOS app) remains the path required by App Store Review Guideline 5.1.1(v).
 
 **Groups you own:** For groups where other members have joined, ownership is automatically transferred to an admin or member when you delete your account. If you are the sole member (including when invitations are pending and not yet accepted), the group and all its data are permanently deleted. You may use the "Transfer ownership" option in group settings to hand off a group to another member before deleting your account.
 
@@ -187,6 +187,6 @@ If you have any questions about this Privacy Policy, or wish to exercise your ri
 
 - By email: [legal@mayutic.com](mailto:legal@mayutic.com)
 
-We will acknowledge and respond to all data subject rights requests within **30 days** of receipt, in accordance with GDPR Article 12. Account deletion can also be initiated directly via the "Purge Account" function in your profile settings.
+We will acknowledge and respond to all data subject rights requests within **30 days** of receipt, in accordance with GDPR Article 12. Account deletion can also be initiated directly via the "Purge Account" function in your profile settings, or fulfilled by an operator after a verified request to the contact below.
 
 **Right to lodge a complaint (GDPR Art. 77):** You have the right to lodge a complaint with a supervisory authority. If you are in Ireland, you may contact the [Data Protection Commission (Ireland)](https://www.dataprotection.ie). If you are elsewhere in the EU or EEA, you may contact your local Data Protection Authority. A list of EU supervisory authorities is available at [edpb.europa.eu](https://edpb.europa.eu/about-edpb/about-edpb/members_en). If you are in the United Kingdom, you may contact the Information Commissioner's Office (ICO) at [ico.org.uk](https://ico.org.uk).

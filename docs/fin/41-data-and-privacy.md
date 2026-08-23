@@ -24,7 +24,7 @@ Exact categories and legal bases are described in the **privacy policy**.
 
 ## Deletion (account purge)
 
-When you **purge your account** from Settings (danger zone), Ration’s intent is to remove **your user record and associated personal data** from application databases and to clean up related artifacts (including vectors and objects tied to deletion flows). **Groups you solely own** may be deleted; shared groups may **transfer ownership** per in-app rules.
+When you **purge your account** from Settings (danger zone), or when an operator fulfils a verified erasure request from God Mode, Ration’s intent is to remove **your user record and associated personal data** from application databases and to clean up related artifacts (including vectors and objects tied to deletion flows). **Groups you solely own** may be deleted; shared groups may **transfer ownership** per in-app rules.
 
 Follow **on-screen warnings**—deletion is meant to be **irreversible**.
 

@@ -26,6 +26,7 @@ describe("RATE_LIMITS failClosed flags", () => {
 			"nutrition_resolve",
 			"cargo_nutrition_refresh",
 			"admin_purge_retry",
+			"admin_account_purge",
 		] as const;
 
 		for (const bucket of failClosedBuckets) {

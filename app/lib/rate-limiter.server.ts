@@ -429,6 +429,13 @@ export const RATE_LIMITS: Record<string, RateLimitConfig> = {
 		keyPrefix: "rate:admin_purge_retry",
 		failClosed: true,
 	},
+	/** Operator-initiated account wipe from God Mode — fail-closed, low QPS. */
+	admin_account_purge: {
+		windowMs: 60_000,
+		maxRequests: 5,
+		keyPrefix: "rate:admin_account_purge",
+		failClosed: true,
+	},
 	status_poll: {
 		windowMs: 60_000,
 		maxRequests: 60,

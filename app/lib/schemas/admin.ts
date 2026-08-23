@@ -15,6 +15,14 @@ export const RetryPurgeJobSchema = z.object({
 
 export type RetryPurgeJobInput = z.infer<typeof RetryPurgeJobSchema>;
 
+export const DeleteAccountSchema = z.object({
+	intent: z.literal("delete-account"),
+	userId: z.string().min(1),
+	confirmEmail: z.string().trim().min(1).max(320),
+});
+
+export type DeleteAccountInput = z.infer<typeof DeleteAccountSchema>;
+
 export const AdminUsersListSchema = z.object({
 	q: z.string().optional(),
 	page: z.coerce.number().int().min(1).default(1),

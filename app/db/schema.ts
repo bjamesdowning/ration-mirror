@@ -1,5 +1,6 @@
 import { relations, sql } from "drizzle-orm";
 import {
+	type AnySQLiteColumn,
 	index,
 	integer,
 	primaryKey,
@@ -152,6 +153,9 @@ export const organizationRelations = relations(organization, ({ many }) => ({
 	tags: many(tag),
 	activeMealSelections: many(activeMealSelection),
 	supplyLists: many(supplyList),
+	supplyStaples: many(supplyStaple),
+	supplyStoreProfiles: many(supplyStoreProfile),
+	supplyOperations: many(supplyOperation),
 	mealPlans: many(mealPlan),
 }));
 
@@ -598,6 +602,54 @@ export const activeCargoSelectionRelations = relations(
 	}),
 );
 
+export const supplyStoreProfile = sqliteTable(
+	"supply_store_profile",
+	{
+		id: text("id")
+			.primaryKey()
+			.$defaultFn(() => crypto.randomUUID()),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id, { onDelete: "cascade" }),
+		name: text("name").notNull(),
+		normalizedName: text("normalized_name").notNull(),
+		createdAt: integer("created_at", { mode: "timestamp" })
+			.notNull()
+			.default(sql`(unixepoch())`),
+		updatedAt: integer("updated_at", { mode: "timestamp" })
+			.notNull()
+			.default(sql`(unixepoch())`),
+	},
+	(table) => [
+		index("supply_store_profile_org_idx").on(table.organizationId),
+		unique("supply_store_profile_org_name").on(
+			table.organizationId,
+			table.normalizedName,
+		),
+	],
+);
+
+export const supplyStoreAisle = sqliteTable(
+	"supply_store_aisle",
+	{
+		id: text("id")
+			.primaryKey()
+			.$defaultFn(() => crypto.randomUUID()),
+		profileId: text("profile_id")
+			.notNull()
+			.references(() => supplyStoreProfile.id, { onDelete: "cascade" }),
+		category: text("category").notNull(),
+		sortOrder: integer("sort_order").notNull().default(0),
+	},
+	(table) => [
+		index("supply_store_aisle_profile_idx").on(table.profileId),
+		unique("supply_store_aisle_profile_category").on(
+			table.profileId,
+			table.category,
+		),
+	],
+);
+
 export const supplyList = sqliteTable(
 	"supply_list",
 	{
@@ -610,6 +662,21 @@ export const supplyList = sqliteTable(
 		name: text("name").notNull().default("Shopping List"),
 		shareToken: text("share_token").unique(),
 		shareExpiresAt: integer("share_expires_at", { mode: "timestamp" }),
+		/** Kitchen class: live | saved | template. Archived is saved + archivedAt. */
+		kind: text("kind").notNull().default("saved"),
+		archivedAt: integer("archived_at", { mode: "timestamp" }),
+		createdFrom: text("created_from").notNull().default("manual"),
+		sourceListId: text("source_list_id").references(
+			(): AnySQLiteColumn => supplyList.id,
+			{ onDelete: "set null" },
+		),
+		sourceReference: text("source_reference"),
+		storeProfileId: text("store_profile_id").references(
+			() => supplyStoreProfile.id,
+			{ onDelete: "set null" },
+		),
+		revision: integer("revision").notNull().default(0),
+		quotaSlot: integer("quota_slot"),
 		createdAt: integer("created_at", { mode: "timestamp" })
 			.notNull()
 			.default(sql`(unixepoch())`),
@@ -620,6 +687,16 @@ export const supplyList = sqliteTable(
 	(table) => [
 		index("supply_list_org_idx").on(table.organizationId),
 		index("supply_list_share_idx").on(table.shareToken),
+		uniqueIndex("supply_list_one_live_per_org")
+			.on(table.organizationId)
+			.where(sql`${table.kind} = 'live'`),
+		uniqueIndex("supply_list_quota_slot_uidx").on(
+			table.organizationId,
+			table.quotaSlot,
+		),
+		uniqueIndex("supply_list_source_ref_uidx")
+			.on(table.organizationId, table.createdFrom, table.sourceReference)
+			.where(sql`${table.sourceReference} IS NOT NULL`),
 	],
 );
 
@@ -629,6 +706,11 @@ export const supplyListRelations = relations(supplyList, ({ one, many }) => ({
 		references: [organization.id],
 	}),
 	items: many(supplyItem),
+	sourceList: one(supplyList, {
+		fields: [supplyList.sourceListId],
+		references: [supplyList.id],
+		relationName: "supplyListSource",
+	}),
 }));
 
 export const supplyItem = sqliteTable(
@@ -663,9 +745,16 @@ export const supplyItem = sqliteTable(
 		sourceCargoId: text("source_cargo_id").references(() => cargo.id, {
 			onDelete: "set null",
 		}),
+		note: text("note"),
+		category: text("category"),
+		sortOrder: integer("sort_order").notNull().default(0),
 		createdAt: integer("created_at", { mode: "timestamp" })
 			.notNull()
 			.default(sql`(unixepoch())`),
+		// Constant default: D1 rejects ADD COLUMN with unixepoch(). Writers set the real timestamp.
+		updatedAt: integer("updated_at", { mode: "timestamp" })
+			.notNull()
+			.default(sql`0`),
 	},
 	(table) => [
 		index("supply_item_list_idx").on(table.listId),
@@ -712,6 +801,113 @@ export const supplySnoozeRelations = relations(supplySnooze, ({ one }) => ({
 		references: [organization.id],
 	}),
 }));
+
+export const supplyStaple = sqliteTable(
+	"supply_staple",
+	{
+		id: text("id")
+			.primaryKey()
+			.$defaultFn(() => crypto.randomUUID()),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id, { onDelete: "cascade" }),
+		name: text("name").notNull(),
+		normalizedName: text("normalized_name").notNull(),
+		quantity: real("quantity").notNull().default(1),
+		unit: text("unit").notNull().default("unit"),
+		baseQuantity: real("base_quantity").notNull().default(1),
+		baseUnit: text("base_unit").notNull().default("unit"),
+		domain: text("domain").notNull().default("food"),
+		category: text("category"),
+		note: text("note"),
+		createdAt: integer("created_at", { mode: "timestamp" })
+			.notNull()
+			.default(sql`(unixepoch())`),
+		updatedAt: integer("updated_at", { mode: "timestamp" })
+			.notNull()
+			.default(sql`(unixepoch())`),
+	},
+	(table) => [
+		index("supply_staple_org_idx").on(table.organizationId),
+		unique("supply_staple_org_name_domain").on(
+			table.organizationId,
+			table.normalizedName,
+			table.domain,
+		),
+	],
+);
+
+export const supplyStapleRelations = relations(supplyStaple, ({ one }) => ({
+	organization: one(organization, {
+		fields: [supplyStaple.organizationId],
+		references: [organization.id],
+	}),
+}));
+
+export const supplyStoreProfileRelations = relations(
+	supplyStoreProfile,
+	({ one, many }) => ({
+		organization: one(organization, {
+			fields: [supplyStoreProfile.organizationId],
+			references: [organization.id],
+		}),
+		aisles: many(supplyStoreAisle),
+		lists: many(supplyList),
+	}),
+);
+
+export const supplyStoreAisleRelations = relations(
+	supplyStoreAisle,
+	({ one }) => ({
+		profile: one(supplyStoreProfile, {
+			fields: [supplyStoreAisle.profileId],
+			references: [supplyStoreProfile.id],
+		}),
+	}),
+);
+
+export const supplyOperation = sqliteTable(
+	"supply_operation",
+	{
+		id: text("id")
+			.primaryKey()
+			.$defaultFn(() => crypto.randomUUID()),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id, { onDelete: "cascade" }),
+		listId: text("list_id").references(() => supplyList.id, {
+			onDelete: "cascade",
+		}),
+		operationId: text("operation_id").notNull(),
+		operationType: text("operation_type").notNull(),
+		appliedAt: integer("applied_at", { mode: "timestamp" })
+			.notNull()
+			.default(sql`(unixepoch())`),
+		resultJson: text("result_json"),
+	},
+	(table) => [
+		index("supply_operation_org_idx").on(table.organizationId),
+		unique("supply_operation_org_op").on(
+			table.organizationId,
+			table.operationId,
+		),
+		index("supply_operation_applied_idx").on(table.appliedAt),
+	],
+);
+
+export const supplyOperationRelations = relations(
+	supplyOperation,
+	({ one }) => ({
+		organization: one(organization, {
+			fields: [supplyOperation.organizationId],
+			references: [organization.id],
+		}),
+		list: one(supplyList, {
+			fields: [supplyOperation.listId],
+			references: [supplyList.id],
+		}),
+	}),
+);
 
 export const mealPlan = sqliteTable(
 	"meal_plan",

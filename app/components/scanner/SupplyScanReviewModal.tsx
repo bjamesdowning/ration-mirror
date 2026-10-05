@@ -2,6 +2,7 @@ import { AlertTriangle, Check, Edit2, Link2, Unlink, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useFetcher, useRouteLoaderData } from "react-router";
 import { UpgradePrompt } from "~/components/shell/UpgradePrompt";
+import { SaveAsSupplyListButton } from "~/components/supply/SaveAsSupplyListButton";
 import { projectNutritionSnapshotToLegacy } from "~/lib/nutrition/adapters";
 import { provenanceLabel } from "~/lib/nutrition/panel-helpers";
 import {
@@ -711,6 +712,18 @@ export function SupplyScanReviewModal({
 						)}
 					</div>
 
+					<div className="px-4">
+						<SaveAsSupplyListButton
+							scanRequestId={requestId}
+							items={pairs.map((pair) => ({
+								name: pair.dockName,
+								quantity: pair.dockQuantity,
+								unit: pair.dockUnit,
+								domain: pair.dockDomain,
+								selected: pair.selected,
+							}))}
+						/>
+					</div>
 					<div className="border-t border-platinum dark:border-white/10 p-4 flex gap-2">
 						<button
 							type="button"

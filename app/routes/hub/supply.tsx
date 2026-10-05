@@ -37,8 +37,12 @@ import { ReplenishModal } from "~/components/supply/ReplenishModal";
 import { ReplenishReceiptModal } from "~/components/supply/ReplenishReceiptModal";
 import { ShareModal } from "~/components/supply/ShareModal";
 import { SnoozedItemsPanel } from "~/components/supply/SnoozedItemsPanel";
+import { SupplyBarcodeAdd } from "~/components/supply/SupplyBarcodeAdd";
+import { SupplyCollaborationPoll } from "~/components/supply/SupplyCollaborationPoll";
 import { SupplyHorizonPicker } from "~/components/supply/SupplyHorizonPicker";
+import { SupplyLibraryActions } from "~/components/supply/SupplyLibraryActions";
 import { SupplyList } from "~/components/supply/SupplyList";
+import { SupplyListSwitcher } from "~/components/supply/SupplyListSwitcher";
 import { SupplyShoppingBar } from "~/components/supply/SupplyShoppingBar";
 import { usePageFilters } from "~/hooks/usePageFilters";
 import { useToast } from "~/hooks/useToast";
@@ -47,6 +51,7 @@ import { CapacityExceededError } from "~/lib/capacity.server";
 import { getCargoTagIndex } from "~/lib/cargo.server";
 import { useConfirm } from "~/lib/confirm-context";
 import { handleApiError } from "~/lib/error-handler";
+import { buildWebFlagContext } from "~/lib/feature-flags/context.server";
 import { log } from "~/lib/logging.server";
 import { getManifestWeekMealsForSupply } from "~/lib/manifest.server";
 import { getActiveMealSelections } from "~/lib/meal-selection.server";
@@ -62,7 +67,11 @@ import {
 	createSupplyListFromSelectedMeals,
 	getActiveSnoozes,
 	getSupplyList,
+	getSupplyListById,
 } from "~/lib/supply.server";
+import { isSupplyMultiListsEnabled } from "~/lib/supply-list-flag.server";
+import { loadSupplyListRow } from "~/lib/supply-list-target.server";
+import { getSupplyCatalog } from "~/lib/supply-lists.server";
 import { filterSupplyItemsByCargoTags } from "~/lib/supply-tags";
 import type { TagRecord } from "~/lib/tags";
 import { getDistinctCargoTags, getTagsForMealIds } from "~/lib/tags.server";
@@ -99,7 +108,8 @@ export function shouldRevalidate({
 			key === "domain" ||
 			key === "tags" ||
 			key === "sort" ||
-			key === "hidePurchased"
+			key === "hidePurchased" ||
+			key === "list"
 		)
 			continue;
 		if (currentUrl.searchParams.get(key) !== nextUrl.searchParams.get(key)) {
@@ -128,16 +138,34 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		groupId,
 		session.user.id,
 	);
+	const flagContext = buildWebFlagContext(
+		request,
+		context.cloudflare.env,
+		session,
+	);
+	const multiListsEnabled = await isSupplyMultiListsEnabled(
+		context.cloudflare.env,
+		flagContext,
+	);
+	const requestedListId = multiListsEnabled
+		? new URL(request.url).searchParams.get("list")
+		: null;
 
 	const [
 		listResult,
+		catalogResult,
 		activeSelectionsResult,
 		cargoItemsResult,
 		availableTagsResult,
 		manifestWeekMealsResult,
 		snoozesResult,
 	] = await Promise.allSettled([
-		getSupplyList(context.cloudflare.env.DB, groupId),
+		requestedListId
+			? getSupplyListById(context.cloudflare.env.DB, groupId, requestedListId)
+			: getSupplyList(context.cloudflare.env.DB, groupId),
+		multiListsEnabled
+			? getSupplyCatalog(context.cloudflare.env, groupId)
+			: Promise.resolve(null),
 		getActiveMealSelections(context.cloudflare.env.DB, groupId),
 		getCargoTagIndex(context.cloudflare.env.DB, groupId),
 		getDistinctCargoTags(context.cloudflare.env.DB, groupId),
@@ -150,6 +178,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 	]);
 
 	if (listResult.status === "rejected") throw listResult.reason;
+	if (catalogResult.status === "rejected") throw catalogResult.reason;
 	if (activeSelectionsResult.status === "rejected") {
 		throw activeSelectionsResult.reason;
 	}
@@ -159,7 +188,20 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 	}
 	if (snoozesResult.status === "rejected") throw snoozesResult.reason;
 
-	const list = listResult.value;
+	let list = listResult.value;
+	if (!list) {
+		list = await getSupplyList(context.cloudflare.env.DB, groupId);
+	} else if (requestedListId) {
+		const row = await loadSupplyListRow(
+			context.cloudflare.env.DB,
+			groupId,
+			requestedListId,
+		);
+		if (!row || row.kind === "live") {
+			list = await getSupplyList(context.cloudflare.env.DB, groupId);
+		}
+	}
+	const catalog = catalogResult.value;
 	const activeSelections = activeSelectionsResult.value;
 	const cargoItems = cargoItemsResult.value;
 	const manifestWeekMeals = manifestWeekMealsResult.value;
@@ -205,6 +247,8 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		canManageSupplySettings: canManageGroupSupplySettings(
 			memberRole ?? "member",
 		),
+		multiListsEnabled,
+		catalog,
 	};
 }
 
@@ -322,6 +366,8 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 		mealTagSlugsByMealId = {},
 		supplyWindow,
 		canManageSupplySettings,
+		multiListsEnabled = false,
+		catalog = null,
 	} = loaderData;
 	const location = useLocation();
 	type SyncResult = {
@@ -360,6 +406,7 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 				clientFlags?: {
 					aiDockFromReceipt?: boolean;
 					aiScanReceipt?: boolean;
+					supplyMultiLists?: boolean;
 				};
 		  }
 		| undefined;
@@ -369,7 +416,10 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 	const { confirm } = useConfirm();
 	const summaryToast = useToast({ duration: 5000 });
 	const dockToast = useToast({ duration: 4000 });
-	const lastSyncSource = useRef<"background" | "manual" | null>(null);
+	const isLiveList =
+		!multiListsEnabled || !displayList?.kind || displayList.kind === "live";
+
+	const libraryFetcher = useFetcher();
 	const {
 		activeDomain,
 		currentTags,
@@ -536,7 +586,9 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 
 	// Background sync on each Supply navigation (session-scoped per visit).
 	const lastSyncedPath = useRef<string | null>(null);
+	const lastSyncSource = useRef<"manual" | "background" | null>(null);
 	useEffect(() => {
+		if (!isLiveList) return;
 		if (location.pathname !== "/hub/supply") return;
 		if (lastSyncedPath.current === location.key) return;
 		if (fetcher.state !== "idle") return;
@@ -546,7 +598,27 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 		formData.set("intent", "update-list");
 		formData.set("syncSource", "background");
 		fetcher.submit(formData, { method: "POST" });
-	}, [location.pathname, location.key, fetcher.state, fetcher.submit]);
+	}, [
+		location.pathname,
+		location.key,
+		fetcher.state,
+		fetcher.submit,
+		isLiveList,
+	]);
+
+	useEffect(() => {
+		if (!multiListsEnabled) return;
+		void import("~/lib/supply-outbox.client").then((mod) =>
+			mod.replaySupplyOutbox(),
+		);
+		const onOnline = () => {
+			void import("~/lib/supply-outbox.client").then((mod) =>
+				mod.replaySupplyOutbox(),
+			);
+		};
+		window.addEventListener("online", onOnline);
+		return () => window.removeEventListener("online", onOnline);
+	}, [multiListsEnabled]);
 
 	// Show summary toast when auto-update or manual update occurs with new items?
 	useEffect(() => {
@@ -607,8 +679,66 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 				/>
 			) : (
 				<div className="space-y-6 pb-36 md:pb-0">
+					{multiListsEnabled && catalog && displayList && (
+						<div className="space-y-3">
+							<SupplyListSwitcher
+								catalog={catalog}
+								selectedId={displayList.id}
+								onCreate={() => {
+									const name = window.prompt("New list name", "Shopping");
+									if (!name) return;
+									libraryFetcher.submit(
+										JSON.stringify({ name, kind: "saved" }),
+										{
+											method: "POST",
+											action: "/api/supply-lists/catalog",
+											encType: "application/json",
+										},
+									);
+								}}
+								onSnapshot={() => {
+									const name = window.prompt(
+										"Save Live as list",
+										`Supply ${new Date().toLocaleDateString()}`,
+									);
+									if (!name) return;
+									libraryFetcher.submit(
+										JSON.stringify({
+											name,
+											kind: "saved",
+											seed: { type: "copy" },
+										}),
+										{
+											method: "POST",
+											action: "/api/supply-lists/catalog",
+											encType: "application/json",
+										},
+									);
+								}}
+							/>
+							<SupplyLibraryActions
+								listId={displayList.id}
+								state={
+									displayList.archivedAt
+										? "archived"
+										: (displayList.kind ?? "live")
+								}
+								atCapacity={
+									catalog.capacity.limit !== -1 &&
+									catalog.capacity.current >= catalog.capacity.limit
+								}
+							/>
+							<SupplyBarcodeAdd listId={displayList.id} />
+							<SupplyCollaborationPoll
+								key={displayList.id}
+								enabled
+								listId={displayList.id}
+								revision={displayList.revision ?? 0}
+							/>
+						</div>
+					)}
 					{/* Sync status banner — visible during background or manual list update */}
-					{fetcher.state !== "idle" && (
+					{isLiveList && fetcher.state !== "idle" && (
 						<output
 							className="flex items-center gap-2 px-4 py-2 rounded-lg bg-hyper-green/10 text-hyper-green text-sm font-medium"
 							aria-live="polite"
@@ -622,33 +752,37 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 						purchasedCount={progressPurchasedCount}
 						totalCount={progressTotalCount}
 					/>
-					<div className="hidden md:block glass-panel rounded-xl p-4">
-						<p className="text-xs font-semibold text-muted uppercase tracking-widest mb-3">
-							Manifest planning
-						</p>
-						<SupplyHorizonPicker
-							horizonDays={supplyWindow.horizonDays}
-							windowEndDate={supplyWindow.endDate}
-							canEdit={canManageSupplySettings}
-							showStepper
-							onHorizonChange={() => handleRefreshList()}
-						/>
-					</div>
+					{isLiveList && (
+						<div className="hidden md:block glass-panel rounded-xl p-4">
+							<p className="text-xs font-semibold text-muted uppercase tracking-widest mb-3">
+								Manifest planning
+							</p>
+							<SupplyHorizonPicker
+								horizonDays={supplyWindow.horizonDays}
+								windowEndDate={supplyWindow.endDate}
+								canEdit={canManageSupplySettings}
+								showStepper
+								onHorizonChange={() => handleRefreshList()}
+							/>
+						</div>
+					)}
 					<div className="hidden md:block">
 						<PanelToolbar
 							primaryAction={
 								<div className="flex gap-2">
-									<button
-										type="button"
-										onClick={handleRefreshList}
-										disabled={fetcher.state !== "idle"}
-										className="flex items-center gap-2 px-4 py-2 font-semibold rounded-lg text-sm transition-all btn-secondary"
-									>
-										<RefreshCw
-											className={`w-4 h-4 ${fetcher.state !== "idle" ? "animate-spin" : ""}`}
-										/>
-										Refresh list
-									</button>
+									{isLiveList && (
+										<button
+											type="button"
+											onClick={handleRefreshList}
+											disabled={fetcher.state !== "idle"}
+											className="flex items-center gap-2 px-4 py-2 font-semibold rounded-lg text-sm transition-all btn-secondary"
+										>
+											<RefreshCw
+												className={`w-4 h-4 ${fetcher.state !== "idle" ? "animate-spin" : ""}`}
+											/>
+											Refresh list
+										</button>
+									)}
 									<button
 										type="button"
 										onClick={() => setShowReplenishModal(true)}
@@ -781,7 +915,7 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 				open={showUpgradePrompt}
 				onClose={() => setShowUpgradePrompt(false)}
 				title="Crew Member required"
-				description="Sharing supply lists is a Crew Member feature. Upgrade to unlock sharing, member invites, and unlimited capacity."
+				description="Sharing supply lists is a Crew Member feature. Upgrade to unlock sharing, member invites, and higher kitchen capacity."
 			/>
 
 			<ReplenishModal

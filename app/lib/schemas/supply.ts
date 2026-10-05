@@ -37,6 +37,8 @@ export const SupplyItemUpdateSchema = z.object({
 	isPurchased: z
 		.union([z.boolean(), z.string().transform((val) => val === "true")])
 		.optional(),
+	note: z.string().max(280).nullable().optional(),
+	category: z.string().max(40).nullable().optional(),
 });
 
 export const SharedItemUpdateSchema = z.object({

@@ -1,8 +1,18 @@
 import { data } from "react-router";
 import { handleApiError } from "~/lib/error-handler";
+import { buildWebFlagContext } from "~/lib/feature-flags/context.server";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import { SharedItemUpdateSchema } from "~/lib/schemas/supply";
-import { updateSharedItemPurchased } from "~/lib/supply.server";
+import {
+	getSupplyListByShareToken,
+	updateSharedItemPurchased,
+} from "~/lib/supply.server";
+import { InvalidListStateError } from "~/lib/supply-list-errors";
+import { isSupplyMultiListsEnabled } from "~/lib/supply-list-flag.server";
+import {
+	canMutateSharedSupplyList,
+	resolveSupplyListState,
+} from "~/lib/supply-list-kinds";
 import type { Route } from "./+types/shared.$token.items.$itemId";
 
 /**
@@ -38,6 +48,33 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 
 		const json = await request.json();
 		const input = SharedItemUpdateSchema.parse(json);
+
+		const list = await getSupplyListByShareToken(
+			context.cloudflare.env.DB,
+			token,
+		);
+		if (!list) {
+			throw data({ error: "List not found or link expired" }, { status: 404 });
+		}
+		const state = resolveSupplyListState({
+			kind: list.kind ?? "live",
+			archivedAt: list.archivedAt ?? null,
+		});
+		if (state !== "live") {
+			const enabled = await isSupplyMultiListsEnabled(
+				context.cloudflare.env,
+				buildWebFlagContext(request, context.cloudflare.env),
+			);
+			if (!enabled) {
+				throw data(
+					{ error: "List not found or link expired" },
+					{ status: 404 },
+				);
+			}
+			if (!canMutateSharedSupplyList(state)) {
+				throw new InvalidListStateError(state);
+			}
+		}
 
 		const result = await updateSharedItemPurchased(
 			context.cloudflare.env.DB,

@@ -154,17 +154,26 @@ struct SupplyScanReviewView: View {
                 }
             }
             .safeAreaInset(edge: .bottom) {
-                Button {
-                    Task { await confirmDock() }
-                } label: {
-                    if model.isSubmitting {
-                        ProgressView().tint(Theme.carbon)
-                    } else {
-                        Text("Dock \(model.selectedCount) item\(model.selectedCount == 1 ? "" : "s") to Cargo")
+                VStack(spacing: 8) {
+                    if env.session.clientFlags.isSupplyMultiListsEnabled {
+                        Button("Save reviewed items as list") {
+                            Task { await saveReviewedAsList() }
+                        }
+                        .buttonStyle(SecondaryButtonStyle())
+                        .disabled(model.selectedCount == 0 || model.isSubmitting)
                     }
+                    Button {
+                        Task { await confirmDock() }
+                    } label: {
+                        if model.isSubmitting {
+                            ProgressView().tint(Theme.carbon)
+                        } else {
+                            Text("Dock \(model.selectedCount) item\(model.selectedCount == 1 ? "" : "s") to Cargo")
+                        }
+                    }
+                    .buttonStyle(PrimaryButtonStyle())
+                    .disabled(model.selectedCount == 0 || model.isSubmitting)
                 }
-                .buttonStyle(PrimaryButtonStyle())
-                .disabled(model.selectedCount == 0 || model.isSubmitting)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
                 .background(Theme.ceramic)
@@ -326,5 +335,32 @@ struct SupplyScanReviewView: View {
         onSuccess()
         dismiss()
         _ = result
+    }
+
+    private func saveReviewedAsList() async {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        let name = "Receipt \(formatter.string(from: Date()))"
+        let items = model.rows.filter(\.selected).map {
+            SupplyFromReceiptItem(
+                name: $0.dockName,
+                quantity: $0.dockQuantity,
+                unit: $0.dockUnit,
+                domain: $0.dockDomain
+            )
+        }
+        guard !items.isEmpty else { return }
+        do {
+            _ = try await env.api.saveSupplyListFromReceipt(
+                SupplyFromReceiptRequest(
+                    scanRequestId: context.requestId,
+                    name: name,
+                    items: items
+                )
+            )
+            Haptics.success()
+        } catch {
+            model.errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+        }
     }
 }

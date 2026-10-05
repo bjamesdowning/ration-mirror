@@ -2,9 +2,11 @@ import { data } from "react-router";
 import { getUserSettings, requireActiveGroup } from "~/lib/auth.server";
 import { CapacityExceededError } from "~/lib/capacity.server";
 import { handleApiError } from "~/lib/error-handler";
+import { buildWebFlagContext } from "~/lib/feature-flags/context.server";
 import { log, redactId } from "~/lib/logging.server";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import { completeSupplyList } from "~/lib/supply.server";
+import { resolveSupplyListTarget } from "~/lib/supply-list-access.server";
 import { resolveUnitDisplayMode } from "~/lib/unit-display-mode";
 import type { Route } from "./+types/supply-lists.$id.complete";
 
@@ -45,6 +47,15 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 	}
 
 	try {
+		await resolveSupplyListTarget({
+			env: context.cloudflare.env,
+			organizationId: groupId,
+			listId,
+			flagContext: buildWebFlagContext(request, context.cloudflare.env, {
+				user,
+			}),
+			allowedStates: ["live", "saved"],
+		});
 		const userSettings = await getUserSettings(
 			context.cloudflare.env.DB,
 			user.id,

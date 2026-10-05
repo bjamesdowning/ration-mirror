@@ -31,6 +31,8 @@ struct SupplyView: View {
     @State private var showingSupplyScanCamera = false
     @State private var showingSupplyScanPhotoLibrary = false
     @State private var supplyScanReviewContext: SupplyScanReviewContext?
+    @State private var showingBarcodeAdd = false
+    @State private var barcodeValue = ""
     @State private var scanConsent = AIConsentCoordinator()
 
     private var scanCreditCost: Int {
@@ -88,9 +90,64 @@ struct SupplyView: View {
                     }
                 }
             }
-            .navigationTitle("Supply")
-            .searchable(text: $model.filters.search, prompt: "Search items")
+            .navigationTitle(model.isLiveList ? "Supply" : (model.list?.name ?? "Supply"))
             .toolbar {
+                if model.multiListsEnabled, let organizationId {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Menu {
+                            if let live = model.catalog?.live {
+                                Button("Supply (Live)") {
+                                    Task {
+                                        await model.selectList(
+                                            live,
+                                            api: env.api,
+                                            snapshots: env.snapshots,
+                                            organizationId: organizationId
+                                        )
+                                    }
+                                }
+                            }
+                            ForEach(model.catalog?.saved ?? []) { summary in
+                                Button(summary.name) {
+                                    Task {
+                                        await model.selectList(
+                                            summary,
+                                            api: env.api,
+                                            snapshots: env.snapshots,
+                                            organizationId: organizationId
+                                        )
+                                    }
+                                }
+                            }
+                            ForEach(model.catalog?.templates ?? []) { summary in
+                                Button("\(summary.name) (template)") {
+                                    Task {
+                                        await model.selectList(
+                                            summary,
+                                            api: env.api,
+                                            snapshots: env.snapshots,
+                                            organizationId: organizationId
+                                        )
+                                    }
+                                }
+                            }
+                            ForEach(model.catalog?.archived ?? []) { summary in
+                                Button("\(summary.name) (archived)") {
+                                    Task {
+                                        await model.selectList(
+                                            summary,
+                                            api: env.api,
+                                            snapshots: env.snapshots,
+                                            organizationId: organizationId
+                                        )
+                                    }
+                                }
+                            }
+                        } label: {
+                            Label("Lists", systemImage: "list.bullet")
+                        }
+                    }
+                }
                 GlobalPageToolbar(
                     hasActiveFilters: model.filters.hasActiveFilters,
                     syncDomain: SnapshotDomain.supply,
@@ -231,6 +288,26 @@ struct SupplyView: View {
                     return success
                 }
             }
+            .alert("Add by barcode", isPresented: $showingBarcodeAdd) {
+                TextField("Barcode", text: $barcodeValue)
+                    .keyboardType(.numberPad)
+                Button("Add") {
+                    let code = barcodeValue
+                    barcodeValue = ""
+                    Task {
+                        guard let organizationId else { return }
+                        _ = await model.addByBarcode(
+                            code,
+                            api: env.api,
+                            snapshots: env.snapshots,
+                            organizationId: organizationId
+                        )
+                    }
+                }
+                Button("Cancel", role: .cancel) { barcodeValue = "" }
+            } message: {
+                Text("Scan or type a product barcode. Unknown codes still add a named item you can edit.")
+            }
             .sheet(isPresented: $showingReplenishReceipt) {
                 ReplenishReceiptSheet(
                     creditCost: scanCreditCost,
@@ -346,6 +423,13 @@ struct SupplyView: View {
                     Label("Dock from List", systemImage: "checkmark.circle.fill")
                 }
                 .disabled(model.purchasedCount == 0 || model.isDocking)
+                if model.multiListsEnabled {
+                    Button {
+                        showingBarcodeAdd = true
+                    } label: {
+                        Label("Add by barcode", systemImage: "barcode.viewfinder")
+                    }
+                }
                 Button {
                     showingAddItem = true
                 } label: {
@@ -356,6 +440,7 @@ struct SupplyView: View {
         .task(id: loadTaskKey) {
             guard isTabActive, let organizationId else { return }
             model.refreshOutcomes = env.refreshOutcomes
+            model.multiListsEnabled = env.session.clientFlags.isSupplyMultiListsEnabled
             await env.loadSnapshot(organizationId: organizationId, domain: SnapshotDomain.supply) {
                 await model.load(
                     api: env.api,
@@ -366,7 +451,7 @@ struct SupplyView: View {
             }
             model.filters.supplyUnitMode = env.unitDisplayMode.mode.rawValue
             model.share.loadStatus { try await env.api.supplyShareStatus() }
-            if env.network.isOnline, !hasTriggeredAutoSync {
+            if env.network.isOnline, !hasTriggeredAutoSync, model.isLiveList {
                 hasTriggeredAutoSync = true
                 await model.sync(
                     api: env.api,
@@ -375,12 +460,32 @@ struct SupplyView: View {
                     organizationId: organizationId
                 )
             }
+            while !Task.isCancelled && isTabActive && model.multiListsEnabled {
+                try? await Task.sleep(nanoseconds: 12_000_000_000)
+                guard !Task.isCancelled, isTabActive else { break }
+                await model.pollCatalogIfVisible(api: env.api)
+            }
         }
         .onDisappear { model.cancelActiveWork() }
     }
 
     private func listView(_ list: SupplyList, organizationId: String) -> some View {
         List {
+            if model.remoteRevisionNotice {
+                Section {
+                    Button("List changed — refresh") {
+                        Task {
+                            model.remoteRevisionNotice = false
+                            await model.load(
+                                api: env.api,
+                                snapshots: env.snapshots,
+                                online: env.network.isOnline,
+                                organizationId: organizationId
+                            )
+                        }
+                    }
+                }
+            }
             if model.totalCount > 0 {
                 Section {
                     EmptyView()

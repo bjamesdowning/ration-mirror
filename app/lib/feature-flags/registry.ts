@@ -148,6 +148,13 @@ export const FLAG_REGISTRY: Record<string, FlagRegistryEntry> = {
 		clientVisible: true,
 		clientKey: "featureEnablementConsent",
 	},
+	"supply-multi-lists": {
+		defaultEnabled: false,
+		description:
+			"Supply list library, templates, history, stores, offline shopping, and barcode entry",
+		clientVisible: true,
+		clientKey: "supplyMultiLists",
+	},
 };
 
 /** Registry keys — narrows as entries are added to FLAG_REGISTRY. */

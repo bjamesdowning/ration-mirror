@@ -689,6 +689,72 @@ export function buildMobileOpenApiDocument(baseUrl: string) {
 					},
 				},
 			},
+			"/api/mobile/v1/supply/lists": {
+				get: {
+					summary: "Supply list catalog (Live, Saved, Template, Archived)",
+					security: [{ bearerAuth: [] }],
+					responses: { "200": { description: "Catalog summaries" } },
+				},
+				post: {
+					summary: "Create a Saved or Template supply list",
+					security: [{ bearerAuth: [] }],
+					responses: { "200": { description: "Created list" } },
+				},
+			},
+			"/api/mobile/v1/supply/lists/{listId}": {
+				get: {
+					summary: "Fetch a supply list by ID",
+					security: [{ bearerAuth: [] }],
+					responses: { "200": { description: "Supply list" } },
+				},
+			},
+			"/api/mobile/v1/supply/lists/{listId}/items": {
+				post: {
+					summary: "Add an item to a Live or Saved supply list",
+					security: [{ bearerAuth: [] }],
+					responses: { "200": { description: "Created item" } },
+				},
+			},
+			"/api/mobile/v1/supply/lists/{listId}/items/{itemId}": {
+				patch: {
+					summary: "Update an item on a Live or Saved supply list",
+					security: [{ bearerAuth: [] }],
+					responses: { "200": { description: "Updated item" } },
+				},
+				delete: {
+					summary: "Delete an item from a Live or Saved supply list",
+					security: [{ bearerAuth: [] }],
+					responses: { "200": { description: "Deleted" } },
+				},
+			},
+			"/api/mobile/v1/supply/lists/{listId}/complete": {
+				post: {
+					summary: "Dock purchased items from a named supply list",
+					security: [{ bearerAuth: [] }],
+					responses: { "200": { description: "Dock result" } },
+				},
+			},
+			"/api/mobile/v1/supply/lists/{listId}/duplicate": {
+				post: {
+					summary: "Duplicate a supply list",
+					security: [{ bearerAuth: [] }],
+					responses: { "200": { description: "Duplicated list" } },
+				},
+			},
+			"/api/mobile/v1/supply/lists/{listId}/archive": {
+				post: {
+					summary: "Archive a Saved supply list",
+					security: [{ bearerAuth: [] }],
+					responses: { "200": { description: "Archived list" } },
+				},
+			},
+			"/api/mobile/v1/supply/lists/from-receipt": {
+				post: {
+					summary: "Save reviewed receipt lines as a Saved supply list",
+					security: [{ bearerAuth: [] }],
+					responses: { "200": { description: "Created list" } },
+				},
+			},
 			"/api/mobile/v1/supply/sync": {
 				post: {
 					summary: "Rebuild supply list from selected meals",

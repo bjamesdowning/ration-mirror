@@ -82,16 +82,16 @@ export const D1_MAX_KITCHEN_EVENT_ROWS_PER_STATEMENT = Math.floor(
 
 /**
  * Bound params per supply_item row in Drizzle multi-row INSERTs.
- * Row objects from `contributionsToSupplyRows` expose 12 keys, but Drizzle
- * also binds the `is_purchased` default (`?`). `created_at` uses
- * `(unixepoch())` with no bind. Confirmed via `insert().values(...).toSQL()`.
- * Do NOT use `Object.keys(row).length` — that undercounts and yields 8×13=104.
+ * Explicit copy/sync rows bind id, listId, name, quantity, unit, baseQuantity,
+ * baseUnit, domain, isPurchased, sourceMealId, sourceMealIds, sourceOrigins,
+ * sourceCargoId, note, category, sortOrder, updatedAt (17). `created_at` uses
+ * `(unixepoch())` with no bind. Recalculate when supply_item columns change.
  */
-export const SUPPLY_ITEM_INSERT_COLUMNS = 13;
+export const SUPPLY_ITEM_INSERT_COLUMNS = 17;
 
 /**
  * Max supply_item rows per INSERT (uses safe 99 ceiling).
- * 7 × 13 = 91 ≤ 99; 8 × 13 = 104 exceeds D1's 100-param limit.
+ * 5 × 17 = 85 ≤ 99; 6 × 17 = 102 exceeds D1's 100-param limit.
  */
 export const D1_MAX_SUPPLY_ROWS_PER_STATEMENT = Math.floor(
 	D1_SAFE_BOUND_PARAMS / SUPPLY_ITEM_INSERT_COLUMNS,

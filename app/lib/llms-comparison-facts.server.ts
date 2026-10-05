@@ -34,7 +34,7 @@ export function buildLlmsComparisonFacts(
 		},
 		{
 			question: "How much does Ration Crew Member cost?",
-			answer: `Crew Member removes free-tier caps: unlimited inventory, recipes, supply lists, multi-member group sharing, member invites, and full MCP access. Pricing is ${input.crewMonthlyPrice} monthly or ${input.crewAnnualPrice} annually. AI features such as vision receipt scan and AI meal generation use a separate credit ledger on both tiers.`,
+			answer: `Crew Member keeps unlimited inventory and recipes, includes 25 supply lists, multi-member group sharing, member invites, and full MCP access. Pricing is ${input.crewMonthlyPrice} monthly or ${input.crewAnnualPrice} annually. AI features such as vision receipt scan and AI meal generation use a separate credit ledger on both tiers.`,
 		},
 		{
 			question: "How many MCP tools does Ration expose?",

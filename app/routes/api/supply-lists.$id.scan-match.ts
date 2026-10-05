@@ -2,9 +2,11 @@ import { data } from "react-router";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { handleApiError } from "~/lib/error-handler";
 import { assertFeatureEnabled } from "~/lib/feature-flags/assert-enabled.server";
+import { buildWebFlagContext } from "~/lib/feature-flags/context.server";
 import { buildFlagContext } from "~/lib/feature-flags/flags.server";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import { SupplyScanMatchQuerySchema } from "~/lib/schemas/supply-scan";
+import { resolveSupplyListTarget } from "~/lib/supply-list-access.server";
 import { getSupplyScanMatch, SupplyScanError } from "~/lib/supply-scan.server";
 import type { Route } from "./+types/supply-lists.$id.scan-match";
 
@@ -20,6 +22,14 @@ export async function loader({ request, context, params }: Route.LoaderArgs) {
 	const env = context.cloudflare.env;
 	const listId = params.id;
 	if (!listId) throw data({ error: "List ID required" }, { status: 400 });
+
+	await resolveSupplyListTarget({
+		env,
+		organizationId: groupId,
+		listId,
+		flagContext: buildWebFlagContext(request, env, { user }),
+		allowedStates: ["live", "saved"],
+	});
 
 	await assertFeatureEnabled(
 		env,

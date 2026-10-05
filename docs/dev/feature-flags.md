@@ -141,6 +141,14 @@ Permanent boolean kill switches for billed AI pipelines. Registry `defaultEnable
 | `nutrition-intake-notes` | `nutritionIntakeNotes` | Optional private Eat notes (≤280) on intake rows |
 | `nutrition-cross-org-diary` | `nutritionCrossOrgDiary` | Personal intake summary/history aggregates across kitchens (user-global diary) |
 
+## Supply list library
+
+| Flag key | Client key | Purpose |
+|----------|------------|---------|
+| `supply-multi-lists` | `supplyMultiLists` | Saved/template/history lists, stores, offline shopping, barcode add. Default **off**. Non-destructive Live repair ships regardless of this flag. |
+
+Production rollout stays Flagship-default **off**. Enable web/internal first. Enable iOS only after binary ≥ **1.5.0** (`clientPlatform` `ios` **and** `clientVersion` ≥ `1.5.0`). Then MCP (`clientPlatform` `mcp`). Killing the flag hides every non-Live surface (HTTP 403 `FEATURE_DISABLED` on catalog routes; 404 on legacy `:id`/share for Saved) while Live remains fully operational and saved rows stay intact.
+
 All default **off**. Create matching Flagship flags before enabling. Seed local nutrition D1 with `bun run db:nutrition:seed:local`.
 
 Hub/SSR and web APIs evaluate Flagship with `buildWebFlagContext` (server-owned `clientPlatform: "web"` + `APP_VERSION`). Mobile uses `buildMobileFlagContext` + validated `X-Ration-Client`. External MCP uses `buildAgentFlagContext` with `clientPlatform` `mcp` and web `APP_VERSION` — never invent an iOS marketing version for MCP. First-party Copilot Ask inherits the originating client's `web` or `ios` identity (iOS marketing version from `X-Ration-Client` when the connection is Bearer-authenticated). Product flags therefore match Hub / iOS without a separate `copilot` platform cohort. Connect-time `ration-copilot` still evaluates from the HTTP request.

@@ -27,6 +27,7 @@ describe("getClientSafeFlags", () => {
 			nutritionIntakeNotes: false,
 			nutritionCrossOrgDiary: false,
 			featureEnablementConsent: false,
+			supplyMultiLists: false,
 		});
 	});
 });

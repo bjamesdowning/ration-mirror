@@ -221,8 +221,19 @@ export default [
 
 	// API - Supply Lists
 	route("api/supply-lists", "routes/api/supply-lists.ts"),
+	route("api/supply-lists/catalog", "routes/api/supply-lists.catalog.ts"),
+	route(
+		"api/supply-lists/from-receipt",
+		"routes/api/supply-lists.from-receipt.ts",
+	),
+	route("api/supply-staples", "routes/api/supply-staples.ts"),
+	route("api/supply-stores", "routes/api/supply-stores.ts"),
 	route("api/supply-lists/:id", "routes/api/supply-lists.$id.ts"),
 	route("api/supply-lists/:id/items", "routes/api/supply-lists.$id.items.ts"),
+	route(
+		"api/supply-lists/:id/items/transfer",
+		"routes/api/supply-lists.$id.items.transfer.ts",
+	),
 	route(
 		"api/supply-lists/:id/items/:itemId",
 		"routes/api/supply-lists.$id.items.$itemId.ts",
@@ -236,6 +247,34 @@ export default [
 	route(
 		"api/supply-lists/:id/complete",
 		"routes/api/supply-lists.$id.complete.ts",
+	),
+	route(
+		"api/supply-lists/:id/duplicate",
+		"routes/api/supply-lists.$id.duplicate.ts",
+	),
+	route(
+		"api/supply-lists/:id/archive",
+		"routes/api/supply-lists.$id.archive.ts",
+	),
+	route(
+		"api/supply-lists/:id/reset-purchased",
+		"routes/api/supply-lists.$id.reset-purchased.ts",
+	),
+	route(
+		"api/supply-lists/:id/copy-to-live",
+		"routes/api/supply-lists.$id.copy-to-live.ts",
+	),
+	route(
+		"api/supply-lists/:id/add-staples",
+		"routes/api/supply-lists.$id.add-staples.ts",
+	),
+	route(
+		"api/supply-lists/:id/operations",
+		"routes/api/supply-lists.$id.operations.ts",
+	),
+	route(
+		"api/supply-lists/:id/barcode",
+		"routes/api/supply-lists.$id.barcode.ts",
 	),
 	route(
 		"api/supply-lists/:id/scan-match",
@@ -445,6 +484,35 @@ export default [
 	),
 	route("api/mobile/v1/meals/:id", "routes/api/mobile/v1.meals.$id.ts"),
 	route("api/mobile/v1/supply", "routes/api/mobile/v1.supply.ts"),
+	route("api/mobile/v1/supply/lists", "routes/api/mobile/v1.supply.lists.ts"),
+	route(
+		"api/mobile/v1/supply/lists/from-receipt",
+		"routes/api/mobile/v1.supply.lists.from-receipt.ts",
+	),
+	route(
+		"api/mobile/v1/supply/lists/:listId",
+		"routes/api/mobile/v1.supply.lists.$listId.ts",
+	),
+	route(
+		"api/mobile/v1/supply/lists/:listId/complete",
+		"routes/api/mobile/v1.supply.lists.$listId.complete.ts",
+	),
+	route(
+		"api/mobile/v1/supply/lists/:listId/items",
+		"routes/api/mobile/v1.supply.lists.$listId.items.ts",
+	),
+	route(
+		"api/mobile/v1/supply/lists/:listId/items/:itemId",
+		"routes/api/mobile/v1.supply.lists.$listId.items.$itemId.ts",
+	),
+	route(
+		"api/mobile/v1/supply/lists/:listId/barcode",
+		"routes/api/mobile/v1.supply.lists.$listId.barcode.ts",
+	),
+	route(
+		"api/mobile/v1/supply/lists/:listId/:action",
+		"routes/api/mobile/v1.supply.lists.$listId.actions.ts",
+	),
 	route("api/mobile/v1/supply/items", "routes/api/mobile/v1.supply.items.ts"),
 	route(
 		"api/mobile/v1/supply/items/:id",

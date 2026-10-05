@@ -127,7 +127,8 @@ All tools are scoped to the authorized household. **MCP calls do not consume Rat
 | `list_meals` | `mcp:read` | Cursor-paginated recipe list. Set `includeIngredients: false` for a lightweight index. |
 | `match_meals` | `mcp:read` | Find cookable recipes from current pantry — `strict` or `delta`. Adds `allergenFlags` when user allergens are configured. |
 | `get_meal_plan` | `mcp:read` | Weekly meal plan entries by date and slot (`cookedAt`/`consumedAt`; `personalIntake` when nutrition flags allow; `gramsPerServing` is recipe-ingredient mass per serving when known). |
-| `get_supply_list` | `mcp:read` | Active shopping list with item ids for updates and purchase toggles. |
+| `get_supply_list` | `mcp:read` | Active shopping list with item ids for updates and purchase toggles. Optional `listId` when `supply-multi-lists` is on. |
+| `list_supply_lists` | `mcp:read` | Catalog of Live, Saved, Template, and Archived lists. Flag-gated. |
 | `get_user_preferences` | `mcp:read` | Allergens, expiration alert days, theme, manifest defaults, and other user settings. |
 | `update_user_preferences` | `mcp:preferences:write` | Patch user settings (allergens, alerts, theme). Only provided fields change. |
 | `get_nutrition_summary` | `mcp:nutrition:read` | Caller’s personal daily intake totals (energy/macros/optional fiber) for a UTC `from`/`to` range (requires `nutrition-goals` or `nutrition-manifest`). When `nutrition-cross-org-diary` is on, includes every kitchen the user logged—not household nutrition. Agent reads audited. |
@@ -182,6 +183,12 @@ All tools are scoped to the authorized household. **MCP calls do not consume Rat
 | `mark_supply_purchased_bulk` | `mcp:supply:write` | Mark one or many supply lines purchased / unpurchased. |
 | `sync_supply_from_selected_meals` | `mcp:supply:write` | Rebuild list from meal plan + Galley selections (buy only the delta). |
 | `complete_supply_list` | `mcp:supply:write` + `mcp:inventory:write` | Dock purchased items into pantry and archive the list. Requires **both** scopes. **Requires `confirm: true`.** |
+| `create_supply_list` | `mcp:supply:write` | Create a Saved or Template list. Flag-gated (`supply-multi-lists`). |
+| `duplicate_supply_list` | `mcp:supply:write` | Duplicate a list into an independent copy. Flag-gated. |
+| `archive_supply_list` | `mcp:supply:write` | Archive a Saved list. Flag-gated. |
+| `transfer_supply_items` | `mcp:supply:write` | Copy or move items between lists. Flag-gated. |
+| `manage_supply_staples` | `mcp:supply:write` | List, upsert, or delete kitchen staples. Flag-gated. |
+| `save_receipt_as_supply_list` | `mcp:supply:write` | Save reviewed receipt lines as a Saved list. Flag-gated. No second AI credit. |
 
 Server card: [`.well-known/mcp/server-card.json`](https://ration.mayutic.com/.well-known/mcp/server-card.json) · Full API reference: [docs/api](https://ration.mayutic.com/docs/api#mcp-tools)
 
@@ -192,7 +199,7 @@ Server card: [`.well-known/mcp/server-card.json`](https://ration.mayutic.com/.we
 | Tier | Includes |
 |------|----------|
 | **Free** | 35 pantry items · 15 recipes · 3 supply lists · MCP + OAuth · agent self-registration |
-| **Crew Member** | Unlimited capacity · household invites · shared Manifest/Supply links · $2/mo or $12/yr |
+| **Crew Member** | Unlimited pantry/recipes · 25 supply lists · household invites · shared Manifest/Supply links · $2/mo or $12/yr |
 | **Credit packs** (optional) | AI receipt scan, recipe import, meal generation, weekly AI plan in the **web app** — from €1 |
 
 [MCP does not meter credits](https://ration.mayutic.com/blog/mcp-kitchen-assistant). Use the web app when you want hosted vision/AI features.

@@ -4,6 +4,7 @@ import { handleApiError } from "~/lib/error-handler";
 import { requireMobileActiveGroup } from "~/lib/mobile/auth.server";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import { completeSupplyList } from "~/lib/supply.server";
+import { requireLegacyLiveListId } from "~/lib/supply-list-access.server";
 import { resolveUnitDisplayMode } from "~/lib/unit-display-mode";
 import type { Route } from "./+types/v1.supply.complete";
 
@@ -35,6 +36,12 @@ export async function action({ request, context }: Route.ActionArgs) {
 		if (!listId) {
 			throw data({ error: "listId is required" }, { status: 400 });
 		}
+
+		await requireLegacyLiveListId({
+			env: context.cloudflare.env,
+			organizationId,
+			listId,
+		});
 
 		const userSettings = await getUserSettings(
 			context.cloudflare.env.DB,

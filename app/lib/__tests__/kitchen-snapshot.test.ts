@@ -88,7 +88,7 @@ describe("buildKitchenAwareSuggestedActions", () => {
 		kitchen.limits = {
 			maxInventoryItems: -1,
 			maxMeals: -1,
-			maxGroceryLists: -1,
+			maxGroceryLists: 25,
 		};
 		kitchen.capacity.cargo = { current: 163, limit: -1, canAdd: -1 };
 		kitchen.credits = 10;

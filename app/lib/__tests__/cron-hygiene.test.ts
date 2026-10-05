@@ -5,6 +5,7 @@ import {
 	deleteExpiredRowsInBatches,
 	EXPIRED_QUEUE_JOB_DELETE_SQL,
 	EXPIRED_SESSION_DELETE_SQL,
+	EXPIRED_SUPPLY_OPERATION_DELETE_SQL,
 } from "../cron-hygiene.server";
 import {
 	EXPIRED_NUTRITION_INTAKE_DELETE_SQL,
@@ -34,6 +35,11 @@ describe("bounded expired-row deletes", () => {
 			"WHERE job_key IN",
 		);
 		expect(EXPIRED_NUTRITION_RECOMPUTE_JOB_DELETE_SQL).toMatch(/LIMIT \?3/i);
+		expect(EXPIRED_SUPPLY_OPERATION_DELETE_SQL).toMatch(
+			/DELETE FROM supply_operation WHERE id IN/i,
+		);
+		expect(EXPIRED_SUPPLY_OPERATION_DELETE_SQL).toMatch(/LIMIT \?2/i);
+		expect(EXPIRED_SUPPLY_OPERATION_DELETE_SQL).not.toMatch(/supply_list/i);
 	});
 
 	it("deletes expired sessions in batches until the table is clean", async () => {
@@ -93,5 +99,44 @@ CREATE TABLE session (
 				c: number;
 			},
 		).toEqual({ c: 1 });
+	});
+
+	it("deletes expired supply operations without touching list rows", async () => {
+		const { database, sqlite } = createSqliteD1();
+		sqlite.exec(`
+CREATE TABLE supply_list (
+  id TEXT PRIMARY KEY
+);
+CREATE TABLE supply_operation (
+  id TEXT PRIMARY KEY,
+  applied_at INTEGER NOT NULL
+);
+`);
+		sqlite.prepare("INSERT INTO supply_list (id) VALUES (?)").run("live");
+		const insert = sqlite.prepare(
+			"INSERT INTO supply_operation (id, applied_at) VALUES (?, ?)",
+		);
+		insert.run("op1", 1);
+		insert.run("op2", 1);
+		insert.run("fresh", 9_999_999);
+
+		const deleted = await deleteExpiredRowsInBatches(
+			database,
+			EXPIRED_SUPPLY_OPERATION_DELETE_SQL,
+			100,
+			{ batchSize: 10, maxRounds: 10 },
+		);
+
+		expect(deleted).toBe(2);
+		expect(
+			sqlite.prepare("SELECT id FROM supply_operation").all() as Array<{
+				id: string;
+			}>,
+		).toEqual([{ id: "fresh" }]);
+		expect(
+			sqlite.prepare("SELECT id FROM supply_list").all() as Array<{
+				id: string;
+			}>,
+		).toEqual([{ id: "live" }]);
 	});
 });

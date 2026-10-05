@@ -242,6 +242,7 @@ export default function PricingPage({ loaderData }: Route.ComponentProps) {
 					</p>
 					<ul className="space-y-2 text-sm text-carbon">
 						<li>Unlimited Cargo items and meals</li>
+						<li>25 supply lists (Live included)</li>
 						<li>Shared supply lists and member invites</li>
 						<li>1 free Ask Ration (Copilot) conversation per group per day</li>
 						<li>No included subscription credits</li>

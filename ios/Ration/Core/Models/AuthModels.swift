@@ -98,6 +98,8 @@ struct ClientFlags: Codable, Sendable, Equatable {
     var nutritionCrossOrgDiary: Bool?
     /// Feature enablement onboarding + web AI consent parity (additive).
     var featureEnablementConsent: Bool?
+    /// Supply list library (additive; missing/false = Live singleton).
+    var supplyMultiLists: Bool?
 
     static let disabled = ClientFlags()
 
@@ -124,6 +126,7 @@ struct ClientFlags: Codable, Sendable, Equatable {
     var isNutritionIntakeNotesEnabled: Bool { nutritionIntakeNotes == true }
     var isNutritionCrossOrgDiaryEnabled: Bool { nutritionCrossOrgDiary == true }
     var isFeatureEnablementConsentEnabled: Bool { featureEnablementConsent == true }
+    var isSupplyMultiListsEnabled: Bool { supplyMultiLists == true }
 }
 
 /// `GET /api/mobile/v1/client-flags` (unsigned)

@@ -23,7 +23,8 @@ Enjoying household Crew capacity does **not** mean you personally own a Crew sub
 
 | Benefit | Notes |
 |---------|--------|
-| Inventory, meals, supply lists | Effectively **unlimited** (fair use still applies) |
+| Inventory, meals | Effectively **unlimited** (fair use still applies) |
+| Supply lists | **25** (Live included; templates and archived history count) |
 | Owned groups | Higher cap (for example multiple households) |
 | Invitations | Can invite others to the org |
 | Public share links | Supply list and meal plan sharing |

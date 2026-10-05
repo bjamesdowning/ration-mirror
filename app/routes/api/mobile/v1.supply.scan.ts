@@ -11,6 +11,7 @@ import {
 	SupplyScanCompleteRequestSchema,
 	SupplyScanMatchQuerySchema,
 } from "~/lib/schemas/supply-scan";
+import { requireLegacyLiveListId } from "~/lib/supply-list-access.server";
 import {
 	completeSupplyScan,
 	getSupplyScanMatch,
@@ -50,6 +51,8 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 	if (!listId) {
 		throw data({ error: "listId is required" }, { status: 400 });
 	}
+
+	await requireLegacyLiveListId({ env, organizationId, listId });
 
 	const parsed = SupplyScanMatchQuerySchema.safeParse({
 		requestId: url.searchParams.get("requestId"),
@@ -111,6 +114,8 @@ export async function action({ request, context }: Route.ActionArgs) {
 		if (!listId || typeof listId !== "string") {
 			throw data({ error: "listId is required" }, { status: 400 });
 		}
+
+		await requireLegacyLiveListId({ env, organizationId, listId });
 
 		const parsed = SupplyScanCompleteRequestSchema.safeParse(body);
 		if (!parsed.success) {

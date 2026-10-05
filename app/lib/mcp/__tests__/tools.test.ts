@@ -611,6 +611,32 @@ describe("MCP tools", () => {
 		});
 	});
 
+	describe("list_supply_lists", () => {
+		it("returns feature_disabled when the library flag is off", async () => {
+			const server = makeServer();
+			const result = await getToolHandler(server, "list_supply_lists")({});
+			const env = parseEnvelope(result);
+			expect(env.ok).toBe(false);
+			expect(env.error.code).toBe("feature_disabled");
+			expect(env.error.details).toMatchObject({ code: "FEATURE_DISABLED" });
+		});
+	});
+
+	describe("create_supply_list", () => {
+		it("returns feature_disabled when the library flag is off", async () => {
+			const server = makeServer();
+			const result = await getToolHandler(
+				server,
+				"create_supply_list",
+			)({
+				name: "Costco",
+			});
+			const env = parseEnvelope(result);
+			expect(env.ok).toBe(false);
+			expect(env.error.code).toBe("feature_disabled");
+		});
+	});
+
 	describe("update_supply_item", () => {
 		it("blocks when rate limited", async () => {
 			vi.mocked(checkRateLimit).mockResolvedValueOnce(RATE_BLOCKED);

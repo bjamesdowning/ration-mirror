@@ -4,7 +4,9 @@ import {
 	exportGroceryListAsMarkdown,
 	exportGroceryListAsText,
 } from "~/lib/export.server";
+import { buildWebFlagContext } from "~/lib/feature-flags/context.server";
 import { getSupplyListById } from "~/lib/supply.server";
+import { resolveSupplyListTarget } from "~/lib/supply-list-access.server";
 import type { Route } from "./+types/supply-lists.$id.export";
 
 /**
@@ -13,12 +15,22 @@ import type { Route } from "./+types/supply-lists.$id.export";
  *   - format: 'text' | 'markdown' (default: 'text')
  */
 export async function loader({ request, context, params }: Route.LoaderArgs) {
-	const { groupId } = await requireActiveGroup(context, request);
+	const {
+		groupId,
+		session: { user },
+	} = await requireActiveGroup(context, request);
 	const listId = params.id;
 
 	if (!listId) {
 		throw data({ error: "List ID required" }, { status: 400 });
 	}
+
+	await resolveSupplyListTarget({
+		env: context.cloudflare.env,
+		organizationId: groupId,
+		listId,
+		flagContext: buildWebFlagContext(request, context.cloudflare.env, { user }),
+	});
 
 	const list = await getSupplyListById(
 		context.cloudflare.env.DB,

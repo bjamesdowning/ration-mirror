@@ -14,12 +14,15 @@ import { SupplyItemOriginBadge } from "~/components/supply/SupplyItemOriginBadge
 import * as schema from "~/db/schema";
 import { getAuth } from "~/lib/auth.server";
 import { DOMAIN_LABELS, ITEM_DOMAINS } from "~/lib/domain";
+import { buildWebFlagContext } from "~/lib/feature-flags/context.server";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import { getSupplyListByShareToken } from "~/lib/supply.server";
 import {
 	normalizeSupplyOrigins,
 	type SupplyItemOrigin,
 } from "~/lib/supply-item-origins";
+import { isSupplyMultiListsEnabled } from "~/lib/supply-list-flag.server";
+import { resolveSupplyListState } from "~/lib/supply-list-kinds";
 import type { Route } from "./+types/shared.$token";
 
 interface SharedItem {
@@ -74,6 +77,20 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
 
 	if (!list) {
 		throw data({ error: "List not found or link expired" }, { status: 404 });
+	}
+
+	const state = resolveSupplyListState({
+		kind: list.kind ?? "live",
+		archivedAt: list.archivedAt ?? null,
+	});
+	if (state !== "live") {
+		const enabled = await isSupplyMultiListsEnabled(
+			context.cloudflare.env,
+			buildWebFlagContext(request, context.cloudflare.env),
+		);
+		if (!enabled) {
+			throw data({ error: "List not found or link expired" }, { status: 404 });
+		}
 	}
 
 	// Determine if the viewer is an admin/owner of the list's organization,

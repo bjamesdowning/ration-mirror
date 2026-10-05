@@ -21,6 +21,12 @@ export const EXPIRED_QUEUE_JOB_DELETE_SQL = `DELETE FROM queue_job WHERE request
   SELECT request_id FROM queue_job WHERE expires_at < ?1 ORDER BY expires_at ASC LIMIT ?2
 )`;
 
+export const SUPPLY_OPERATION_RETENTION_SECONDS = 30 * 24 * 60 * 60;
+
+export const EXPIRED_SUPPLY_OPERATION_DELETE_SQL = `DELETE FROM supply_operation WHERE id IN (
+  SELECT id FROM supply_operation WHERE applied_at < ?1 ORDER BY applied_at ASC LIMIT ?2
+)`;
+
 export async function deleteExpiredRowsInBatches(
 	db: D1Database,
 	sql: string,
@@ -93,12 +99,38 @@ export async function purgeExpiredQueueJobs(
 	}
 }
 
+/** Deletes applied supply_operation rows older than 30 days. Never touches list rows. */
+export async function purgeExpiredSupplyOperations(
+	env: Cloudflare.Env,
+	now: Date = new Date(),
+): Promise<number> {
+	const cutoffUnix =
+		Math.floor(now.getTime() / 1000) - SUPPLY_OPERATION_RETENTION_SECONDS;
+	try {
+		const deleted = await deleteExpiredRowsInBatches(
+			env.DB,
+			EXPIRED_SUPPLY_OPERATION_DELETE_SQL,
+			cutoffUnix,
+		);
+		if (deleted > 0) {
+			log.info("[CRON] Purged expired supply operations", { deleted });
+		}
+		return deleted;
+	} catch (err) {
+		log.error("[CRON] Supply operation purge failed", err, {
+			event: "cron_purge_failed",
+		});
+		return 0;
+	}
+}
+
 /** Session + queue + nutrition retention, then GDPR purge retry — one D1 writer at a time. */
 export async function runDailyD1HygieneThenPurgeRetry(
 	env: Cloudflare.Env,
 ): Promise<void> {
 	await purgeExpiredSessions(env);
 	await purgeExpiredQueueJobs(env);
+	await purgeExpiredSupplyOperations(env);
 	await purgeExpiredNutritionRetention(env);
 	await retryFailedPurgeJobs(env);
 }

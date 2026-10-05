@@ -10,6 +10,7 @@ import {
 	SUPPLY_SCAN_COMPLETE_INVALID_MESSAGE,
 	SupplyScanCompleteRequestSchema,
 } from "~/lib/schemas/supply-scan";
+import { resolveSupplyListTarget } from "~/lib/supply-list-access.server";
 import {
 	completeSupplyScan,
 	SupplyScanError,
@@ -34,6 +35,14 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 	if (request.method !== "POST") {
 		throw data({ error: "Method not allowed" }, { status: 405 });
 	}
+
+	await resolveSupplyListTarget({
+		env,
+		organizationId: groupId,
+		listId,
+		flagContext: buildWebFlagContext(request, env, { user }),
+		allowedStates: ["live", "saved"],
+	});
 
 	await assertFeatureEnabled(
 		env,

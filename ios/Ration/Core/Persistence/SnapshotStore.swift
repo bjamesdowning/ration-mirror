@@ -181,6 +181,8 @@ enum SnapshotDomain {
     static let galley = "galley"
     static let manifest = "manifest"
     static let supply = "supply"
+    static let supplyCatalog = "supplyCatalog"
+    static func supplyList(_ listId: String) -> String { "supplyList/\(listId)" }
     static let ask = "ask"
     static let nutritionSummary = "nutrition-summary"
     static let nutritionConsent = "nutrition-consent"

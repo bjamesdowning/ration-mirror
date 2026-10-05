@@ -2,6 +2,7 @@ import { AlertTriangle, Calendar, Check, Edit2, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useFetcher, useRouteLoaderData } from "react-router";
 import { UpgradePrompt } from "~/components/shell/UpgradePrompt";
+import { SaveAsSupplyListButton } from "~/components/supply/SaveAsSupplyListButton";
 import { DOMAIN_LABELS, type ITEM_DOMAINS } from "~/lib/domain";
 import { normalizeForMatch, tokenMatchScore } from "~/lib/matching";
 import { projectNutritionSnapshotToLegacy } from "~/lib/nutrition/adapters";
@@ -46,6 +47,7 @@ interface ScanResultsModalProps {
 	existingInventory?: ExistingInventoryItem[];
 	onClose: () => void;
 	onSuccess: () => void;
+	scanRequestId?: string;
 }
 
 export function ScanResultsModal({
@@ -53,6 +55,7 @@ export function ScanResultsModal({
 	existingInventory = [],
 	onClose,
 	onSuccess,
+	scanRequestId,
 }: ScanResultsModalProps) {
 	const fetcher = useFetcher();
 	const [items, setItems] = useState<ScanResultItem[]>(result.items);
@@ -516,6 +519,7 @@ export function ScanResultsModal({
 						)}
 					</div>
 
+					<SaveAsSupplyListButton scanRequestId={scanRequestId} items={items} />
 					{/* Footer Actions */}
 					<div className="p-6 border-t border-hyper-green/30 flex justify-between items-center">
 						<button

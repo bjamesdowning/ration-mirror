@@ -20,6 +20,7 @@ const CORE_TOOLS = [
 	"match_meals",
 	"get_meal_plan",
 	"get_supply_list",
+	"list_supply_lists",
 	// High-frequency agentic writes — always available to avoid keyword misses.
 	"create_meal",
 	"propose_manifest_plan",
@@ -63,6 +64,12 @@ const SUPPLY_WRITE = [
 	"mark_supply_purchased_bulk",
 	"sync_supply_from_selected_meals",
 	"complete_supply_list",
+	"create_supply_list",
+	"duplicate_supply_list",
+	"archive_supply_list",
+	"transfer_supply_items",
+	"manage_supply_staples",
+	"save_receipt_as_supply_list",
 ] as const;
 
 const PREFERENCES_WRITE = ["update_user_preferences"] as const;

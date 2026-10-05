@@ -7,6 +7,11 @@ import { CreditForfeitUnacknowledgedError } from "./group-delete-credits";
 import { GroupMembershipError } from "./group-membership.server";
 import { log } from "./logging.server";
 import { NutritionConsentError } from "./nutrition/consent.server";
+import {
+	InvalidListStateError,
+	SupplyItemLimitError,
+	SupplyListNotFoundError,
+} from "./supply-list-errors";
 import { SupplySyncBusyError } from "./supply-sync-lock.server";
 import { emitApiOutcome } from "./telemetry.server";
 
@@ -313,6 +318,35 @@ export function handleApiError(error: unknown) {
 				code: error.code,
 			},
 			{ status: error.status },
+		);
+	}
+
+	if (error instanceof SupplyListNotFoundError) {
+		return data(
+			{ error: error.message, code: "list_not_found" as const },
+			{ status: 404 },
+		);
+	}
+
+	if (error instanceof InvalidListStateError) {
+		return data(
+			{
+				error: error.message,
+				code: "invalid_list_state" as const,
+				state: error.state,
+			},
+			{ status: 409 },
+		);
+	}
+
+	if (error instanceof SupplyItemLimitError) {
+		return data(
+			{
+				error: error.message,
+				code: "invalid_input" as const,
+				limit: error.limit,
+			},
+			{ status: 400 },
 		);
 	}
 

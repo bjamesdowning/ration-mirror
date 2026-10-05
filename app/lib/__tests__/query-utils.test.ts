@@ -36,9 +36,9 @@ describe("constants", () => {
 		expect(D1_MAX_TAG_INSERT_ROWS_PER_STATEMENT).toBe(14);
 	});
 
-	it("D1_MAX_SUPPLY_ROWS_PER_STATEMENT is floor(99/13) = 7", () => {
-		expect(SUPPLY_ITEM_INSERT_COLUMNS).toBe(13);
-		expect(D1_MAX_SUPPLY_ROWS_PER_STATEMENT).toBe(7);
+	it("D1_MAX_SUPPLY_ROWS_PER_STATEMENT is floor(99/17) = 5", () => {
+		expect(SUPPLY_ITEM_INSERT_COLUMNS).toBe(17);
+		expect(D1_MAX_SUPPLY_ROWS_PER_STATEMENT).toBe(5);
 	});
 
 	it("caps full nutrition intake inserts at 2 rows", () => {
@@ -234,10 +234,15 @@ describe("supply_item Drizzle insert bind counts", () => {
 			sourceMealIds: ["m1"],
 			sourceOrigins: ["manifest" as const],
 			sourceCargoId: null,
+			isPurchased: false,
+			note: null,
+			category: null,
+			sortOrder: 0,
+			updatedAt: new Date("2026-01-01T00:00:00.000Z"),
 		}));
 	}
 
-	it("8-row insert binds 104 params (exceeds D1 limit — why max is 7)", async () => {
+	it("8-row insert exceeds D1 bind limit", async () => {
 		const { drizzle } = await import("drizzle-orm/d1");
 		const { supplyItem } = await import("~/db/schema");
 		const fakeDb = {
@@ -247,11 +252,11 @@ describe("supply_item Drizzle insert bind counts", () => {
 		};
 		const d1 = drizzle(fakeDb as unknown as D1Database);
 		const built = d1.insert(supplyItem).values(sampleSupplyRows(8)).toSQL();
-		expect(built.params.length).toBe(104);
+		expect(built.params.length).toBe(8 * SUPPLY_ITEM_INSERT_COLUMNS);
 		expect(built.params.length).toBeGreaterThan(D1_MAX_BOUND_PARAMS);
 	});
 
-	it("7-row insert stays within safe D1 bind budget", async () => {
+	it("max-row insert stays within safe D1 bind budget", async () => {
 		const { drizzle } = await import("drizzle-orm/d1");
 		const { supplyItem } = await import("~/db/schema");
 		const fakeDb = {
@@ -264,8 +269,10 @@ describe("supply_item Drizzle insert bind counts", () => {
 			.insert(supplyItem)
 			.values(sampleSupplyRows(D1_MAX_SUPPLY_ROWS_PER_STATEMENT))
 			.toSQL();
-		expect(D1_MAX_SUPPLY_ROWS_PER_STATEMENT).toBe(7);
-		expect(built.params.length).toBe(7 * SUPPLY_ITEM_INSERT_COLUMNS);
+		expect(D1_MAX_SUPPLY_ROWS_PER_STATEMENT).toBe(5);
+		expect(built.params.length).toBe(
+			D1_MAX_SUPPLY_ROWS_PER_STATEMENT * SUPPLY_ITEM_INSERT_COLUMNS,
+		);
 		expect(built.params.length).toBeLessThanOrEqual(D1_SAFE_BOUND_PARAMS);
 	});
 });

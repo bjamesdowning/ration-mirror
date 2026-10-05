@@ -25,6 +25,8 @@ import {
 } from "../../nutrition/service.server";
 import { parseDirections } from "../../schemas/directions";
 import { getSupplyList, getSupplyListById } from "../../supply.server";
+import { SUPPLY_MULTI_LISTS_FLAG } from "../../supply-list-kinds";
+import { requireSupplyListTarget } from "../../supply-list-target.server";
 import { getTagsForCargoIds, tagsToSlugs } from "../../tags.server";
 import { findSimilarCargoBatch } from "../../vector.server";
 import { MCP_SERVER_VERSION } from "../../version";
@@ -39,6 +41,7 @@ import {
 	encodeCursor,
 	encodeInventoryCursor,
 	err,
+	featureDisabled,
 	ok,
 } from "../envelope";
 import { mapExpiryCargoItems } from "../expiry-map";
@@ -438,13 +441,33 @@ export function createReadToolDefs(env: McpToolsEnv) {
 		defineSharedTool({
 			name: "get_supply_list",
 			description:
-				"Retrieve the user's active supply list. Each item includes its `id` so it can be referenced by update_supply_item, mark_supply_purchased_bulk, and remove_supply_item.",
-			inputSchema: z.object({}),
+				"Retrieve the user's active supply list. Each item includes its `id` so it can be referenced by update_supply_item, mark_supply_purchased_bulk, and remove_supply_item. Optional listId targets a Saved list when the supply list library is enabled.",
+			inputSchema: z.object({
+				listId: z.string().uuid().optional(),
+			}),
 			scopes: ["mcp:read"],
 			rateLimitCategory: "mcp_list",
 			audit: false,
-			handler: async (ctx) => {
-				const list = await getSupplyList(env.DB, ctx.organizationId);
+			handler: async (ctx, a) => {
+				let list = await getSupplyList(env.DB, ctx.organizationId);
+				if (a.listId) {
+					const enabled = await isFeatureEnabled(
+						env,
+						SUPPLY_MULTI_LISTS_FLAG,
+						resolveAgentFlagContext(env, ctx),
+					);
+					if (!enabled) {
+						return featureDisabled(
+							"get_supply_list",
+							"Supply list library is not available.",
+							"Use the Live Supply list, or enable the supply list library.",
+						);
+					}
+					await requireSupplyListTarget(env.DB, ctx.organizationId, a.listId, {
+						multiListsEnabled: true,
+					});
+					list = await getSupplyListById(env.DB, ctx.organizationId, a.listId);
+				}
 				if (!list) {
 					return ok("get_supply_list", null);
 				}

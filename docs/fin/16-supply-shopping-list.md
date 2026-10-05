@@ -16,15 +16,17 @@ Quantities respect your global **unit display mode** (`original`, `metric`, `imp
 
 ## Actions
 
-- **Sync / refresh** — Opening Supply **auto-syncs**. Use **Refresh list** to recompute manually.
+- **Sync / refresh** — Opening **Live** Supply **auto-syncs**. Use **Refresh list** to recompute manually. Saved, Template, and Archived lists never auto-sync from Manifest/Galley/Cargo.
+- **List library** (flag `supply-multi-lists`, default off) — Each kitchen has exactly one Live list named **Supply**. Saved lists and templates are independently shoppable. Archived lists are Saved snapshots (`archivedAt` set). Free includes **3** lists (Live included); Crew includes **25**. Templates and archived history count toward the cap.
 - **Manual add / edit / remove** — Create, change, or delete list lines by hand.
 - **Mark purchased** — Check off items while shopping; you can confirm quantity and unit when checking off. Checked items stay until you dock them or complete a receipt scan from Supply.
 - **From meal** — Add missing ingredients for one specific meal onto the list.
 - **Snooze** — Hide an ingredient from future syncs for a period (for example you already have it elsewhere). Snoozed items stay out until they expire or you clear them.
 - **Dock / complete** — Move purchased lines into Cargo (same merge/dedup path as direct Cargo adds). Post-dock reconciliation updates pantry gaps and clears or reduces fulfilled restock toggles.
 - **Replenish scan** — Scan or upload a receipt from Supply; Ration pairs receipt lines with the list so you can verify quantities before docking. Receipt scanning also works from **Cargo**. Scan cost: see *Receipt scanning* and *AI credits explained*.
-- **Share** — Create a **public share link** so household members can toggle purchased state **without logging in**. Requires **Crew Member** eligibility — see *Free vs Crew Member*.
+- **Share** — Create a **public share link** so household members can toggle purchased state **without logging in**. Requires **Crew Member** eligibility — see *Free vs Crew Member*. Live links work with the library flag off; Saved-list tokens additionally require the flag.
 - **Export** — Export the list (for example text or markdown) for clipboard or notes.
+- **Receipt save** — After a replenish scan review, save reviewed lines as a Saved list without a second AI credit.
 - **Planning horizon** — Owners and admins set how many forward Manifest days feed Supply (Supply options or Group Settings). Members see the window read-only. Galley selections and Cargo restock are not date-filtered.
 
 ## Credits note

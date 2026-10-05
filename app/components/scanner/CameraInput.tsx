@@ -479,6 +479,7 @@ export const CameraInput = forwardRef<CameraInputHandle, CameraInputProps>(
 						existingInventory={existingInventory ?? []}
 						onClose={handleModalClose}
 						onSuccess={handleModalSuccess}
+						scanRequestId={pollRequestId ?? undefined}
 					/>
 				)}
 

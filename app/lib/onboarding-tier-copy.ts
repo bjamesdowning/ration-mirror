@@ -29,7 +29,7 @@ export function getOnboardingTierCopy(): OnboardingTierCopy[] {
 			features: [
 				"Unlimited Cargo",
 				"Unlimited Meals",
-				"Unlimited lists",
+				"25 Supply lists",
 				"Groups & invites",
 			],
 			highlight: true,

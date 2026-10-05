@@ -21,7 +21,7 @@ export const TIER_LIMITS: Record<TierSlug, TierLimits> = {
 	crew_member: {
 		maxInventoryItems: -1,
 		maxMeals: -1,
-		maxGroceryLists: -1,
+		maxGroceryLists: 25,
 		maxOwnedGroups: 5,
 		canInviteMembers: true,
 		canShareGroceryLists: true,

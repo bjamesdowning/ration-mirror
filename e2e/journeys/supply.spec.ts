@@ -180,4 +180,11 @@ test.describe("supply", () => {
 		await removeSupplyItem(page, apple);
 		await removeSupplyItem(page, zebra);
 	});
+
+	test("hides the list library while the flag is off", async ({
+		authenticatedPage: page,
+	}) => {
+		await expect(page.getByRole("button", { name: "New list" })).toHaveCount(0);
+		await expect(page.getByLabel("Supply list")).toHaveCount(0);
+	});
 });

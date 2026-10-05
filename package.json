@@ -1,6 +1,6 @@
 {
 	"name": "ration",
-	"version": "1.9.18",
+	"version": "1.9.19",
 	"private": true,
 	"license": "SEE LICENSE IN LICENSE",
 	"type": "module",
@@ -32,7 +32,7 @@
 		"test:e2e:report": "playwright show-report",
 		"typecheck": "bun run cf-typegen && react-router typegen && tsc -b",
 		"db:generate": "drizzle-kit generate",
-		"db:migrate:local": "wrangler d1 migrations apply ration-db-dev --local --config wrangler.local.jsonc",
+		"db:migrate:local": "bun scripts/e2e-prep-local.ts",
 		"db:reset:local": "bun scripts/e2e-prep-local.ts --force-reset",
 		"db:migrate:dev": "wrangler d1 migrations apply ration-db-dev --remote --env dev",
 		"db:migrate:prod": "wrangler d1 migrations apply DB --remote",

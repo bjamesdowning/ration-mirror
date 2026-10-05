@@ -155,7 +155,7 @@ function PricingSection({
 						</p>
 					</div>
 					<ul className="space-y-3 text-sm text-muted">
-						<li>Unlimited Cargo, Galley, and Supply capacity</li>
+						<li>Unlimited Cargo and Galley; 25 Supply lists</li>
 						<li>
 							Up to {loaderData.tierLimits.crew_member.maxOwnedGroups} owned
 							groups
@@ -371,14 +371,14 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 					price: "2",
 					priceCurrency: "EUR",
 					description:
-						"Unlimited inventory, recipes, supply lists; group sharing; 1 free Ask Ration conversation per group per day; autonomous MCP registration and OAuth access.",
+						"Unlimited inventory and recipes, 25 supply lists; group sharing; 1 free Ask Ration conversation per group per day; autonomous MCP registration and OAuth access.",
 				},
 				{
 					name: "Crew Member (Annual)",
 					price: "12",
 					priceCurrency: "EUR",
 					description:
-						"Unlimited inventory, recipes, supply lists; group sharing; 1 free Ask Ration conversation per group per day; capacity-only subscription (no included credits).",
+						"Unlimited inventory and recipes, 25 supply lists; group sharing; 1 free Ask Ration conversation per group per day; capacity-only subscription (no included credits).",
 				},
 			],
 		}),

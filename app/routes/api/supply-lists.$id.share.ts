@@ -2,8 +2,10 @@ import { data } from "react-router";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { getGroupTierLimits } from "~/lib/capacity.server";
 import { handleApiError } from "~/lib/error-handler";
+import { buildWebFlagContext } from "~/lib/feature-flags/context.server";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import { generateShareToken, revokeShareToken } from "~/lib/supply.server";
+import { resolveSupplyListTarget } from "~/lib/supply-list-access.server";
 import type { Route } from "./+types/supply-lists.$id.share";
 
 /**
@@ -34,6 +36,15 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 	}
 
 	try {
+		await resolveSupplyListTarget({
+			env: context.cloudflare.env,
+			organizationId: groupId,
+			listId,
+			flagContext: buildWebFlagContext(request, context.cloudflare.env, {
+				user,
+			}),
+			allowedStates: ["live", "saved", "archived"],
+		});
 		if (request.method === "POST") {
 			const tierLimits = await getGroupTierLimits(
 				context.cloudflare.env,

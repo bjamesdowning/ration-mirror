@@ -21,7 +21,7 @@ describe("getOnboardingTierCopy", () => {
 		const tiers = getOnboardingTierCopy();
 		const crew = tiers.find((t) => t.name === CREW_MEMBER_PRODUCT.name);
 		expect(crew?.highlight).toBe(true);
-		expect(crew?.features).toContain("Groups & invites");
+		expect(crew?.features).toContain("25 Supply lists");
 		expect(crew?.features.some((f) => f.includes("credits for AI"))).toBe(
 			false,
 		);

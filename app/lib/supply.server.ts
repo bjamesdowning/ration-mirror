@@ -6,11 +6,9 @@ import {
 	ledger,
 	meal,
 	mealIngredient,
-	member,
 	supplyItem,
 	supplyList,
 	supplySnooze,
-	user,
 } from "../db/schema";
 import { computeBaseFields, effectiveBaseFields } from "./base-quantity";
 import { assertCargoIngestCapacity, checkCapacity } from "./capacity.server";
@@ -20,7 +18,7 @@ import {
 	fulfillCargoSelectionsFromDockedSupplyItems,
 	getActiveCargoSelections,
 } from "./cargo-selection.server";
-import { parseDockExpiresAt, toExpiryDate } from "./date-utils";
+import { parseDockExpiresAt } from "./date-utils";
 import type { ITEM_DOMAINS } from "./domain";
 import { retryOnD1Contention } from "./error-handler";
 import type { FlagshipEvaluationContext } from "./feature-flags/context.server";
@@ -66,6 +64,25 @@ import {
 	type SupplyItemOrigin,
 	shouldClearUnpurchasedSupplyItemOnSync,
 } from "./supply-item-origins";
+import { assignMissingQuotaSlots } from "./supply-list-capacity.server";
+import {
+	InvalidListStateError,
+	SupplyItemLimitError,
+	SupplyListNotFoundError,
+} from "./supply-list-errors";
+import {
+	canAddFromMealSupplyList,
+	canIssueSupplyShareToken,
+	canMutateSharedSupplyList,
+	canMutateSupplyItems,
+	canShopSupplyList,
+	isUniqueConstraintError,
+	pickLegacyLiveCandidate,
+	resolveSupplyListState,
+	SUPPLY_LIST_NAME,
+	SUPPLY_SAVED_ITEM_LIMIT,
+} from "./supply-list-kinds";
+import { loadSupplyListRow } from "./supply-list-target.server";
 import { withSupplySyncLock } from "./supply-sync-lock.server";
 import { type TagRecord, tagsToSlugs } from "./tags.server";
 import {
@@ -74,7 +91,6 @@ import {
 	type SupplySyncTelemetryContext,
 	trackD1BatchSize,
 } from "./telemetry.server";
-import { TIER_LIMITS } from "./tiers.server";
 import type { UnitDisplayMode } from "./unit-display-mode";
 import {
 	type BaseUnit,
@@ -97,35 +113,6 @@ import {
 
 const SHARE_TOKEN_EXPIRY_DAYS = 7;
 const SHARE_TOKEN_EXPIRY_SECONDS = SHARE_TOKEN_EXPIRY_DAYS * 24 * 60 * 60;
-const SUPPLY_LIST_NAME = "Supply";
-
-async function getGroupSupplyListCapacity(
-	d1: ReturnType<typeof drizzle>,
-	organizationId: string,
-) {
-	const [ownerRow] = await d1
-		.select({
-			tier: user.tier,
-			tierExpiresAt: user.tierExpiresAt,
-		})
-		.from(member)
-		.innerJoin(user, eq(member.userId, user.id))
-		.where(
-			and(eq(member.organizationId, organizationId), eq(member.role, "owner")),
-		);
-
-	// Fallback to free limits if owner lookup fails.
-	if (!ownerRow) return TIER_LIMITS.free.maxGroceryLists;
-
-	const now = Date.now();
-	const expiresAt = toExpiryDate(ownerRow.tierExpiresAt);
-	const isExpired =
-		ownerRow.tier === "crew_member" && expiresAt && expiresAt.getTime() <= now;
-	const effectiveTier =
-		ownerRow.tier === "crew_member" && !isExpired ? "crew_member" : "free";
-
-	return TIER_LIMITS[effectiveTier].maxGroceryLists;
-}
 
 export interface SupplyItemInput {
 	name: string;
@@ -134,6 +121,9 @@ export interface SupplyItemInput {
 	domain?: string;
 	sourceMealId?: string;
 	sourceMealIds?: string[];
+	note?: string | null;
+	category?: string | null;
+	sortOrder?: number;
 }
 
 export interface SupplyListInput {
@@ -425,67 +415,122 @@ export function aggregateIngredients(
 	});
 }
 
+export { pickLegacyLiveCandidate, SUPPLY_LIST_NAME };
+
+async function insertLiveSupplyList(
+	db: D1Database,
+	organizationId: string,
+): Promise<string> {
+	const d1 = drizzle(db);
+	const listId = crypto.randomUUID();
+	try {
+		await d1.insert(supplyList).values({
+			id: listId,
+			organizationId,
+			name: SUPPLY_LIST_NAME,
+			kind: "live",
+			createdFrom: "manual",
+			quotaSlot: 1,
+			revision: 0,
+		});
+		return listId;
+	} catch (error) {
+		if (!isUniqueConstraintError(error)) throw error;
+		const [existing] = await d1
+			.select({ id: supplyList.id })
+			.from(supplyList)
+			.where(
+				and(
+					eq(supplyList.organizationId, organizationId),
+					eq(supplyList.kind, "live"),
+				),
+			)
+			.limit(1);
+		if (existing) return existing.id;
+		throw error;
+	}
+}
+
 /**
- * Ensures a single "Supply" list exists for the organization.
- * If multiple lists exist, it keeps the most recently updated one, renames it to "Supply",
- * and deletes the others (per user directive to destroy data if easier).
- * If no list exists, creates a new one named "Supply".
+ * Ensures exactly one Live "Supply" list exists. Never deletes sibling lists.
  */
-export async function ensureSupplyList(
+export async function ensureLiveSupplyList(
 	db: D1Database,
 	organizationId: string,
 	options?: SupplyItemsFetchOptions,
 ) {
 	const d1 = drizzle(db);
 
-	// Fast path (99%+ of calls): a correctly-named list already exists.
-	// A single LIMIT 1 query avoids fetching all rows and never triggers writes.
-	const [existing] = await d1
+	const [live] = await d1
 		.select()
 		.from(supplyList)
 		.where(
 			and(
 				eq(supplyList.organizationId, organizationId),
-				eq(supplyList.name, SUPPLY_LIST_NAME),
+				eq(supplyList.kind, "live"),
 			),
 		)
-		.orderBy(desc(supplyList.updatedAt))
 		.limit(1);
 
-	if (existing) {
-		return getSupplyListById(db, organizationId, existing.id, options);
+	if (live) {
+		return getSupplyListById(db, organizationId, live.id, options);
 	}
 
-	// Slow path: either no list exists, or the primary list has the wrong name.
-	// Fetch all to find/rename/create and remove duplicates.
 	const lists = await d1
 		.select()
 		.from(supplyList)
 		.where(eq(supplyList.organizationId, organizationId))
-		.orderBy(desc(supplyList.updatedAt));
+		.orderBy(desc(supplyList.updatedAt), desc(supplyList.id));
 
 	if (lists.length === 0) {
-		return createSupplyList(db, organizationId, { name: SUPPLY_LIST_NAME });
+		const listId = await insertLiveSupplyList(db, organizationId);
+		return getSupplyListById(db, organizationId, listId, options);
 	}
 
-	const [primaryList, ...listsToDelete] = lists;
-
-	if (primaryList.name !== SUPPLY_LIST_NAME) {
+	const candidate = pickLegacyLiveCandidate(lists);
+	try {
 		await d1
 			.update(supplyList)
-			.set({ name: SUPPLY_LIST_NAME, updatedAt: new Date() })
-			.where(eq(supplyList.id, primaryList.id));
-		primaryList.name = SUPPLY_LIST_NAME;
+			.set({
+				kind: "live",
+				name: SUPPLY_LIST_NAME,
+				quotaSlot: 1,
+				updatedAt: new Date(),
+			})
+			.where(
+				and(
+					eq(supplyList.id, candidate.id),
+					eq(supplyList.organizationId, organizationId),
+				),
+			);
+	} catch (error) {
+		if (!isUniqueConstraintError(error)) throw error;
 	}
 
-	if (listsToDelete.length > 0) {
-		const idsToDelete = listsToDelete.map((l) => l.id);
-		for (const deleteChunk of chunkArray(idsToDelete, D1_MAX_BOUND_PARAMS)) {
-			await d1.delete(supplyList).where(inArray(supplyList.id, deleteChunk));
-		}
-	}
+	const [resolved] = await d1
+		.select({ id: supplyList.id })
+		.from(supplyList)
+		.where(
+			and(
+				eq(supplyList.organizationId, organizationId),
+				eq(supplyList.kind, "live"),
+			),
+		)
+		.limit(1);
+	const liveId = resolved?.id ?? candidate.id;
+	await assignMissingQuotaSlots(db, organizationId, liveId);
+	return getSupplyListById(db, organizationId, liveId, options);
+}
 
-	return getSupplyListById(db, organizationId, primaryList.id, options);
+/**
+ * Compatibility alias for Live Supply. Never collapses sibling lists.
+ */
+export async function ensureSupplyList(
+	db: D1Database,
+	organizationId: string,
+	options?: SupplyItemsFetchOptions,
+) {
+	return ensureLiveSupplyList(db, organizationId, options);
 }
 
 /**
@@ -612,13 +657,14 @@ export async function getSupplyListById(
 				(x): x is { id: string; name: string } => typeof x.name === "string",
 			);
 		const sourceMealNames = sourceMealSources.map((x) => x.name);
+		const sourceOrigins = normalizeSupplyOrigins(item.sourceOrigins);
 		return {
 			...item,
 			sourceMealIds: sourceIds,
 			sourceMealName: sourceMealNames[0] ?? null,
 			sourceMealNames,
 			sourceMealSources,
-			sourceOrigins: normalizeSupplyOrigins(item.sourceOrigins),
+			sourceOrigins,
 		};
 	});
 
@@ -691,7 +737,13 @@ export async function getSupplyListByShareToken(
 		id: list.id,
 		organizationId: list.organizationId,
 		name: list.name,
-		items,
+		kind: list.kind,
+		archivedAt: list.archivedAt,
+		revision: list.revision,
+		items: items.map((item) => ({
+			...item,
+			sourceOrigins: normalizeSupplyOrigins(item.sourceOrigins),
+		})),
 	};
 }
 
@@ -711,6 +763,8 @@ export async function updateSharedItemPurchased(
 	const [list] = await d1
 		.select({
 			id: supplyList.id,
+			kind: supplyList.kind,
+			archivedAt: supplyList.archivedAt,
 			shareExpiresAt: supplyList.shareExpiresAt,
 		})
 		.from(supplyList)
@@ -720,6 +774,13 @@ export async function updateSharedItemPurchased(
 
 	if (list.shareExpiresAt && new Date(list.shareExpiresAt) < new Date()) {
 		throw new Error("Share link has expired");
+	}
+	const sharedState = resolveSupplyListState({
+		kind: list.kind ?? "live",
+		archivedAt: list.archivedAt ?? null,
+	});
+	if (!canMutateSharedSupplyList(sharedState)) {
+		throw new InvalidListStateError(sharedState);
 	}
 
 	const [item] = await d1
@@ -747,35 +808,27 @@ export async function updateSharedItemPurchased(
 
 /**
  * Creates a new supply list for an organization.
+ * Legacy helper: Live bootstrap uses `ensureLiveSupplyList`. Saved lists use
+ * `insertSupplyListWithQuota`.
  */
 export async function createSupplyList(
 	db: D1Database,
 	organizationId: string,
 	data?: SupplyListInput,
 ) {
-	const d1 = drizzle(db);
-	const listId = crypto.randomUUID();
-	const maxSupplyLists = await getGroupSupplyListCapacity(d1, organizationId);
-
-	if (maxSupplyLists !== -1) {
-		const [countResult] = await d1
-			.select({ count: sql<number>`count(*)` })
-			.from(supplyList)
-			.where(eq(supplyList.organizationId, organizationId));
-		const currentCount = countResult?.count ?? 0;
-		if (currentCount >= maxSupplyLists) {
-			throw new Error(
-				`capacity_exceeded:supplyLists:${currentCount}:${maxSupplyLists}`,
-			);
-		}
+	const name = data?.name || SUPPLY_LIST_NAME;
+	if (name === SUPPLY_LIST_NAME) {
+		return ensureLiveSupplyList(db, organizationId);
 	}
-
+	const listId = crypto.randomUUID();
+	const d1 = drizzle(db);
 	await d1.insert(supplyList).values({
 		id: listId,
 		organizationId,
-		name: data?.name || "Shopping List",
+		name,
+		kind: "saved",
+		createdFrom: "manual",
 	});
-
 	return await getSupplyListById(db, organizationId, listId);
 }
 
@@ -788,26 +841,26 @@ export async function updateSupplyList(
 	listId: string,
 	data: SupplyListInput,
 ) {
-	const d1 = drizzle(db);
-
-	// Verify ownership
-	const [existing] = await d1
-		.select()
-		.from(supplyList)
-		.where(
-			and(
-				eq(supplyList.id, listId),
-				eq(supplyList.organizationId, organizationId),
-			),
+	const existing = await loadSupplyListRow(db, organizationId, listId);
+	if (!existing) throw new SupplyListNotFoundError();
+	const state = resolveSupplyListState(existing);
+	if (state === "live") {
+		throw new InvalidListStateError(
+			state,
+			"The Live Supply list cannot be renamed.",
 		);
+	}
+	if (state === "archived") {
+		throw new InvalidListStateError(state);
+	}
 
-	if (!existing) throw new Error("Supply list not found or unauthorized");
-
+	const d1 = drizzle(db);
 	await d1
 		.update(supplyList)
 		.set({
 			name: data.name || existing.name,
 			updatedAt: new Date(),
+			revision: (existing.revision ?? 0) + 1,
 		})
 		.where(eq(supplyList.id, listId));
 
@@ -822,8 +875,15 @@ export async function deleteSupplyList(
 	organizationId: string,
 	listId: string,
 ) {
+	const existing = await loadSupplyListRow(db, organizationId, listId);
+	if (!existing) throw new SupplyListNotFoundError();
+	if (resolveSupplyListState(existing) === "live") {
+		throw new InvalidListStateError(
+			"live",
+			"The Live Supply list cannot be deleted.",
+		);
+	}
 	const d1 = drizzle(db);
-
 	return await d1
 		.delete(supplyList)
 		.where(
@@ -844,21 +904,25 @@ export async function addSupplyItem(
 	data: SupplyItemInput,
 ) {
 	const d1 = drizzle(db);
+	const list = await loadSupplyListRow(db, organizationId, listId);
+	if (!list) throw new SupplyListNotFoundError();
+	const state = resolveSupplyListState(list);
+	if (!canMutateSupplyItems(state)) {
+		throw new InvalidListStateError(state);
+	}
 
-	// Verify list ownership
-	const [list] = await d1
-		.select()
-		.from(supplyList)
-		.where(
-			and(
-				eq(supplyList.id, listId),
-				eq(supplyList.organizationId, organizationId),
-			),
-		);
-
-	if (!list) throw new Error("Supply list not found or unauthorized");
+	if (state !== "live") {
+		const [countRow] = await d1
+			.select({ count: sql<number>`count(*)` })
+			.from(supplyItem)
+			.where(eq(supplyItem.listId, listId));
+		if ((countRow?.count ?? 0) >= SUPPLY_SAVED_ITEM_LIMIT) {
+			throw new SupplyItemLimitError(SUPPLY_SAVED_ITEM_LIMIT);
+		}
+	}
 
 	const itemId = crypto.randomUUID();
+	const now = new Date();
 
 	await d1.batch([
 		d1.insert(supplyItem).values({
@@ -878,10 +942,17 @@ export async function addSupplyItem(
 						: [],
 			sourceOrigins:
 				data.sourceMealId || data.sourceMealIds?.length ? [] : ["manual"],
+			note: data.note ?? null,
+			category: data.category ?? null,
+			sortOrder: data.sortOrder ?? 0,
+			updatedAt: now,
 		}),
 		d1
 			.update(supplyList)
-			.set({ updatedAt: new Date() })
+			.set({
+				updatedAt: now,
+				revision: (list.revision ?? 0) + 1,
+			})
 			.where(eq(supplyList.id, listId)),
 	]);
 
@@ -916,7 +987,11 @@ export async function updateSupplyItem(
 			),
 		);
 
-	if (!list) throw new Error("Supply list not found or unauthorized");
+	if (!list) throw new SupplyListNotFoundError();
+	const state = resolveSupplyListState(list);
+	if (!canMutateSupplyItems(state)) {
+		throw new InvalidListStateError(state);
+	}
 
 	// Verify item belongs to list
 	const [existing] = await d1
@@ -930,6 +1005,7 @@ export async function updateSupplyItem(
 	const nextUnit = data.unit ?? existing.unit;
 	const nextName = data.name ?? existing.name;
 	const base = computeBaseFields(nextQuantity, nextUnit, nextName);
+	const now = new Date();
 
 	await d1.batch([
 		d1
@@ -942,11 +1018,19 @@ export async function updateSupplyItem(
 				baseUnit: base.baseUnit,
 				domain: data.domain ?? existing.domain,
 				isPurchased: data.isPurchased ?? existing.isPurchased,
+				note: data.note === undefined ? existing.note : data.note,
+				category:
+					data.category === undefined ? existing.category : data.category,
+				sortOrder: data.sortOrder ?? existing.sortOrder,
+				updatedAt: now,
 			})
 			.where(eq(supplyItem.id, itemId)),
 		d1
 			.update(supplyList)
-			.set({ updatedAt: new Date() })
+			.set({
+				updatedAt: now,
+				revision: (list.revision ?? 0) + 1,
+			})
 			.where(eq(supplyList.id, listId)),
 	]);
 
@@ -1014,18 +1098,12 @@ export async function deleteSupplyItem(
 ) {
 	const d1 = drizzle(db);
 
-	// Verify list ownership
-	const [list] = await d1
-		.select()
-		.from(supplyList)
-		.where(
-			and(
-				eq(supplyList.id, listId),
-				eq(supplyList.organizationId, organizationId),
-			),
-		);
-
-	if (!list) throw new Error("Supply list not found or unauthorized");
+	const list = await loadSupplyListRow(db, organizationId, listId);
+	if (!list) throw new SupplyListNotFoundError();
+	const state = resolveSupplyListState(list);
+	if (!canMutateSupplyItems(state)) {
+		throw new InvalidListStateError(state);
+	}
 
 	await d1.batch([
 		d1
@@ -1033,7 +1111,10 @@ export async function deleteSupplyItem(
 			.where(and(eq(supplyItem.id, itemId), eq(supplyItem.listId, listId))),
 		d1
 			.update(supplyList)
-			.set({ updatedAt: new Date() })
+			.set({
+				updatedAt: new Date(),
+				revision: (list.revision ?? 0) + 1,
+			})
 			.where(eq(supplyList.id, listId)),
 	]);
 
@@ -1072,7 +1153,13 @@ export async function snoozeSupplyItem(
 			),
 		);
 
-	if (!list) throw new Error("Supply list not found or unauthorized");
+	if (!list) throw new SupplyListNotFoundError();
+	if (resolveSupplyListState(list) !== "live") {
+		throw new InvalidListStateError(
+			resolveSupplyListState(list),
+			"Snooze is only available on Live Supply.",
+		);
+	}
 
 	const [existing] = await d1
 		.select()
@@ -1237,6 +1324,10 @@ export async function generateShareToken(
 		);
 
 	if (!list) throw new Error("Supply list not found or unauthorized");
+	const state = resolveSupplyListState(list);
+	if (!canIssueSupplyShareToken(state)) {
+		throw new InvalidListStateError(state);
+	}
 
 	// Generate a URL-safe token
 	const shareToken = crypto.randomUUID().replace(/-/g, "");
@@ -1326,7 +1417,10 @@ export async function addItemsFromMeal(
 			.where(eq(meal.id, mealId)),
 	]);
 
-	if (!list) throw new Error("Supply list not found or unauthorized");
+	if (!list) throw new SupplyListNotFoundError();
+	if (!canAddFromMealSupplyList(resolveSupplyListState(list))) {
+		throw new InvalidListStateError(resolveSupplyListState(list));
+	}
 
 	const mealDomain = mealRecord?.domain ?? "food";
 	const mealBaseServings = mealRecord?.servings ?? 1;
@@ -1459,6 +1553,7 @@ export async function addItemsFromMeal(
 			domain: mealDomain,
 			sourceMealId: mealId,
 			sourceMealIds: [mealId],
+			updatedAt: new Date(),
 		} satisfies typeof supplyItem.$inferInsert;
 
 		await d1.insert(supplyItem).values(newItemPayload);
@@ -2001,10 +2096,15 @@ function contributionsToSupplyRows(
 			baseQuantity: contribution.baseQuantity,
 			baseUnit: contribution.baseUnit,
 			domain: contribution.domain,
+			isPurchased: false,
 			sourceMealId: contribution.sourceMealIds[0] ?? null,
 			sourceMealIds: contribution.sourceMealIds,
 			sourceOrigins: contribution.sourceOrigins,
 			sourceCargoId: contribution.sourceCargoId,
+			note: null,
+			category: null,
+			sortOrder: 0,
+			updatedAt: new Date(),
 		};
 	});
 }
@@ -2118,8 +2218,7 @@ async function materializeSupplyFromSelections(
 	}
 
 	// Each multi-row INSERT runs alone so batch-wide variable counting cannot
-	// combine dense inserts. Row budget uses SUPPLY_ITEM_INSERT_COLUMNS (13),
-	// not Object.keys — Drizzle also binds is_purchased.
+	// combine dense inserts. Row budget uses SUPPLY_ITEM_INSERT_COLUMNS.
 	for (const insertChunk of chunkArray(itemsToInsert, rowsPerInsert)) {
 		const insertStmt = d1.insert(supplyItem).values(insertChunk);
 		trackD1BatchSize("materializeSupplyFromSelections", 1, {
@@ -2398,20 +2497,11 @@ export async function completeSupplyList(
 	options: SupplyListOperationOptions = {},
 ) {
 	const d1 = drizzle(env.DB);
-
-	const [list] = await d1
-		.select({ id: supplyList.id })
-		.from(supplyList)
-		.where(
-			and(
-				eq(supplyList.id, listId),
-				eq(supplyList.organizationId, organizationId),
-			),
-		)
-		.limit(1);
-
-	if (!list) {
-		throw new Error("Supply list not found or unauthorized");
+	const list = await loadSupplyListRow(env.DB, organizationId, listId);
+	if (!list) throw new SupplyListNotFoundError();
+	const state = resolveSupplyListState(list);
+	if (!canShopSupplyList(state)) {
+		throw new InvalidListStateError(state);
 	}
 
 	// 1. Get purchased items
@@ -2461,6 +2551,10 @@ export async function completeSupplyList(
 		summary: results,
 		cargoSelectionsCleared: reconcileResult.cargoSelectionsCleared,
 		cargoSelectionsReduced: reconcileResult.cargoSelectionsReduced,
+		message:
+			state === "saved"
+				? "Cargo replenished; Live Supply recalculated"
+				: undefined,
 	};
 }
 

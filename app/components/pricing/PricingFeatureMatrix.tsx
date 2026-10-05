@@ -101,7 +101,7 @@ export function PricingFeatureMatrix({
 				<FeatureRow
 					label="Supply lists"
 					free={`${free.maxGroceryLists}`}
-					crew="Unlimited"
+					crew={`${crew.maxGroceryLists}`}
 				/>
 				<FeatureRow label="Auto-generate from Galley & Manifest" free crew />
 				<FeatureRow label="Dock Cargo (list → inventory)" free crew />

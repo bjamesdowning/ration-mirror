@@ -79,7 +79,7 @@ describe("checkCapacityWithTier", () => {
 		expect(result.canAdd).toBe(Number.POSITIVE_INFINITY);
 	});
 
-	it("returns real supplyLists count for crew unlimited tier", async () => {
+	it("returns real supplyLists count for crew 25-list cap", async () => {
 		mockWhere.mockResolvedValueOnce([{ count: 7 }]);
 
 		const result = await checkCapacityWithTier(
@@ -91,9 +91,9 @@ describe("checkCapacityWithTier", () => {
 		);
 
 		expect(result.current).toBe(7);
-		expect(result.limit).toBe(-1);
+		expect(result.limit).toBe(25);
 		expect(result.allowed).toBe(true);
-		expect(result.canAdd).toBe(Number.POSITIVE_INFINITY);
+		expect(result.canAdd).toBe(18);
 	});
 
 	it("returns correct canAdd for free tier below cap", async () => {

@@ -769,7 +769,8 @@ The Manifest is a calendar-style meal plan. Each organization has a single activ
 The supply list bridges the Galley and Cargo — it holds ingredients needed to cook the selected meals that aren't already in the pantry.
 
 **Key workflows:**
-- **Sync** — Opening Supply auto-syncs on each visit; use **Refresh list** to recompute manually. `POST /hub/supply` (intent `update-list`) / mobile `POST /api/mobile/v1/supply/sync` materializes contributions from Manifest meals within the org **planning horizon** (see §3.5), Galley `active_meal_selection`, and Cargo `active_cargo_selection` (restock toggles with optional `quantity_override`). Meal rows use pantry gap math; cargo restock uses explicit buy quantity. Contributions merge by `normalizeForCargoDedup` name + domain into one row with multiple `sourceOrigins` badges. Sync is org-locked in KV to prevent duplicate lines from concurrent rebuilds; fractional count ingredients are summed across Manifest days then rounded once. Vectorize resolves fuzzy name matches for meal gaps. Snoozed items are excluded.
+- **List library** (flag `supply-multi-lists`, default off) — Each kitchen has exactly one Live list named Supply that keeps auto-syncing. Saved lists, templates, and archived trip history are independently shoppable and never auto-sync. Free includes 3 lists (Live included); Crew includes 25. Catalog APIs live at `/api/supply-lists/catalog` and `/api/mobile/v1/supply/lists`. Legacy `GET/POST /api/supply-lists` and `GET /api/mobile/v1/supply` remain Live-only `{ list }` contracts.
+- **Sync** — Opening Supply auto-syncs on each visit; use **Refresh list** to recompute manually. `POST /hub/supply` (intent `update-list`) / mobile `POST /api/mobile/v1/supply/sync` materializes contributions from Manifest meals within the org **planning horizon** (see §3.5), Galley `active_meal_selection`, and Cargo `active_cargo_selection` (restock toggles with optional `quantity_override`). Meal rows use pantry gap math; cargo restock uses explicit buy quantity. Contributions merge by `normalizeForCargoDedup` name + domain into one row with multiple `sourceOrigins` badges. Sync is org-locked in KV to prevent duplicate lines from concurrent rebuilds; fractional count ingredients are summed across Manifest days then rounded once. Vectorize resolves fuzzy name matches for meal gaps. Snoozed items are excluded. Auto-sync runs only on Live.
 - **Planning horizon** — Owner/admin set how many days of Manifest meals feed the list (7/14/21/30 presets or 1–30 custom on web) in Supply options or Group Settings. Stored in `organization.metadata.supplySettings.manifestHorizonDays`.
 - **Selection toggles** — Galley meals and Cargo items can be marked for Supply sync via toggle on cards/rows (web) or swipe actions (iOS). Adding cargo to Supply prompts for restock quantity (default 1 + cargo unit). Selection bars show counts + Clear all.
 - **Unit normalization** — Global **unit display mode** (`user.settings.unitDisplayMode`: `original`, `metric`, `imperial`, or `cooking`) controls how quantities appear across Cargo, Galley, Supply, and Manifest via `presentQuantity()` (web) / `QuantityPresenter` (iOS). Set it in **Hub → System → Preferences** (iOS: Settings → Measurements). **original** shows authored units as entered (mixed systems by design). **metric** shopping uses g/kg and **l/ml** for liquids; **imperial** uses oz/lb and the US volume ladder (gal/qt/pt/cup/…); **cooking** prefers kitchen volumes when density is known. Conversion is **display-time only** — toggling preference never rewrites inventory rows. Cargo, meal ingredients, and supply items store **authored** `quantity`/`unit` plus canonical `base_quantity`/`base_unit` for matching, sync gap math, and mode-aware presentation. Supply list generation shapes display quantities with `chooseReadableUnitForMode` using the user's mode. Legacy `supplyUnitMode` is kept in sync for older clients. Liquids stay volume-based (`ml`) in base storage while volume-measured solids with density data canonicalize to weight. Run `bun run db:migrate:dev`, export row JSON, then generate reviewed SQL with `scripts/backfill-base-quantity.ts` after deploy. iOS density data is generated from the TypeScript table with `bun run ios:density`. Shared golden cases live in `app/lib/__fixtures__/quantity-presentation.json`.
@@ -777,7 +778,7 @@ The supply list bridges the Galley and Cargo — it holds ingredients needed to 
 - **Dock cargo** — `POST /api/supply-lists/:id/complete` (and Hub intent `dock`, mobile `POST /api/mobile/v1/supply/complete`, MCP `complete_supply_list`) moves all purchased items into cargo inventory via the same vector dedup pipeline as direct cargo adds. After ingest, **post-dock reconciliation** runs before list cleanup: meal/manifest/galley gaps are recomputed against updated pantry stock, and fulfilled cargo restock toggles are cleared or reduced (`quantity_override`). Purchased rows are removed from the list only after reconciliation succeeds (with D1 contention retries). All dock entry points delegate to `completeSupplyList` in `supply.server.ts`.
 - **Replenish (scan-from-Supply)** — The Supply hub **Replenish Cargo** action offers **Dock from Receipt** (combined credit intro + camera/photo library/**upload file** picker on one screen → server-side match via `GET /api/supply-lists/:id/scan-match` → editable review of dock fields (shared with Cargo photo-scan form: name/qty/unit/domain/expiry) with **manual Link to supply / Unlink** so unmatched receipt lines can be paired to leftover list rows (and auto-matches can be corrected) before confirm → `POST .../scan-complete` docks to Cargo with `matchType: "manual"` when the user set the link, runs the same post-dock reconciliation, then reconciles list rows) or **Dock from List** (same as dock cargo above). Accepted upload types: JPEG, PNG, WebP, PDF (max 5MB). Complete accepts `supplyItemId` as uuid, null, or omitted for receipt-only lines. iOS mirrors the combined receipt sheet, AI consent gate, Files upload, searchable supply link picker, unlink, and the shared `ScanItemEditSheet` for per-line edits before docking.
 - **Snooze** — An item can be snoozed for a duration (via `supply_snooze` table, keyed on `normalizedName + domain`). Snoozed items are silently excluded from all future syncs until the snooze expires or is manually dismissed. Useful for items that are always on hand.
-- **Share** — Crew Member only. Public URL at `/shared/:token`. Any visitor can toggle purchased state on items via `PATCH /api/shared/:token/items/:itemId` (rate-limited by IP, no session required). Shared rows show origin badges; the page refreshes when the tab regains focus.
+- **Share** — Crew Member only. Public URL at `/shared/:token`. Any visitor can toggle purchased state on items via `PATCH /api/shared/:token/items/:itemId` (rate-limited by IP, no session required). Shared rows show origin badges; the page refreshes when the tab regains focus. Live share links work with the library flag off. Saved-list tokens additionally require `supply-multi-lists`; Archived tokens are read-only; Template tokens are not issued.
 - **Export** — `GET /api/supply-lists/:id/export?format=text|markdown` for clipboard/note-app sharing.
 - **Mobile shopping UI** — Stacked list rows with title-case names, tap-to-edit quantity pills, one-tap check-off at the listed (or edited) amount, sticky progress/sort/domain bar, and hide-bought toggle. Quantities display via mode-aware `presentQuantity()` / iOS `QuantityPresenter` (readable units, vulgar fractions where appropriate).
 
@@ -1106,6 +1107,11 @@ erDiagram
         text id PK
         text organization_id FK
         text name
+        text kind
+        timestamp archived_at
+        text created_from
+        integer revision
+        integer quota_slot
         text share_token UK
         timestamp share_expires_at
     }
@@ -1117,6 +1123,9 @@ erDiagram
         real quantity
         text unit
         boolean is_purchased
+        text note
+        text category
+        integer sort_order
         text source_meal_id FK
         json source_meal_ids
     }
@@ -1127,6 +1136,33 @@ erDiagram
         text normalized_name
         text domain
         timestamp snoozed_until
+    }
+
+    supply_staple {
+        text id PK
+        text organization_id FK
+        text name
+        text domain
+    }
+
+    supply_store_profile {
+        text id PK
+        text organization_id FK
+        text name
+    }
+
+    supply_store_aisle {
+        text id PK
+        text store_profile_id FK
+        text category
+        integer sort_order
+    }
+
+    supply_operation {
+        text id PK
+        text organization_id FK
+        text list_id FK
+        text operation_id
     }
 
     meal_plan {
@@ -1178,6 +1214,8 @@ erDiagram
     organization ||--o{ meal : "owns meals"
     organization ||--o{ active_meal_selection : "selects meals"
     organization ||--o{ supply_list : "owns supply lists"
+    organization ||--o{ supply_staple : "has staples"
+    organization ||--o{ supply_store_profile : "has store layouts"
     organization ||--o{ supply_snooze : "has snoozes"
     organization ||--o{ meal_plan : "owns meal plans"
     organization ||--o{ ledger : "has ledger entries"
@@ -1194,6 +1232,8 @@ erDiagram
     meal_ingredient }o--o| cargo : "links to inventory item"
 
     supply_list ||--o{ supply_item : "contains items"
+    supply_list ||--o{ supply_operation : "records operations"
+    supply_store_profile ||--o{ supply_store_aisle : "has aisles"
     supply_item }o--o| meal : "sourced from meal"
 
     meal_plan ||--o{ meal_plan_entry : "has entries"
@@ -1221,8 +1261,12 @@ erDiagram
 | `meal_ingredient` | meal | Ingredient list with optional soft FK to cargo | `meal_id`, `ingredient_name` |
 | `meal_tag` | meal + tag | Junction: meal ↔ tag | `(meal_id, tag_id)` PK |
 | `active_meal_selection` | org + meal | Currently "selected" meals for supply list generation | `(org_id, meal_id)` unique |
-| `supply_list` | org | Shopping/supply lists with optional share token | `org_id`, `share_token` |
-| `supply_item` | supply_list | Individual items; `source_meal_ids` (JSON) tracks multiple sources | `list_id`, `(list_id, domain)` |
+| `supply_list` | org | Shopping lists: exactly one Live (`kind=live`) plus Saved/Template; Archived = Saved + `archived_at` | `org_id`, `share_token`, unique Live per org, `(org_id, quota_slot)` |
+| `supply_item` | supply_list | Individual items; `source_meal_ids` (JSON) tracks multiple sources; optional `note`/`category` | `list_id`, `(list_id, domain)` |
+| `supply_staple` | org | Kitchen staples used to seed Saved lists | `(org_id, normalized_name, domain)` |
+| `supply_store_profile` | org | Named store layouts for aisle grouping | `org_id` |
+| `supply_store_aisle` | store | Ordered aisle/category rows for a store profile | `store_profile_id` |
+| `supply_operation` | org | Idempotent offline shopping operations | `(org_id, operation_id)` unique |
 | `supply_snooze` | org | Items suppressed from auto-generation; keyed on `normalizedName + domain` | `(org_id, name, domain)` unique |
 | `meal_plan` | org | Singleton active meal plan per org with optional share | `org_id`, `share_token` |
 | `meal_plan_entry` | meal_plan | Single date+slot+meal assignment with `consumed_at` tracking | `(plan_id, date)`, `(plan_id, date, slot_type)` |
@@ -1239,7 +1283,7 @@ erDiagram
 | `D1_MAX_TAG_ROWS_PER_STATEMENT` | 50 | 2 | `cargo_tag` / `meal_tag` |
 | `D1_MAX_TAG_INSERT_ROWS_PER_STATEMENT` | 14 | 7 | `tag` |
 | `D1_MAX_PLAN_ENTRY_ROWS_PER_STATEMENT` | 12 | 8 | `meal_plan_entry` |
-| `D1_MAX_SUPPLY_ROWS_PER_STATEMENT` | 7 | 13 | `supply_item` (Drizzle binds `is_purchased` default; inserts run one statement per batch) |
+| `D1_MAX_SUPPLY_ROWS_PER_STATEMENT` | 5 | 17 | `supply_item` (explicit copy/sync rows bind 17 columns; 5 × 17 = 85 ≤ 99) |
 | `D1_MAX_KITCHEN_EVENT_ROWS_PER_STATEMENT` | 11 | 9 | `kitchen_event` (Flight Recorder) |
 
 **Supply sync concurrency:** `createSupplyListFromSelectedMeals` takes an org-scoped KV lock (`supply_sync_lock:{organizationId}`, TTL 60s) so concurrent mobile/web/MCP syncs cannot race clear→insert and duplicate lines. Contended callers get `429` `supply_sync_busy` with `Retry-After`. Insert batches are not retried on D1 timeouts (avoids double-insert after a committed write). Fractional count ingredients (e.g. `0.5 unit`) are scaled exactly per Manifest day, summed, then rounded once for shopping.
@@ -1541,7 +1585,7 @@ flowchart TB
     subgraph CrewTier["Crew Member — 12/year"]
         C1["Unlimited Inventory"]
         C2["Unlimited Meals"]
-        C3["Unlimited Supply Lists"]
+        C3["25 Supply Lists"]
         C4["5 Owned Groups"]
         C5["Invite Members"]
         C6["Share Lists and Plans publicly"]
@@ -1713,7 +1757,8 @@ A separate Cloudflare Worker (`ration-mcp`) exposes the Ration pantry to AI agen
 | `search_ingredients` | Read | `mcp:read` | Semantic vector search against the org's cargo (Vectorize, threshold 0.60) | mcp_search (20/min) |
 | `list_inventory` | Read | `mcp:read` | Cursor-paginated cargo list (default 100, max 200), `meta.nextCursor` for next page | mcp_list (30/min) |
 | `get_cargo_item` | Read | `mcp:read` | Full single-item view (tags, expiresAt, customFields) | mcp_list (30/min) |
-| `get_supply_list` | Read | `mcp:read` | Active supply list with item names, quantities, units, and source meal names | mcp_list (30/min) |
+| `get_supply_list` | Read | `mcp:read` | Active supply list with item names, quantities, units, and source meal names. Optional `listId` when the library flag is on. | mcp_list (30/min) |
+| `list_supply_lists` | Read | `mcp:read` | Catalog of Live/Saved/Template/Archived lists. Flag-gated (`supply-multi-lists`). | mcp_list (30/min) |
 | `get_meal_plan` | Read | `mcp:read` | Weekly meal plan entries for a date range (default: next 7 days) | mcp_list (30/min) |
 | `list_meals` | Read | `mcp:read` | Cursor-paginated recipes; pass `includeIngredients:false` to skip fan-out | mcp_list (30/min) |
 | `match_meals` | Read | `mcp:read` | Meals cookable from pantry (strict or delta); compact `nutrition.perServing` + optional `maxEnergyKcal` | mcp_search (20/min) |
@@ -1747,6 +1792,12 @@ A separate Cloudflare Worker (`ration-mcp`) exposes the Ration pantry to AI agen
 | `mark_supply_purchased_bulk` | Write | `mcp:supply:write` | Mark one or many supply items purchased/unpurchased | mcp_write (15/min) |
 | `sync_supply_from_selected_meals` | Write | `mcp:supply:write` | Rebuild supply from manifest + Galley selections | mcp_supply_sync (8/min) |
 | `complete_supply_list` | Write | `mcp:supply:write` | Archive the current list and start a fresh one | mcp_write (15/min) |
+| `create_supply_list` | Write | `mcp:supply:write` | Create a Saved or Template list. Flag-gated. | mcp_write (15/min) |
+| `duplicate_supply_list` | Write | `mcp:supply:write` | Duplicate a list into an independent Saved/Template copy. Flag-gated. | mcp_write (15/min) |
+| `archive_supply_list` | Write | `mcp:supply:write` | Archive a Saved list. Flag-gated. | mcp_write (15/min) |
+| `transfer_supply_items` | Write | `mcp:supply:write` | Copy or move items between lists. Flag-gated. | mcp_write (15/min) |
+| `manage_supply_staples` | Write | `mcp:supply:write` | List, upsert, or delete kitchen staples. Flag-gated. | mcp_write (15/min) |
+| `save_receipt_as_supply_list` | Write | `mcp:supply:write` | Save reviewed receipt lines as a Saved list (no second AI credit). Flag-gated. | mcp_write (15/min) |
 | `update_user_preferences` | Write | `mcp:preferences:write` | Patch allergens, expiration alert days, theme | mcp_write (15/min) |
 | `quick_eat_cargo` | Write | `mcp:inventory:write` + `mcp:manifest:write` + `mcp:nutrition:write` | Personal Quick Eat — resolve or create cargo, Manifest snack, optional private intake | mcp_write (15/min) |
 
@@ -2173,7 +2224,7 @@ bun run lint:fix      # Biome v2 auto-fix
 
 **Vitest startup errors (`Cannot find package .../esbuild/lib/main.js` or similar):** Usually a corrupted or incomplete `node_modules` tree. `pretest:unit` runs [`scripts/verify-test-deps.ts`](scripts/verify-test-deps.ts) before Vitest. If tests still fail to start, see [Dependency install issues](#dependency-install-issues) below.
 
-**E2E testing:** After upgrading `@playwright/test`, run `bunx playwright install` (or `bunx playwright install chromium`) so browser binaries match the installed version; otherwise tests fail with “Executable doesn't exist”. Playwright uses `bun run dev:local` (local D1/KV/R2, fast startup). `pretest:e2e` runs [`scripts/e2e-prep-local.ts`](scripts/e2e-prep-local.ts) to apply local D1 migrations and auto-reset corrupted Miniflare D1 state (`SQLITE_IOERR`); manual recovery: `bun run db:reset:local`. If a dev server is already running on port 5173, Playwright reuses it. Dev Login (`dev@ration.app`). Auth state saved in `e2e/.auth/user.json`. Public smoke tests run without auth state; journeys reuse the saved authenticated session. To scale local runs, set workers explicitly (for example `PLAYWRIGHT_WORKERS=4 bun run test:e2e`). Fixtures: `e2e/fixtures/avatar.png`, `e2e/fixtures/sample-scan.png`. Scan tests mock the API to avoid AI/credits. **Stability:** use `CI=true bun run test:e2e` to match CI retries/reporter, and `bun x playwright test --repeat-each=3` to hunt flakes. Spec inventory and triage notes live in [`plans/e2e-review.md`](plans/e2e-review.md). Magic-link UI tests mock **POST** `/api/auth/sign-in/magic-link` (Better Auth 1.6), not a `magic-link/send` path.
+**E2E testing:** After upgrading `@playwright/test`, run `bunx playwright install` (or `bunx playwright install chromium`) so browser binaries match the installed version; otherwise tests fail with “Executable doesn't exist”. Playwright uses `bun run dev:local` (local D1/KV/R2, fast startup). `pretest:e2e` and `bun run db:migrate:local` run [`scripts/e2e-prep-local.ts`](scripts/e2e-prep-local.ts), which applies `drizzle/*.sql` through Miniflare D1 (same persist path as `wrangler dev`) and auto-resets corrupted state (`SQLITE_IOERR`); manual recovery: `bun run db:reset:local`. This avoids the wrangler CLI `d1 migrations apply --local` confirm prompt, which hangs in non-interactive TTY wrappers. If a dev server is already running on port 5173, Playwright reuses it. Dev Login (`dev@ration.app`). Auth state saved in `e2e/.auth/user.json`. Public smoke tests run without auth state; journeys reuse the saved authenticated session. To scale local runs, set workers explicitly (for example `PLAYWRIGHT_WORKERS=4 bun run test:e2e`). Fixtures: `e2e/fixtures/avatar.png`, `e2e/fixtures/sample-scan.png`. Scan tests mock the API to avoid AI/credits. **Stability:** use `CI=true bun run test:e2e` to match CI retries/reporter, and `bun x playwright test --repeat-each=3` to hunt flakes. Spec inventory and triage notes live in [`plans/e2e-review.md`](plans/e2e-review.md). Magic-link UI tests mock **POST** `/api/auth/sign-in/magic-link` (Better Auth 1.6), not a `magic-link/send` path.
 
 **What is tested:**
 

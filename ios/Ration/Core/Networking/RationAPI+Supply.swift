@@ -53,6 +53,22 @@ extension RationAPI {
         )
     }
 
+    func addSupplyItem(_ body: CreateSupplyItemRequest) async throws -> CreateSupplyItemResponse {
+        try await client.post("supply/items", body: body)
+    }
+
+    func addSupplyItem(listId: String, _ body: CreateSupplyItemRequest) async throws -> CreateSupplyItemResponse {
+        try await client.post("supply/lists/\(listId)/items", body: body)
+    }
+
+    func deleteSupplyItem(_ id: String) async throws {
+        let _: EmptyResponse = try await client.delete("supply/items/\(id)")
+    }
+
+    func deleteSupplyItem(listId: String, itemId: String) async throws {
+        let _: EmptyResponse = try await client.delete("supply/lists/\(listId)/items/\(itemId)")
+    }
+
     func toggleSupplyItem(_ id: String, isPurchased: Bool) async throws -> EmptyResponse {
         try await client.patch("supply/items/\(id)", body: ["isPurchased": isPurchased])
     }
@@ -63,6 +79,34 @@ extension RationAPI {
         if let unit { body["unit"] = .string(unit) }
         if let isPurchased { body["isPurchased"] = .bool(isPurchased) }
         return try await client.patch("supply/items/\(id)", body: body)
+    }
+
+    func updateSupplyItem(
+        listId: String,
+        itemId: String,
+        quantity: Double?,
+        unit: String?,
+        isPurchased: Bool?
+    ) async throws -> EmptyResponse {
+        var body: [String: EncodableValue] = [:]
+        if let quantity { body["quantity"] = .double(quantity) }
+        if let unit { body["unit"] = .string(unit) }
+        if let isPurchased { body["isPurchased"] = .bool(isPurchased) }
+        return try await client.patch("supply/lists/\(listId)/items/\(itemId)", body: body)
+    }
+
+    func replaySupplyOperations(listId: String, baseRevision: Int, operations: [SupplyOutboxOperation]) async throws -> EmptyResponse {
+        try await client.post(
+            "supply/lists/\(listId)/operations",
+            body: SupplyOperationsRequest(baseRevision: baseRevision, operations: operations)
+        )
+    }
+
+    func addSupplyItemByBarcode(listId: String, barcode: String) async throws -> CreateSupplyItemResponse {
+        try await client.post(
+            "supply/lists/\(listId)/barcode",
+            body: SupplyBarcodeRequest(barcode: barcode)
+        )
     }
 
     func syncSupply() async throws -> SupplySyncResponse {
@@ -100,11 +144,59 @@ extension RationAPI {
         )
     }
 
-    func addSupplyItem(_ body: CreateSupplyItemRequest) async throws -> CreateSupplyItemResponse {
-        try await client.post("supply/items", body: body)
+    func supplyCatalog() async throws -> SupplyCatalogResponse {
+        try await client.get("supply/lists")
     }
 
-    func deleteSupplyItem(_ id: String) async throws {
-        let _: EmptyResponse = try await client.delete("supply/items/\(id)")
+    func createSupplyList(name: String, kind: String = "saved") async throws -> SupplyResponse {
+        try await client.post(
+            "supply/lists",
+            body: SupplyCatalogCreateRequest(name: name, kind: kind, seed: nil)
+        )
+    }
+
+    func snapshotLiveSupplyList(name: String) async throws -> SupplyResponse {
+        try await client.post(
+            "supply/lists",
+            body: SupplyCatalogCreateRequest(
+                name: name,
+                kind: "saved",
+                seed: .init(type: "copy", sourceListId: nil)
+            )
+        )
+    }
+
+    func supplyList(id: String) async throws -> SupplyResponse {
+        try await client.get("supply/lists/\(id)")
+    }
+
+    func duplicateSupplyList(id: String, name: String?) async throws -> SupplyResponse {
+        try await client.post(
+            "supply/lists/\(id)/duplicate",
+            body: SupplyDuplicateRequest(name: name)
+        )
+    }
+
+    func archiveSupplyList(id: String) async throws -> SupplyResponse {
+        try await client.post("supply/lists/\(id)/archive", body: EmptyBody())
+    }
+
+    func resetPurchasedSupplyList(id: String) async throws -> SupplyResponse {
+        try await client.post("supply/lists/\(id)/reset-purchased", body: EmptyBody())
+    }
+
+    func copySupplyListToLive(id: String, mode: String = "missing_only") async throws -> SupplyResponse {
+        try await client.post(
+            "supply/lists/\(id)/copy-to-live",
+            body: SupplyCopyToLiveRequest(mode: mode)
+        )
+    }
+
+    func completeNamedSupplyList(id: String) async throws -> SupplyCompleteResponse {
+        try await client.post("supply/lists/\(id)/complete", body: EmptyBody())
+    }
+
+    func saveSupplyListFromReceipt(_ body: SupplyFromReceiptRequest) async throws -> SupplyResponse {
+        try await client.post("supply/lists/from-receipt", body: body)
     }
 }

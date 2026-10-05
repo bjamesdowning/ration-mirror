@@ -228,6 +228,85 @@ struct SupplyUnsnoozeResponse: Codable, Sendable {
     let unsnoozed: Bool
 }
 
+struct SupplyCatalogSummary: Codable, Sendable, Identifiable {
+    let id: String
+    let name: String
+    let kind: String?
+    let state: String?
+    let itemCount: Int?
+    let purchasedCount: Int?
+    let revision: Int?
+}
+
+struct SupplyCatalogCapacity: Codable, Sendable {
+    let current: Int
+    let limit: Int
+    let canAdd: Int?
+}
+
+struct SupplyCatalogResponse: Codable, Sendable {
+    let live: SupplyCatalogSummary?
+    let saved: [SupplyCatalogSummary]
+    let templates: [SupplyCatalogSummary]
+    let archived: [SupplyCatalogSummary]
+    let capacity: SupplyCatalogCapacity?
+}
+
+struct SupplyCatalogCreateRequest: Codable, Sendable {
+    let name: String
+    let kind: String
+    let seed: Seed?
+
+    struct Seed: Codable, Sendable {
+        let type: String
+        let sourceListId: String?
+    }
+}
+
+struct SupplyDuplicateRequest: Codable, Sendable {
+    let name: String?
+}
+
+struct SupplyCopyToLiveRequest: Codable, Sendable {
+    let mode: String
+}
+
+struct SupplyFromReceiptItem: Codable, Sendable {
+    let name: String
+    let quantity: Double
+    let unit: String
+    let domain: String
+}
+
+struct SupplyFromReceiptRequest: Codable, Sendable {
+    let scanRequestId: String
+    let name: String
+    let items: [SupplyFromReceiptItem]
+}
+
+struct SupplyBarcodeRequest: Codable, Sendable {
+    let barcode: String
+}
+
+struct SupplyOutboxOperation: Codable, Sendable {
+    let operationId: String
+    let type: String
+    let itemId: String?
+    let payload: Payload?
+
+    struct Payload: Codable, Sendable {
+        var name: String?
+        var quantity: Double?
+        var unit: String?
+        var isPurchased: Bool?
+    }
+}
+
+struct SupplyOperationsRequest: Codable, Sendable {
+    let baseRevision: Int
+    let operations: [SupplyOutboxOperation]
+}
+
 struct SupplyCompleteRequest: Encodable, Sendable {
     let listId: String
 }
@@ -235,4 +314,5 @@ struct SupplyCompleteRequest: Encodable, Sendable {
 struct SupplyCompleteResponse: Codable, Sendable {
     let success: Bool
     let docked: Int
+    let message: String?
 }

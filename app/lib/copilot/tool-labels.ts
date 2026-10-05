@@ -61,6 +61,41 @@ export const COPILOT_TOOL_LABELS: Record<string, CopilotToolLabelSet> = {
 		done: "Loaded Supply list",
 		error: "Supply lookup failed",
 	},
+	list_supply_lists: {
+		running: "Listing Supply lists…",
+		done: "Listed Supply lists",
+		error: "Could not list Supply lists",
+	},
+	create_supply_list: {
+		running: "Creating a Supply list…",
+		done: "Created Supply list",
+		error: "Could not create Supply list",
+	},
+	duplicate_supply_list: {
+		running: "Duplicating a Supply list…",
+		done: "Duplicated Supply list",
+		error: "Could not duplicate Supply list",
+	},
+	archive_supply_list: {
+		running: "Archiving a Supply list…",
+		done: "Archived Supply list",
+		error: "Could not archive Supply list",
+	},
+	transfer_supply_items: {
+		running: "Moving Supply items…",
+		done: "Transferred Supply items",
+		error: "Could not transfer Supply items",
+	},
+	manage_supply_staples: {
+		running: "Updating staples…",
+		done: "Updated staples",
+		error: "Could not update staples",
+	},
+	save_receipt_as_supply_list: {
+		running: "Saving receipt as a Supply list…",
+		done: "Saved receipt as a Supply list",
+		error: "Could not save receipt as a Supply list",
+	},
 	get_meal_plan: {
 		running: "Loading your meal plan…",
 		done: "Loaded meal plan",

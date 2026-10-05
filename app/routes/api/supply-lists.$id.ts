@@ -1,6 +1,7 @@
 import { data } from "react-router";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { handleApiError } from "~/lib/error-handler";
+import { buildWebFlagContext } from "~/lib/feature-flags/context.server";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import { SupplyListSchema } from "~/lib/schemas/supply";
 import {
@@ -8,30 +9,46 @@ import {
 	getSupplyListById,
 	updateSupplyList,
 } from "~/lib/supply.server";
+import { resolveSupplyListTarget } from "~/lib/supply-list-access.server";
 import type { Route } from "./+types/supply-lists.$id";
 
 /**
  * GET /api/grocery-lists/:id - Get a single grocery list with items
  */
 export async function loader({ request, context, params }: Route.LoaderArgs) {
-	const { groupId } = await requireActiveGroup(context, request);
+	const {
+		groupId,
+		session: { user },
+	} = await requireActiveGroup(context, request);
 	const listId = params.id;
 
 	if (!listId) {
 		throw data({ error: "List ID required" }, { status: 400 });
 	}
 
-	const list = await getSupplyListById(
-		context.cloudflare.env.DB,
-		groupId,
-		listId,
-	);
+	try {
+		await resolveSupplyListTarget({
+			env: context.cloudflare.env,
+			organizationId: groupId,
+			listId,
+			flagContext: buildWebFlagContext(request, context.cloudflare.env, {
+				user,
+			}),
+		});
+		const list = await getSupplyListById(
+			context.cloudflare.env.DB,
+			groupId,
+			listId,
+		);
 
-	if (!list) {
-		throw data({ error: "Grocery list not found" }, { status: 404 });
+		if (!list) {
+			throw data({ error: "Grocery list not found" }, { status: 404 });
+		}
+
+		return { list };
+	} catch (e) {
+		return handleApiError(e);
 	}
-
-	return { list };
 }
 
 /**
@@ -62,6 +79,14 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 	}
 
 	try {
+		await resolveSupplyListTarget({
+			env: context.cloudflare.env,
+			organizationId: groupId,
+			listId,
+			flagContext: buildWebFlagContext(request, context.cloudflare.env, {
+				user,
+			}),
+		});
 		if (request.method === "PUT") {
 			const json = await request.json();
 			const input = SupplyListSchema.parse(json);

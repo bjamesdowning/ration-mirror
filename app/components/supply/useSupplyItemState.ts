@@ -123,6 +123,19 @@ export function useSupplyItemState({
 		setIsMarkingPurchased(true);
 		setLocalQuantity(quantity);
 		setLocalUnit(toSupportedUnit(unit));
+		if (typeof navigator !== "undefined" && !navigator.onLine) {
+			void import("~/lib/supply-outbox.client").then((mod) =>
+				mod.enqueueSupplyOperation({
+					operationId: crypto.randomUUID(),
+					listId,
+					type: "toggle_purchased",
+					itemId: item.id,
+					payload: { isPurchased: true, quantity, unit: unit.trim() || "unit" },
+					baseRevision: 0,
+				}),
+			);
+			return;
+		}
 		fetcher.submit(
 			JSON.stringify({
 				isPurchased: true,

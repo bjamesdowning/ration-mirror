@@ -95,6 +95,13 @@ export const MCP_TOOL_GROUPS = [
 		name: "Supply",
 		tools: [
 			"get_supply_list",
+			"list_supply_lists",
+			"create_supply_list",
+			"duplicate_supply_list",
+			"archive_supply_list",
+			"transfer_supply_items",
+			"manage_supply_staples",
+			"save_receipt_as_supply_list",
 			"add_supply_item",
 			"update_supply_item",
 			"remove_supply_item",

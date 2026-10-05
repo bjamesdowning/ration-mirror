@@ -40,6 +40,10 @@ describe("TIER_LIMITS", () => {
 		expect(TIER_LIMITS.crew_member.maxInventoryItems).toBe(-1);
 	});
 
+	it("crew_member tier has a 25 grocery list cap", () => {
+		expect(TIER_LIMITS.crew_member.maxGroceryLists).toBe(25);
+	});
+
 	it("free tier cannot invite members", () => {
 		expect(TIER_LIMITS.free.canInviteMembers).toBe(false);
 	});

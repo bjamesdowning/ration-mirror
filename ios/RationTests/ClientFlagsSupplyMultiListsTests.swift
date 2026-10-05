@@ -14,4 +14,17 @@ final class ClientFlagsSupplyMultiListsTests: XCTestCase {
         let flags = try JSONDecoder().decode(ClientFlags.self, from: json)
         XCTAssertTrue(flags.isSupplyMultiListsEnabled)
     }
+
+    func testMissingIosHomeWidgetsIsFailClosed() throws {
+        let json = #"{"supplyMultiLists":true}"#.data(using: .utf8)!
+        let flags = try JSONDecoder().decode(ClientFlags.self, from: json)
+        XCTAssertFalse(flags.isIosHomeWidgetsEnabled)
+        XCTAssertTrue(flags.isSupplyMultiListsEnabled)
+    }
+
+    func testIosHomeWidgetsTrue() throws {
+        let json = #"{"iosHomeWidgets":true}"#.data(using: .utf8)!
+        let flags = try JSONDecoder().decode(ClientFlags.self, from: json)
+        XCTAssertTrue(flags.isIosHomeWidgetsEnabled)
+    }
 }

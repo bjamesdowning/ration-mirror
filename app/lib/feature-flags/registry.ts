@@ -155,6 +155,13 @@ export const FLAG_REGISTRY: Record<string, FlagRegistryEntry> = {
 		clientVisible: true,
 		clientKey: "supplyMultiLists",
 	},
+	"ios-home-widgets": {
+		defaultEnabled: false,
+		description:
+			"iOS Home Screen widgets for Supply, Ate, and Today. Snapshot only; checks and Quick Eat stay on their existing routes.",
+		clientVisible: true,
+		clientKey: "iosHomeWidgets",
+	},
 };
 
 /** Registry keys — narrows as entries are added to FLAG_REGISTRY. */

@@ -24,6 +24,15 @@ final class AppDeepLinkTests: XCTestCase {
             .galleyImport(url: nil, autoStart: true, userText: nil)
         )
         XCTAssertEqual(AppDeepLink.parse("ration://manifest/plan-week"), .manifestPlanWeek)
+        XCTAssertEqual(AppDeepLink.parse("ration://manifest/today"), .manifestToday)
+        XCTAssertEqual(AppDeepLink.parse("ration://supply"), .supply)
+        XCTAssertEqual(AppDeepLink.parse("ration://supply?compose=1"), .supplyCompose)
+        XCTAssertEqual(
+            AppDeepLink.parse("ration://cargo/eat?id=11111111-1111-4111-8111-111111111111"),
+            .cargoEat(id: "11111111-1111-4111-8111-111111111111")
+        )
+        XCTAssertNil(AppDeepLink.parse("ration://cargo/eat"))
+        XCTAssertNil(AppDeepLink.parse("ration://cargo/eat?id=not-a-uuid"))
         XCTAssertEqual(AppDeepLink.parse("RATION://Ask"), .ask)
         XCTAssertEqual(AppDeepLink.parse("ration://Galley/Generate"), .galleyGenerate)
         XCTAssertEqual(AppDeepLink.parse("ration://MANIFEST/Plan-Week"), .manifestPlanWeek)

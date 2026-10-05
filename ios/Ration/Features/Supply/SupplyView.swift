@@ -463,6 +463,10 @@ struct SupplyView: View {
                 .disabled(model.purchasedCount == 0 || model.isDocking || !model.canEditCurrentList)
             }
         }
+        .onChange(of: env.deepLinkRouter.supplyComposePending, initial: true) { _, pending in
+            guard pending else { return }
+            openSupplyComposerIfNeeded()
+        }
         .task(id: loadTaskKey) {
             guard isTabActive, let organizationId else { return }
             model.refreshOutcomes = env.refreshOutcomes
@@ -493,6 +497,21 @@ struct SupplyView: View {
             }
         }
         .onDisappear { model.cancelActiveWork() }
+    }
+
+    private func openSupplyComposerIfNeeded() {
+        guard env.deepLinkRouter.supplyComposePending, let organizationId else { return }
+        Task {
+            model.multiListsEnabled = env.session.clientFlags.isSupplyMultiListsEnabled
+            await model.focusLiveList(
+                api: env.api,
+                snapshots: env.snapshots,
+                online: env.network.isOnline,
+                organizationId: organizationId
+            )
+            showingQuickAdd = true
+            env.deepLinkRouter.acknowledgeSupplyCompose()
+        }
     }
 
     private func listView(_ list: SupplyList, organizationId: String) -> some View {

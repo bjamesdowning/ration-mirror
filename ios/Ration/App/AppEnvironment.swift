@@ -17,6 +17,10 @@ final class AppEnvironment {
         case manifestPlanWeek
         /// Open Manifest Add-to-plan with meal + date prefilled (nutrition-cook-log-split).
         case manifestAddEntry(mealId: String, date: String)
+        case manifestToday
+        case supply
+        case supplyCompose
+        case cargoEat(id: String)
     }
 
     let auth: AuthManager

@@ -1,5 +1,6 @@
 import GoogleSignIn
 import SwiftUI
+import WidgetKit
 
 @main
 struct RationApp: App {
@@ -38,6 +39,8 @@ struct RationApp: App {
                     // Share Extension may fail to open the host (host-app policy).
                     // App Group payload is still consumed when the user returns to Ration.
                     guard phase == .active else { return }
+                    WidgetAPIBase.publish(AppConfig.apiBaseURL)
+                    WidgetCenter.shared.reloadAllTimelines()
                     consumeSharedImportHandoff()
                 }
         }

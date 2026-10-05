@@ -28,7 +28,9 @@ final class DeepLinkRouter {
     private(set) var galleyImportUserText: String?
     private(set) var manifestPlanWeekPending = false
     private(set) var manifestAddEntryPending: ManifestAddEntryPrefill?
+    private(set) var supplyComposePending = false
     private(set) var cargoItemPending: String?
+    private(set) var cargoEatPending: String?
     private(set) var mealPending: String?
 
     var pending: AppEnvironment.DeepLinkDestination? {
@@ -56,7 +58,9 @@ final class DeepLinkRouter {
         galleyImportUserText = nil
         manifestPlanWeekPending = false
         manifestAddEntryPending = nil
+        supplyComposePending = false
         cargoItemPending = nil
+        cargoEatPending = nil
         mealPending = nil
     }
 
@@ -95,6 +99,16 @@ final class DeepLinkRouter {
         case .manifestAddEntry(let mealId, let date):
             selectedTab = .manifest
             manifestAddEntryPending = ManifestAddEntryPrefill(mealId: mealId, date: date)
+        case .manifestToday:
+            selectedTab = .manifest
+        case .supply:
+            selectedTab = .supply
+        case .supplyCompose:
+            selectedTab = .supply
+            supplyComposePending = true
+        case .cargoEat(let id):
+            selectedTab = .cargo
+            cargoEatPending = id
         }
         queue.removeFirst()
     }
@@ -108,7 +122,9 @@ final class DeepLinkRouter {
     }
     func acknowledgeManifestPlanWeek() { manifestPlanWeekPending = false }
     func acknowledgeManifestAddEntry() { manifestAddEntryPending = nil }
+    func acknowledgeSupplyCompose() { supplyComposePending = false }
     func acknowledgeCargoItem() { cargoItemPending = nil }
+    func acknowledgeCargoEat() { cargoEatPending = nil }
     func acknowledgeMeal() { mealPending = nil }
 }
 

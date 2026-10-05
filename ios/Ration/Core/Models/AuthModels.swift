@@ -100,6 +100,8 @@ struct ClientFlags: Codable, Sendable, Equatable {
     var featureEnablementConsent: Bool?
     /// Supply list library (additive; missing/false = Live singleton).
     var supplyMultiLists: Bool?
+    /// Home Screen widgets (additive; missing/false = widgets stay blank).
+    var iosHomeWidgets: Bool?
 
     static let disabled = ClientFlags()
 
@@ -127,6 +129,7 @@ struct ClientFlags: Codable, Sendable, Equatable {
     var isNutritionCrossOrgDiaryEnabled: Bool { nutritionCrossOrgDiary == true }
     var isFeatureEnablementConsentEnabled: Bool { featureEnablementConsent == true }
     var isSupplyMultiListsEnabled: Bool { supplyMultiLists == true }
+    var isIosHomeWidgetsEnabled: Bool { iosHomeWidgets == true }
 }
 
 /// `GET /api/mobile/v1/client-flags` (unsigned)

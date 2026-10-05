@@ -112,6 +112,23 @@ final class SupplyViewModel {
         return Double(purchasedCount) / Double(totalCount)
     }
 
+    /// Widget “+” always jots onto Live, even if a saved list was selected.
+    func focusLiveList(
+        api: RationAPI,
+        snapshots: SnapshotStore,
+        online: Bool,
+        organizationId: String
+    ) async {
+        UserDefaults.standard.removeObject(forKey: "supply.selected.\(organizationId)")
+        selectedListId = nil
+        await load(
+            api: api,
+            snapshots: snapshots,
+            online: online,
+            organizationId: organizationId
+        )
+    }
+
     func load(api: RationAPI, snapshots: SnapshotStore, online: Bool, organizationId: String) async {
         errorMessage = nil
         let hadCache = await restoreSnapshot(snapshots, organizationId: organizationId)

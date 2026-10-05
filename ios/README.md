@@ -24,10 +24,21 @@ Set your **Apple Developer Team ID** in `project.yml` (`DEVELOPMENT_TEAM`) befor
 building to a device, then re-run `xcodegen generate`.
 
 **Versioning:** User-facing app version is `MARKETING_VERSION` in `project.yml`
-(currently **1.4.25**). `CURRENT_PROJECT_VERSION` is the monotonic build number for
+(currently **1.5.2**). `CURRENT_PROJECT_VERSION` is the monotonic build number for
 TestFlight / App Store uploads. Follow the same patch/minor rules as the web app
 (`1.X.1`–`1.X.49`, then `1.(X+1).0`); see `.cursor/rules/ration-master.mdc`.
 After editing `project.yml`, run `bun run ios:generate`.
+
+## Home Screen widgets
+
+The `RationWidgets` extension ships three widgets behind Flagship `ios-home-widgets` (default off):
+
+- **Supply** — unchecked Live items. A check marks the row purchased and leaves it on the list until you dock in the app. “+” opens the Live jot sheet.
+- **Ate** — one tap eats a single count (slice, can, pack, unit). Grams, millilitres, and dozen open Quick Eat. One-tap also needs `cargo-quick-eat`.
+- **Today** — next uncooked meal. Remaining calories appear only with nutrition consent.
+
+Add them from the Home Screen widget gallery after installing a build that includes the extension. With the flag off, each widget says it is turned off and shows no kitchen data. The widget process reads the refresh token from the shared keychain access group and never deletes it. Sign out in the app clears the snapshot.
+
 
 ### First-class repo commands
 

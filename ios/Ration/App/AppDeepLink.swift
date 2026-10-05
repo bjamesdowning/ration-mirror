@@ -10,6 +10,9 @@ enum AppDeepLink {
         case "scan":
             return .scan
         case "cargo":
+            if url.path.lowercased() == "/eat" {
+                return parseCargoEat(url)
+            }
             return .cargo
         case "galley":
             let path = url.path.lowercased()
@@ -29,7 +32,10 @@ enum AppDeepLink {
             let path = url.path.lowercased()
             if path == "/plan-week" { return .manifestPlanWeek }
             if path == "/add" { return parseManifestAdd(url) }
+            if path == "/today" { return .manifestToday }
             return nil
+        case "supply":
+            return composeRequested(url) ? .supplyCompose : .supply
         default:
             return nil
         }
@@ -54,6 +60,25 @@ enum AppDeepLink {
         else { return nil }
 
         return .manifestAddEntry(mealId: mealId, date: date)
+    }
+
+    private static func parseCargoEat(_ url: URL) -> AppEnvironment.DeepLinkDestination? {
+        guard let id = queryValue(url, name: "id"), isUUID(id) else { return nil }
+        return .cargoEat(id: id)
+    }
+
+    private static func composeRequested(_ url: URL) -> Bool {
+        let raw = queryValue(url, name: "compose")?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        return raw == "1" || raw == "true" || raw == "yes"
+    }
+
+    private static func queryValue(_ url: URL, name: String) -> String? {
+        URLComponents(url: url, resolvingAgainstBaseURL: false)?
+            .queryItems?
+            .first(where: { $0.name == name })?
+            .value
     }
 
     private static func isUUID(_ value: String) -> Bool {

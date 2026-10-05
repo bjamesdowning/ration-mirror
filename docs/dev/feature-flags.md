@@ -146,6 +146,7 @@ Permanent boolean kill switches for billed AI pipelines. Registry `defaultEnable
 | Flag key | Client key | Purpose |
 |----------|------------|---------|
 | `supply-multi-lists` | `supplyMultiLists` | Saved/template/history lists and copying them onto Live. Default **off**. Quick-add on Live works with the flag off. Non-destructive Live repair ships regardless of this flag. |
+| `ios-home-widgets` | `iosHomeWidgets` | iOS Home Screen widgets (Supply, Ate, Today) and `GET /api/mobile/v1/widgets/home`. Default **off**. Ate one-tap still requires `cargo-quick-eat`. Enable for iOS only when `clientVersion` ≥ `1.5.2`. |
 
 Production rollout stays Flagship-default **off**. Enable web/internal first. Enable iOS only after binary ≥ **1.5.0** (`clientPlatform` `ios` **and** `clientVersion` ≥ `1.5.0`). Then MCP (`clientPlatform` `mcp`). Killing the flag hides every non-Live surface (HTTP 403 `FEATURE_DISABLED` on catalog routes; 404 on legacy `:id`/share for Saved) while Live remains fully operational and saved rows stay intact.
 

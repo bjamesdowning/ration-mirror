@@ -15,8 +15,8 @@ options:
 
 settings:
   base:
-    MARKETING_VERSION: "1.5.1"
-    CURRENT_PROJECT_VERSION: "136"
+    MARKETING_VERSION: "1.5.2"
+    CURRENT_PROJECT_VERSION: "137"
     SWIFT_VERSION: "5.9"
     # Set your Apple Developer Team ID here (must match App Store Connect / AASA).
     DEVELOPMENT_TEAM: "M2KJH5GDGH"
@@ -51,6 +51,7 @@ targets:
       - path: Ration
         excludes:
           - Resources/BrandReview
+      - path: Shared
     entitlements:
       path: Ration/App/Ration.entitlements
       properties:
@@ -79,6 +80,33 @@ targets:
       - package: Textual
       - target: RationShare
         embed: true
+      - target: RationWidgets
+        embed: true
+  RationWidgets:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: RationWidgets
+      - path: Shared
+    entitlements:
+      path: RationWidgets/RationWidgets.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.com.mayutic.ration
+        keychain-access-groups:
+          - $(AppIdentifierPrefix)com.mayutic.ration
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.mayutic.ration.widgets
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: RationWidgets/Info.plist
+        TARGETED_DEVICE_FAMILY: "1"
+        APPLICATION_EXTENSION_API_ONLY: YES
+        LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks"
+      configs:
+        Release:
+          CODE_SIGN_STYLE: Automatic
+          DEVELOPMENT_TEAM: M2KJH5GDGH
   RationShare:
     type: app-extension
     platform: iOS
@@ -124,6 +152,7 @@ schemes:
       targets:
         Ration: [run, archive, profile, analyze]
         RationShare: [run, archive, profile, analyze]
+        RationWidgets: [run, archive, profile, analyze]
         RationTests: [test]
     run:
       config: Debug

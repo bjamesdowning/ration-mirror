@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import WidgetKit
 
 /// Process-level “no account” copy so a recreated `AuthManager` (iPad Sign in
 /// with Apple tearing down `WindowGroup` `@State`) still switches to Create Account.
@@ -364,21 +365,29 @@ final class AuthManager {
 
     /// Single-flight refresh — concurrent callers await the same rotation.
     /// Uses a detached task so SwiftUI `.task` cancellation cannot abort token rotation.
+    /// Re-reads the Keychain inside the app-group lock so a widget refresh cannot
+    /// rotate the same refresh token out from under this process.
     @discardableResult
     func refreshAccessToken() async throws -> String {
         if let task = refreshTask { return try await task.value }
-        guard let refreshToken else { throw APIError.notAuthenticated }
+        guard Keychain.get(Self.refreshKey) != nil || refreshToken != nil else {
+            throw APIError.notAuthenticated
+        }
 
-        let token = refreshToken
+        let fallback = refreshToken
         let baseURL = AppConfig.apiBaseURL
         let session = self.session
 
         let task = Task.detached(priority: .userInitiated) { () async throws -> String in
-            let pair = try await Self.postTokenDetached(
-                refreshToken: token,
-                baseURL: baseURL,
-                session: session
-            )
+            let pair = try await AppGroupFileLock.perform("auth-refresh.lock") {
+                let current = Keychain.get(Self.refreshKey) ?? fallback
+                guard let current else { throw APIError.notAuthenticated }
+                return try await Self.postTokenDetached(
+                    refreshToken: current,
+                    baseURL: baseURL,
+                    session: session
+                )
+            }
             try await MainActor.run { [weak self] in
                 guard let self else { throw APIError.notAuthenticated }
                 try self.apply(pair)
@@ -412,6 +421,11 @@ final class AuthManager {
         accessToken = nil
         accessExpiry = nil
         refreshToken = nil
+        Keychain.delete(Self.refreshKey)
+        Keychain.delete("widget_access_token")
+        Keychain.delete("widget_access_expiry")
+        HomeWidgetCacheStore.clear()
+        WidgetCenter.shared.reloadAllTimelines()
         // M-12: an abandoned magic-link request otherwise leaves this orphaned in Keychain indefinitely.
         Keychain.delete(Self.pkceVerifierKey)
         appleGivenName = nil

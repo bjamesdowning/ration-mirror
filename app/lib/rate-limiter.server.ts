@@ -402,6 +402,12 @@ export const RATE_LIMITS: Record<string, RateLimitConfig> = {
 		maxRequests: 60,
 		keyPrefix: "rate:supply_read",
 	},
+	/** iOS Home Screen widget snapshot. Fail open so a KV blip keeps the last glance. */
+	widget_snapshot: {
+		windowMs: 60_000,
+		maxRequests: 30,
+		keyPrefix: "rate:widget_snapshot",
+	},
 	/** Visible catalog/list ETag polling — stop when backgrounded. */
 	supply_catalog_read: {
 		windowMs: 60_000,

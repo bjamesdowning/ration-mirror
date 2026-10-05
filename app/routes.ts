@@ -488,6 +488,7 @@ export default [
 	),
 	route("api/mobile/v1/meals/:id", "routes/api/mobile/v1.meals.$id.ts"),
 	route("api/mobile/v1/supply", "routes/api/mobile/v1.supply.ts"),
+	route("api/mobile/v1/widgets/home", "routes/api/mobile/v1.widgets.home.ts"),
 	route("api/mobile/v1/supply/lists", "routes/api/mobile/v1.supply.lists.ts"),
 	route(
 		"api/mobile/v1/supply/lists/from-receipt",

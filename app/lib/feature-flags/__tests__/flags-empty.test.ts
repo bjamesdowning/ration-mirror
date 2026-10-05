@@ -28,6 +28,7 @@ describe("getClientSafeFlags", () => {
 			nutritionCrossOrgDiary: false,
 			featureEnablementConsent: false,
 			supplyMultiLists: false,
+			iosHomeWidgets: false,
 		});
 	});
 });

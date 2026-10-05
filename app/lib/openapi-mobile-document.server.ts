@@ -778,6 +778,17 @@ export function buildMobileOpenApiDocument(baseUrl: string) {
 					responses: { "200": { description: "Dock result" } },
 				},
 			},
+			"/api/mobile/v1/widgets/home": {
+				get: {
+					summary:
+						"Home Screen widget snapshot (Live supply, Ate foods, today). Flag ios-home-widgets. date is the device-local YYYY-MM-DD.",
+					security: [{ bearerAuth: [] }],
+					responses: {
+						"200": { description: "Widget snapshot" },
+						"403": { description: "FEATURE_DISABLED" },
+					},
+				},
+			},
 		},
 	};
 }

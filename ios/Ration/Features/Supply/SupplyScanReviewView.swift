@@ -82,14 +82,26 @@ struct SupplyScanReviewView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(AppEnvironment.self) private var env
     let context: SupplyScanReviewContext
+    var catalog: SupplyCatalogResponse?
     var onSuccess: () -> Void = {}
 
     @State private var model: SupplyScanReviewViewModel
+    @State private var showingAddToList = false
+    @State private var newListName = ""
+    @State private var addedMessage: String?
 
-    init(context: SupplyScanReviewContext, onSuccess: @escaping () -> Void = {}) {
+    init(
+        context: SupplyScanReviewContext,
+        catalog: SupplyCatalogResponse? = nil,
+        onSuccess: @escaping () -> Void = {}
+    ) {
         self.context = context
+        self.catalog = catalog
         self.onSuccess = onSuccess
         _model = State(initialValue: SupplyScanReviewViewModel(match: context.match))
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        _newListName = State(initialValue: "Receipt \(formatter.string(from: Date()))")
     }
 
     var body: some View {
@@ -155,9 +167,14 @@ struct SupplyScanReviewView: View {
             }
             .safeAreaInset(edge: .bottom) {
                 VStack(spacing: 8) {
+                    if let addedMessage {
+                        Text(addedMessage)
+                            .font(Typography.caption())
+                            .foregroundStyle(Theme.muted)
+                    }
                     if env.session.clientFlags.isSupplyMultiListsEnabled {
-                        Button("Save reviewed items as list") {
-                            Task { await saveReviewedAsList() }
+                        Button("Add to a list") {
+                            showingAddToList = true
                         }
                         .buttonStyle(SecondaryButtonStyle())
                         .disabled(model.selectedCount == 0 || model.isSubmitting)
@@ -177,6 +194,51 @@ struct SupplyScanReviewView: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
                 .background(Theme.ceramic)
+            }
+            .sheet(isPresented: $showingAddToList) {
+                NavigationStack {
+                    List {
+                        if let live = catalog?.live {
+                            Button("Supply (Live)") {
+                                Task { await saveReviewed(listId: live.id, name: nil, label: "Supply") }
+                            }
+                        }
+                        Section("Your lists") {
+                            ForEach(catalog?.saved ?? []) { summary in
+                                Button(summary.name.capitalized) {
+                                    Task {
+                                        await saveReviewed(
+                                            listId: summary.id,
+                                            name: nil,
+                                            label: summary.name.capitalized
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        Section("New list") {
+                            TextField("List name", text: $newListName)
+                            Button("Save as new list") {
+                                Task {
+                                    await saveReviewed(
+                                        listId: nil,
+                                        name: newListName,
+                                        label: newListName
+                                    )
+                                }
+                            }
+                            .disabled(newListName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        }
+                    }
+                    .navigationTitle("Add to a list")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Cancel") { showingAddToList = false }
+                        }
+                    }
+                }
+                .presentationDetents([.medium, .large])
             }
             .sheet(item: $model.editingItem) { item in
                 ScanItemEditSheet(item: item) { updated in
@@ -337,10 +399,7 @@ struct SupplyScanReviewView: View {
         _ = result
     }
 
-    private func saveReviewedAsList() async {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .medium
-        let name = "Receipt \(formatter.string(from: Date()))"
+    private func saveReviewed(listId: String?, name: String?, label: String) async {
         let items = model.rows.filter(\.selected).map {
             SupplyFromReceiptItem(
                 name: $0.dockName,
@@ -355,10 +414,13 @@ struct SupplyScanReviewView: View {
                 SupplyFromReceiptRequest(
                     scanRequestId: context.requestId,
                     name: name,
+                    listId: listId,
                     items: items
                 )
             )
             Haptics.success()
+            addedMessage = "Added to \(label)"
+            showingAddToList = false
         } catch {
             model.errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
         }

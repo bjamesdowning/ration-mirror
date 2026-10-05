@@ -18,7 +18,10 @@ Quantities respect your global **unit display mode** (`original`, `metric`, `imp
 
 - **Sync / refresh** — Opening **Live** Supply **auto-syncs**. Use **Refresh list** to recompute manually. Saved, Template, and Archived lists never auto-sync from Manifest/Galley/Cargo.
 - **List library** (flag `supply-multi-lists`, default off) — Each kitchen has exactly one Live list named **Supply**. Saved lists and templates are independently shoppable. Archived lists are Saved snapshots (`archivedAt` set). Free includes **3** lists (Live included); Crew includes **25**. Templates and archived history count toward the cap.
-- **Manual add / edit / remove** — Create, change, or delete list lines by hand.
+- **Quick add** — Type or paste several items at once (`butter, eggs, bread` or one per line). `2 lb chicken` sets a quantity. Matching names on that list gain quantity and become unchecked. Live accepts quick add with the library flag off.
+- **Saved lists** (flag `supply-multi-lists`) — Create, rename, and delete a list from the Supply actions menu. **Add all to Live** or **Choose items** copies lines onto Live and leaves the saved list intact. Docking bought items still removes only the checked rows and puts them in Cargo.
+- **Receipt into a list** — After a replenish review, add the selected lines to Live, an existing saved list, or a new list.
+- **Manual add / edit / remove** — Swipe a line to delete it. Check it off while shopping.
 - **Mark purchased** — Check off items while shopping; you can confirm quantity and unit when checking off. Checked items stay until you dock them or complete a receipt scan from Supply.
 - **From meal** — Add missing ingredients for one specific meal onto the list.
 - **Snooze** — Hide an ingredient from future syncs for a period (for example you already have it elsewhere). Snoozed items stay out until they expire or you clear them.

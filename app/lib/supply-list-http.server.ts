@@ -3,6 +3,7 @@ import { handleApiError } from "./error-handler";
 import type { buildWebFlagContext } from "./feature-flags/context.server";
 import { checkRateLimit, rateLimitResponse } from "./rate-limiter.server";
 import {
+	SupplyBulkAddSchema,
 	SupplyCatalogCreateSchema,
 	SupplyCopyToLiveSchema,
 	SupplyFromReceiptSchema,
@@ -10,9 +11,12 @@ import {
 	SupplyListDuplicateSchema,
 	SupplyOperationsBatchSchema,
 } from "./schemas/supply-lists";
+import { getSupplyListById } from "./supply.server";
+import { resolveSupplyListTarget } from "./supply-list-access.server";
 import { parseIfNoneMatch, supplyListEtag } from "./supply-list-dto.server";
 import { assertSupplyMultiListsEnabled } from "./supply-list-flag.server";
 import {
+	addSupplyItemsBulk,
 	applySupplyOperations,
 	archiveSupplyList,
 	copyItemsToLive,
@@ -24,6 +28,7 @@ import {
 	snapshotLiveSupplyList,
 	transferSupplyItems,
 } from "./supply-lists.server";
+import { parseSupplyQuickAdd } from "./supply-quick-add";
 
 type AuthSlice = {
 	env: Env;
@@ -198,10 +203,75 @@ export async function handleSupplyTransfer(
 	}
 }
 
+export async function handleSupplyBulkAdd(
+	auth: AuthSlice,
+	listId: string,
+	body: unknown,
+) {
+	try {
+		const rate = await checkRateLimit(
+			auth.env.RATION_KV,
+			"grocery_mutation",
+			auth.userId,
+		);
+		if (!rate.allowed) {
+			throw rateLimitResponse(
+				rate,
+				"Too many requests. Please try again later.",
+			);
+		}
+		const input = SupplyBulkAddSchema.parse(body);
+		const items = parseSupplyQuickAdd(input.text);
+		if (items.length === 0) {
+			throw data(
+				{
+					error: "No items found. Separate names with commas or new lines.",
+				},
+				{ status: 400 },
+			);
+		}
+		await resolveSupplyListTarget({
+			env: auth.env,
+			organizationId: auth.organizationId,
+			listId,
+			flagContext: auth.flagContext,
+			allowedStates: ["live", "saved"],
+		});
+		return await addSupplyItemsBulk(
+			auth.env.DB,
+			auth.organizationId,
+			listId,
+			items,
+		);
+	} catch (error) {
+		return handleApiError(error);
+	}
+}
+
 export async function handleSupplyFromReceipt(auth: AuthSlice, body: unknown) {
 	try {
 		await assertSupplyMultiListsEnabled(auth.env, auth.flagContext);
 		const input = SupplyFromReceiptSchema.parse(body);
+		if (input.listId) {
+			const counts = await addSupplyItemsBulk(
+				auth.env.DB,
+				auth.organizationId,
+				input.listId,
+				input.items,
+			);
+			const list = await getSupplyListById(
+				auth.env.DB,
+				auth.organizationId,
+				input.listId,
+			);
+			return { list, ...counts };
+		}
+		if (!input.name) {
+			throw data(
+				{ error: "Choose an existing list or a name for a new one" },
+				{ status: 400 },
+			);
+		}
 		const list = await createSupplyListFromReceipt({
 			env: auth.env,
 			organizationId: auth.organizationId,

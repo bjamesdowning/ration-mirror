@@ -715,6 +715,14 @@ export function buildMobileOpenApiDocument(baseUrl: string) {
 					responses: { "200": { description: "Created item" } },
 				},
 			},
+			"/api/mobile/v1/supply/lists/{listId}/bulk-add": {
+				post: {
+					summary:
+						"Add many jot lines (commas or new lines) to a Live or Saved list. Live works with the library flag off.",
+					security: [{ bearerAuth: [] }],
+					responses: { "200": { description: "Added and merged counts" } },
+				},
+			},
 			"/api/mobile/v1/supply/lists/{listId}/items/{itemId}": {
 				patch: {
 					summary: "Update an item on a Live or Saved supply list",
@@ -750,7 +758,8 @@ export function buildMobileOpenApiDocument(baseUrl: string) {
 			},
 			"/api/mobile/v1/supply/lists/from-receipt": {
 				post: {
-					summary: "Save reviewed receipt lines as a Saved supply list",
+					summary:
+						"Save reviewed receipt lines as a new Saved list, or append them to listId",
 					security: [{ bearerAuth: [] }],
 					responses: { "200": { description: "Created list" } },
 				},

@@ -102,10 +102,25 @@ extension RationAPI {
         )
     }
 
-    func addSupplyItemByBarcode(listId: String, barcode: String) async throws -> CreateSupplyItemResponse {
+    func addSupplyItems(listId: String, text: String) async throws -> SupplyBulkAddResponse {
         try await client.post(
-            "supply/lists/\(listId)/barcode",
-            body: SupplyBarcodeRequest(barcode: barcode)
+            "supply/lists/\(listId)/bulk-add",
+            body: SupplyBulkAddRequest(text: text)
+        )
+    }
+
+    func renameSupplyList(id: String, name: String) async throws -> SupplyResponse {
+        try await client.put("supply/lists/\(id)", body: SupplyRenameRequest(name: name))
+    }
+
+    func deleteSupplyList(id: String) async throws -> SupplyDeleteResponse {
+        try await client.delete("supply/lists/\(id)")
+    }
+
+    func copySupplyListToLive(id: String, itemIds: [String]?) async throws -> SupplyResponse {
+        try await client.post(
+            "supply/lists/\(id)/copy-to-live",
+            body: SupplyCopyToLiveRequest(mode: "add_all", itemIds: itemIds)
         )
     }
 
@@ -183,13 +198,6 @@ extension RationAPI {
 
     func resetPurchasedSupplyList(id: String) async throws -> SupplyResponse {
         try await client.post("supply/lists/\(id)/reset-purchased", body: EmptyBody())
-    }
-
-    func copySupplyListToLive(id: String, mode: String = "missing_only") async throws -> SupplyResponse {
-        try await client.post(
-            "supply/lists/\(id)/copy-to-live",
-            body: SupplyCopyToLiveRequest(mode: mode)
-        )
     }
 
     func completeNamedSupplyList(id: String) async throws -> SupplyCompleteResponse {

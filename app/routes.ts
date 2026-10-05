@@ -273,6 +273,10 @@ export default [
 		"routes/api/supply-lists.$id.operations.ts",
 	),
 	route(
+		"api/supply-lists/:id/bulk-add",
+		"routes/api/supply-lists.$id.bulk-add.ts",
+	),
+	route(
 		"api/supply-lists/:id/barcode",
 		"routes/api/supply-lists.$id.barcode.ts",
 	),
@@ -504,6 +508,10 @@ export default [
 	route(
 		"api/mobile/v1/supply/lists/:listId/items/:itemId",
 		"routes/api/mobile/v1.supply.lists.$listId.items.$itemId.ts",
+	),
+	route(
+		"api/mobile/v1/supply/lists/:listId/bulk-add",
+		"routes/api/mobile/v1.supply.lists.$listId.bulk-add.ts",
 	),
 	route(
 		"api/mobile/v1/supply/lists/:listId/barcode",

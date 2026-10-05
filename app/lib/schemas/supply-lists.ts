@@ -56,11 +56,20 @@ export const SupplyReceiptItemSchema = z.object({
 	note: z.string().max(SUPPLY_LIST_NOTE_MAX).optional(),
 });
 
-export const SupplyFromReceiptSchema = z.object({
-	scanRequestId: z.string().min(1).max(128),
-	name: z.string().trim().min(1).max(100),
-	items: z.array(SupplyReceiptItemSchema).min(1).max(SUPPLY_SAVED_ITEM_LIMIT),
-	clientKey: z.string().uuid().optional(),
+export const SupplyFromReceiptSchema = z
+	.object({
+		scanRequestId: z.string().min(1).max(128),
+		name: z.string().trim().min(1).max(100).optional(),
+		listId: z.string().uuid().optional(),
+		items: z.array(SupplyReceiptItemSchema).min(1).max(SUPPLY_SAVED_ITEM_LIMIT),
+		clientKey: z.string().uuid().optional(),
+	})
+	.refine((value) => Boolean(value.listId || value.name), {
+		message: "Choose an existing list or a name for a new one",
+	});
+
+export const SupplyBulkAddSchema = z.object({
+	text: z.string().trim().min(1).max(4000),
 });
 
 export const SupplyStapleSchema = z.object({

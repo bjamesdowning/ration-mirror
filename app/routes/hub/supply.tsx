@@ -37,7 +37,6 @@ import { ReplenishModal } from "~/components/supply/ReplenishModal";
 import { ReplenishReceiptModal } from "~/components/supply/ReplenishReceiptModal";
 import { ShareModal } from "~/components/supply/ShareModal";
 import { SnoozedItemsPanel } from "~/components/supply/SnoozedItemsPanel";
-import { SupplyBarcodeAdd } from "~/components/supply/SupplyBarcodeAdd";
 import { SupplyCollaborationPoll } from "~/components/supply/SupplyCollaborationPoll";
 import { SupplyHorizonPicker } from "~/components/supply/SupplyHorizonPicker";
 import { SupplyLibraryActions } from "~/components/supply/SupplyLibraryActions";
@@ -728,7 +727,6 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 									catalog.capacity.current >= catalog.capacity.limit
 								}
 							/>
-							<SupplyBarcodeAdd listId={displayList.id} />
 							<SupplyCollaborationPoll
 								key={displayList.id}
 								enabled

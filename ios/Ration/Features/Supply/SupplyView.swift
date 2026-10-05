@@ -25,14 +25,20 @@ struct SupplyView: View {
     @State private var supplyWindow: SupplyPlanningWindow?
     @State private var snoozeItem: SupplyItem?
     @State private var paywallContext: PaywallContext?
-    @State private var showingAddItem = false
+    @State private var showingQuickAdd = false
+    @State private var showingLists = false
+    @State private var showingNewList = false
+    @State private var showingRename = false
+    @State private var renameText = ""
+    @State private var showingDeleteConfirm = false
+    @State private var showingDockConfirm = false
+    @State private var choosingForLive = false
+    @State private var selectedForLive: Set<String> = []
     @State private var hasTriggeredAutoSync = false
     @State private var showingReplenishReceipt = false
     @State private var showingSupplyScanCamera = false
     @State private var showingSupplyScanPhotoLibrary = false
     @State private var supplyScanReviewContext: SupplyScanReviewContext?
-    @State private var showingBarcodeAdd = false
-    @State private var barcodeValue = ""
     @State private var scanConsent = AIConsentCoordinator()
 
     private var scanCreditCost: Int {
@@ -66,8 +72,8 @@ struct SupplyView: View {
                                 title: "No supply delta yet",
                                 message: "Add items manually, select meals in Galley, mark Cargo for restock, or plan meals in Manifest."
                             )
-                            Button("Add item") {
-                                showingAddItem = true
+                            Button("Add items") {
+                                showingQuickAdd = true
                             }
                             .buttonStyle(PrimaryButtonStyle())
                             .disabled(!env.network.isOnline)
@@ -92,62 +98,6 @@ struct SupplyView: View {
             }
             .navigationTitle(model.isLiveList ? "Supply" : (model.list?.name ?? "Supply"))
             .toolbar {
-                if model.multiListsEnabled, let organizationId {
-                    ToolbarItem(placement: .topBarLeading) {
-                        Menu {
-                            if let live = model.catalog?.live {
-                                Button("Supply (Live)") {
-                                    Task {
-                                        await model.selectList(
-                                            live,
-                                            api: env.api,
-                                            snapshots: env.snapshots,
-                                            organizationId: organizationId
-                                        )
-                                    }
-                                }
-                            }
-                            ForEach(model.catalog?.saved ?? []) { summary in
-                                Button(summary.name) {
-                                    Task {
-                                        await model.selectList(
-                                            summary,
-                                            api: env.api,
-                                            snapshots: env.snapshots,
-                                            organizationId: organizationId
-                                        )
-                                    }
-                                }
-                            }
-                            ForEach(model.catalog?.templates ?? []) { summary in
-                                Button("\(summary.name) (template)") {
-                                    Task {
-                                        await model.selectList(
-                                            summary,
-                                            api: env.api,
-                                            snapshots: env.snapshots,
-                                            organizationId: organizationId
-                                        )
-                                    }
-                                }
-                            }
-                            ForEach(model.catalog?.archived ?? []) { summary in
-                                Button("\(summary.name) (archived)") {
-                                    Task {
-                                        await model.selectList(
-                                            summary,
-                                            api: env.api,
-                                            snapshots: env.snapshots,
-                                            organizationId: organizationId
-                                        )
-                                    }
-                                }
-                            }
-                        } label: {
-                            Label("Lists", systemImage: "list.bullet")
-                        }
-                    }
-                }
                 GlobalPageToolbar(
                     hasActiveFilters: model.filters.hasActiveFilters,
                     syncDomain: SnapshotDomain.supply,
@@ -272,41 +222,107 @@ struct SupplyView: View {
             .onChange(of: model.paywallContext) { _, ctx in
                 if let ctx { paywallContext = ctx }
             }
-            .sheet(isPresented: $showingAddItem) {
-                SupplyAddItemSheet(
-                    defaultDomain: model.filters.domain?.rawValue ?? "food",
-                    serverError: $model.errorMessage
-                ) { request in
+            .sheet(isPresented: $showingQuickAdd) {
+                SupplyQuickAddSheet(listName: model.isLiveList ? "Supply" : (model.list?.name.capitalized ?? "list")) { text in
                     guard let organizationId else { return false }
-                    let success = await model.addItem(
-                        request,
+                    return await model.addQuickItems(
+                        text: text,
                         api: env.api,
                         snapshots: env.snapshots,
-                        online: env.network.isOnline,
                         organizationId: organizationId
                     )
-                    return success
                 }
             }
-            .alert("Add by barcode", isPresented: $showingBarcodeAdd) {
-                TextField("Barcode", text: $barcodeValue)
-                    .keyboardType(.numberPad)
-                Button("Add") {
-                    let code = barcodeValue
-                    barcodeValue = ""
+            .sheet(isPresented: $showingLists) {
+                SupplyListsSheet(
+                    catalog: model.catalog,
+                    selectedId: model.list?.id
+                ) { summary in
+                    choosingForLive = false
+                    selectedForLive = []
+                    guard let organizationId else { return }
+                    Task {
+                        await model.selectList(
+                            summary,
+                            api: env.api,
+                            snapshots: env.snapshots,
+                            organizationId: organizationId
+                        )
+                    }
+                } onNewList: {
+                    showingNewList = true
+                }
+            }
+            .sheet(isPresented: $showingNewList) {
+                SupplyNewListSheet { name, text in
+                    guard let organizationId else { return false }
+                    return await model.createSavedList(
+                        name: name,
+                        itemText: text,
+                        api: env.api,
+                        snapshots: env.snapshots,
+                        organizationId: organizationId
+                    )
+                }
+            }
+            .alert("Rename list", isPresented: $showingRename) {
+                TextField("Name", text: $renameText)
+                Button("Save") {
+                    let name = renameText
                     Task {
                         guard let organizationId else { return }
-                        _ = await model.addByBarcode(
-                            code,
+                        _ = await model.renameCurrentList(
+                            to: name,
                             api: env.api,
                             snapshots: env.snapshots,
                             organizationId: organizationId
                         )
                     }
                 }
-                Button("Cancel", role: .cancel) { barcodeValue = "" }
+                Button("Cancel", role: .cancel) {}
             } message: {
-                Text("Scan or type a product barcode. Unknown codes still add a named item you can edit.")
+                Text("This only changes the list name. Items stay put.")
+            }
+            .confirmationDialog(
+                "Delete this list?",
+                isPresented: $showingDeleteConfirm,
+                titleVisibility: .visible
+            ) {
+                Button("Delete list", role: .destructive) {
+                    Task {
+                        guard let organizationId else { return }
+                        await model.deleteCurrentList(
+                            api: env.api,
+                            snapshots: env.snapshots,
+                            organizationId: organizationId
+                        )
+                    }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("Items on this list are removed. Live Supply is not affected.")
+            }
+            .confirmationDialog(
+                "Dock bought items to Cargo?",
+                isPresented: $showingDockConfirm,
+                titleVisibility: .visible
+            ) {
+                Button("Dock bought items") {
+                    Task {
+                        guard let organizationId else { return }
+                        await model.dock(
+                            api: env.api,
+                            snapshots: env.snapshots,
+                            online: env.network.isOnline,
+                            organizationId: organizationId,
+                            isCrewMember: env.session.isCrewMember
+                        )
+                        env.notifyCargoDataChanged()
+                    }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("Checked items move into Cargo and leave this list. Unchecked items stay, so a repeat list is not wiped.")
             }
             .sheet(isPresented: $showingReplenishReceipt) {
                 ReplenishReceiptSheet(
@@ -332,7 +348,7 @@ struct SupplyView: View {
                 )
             }
             .sheet(item: $supplyScanReviewContext) { context in
-                SupplyScanReviewView(context: context) {
+                SupplyScanReviewView(context: context, catalog: model.catalog) {
                     Task {
                         guard let organizationId else { return }
                         model.refreshOutcomes = env.refreshOutcomes
@@ -400,6 +416,38 @@ struct SupplyView: View {
                 accessibilityLabel: "Supply actions",
                 disabled: model.isDocking || model.isScanning || !env.network.isOnline
             ) {
+                Button {
+                    showingQuickAdd = true
+                } label: {
+                    Label("Add items", systemImage: "plus")
+                }
+                .disabled(!model.canEditCurrentList)
+                if model.multiListsEnabled {
+                    Button {
+                        showingLists = true
+                    } label: {
+                        Label("Lists", systemImage: "list.bullet")
+                    }
+                    Button {
+                        showingNewList = true
+                    } label: {
+                        Label("New list", systemImage: "square.and.pencil")
+                    }
+                    if !model.isLiveList {
+                        Button {
+                            renameText = model.list?.name ?? ""
+                            showingRename = true
+                        } label: {
+                            Label("Rename list", systemImage: "pencil")
+                        }
+                        .disabled(model.activeListState == "archived")
+                        Button(role: .destructive) {
+                            showingDeleteConfirm = true
+                        } label: {
+                            Label("Delete list", systemImage: "trash")
+                        }
+                    }
+                }
                 if env.session.clientFlags.isAiDockFromReceiptEnabled {
                     Button {
                         showingReplenishReceipt = true
@@ -408,33 +456,11 @@ struct SupplyView: View {
                     }
                 }
                 Button {
-                    Task {
-                        guard let organizationId else { return }
-                        await model.dock(
-                            api: env.api,
-                            snapshots: env.snapshots,
-                            online: env.network.isOnline,
-                            organizationId: organizationId,
-                            isCrewMember: env.session.isCrewMember
-                        )
-                        env.notifyCargoDataChanged()
-                    }
+                    showingDockConfirm = true
                 } label: {
-                    Label("Dock from List", systemImage: "checkmark.circle.fill")
+                    Label("Dock bought items to Cargo", systemImage: "shippingbox.fill")
                 }
-                .disabled(model.purchasedCount == 0 || model.isDocking)
-                if model.multiListsEnabled {
-                    Button {
-                        showingBarcodeAdd = true
-                    } label: {
-                        Label("Add by barcode", systemImage: "barcode.viewfinder")
-                    }
-                }
-                Button {
-                    showingAddItem = true
-                } label: {
-                    Label("Add item", systemImage: "plus")
-                }
+                .disabled(model.purchasedCount == 0 || model.isDocking || !model.canEditCurrentList)
             }
         }
         .task(id: loadTaskKey) {
@@ -484,6 +510,36 @@ struct SupplyView: View {
                             )
                         }
                     }
+                }
+            }
+            if model.multiListsEnabled, !model.isLiveList {
+                Section {
+                    if choosingForLive {
+                        Button(selectedForLive.isEmpty ? "Add selected to Live" : "Add \(selectedForLive.count) to Live") {
+                            let ids = Array(selectedForLive)
+                            choosingForLive = false
+                            selectedForLive = []
+                            Task { await model.addItemsToLive(itemIds: ids, api: env.api) }
+                        }
+                        .disabled(selectedForLive.isEmpty)
+                        Button("Cancel") {
+                            choosingForLive = false
+                            selectedForLive = []
+                        }
+                    } else {
+                        Button("Add all to Live") {
+                            Task { await model.addItemsToLive(itemIds: nil, api: env.api) }
+                        }
+                        .disabled(model.totalCount == 0)
+                        Button("Choose items") {
+                            choosingForLive = true
+                            selectedForLive = []
+                        }
+                        .disabled(model.totalCount == 0)
+                    }
+                } footer: {
+                    Text("Copies onto Live Supply and leaves this list as-is. Check items off, then dock, when you shop this list itself.")
+                        .textCase(nil)
                 }
             }
             if model.totalCount > 0 {
@@ -547,6 +603,15 @@ struct SupplyView: View {
                             }
                         },
                         onSnooze: { snoozeItem = item },
+                        liveSelection: choosingForLive
+                            ? (selectedForLive.contains(item.id), {
+                                if selectedForLive.contains(item.id) {
+                                    selectedForLive.remove(item.id)
+                                } else {
+                                    selectedForLive.insert(item.id)
+                                }
+                            })
+                            : nil,
                         onDelete: {
                             model.runMutation {
                                 await model.deleteItem(item, api: env.api, snapshots: env.snapshots, online: env.network.isOnline, organizationId: organizationId)
@@ -635,6 +700,7 @@ private struct SupplyListItemRow: View {
     let onCheckOff: () -> Void
     let onCheck: () -> Void
     let onSnooze: () -> Void
+    var liveSelection: (selected: Bool, toggle: () -> Void)? = nil
     let onDelete: () -> Void
     @ScaledMetric(relativeTo: .body) private var checkIconPoints: CGFloat = 28
 
@@ -673,6 +739,16 @@ private struct SupplyListItemRow: View {
             )
             .rationCaption()
             .accessibilityHidden(true)
+
+            if let liveSelection {
+                Button(action: liveSelection.toggle) {
+                    Image(systemName: liveSelection.selected ? "checkmark.circle.fill" : "circle")
+                        .foregroundStyle(liveSelection.selected ? Theme.hyperGreen : Theme.muted)
+                }
+                .buttonStyle(.plain)
+                .frame(minWidth: 44, minHeight: 44)
+                .accessibilityLabel(liveSelection.selected ? "Remove \(item.name) from Live copy" : "Add \(item.name) to Live")
+            }
         }
         .accessibilityElement(children: .contain)
         .swipeActions(edge: .leading) {

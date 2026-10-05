@@ -29,6 +29,24 @@ describe("SupplyFromReceiptSchema", () => {
 		});
 		expect(parsed.items).toHaveLength(1);
 	});
+
+	it("accepts an existing list without a new name", () => {
+		const parsed = SupplyFromReceiptSchema.parse({
+			scanRequestId: "scan-1",
+			listId: "11111111-1111-4111-8111-111111111111",
+			items: [{ name: "Milk" }],
+		});
+		expect(parsed.listId).toBe("11111111-1111-4111-8111-111111111111");
+	});
+
+	it("rejects a receipt save with neither list nor name", () => {
+		expect(() =>
+			SupplyFromReceiptSchema.parse({
+				scanRequestId: "scan-1",
+				items: [{ name: "Milk" }],
+			}),
+		).toThrow();
+	});
 });
 
 describe("SupplyOperationsBatchSchema", () => {

@@ -462,6 +462,142 @@ export function mergeSupplyItemQuantities(
 	};
 }
 
+async function runSupplyStatements(
+	d1: ReturnType<typeof drizzle>,
+	// biome-ignore lint/suspicious/noExplicitAny: Drizzle statement types
+	statements: any[],
+) {
+	for (const chunk of chunkArray(statements, 20)) {
+		if (chunk.length === 0) continue;
+		if (chunk.length === 1) {
+			await chunk[0];
+			continue;
+		}
+		// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
+		await d1.batch(chunk as [any, ...any[]]);
+	}
+}
+
+/**
+ * Adds many jot lines at once. Matching name+domain rows gain quantity and
+ * become unchecked so a repeat "milk" shows up to buy again. The source list
+ * is otherwise left in place for the caller.
+ */
+export async function addSupplyItemsBulk(
+	db: D1Database,
+	organizationId: string,
+	listId: string,
+	items: Array<{
+		name: string;
+		quantity: number;
+		unit: string;
+		domain: string;
+	}>,
+): Promise<{ added: number; merged: number }> {
+	if (items.length === 0) return { added: 0, merged: 0 };
+	const list = await loadSupplyListRow(db, organizationId, listId);
+	if (!list) throw new SupplyListNotFoundError();
+	const state = resolveSupplyListState(list);
+	if (!canMutateSupplyItems(state)) {
+		throw new InvalidListStateError(state);
+	}
+
+	const d1 = drizzle(db);
+	const existing = await loadItems(db, listId);
+	const now = new Date();
+	const byKey = new Map(
+		existing.map((item) => [itemIdentity(item.name, item.domain), item]),
+	);
+	const inserts: ReturnType<typeof cloneSupplyItemValues>[] = [];
+	// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch statement types
+	const updates: any[] = [];
+	let added = 0;
+	let merged = 0;
+
+	for (const item of items) {
+		const key = itemIdentity(item.name, item.domain);
+		const base = computeBaseFields(item.quantity, item.unit, item.name);
+		const current = byKey.get(key);
+		if (current) {
+			const mergedQty = mergeSupplyItemQuantities(current, {
+				name: item.name,
+				quantity: item.quantity,
+				unit: item.unit,
+				baseQuantity: base.baseQuantity,
+				baseUnit: base.baseUnit,
+			});
+			updates.push(
+				d1
+					.update(supplyItem)
+					.set({
+						quantity: mergedQty.quantity,
+						unit: mergedQty.unit,
+						baseQuantity: mergedQty.baseQuantity,
+						baseUnit: mergedQty.baseUnit,
+						isPurchased: false,
+						updatedAt: now,
+					})
+					.where(eq(supplyItem.id, current.id)),
+			);
+			byKey.set(key, {
+				...current,
+				quantity: mergedQty.quantity,
+				unit: mergedQty.unit,
+				baseQuantity: mergedQty.baseQuantity,
+				baseUnit: mergedQty.baseUnit,
+				isPurchased: false,
+			});
+			merged += 1;
+		} else {
+			const row = {
+				id: crypto.randomUUID(),
+				listId,
+				name: item.name,
+				quantity: item.quantity,
+				unit: item.unit,
+				baseQuantity: base.baseQuantity,
+				baseUnit: base.baseUnit,
+				domain: item.domain,
+				isPurchased: false,
+				sourceMealId: null,
+				sourceMealIds: [] as string[],
+				sourceOrigins: ["manual"] as Array<
+					"manual" | "manifest" | "galley" | "cargo"
+				>,
+				sourceCargoId: null,
+				note: null,
+				category: null,
+				sortOrder: 0,
+				updatedAt: now,
+			};
+			inserts.push(row);
+			byKey.set(key, row as (typeof existing)[number]);
+			added += 1;
+		}
+	}
+
+	const limit = state === "live" ? 10_000 : SUPPLY_SAVED_ITEM_LIMIT;
+	if (existing.length + inserts.length > limit) {
+		throw new SupplyItemLimitError(limit);
+	}
+
+	const statements = [
+		...updates,
+		...chunkArray(inserts, D1_MAX_SUPPLY_ROWS_PER_STATEMENT).map((chunk) =>
+			d1.insert(supplyItem).values(chunk),
+		),
+		d1
+			.update(supplyList)
+			.set({
+				updatedAt: now,
+				revision: (list.revision ?? 0) + 1,
+			})
+			.where(eq(supplyList.id, listId)),
+	];
+	await runSupplyStatements(d1, statements);
+	return { added, merged };
+}
+
 export async function copyItemsToLive(options: {
 	env: Env;
 	organizationId: string;

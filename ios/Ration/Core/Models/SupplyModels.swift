@@ -269,6 +269,24 @@ struct SupplyDuplicateRequest: Codable, Sendable {
 
 struct SupplyCopyToLiveRequest: Codable, Sendable {
     let mode: String
+    let itemIds: [String]?
+}
+
+struct SupplyBulkAddRequest: Codable, Sendable {
+    let text: String
+}
+
+struct SupplyBulkAddResponse: Codable, Sendable {
+    let added: Int
+    let merged: Int
+}
+
+struct SupplyRenameRequest: Codable, Sendable {
+    let name: String
+}
+
+struct SupplyDeleteResponse: Codable, Sendable {
+    let deleted: Bool
 }
 
 struct SupplyFromReceiptItem: Codable, Sendable {
@@ -280,12 +298,9 @@ struct SupplyFromReceiptItem: Codable, Sendable {
 
 struct SupplyFromReceiptRequest: Codable, Sendable {
     let scanRequestId: String
-    let name: String
+    let name: String?
+    let listId: String?
     let items: [SupplyFromReceiptItem]
-}
-
-struct SupplyBarcodeRequest: Codable, Sendable {
-    let barcode: String
 }
 
 struct SupplyOutboxOperation: Codable, Sendable {

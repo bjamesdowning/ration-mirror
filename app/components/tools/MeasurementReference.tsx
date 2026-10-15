@@ -1,4 +1,6 @@
-// Static measurement reference tables for SEO-indexable content.
+// Measurement reference tables for SEO-indexable content.
+
+import { lookupDensity } from "~/lib/ingredient-density";
 
 type ReferenceRow = { from: string; to: string; value: string };
 
@@ -32,65 +34,64 @@ const WEIGHT_TABLE: ReferenceRow[] = [
 	{ from: "500 grams (g)", to: "pounds", value: "1.102 lb" },
 ];
 
-// Derived from density data: 1 cup of each ingredient in grams
-const BAKING_QUICK_REF: Array<{
+const CUP_ML = 236.588;
+const TBSP_ML = 14.7868;
+const TSP_ML = 4.92892;
+
+/** Ingredients shown in the baking table: label + density lookup key. */
+const BAKING_INGREDIENTS: Array<{ ingredient: string; key: string }> = [
+	{ ingredient: "All-purpose flour", key: "all purpose flour" },
+	{ ingredient: "Bread flour", key: "bread flour" },
+	{ ingredient: "Cake flour", key: "cake flour" },
+	{ ingredient: "Whole wheat flour", key: "whole wheat flour" },
+	{ ingredient: "Almond flour", key: "almond flour" },
+	{ ingredient: "Coconut flour", key: "coconut flour" },
+	{ ingredient: "Cocoa powder", key: "cocoa powder" },
+	{ ingredient: "Cornstarch", key: "cornstarch" },
+	{ ingredient: "Granulated sugar", key: "granulated sugar" },
+	{ ingredient: "Caster sugar", key: "caster sugar" },
+	{ ingredient: "Powdered / icing sugar", key: "powdered sugar" },
+	{ ingredient: "Brown sugar (packed)", key: "brown sugar" },
+	{ ingredient: "Coconut sugar", key: "coconut sugar" },
+	{ ingredient: "Butter", key: "butter" },
+	{ ingredient: "Honey", key: "honey" },
+	{ ingredient: "Maple syrup", key: "maple syrup" },
+	{ ingredient: "Olive oil", key: "olive oil" },
+	{ ingredient: "Rolled oats", key: "rolled oats" },
+	{ ingredient: "White rice (dry)", key: "rice" },
+	{ ingredient: "Baking powder", key: "baking powder" },
+	{ ingredient: "Baking soda", key: "baking soda" },
+	{ ingredient: "Salt (table)", key: "salt" },
+];
+
+function formatGrams(grams: number, decimals: number): string {
+	return `${Number(grams.toFixed(decimals))} g`;
+}
+
+export type BakingReferenceRow = {
 	ingredient: string;
 	cup: string;
 	tbsp: string;
 	tsp: string;
-}> = [
-	{
-		ingredient: "All-purpose flour",
-		cup: "125 g",
-		tbsp: "7.8 g",
-		tsp: "2.6 g",
-	},
-	{ ingredient: "Bread flour", cup: "127 g", tbsp: "8 g", tsp: "2.7 g" },
-	{ ingredient: "Cake flour", cup: "114 g", tbsp: "7.1 g", tsp: "2.4 g" },
-	{
-		ingredient: "Whole wheat flour",
-		cup: "118 g",
-		tbsp: "7.4 g",
-		tsp: "2.5 g",
-	},
-	{ ingredient: "Almond flour", cup: "96 g", tbsp: "6 g", tsp: "2 g" },
-	{ ingredient: "Cocoa powder", cup: "82 g", tbsp: "5.2 g", tsp: "1.7 g" },
-	{ ingredient: "Cornstarch", cup: "90 g", tbsp: "5.6 g", tsp: "1.9 g" },
-	{
-		ingredient: "Granulated sugar",
-		cup: "200 g",
-		tbsp: "12.5 g",
-		tsp: "4.2 g",
-	},
-	{ ingredient: "Caster sugar", cup: "208 g", tbsp: "13 g", tsp: "4.3 g" },
-	{
-		ingredient: "Powdered / icing sugar",
-		cup: "120 g",
-		tbsp: "7.5 g",
-		tsp: "2.5 g",
-	},
-	{
-		ingredient: "Brown sugar (packed)",
-		cup: "220 g",
-		tbsp: "13.8 g",
-		tsp: "4.6 g",
-	},
-	{ ingredient: "Coconut sugar", cup: "200 g", tbsp: "12.5 g", tsp: "4.2 g" },
-	{ ingredient: "Butter (melted)", cup: "227 g", tbsp: "14.2 g", tsp: "4.7 g" },
-	{ ingredient: "Honey", cup: "340 g", tbsp: "21.3 g", tsp: "7.1 g" },
-	{ ingredient: "Maple syrup", cup: "322 g", tbsp: "20.1 g", tsp: "6.7 g" },
-	{ ingredient: "Olive oil", cup: "218 g", tbsp: "13.6 g", tsp: "4.5 g" },
-	{ ingredient: "Rolled oats", cup: "82 g", tbsp: "5.2 g", tsp: "1.7 g" },
-	{
-		ingredient: "White rice (dry)",
-		cup: "201 g",
-		tbsp: "12.6 g",
-		tsp: "4.2 g",
-	},
-	{ ingredient: "Baking powder", cup: "213 g", tbsp: "13.3 g", tsp: "4.4 g" },
-	{ ingredient: "Baking soda", cup: "206 g", tbsp: "12.9 g", tsp: "4.3 g" },
-	{ ingredient: "Salt (table)", cup: "288 g", tbsp: "18 g", tsp: "6 g" },
-];
+};
+
+/** Derived from the same density table the converter uses, so they never drift. */
+export function buildBakingReference(): BakingReferenceRow[] {
+	return BAKING_INGREDIENTS.flatMap(({ ingredient, key }) => {
+		const density = lookupDensity(key);
+		if (density == null) return [];
+		return [
+			{
+				ingredient,
+				cup: formatGrams(density * CUP_ML, 0),
+				tbsp: formatGrams(density * TBSP_ML, 1),
+				tsp: formatGrams(density * TSP_ML, 1),
+			},
+		];
+	});
+}
+
+const BAKING_QUICK_REF = buildBakingReference();
 
 function RefTable({
 	title,
@@ -245,10 +246,10 @@ export function MeasurementReference() {
 					</p>
 					<p>
 						The conversions above use real density values (g/ml) for each
-						ingredient. Flour is approximately 0.53 g/ml; granulated sugar is
-						around 0.85 g/ml; honey is ~1.44 g/ml. The converter above uses
-						these same values to calculate weight↔volume conversions in real
-						time.
+						ingredient. All-purpose flour is approximately 0.53 g/ml; granulated
+						sugar is around 0.85 g/ml; honey is ~1.44 g/ml. The converter above
+						uses these same values to calculate weight↔volume conversions in
+						real time.
 					</p>
 				</div>
 			</section>

@@ -1,5 +1,11 @@
 import { useMemo, useState } from "react";
+import { Link } from "react-router";
 import { lookupDensity } from "~/lib/ingredient-density";
+import {
+	formatConversionResult,
+	parseQuantityInput,
+	quantityInputErrorMessage,
+} from "~/lib/parse-quantity-input";
 import {
 	convertQuantity,
 	convertQuantityWithDensity,
@@ -122,7 +128,11 @@ export const INGREDIENT_CATEGORIES: IngredientCategory[] = [
 			{ label: "Baking powder", key: "baking powder" },
 			{ label: "Baking soda", key: "baking soda" },
 			{ label: "Salt (table)", key: "salt" },
-			{ label: "Kosher salt", key: "kosher salt" },
+			{ label: "Kosher salt (Morton)", key: "morton kosher salt" },
+			{
+				label: "Kosher salt (Diamond Crystal)",
+				key: "diamond crystal kosher salt",
+			},
 			{ label: "Cocoa powder", key: "cocoa powder" },
 			{ label: "Cacao powder", key: "cacao powder" },
 			{ label: "Vanilla extract", key: "vanilla extract" },
@@ -170,14 +180,6 @@ export const INGREDIENT_CATEGORIES: IngredientCategory[] = [
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function formatResult(value: number): string {
-	if (!Number.isFinite(value) || value < 0) return "—";
-	if (value === 0) return "0";
-	// Round to 4 significant figures then strip trailing zeros
-	const parsed = parseFloat(value.toPrecision(4));
-	return parsed.toString();
-}
-
 function isWeightUnit(u: SupportedUnit): boolean {
 	const f = getUnitFamily(u);
 	return f === "weight_metric" || f === "weight_imperial";
@@ -200,12 +202,17 @@ export function UnitConverterForm() {
 	const [quantity, setQuantity] = useState<string>("1");
 	const [fromUnit, setFromUnit] = useState<SupportedUnit>("cup");
 	const [toUnit, setToUnit] = useState<SupportedUnit>("g");
-	const [ingredientKey, setIngredientKey] = useState<string>("");
+	const [ingredientKey, setIngredientKey] =
+		useState<string>("all purpose flour");
 
-	const parsedQty = parseFloat(quantity);
+	const parsedInput = parseQuantityInput(quantity);
+	const parsedQty = parsedInput.ok ? parsedInput.value : null;
+	const inputError = parsedInput.ok
+		? null
+		: quantityInputErrorMessage(parsedInput.reason);
 
 	const conversion = useMemo(() => {
-		if (!Number.isFinite(parsedQty) || parsedQty < 0) {
+		if (parsedQty === null) {
 			return { result: null, error: null, needsIngredient: false };
 		}
 		if (fromUnit === toUnit) {
@@ -285,15 +292,27 @@ export function UnitConverterForm() {
 							</label>
 							<input
 								id="conv-qty"
-								type="number"
+								type="text"
 								inputMode="decimal"
+								autoComplete="off"
+								spellCheck={false}
+								placeholder="e.g. 1, 1.5, 1/2 or 1 ½"
 								value={quantity}
-								min="0"
-								step="any"
 								onChange={(e) => setQuantity(e.target.value)}
 								aria-label="Quantity to convert"
+								aria-invalid={inputError !== null}
+								aria-describedby={inputError ? "conv-qty-error" : undefined}
 								className="w-full bg-platinum rounded-lg px-4 py-3 text-carbon font-mono text-lg focus:ring-2 focus:ring-hyper-green/50 focus:outline-none"
 							/>
+							{inputError && (
+								<p
+									id="conv-qty-error"
+									role="alert"
+									className="mt-2 text-sm text-warning"
+								>
+									{inputError}
+								</p>
+							)}
 						</div>
 						<div>
 							<label
@@ -349,7 +368,7 @@ export function UnitConverterForm() {
 							>
 								{conversion.result !== null ? (
 									<span className="text-hyper-green font-bold">
-										{formatResult(conversion.result)}
+										{formatConversionResult(conversion.result)}
 									</span>
 								) : conversion.needsIngredient ? (
 									<span className="text-muted text-sm">
@@ -431,15 +450,33 @@ export function UnitConverterForm() {
 				{conversion.result !== null && fromUnit !== toUnit && (
 					<div className="mt-6 p-4 rounded-xl bg-hyper-green/10 border border-hyper-green/20 font-mono text-sm text-carbon">
 						<span className="font-bold">
-							{quantity} {fromUnit}
+							{parsedQty !== null
+								? formatConversionResult(parsedQty)
+								: quantity}{" "}
+							{fromUnit}
 						</span>{" "}
 						{selectedIngredientLabel ? (
 							<span className="text-muted">of {selectedIngredientLabel} </span>
 						) : null}
 						<span className="text-muted">= </span>
 						<span className="font-bold text-hyper-green">
-							{formatResult(conversion.result)} {toUnit}
+							{formatConversionResult(conversion.result)} {toUnit}
 						</span>
+					</div>
+				)}
+
+				{conversion.result !== null && fromUnit !== toUnit && (
+					<div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+						<p className="text-sm text-muted leading-relaxed">
+							Converting a whole Meal? Ration does this automatically as you add
+							ingredients, and scales servings too.
+						</p>
+						<Link
+							to="/"
+							className="inline-block shrink-0 text-center px-5 py-2.5 bg-hyper-green text-on-hyper-green font-bold text-xs uppercase tracking-wider rounded-lg hover:shadow-glow transition-shadow"
+						>
+							Try Ration free
+						</Link>
 					</div>
 				)}
 

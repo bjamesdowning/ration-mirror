@@ -4,6 +4,7 @@ import { PublicFooter } from "~/components/shell/PublicFooter";
 import { PublicHeader } from "~/components/shell/PublicHeader";
 import { MeasurementReference } from "~/components/tools/MeasurementReference";
 import { UnitConverterForm } from "~/components/tools/UnitConverterForm";
+import { APP_STORE_URL } from "~/lib/marketing";
 import { canonicalMeta, ogMeta } from "~/lib/seo";
 import { breadcrumbSchema, webAppSchema } from "~/lib/structured-data";
 import type { Route } from "./+types/tools.unit-converter";
@@ -12,7 +13,7 @@ export function meta(_: Route.MetaArgs) {
 	const title =
 		"Cooking Unit Converter — Cups to Grams, Flour, Sugar & More | Ration";
 	const description =
-		"Convert cups to grams, tablespoons to milliliters, ounces to grams, and more — with ingredient-specific density for flour, sugar, butter, honey, and 200+ baking ingredients. Free cooking unit converter.";
+		"Free cooking unit converter. Turn cups into grams, tbsp into ml and oz into grams, with accurate weights for flour, sugar, butter and 80+ ingredients.";
 	return [
 		{ title },
 		{ name: "description", content: description },
@@ -30,7 +31,7 @@ const unitConverterSchemas = [
 	webAppSchema({
 		name: "Ration Cooking Unit Converter",
 		description:
-			"Convert cooking measurements between volume and weight with ingredient-specific density for flour, sugar, butter, and 200+ baking ingredients.",
+			"Convert cooking measurements between volume and weight, using ingredient-specific densities for flour, sugar, butter and 80+ common ingredients.",
 		path: "/tools/unit-converter",
 	}),
 	breadcrumbSchema([
@@ -108,27 +109,42 @@ export default function UnitConverterPage() {
 				<div className="mt-16 glass-panel rounded-2xl p-8 text-center">
 					<div className="w-8 h-[3px] bg-hyper-green rounded-full mx-auto mb-5" />
 					<h2 className="text-display text-xl text-carbon mb-3">
-						Tired of converting manually?
+						Stop converting by hand
 					</h2>
 					<p className="text-muted text-sm max-w-md mx-auto mb-6 leading-relaxed">
-						Ration handles unit conversions automatically when you add
-						ingredients to your Cargo or create recipes in the Galley — weight,
-						volume, and ingredient density built in.
+						Ration keeps your pantry, Meals and shopping list in one place, and
+						it handles cups, grams and ingredient weights for you. It's free to
+						start, on the web and on iPhone.
 					</p>
-					<div className="flex flex-col sm:flex-row gap-3 justify-center">
+					<div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
 						<Link
-							to="/"
+							to="/#signup"
 							className="inline-block px-6 py-3 bg-hyper-green text-on-hyper-green font-bold text-sm uppercase tracking-wider rounded-lg hover:shadow-glow transition-shadow"
 						>
 							Get started free
 						</Link>
+						<a
+							href={APP_STORE_URL}
+							target="_blank"
+							rel="noopener noreferrer"
+							aria-label="Download Ration on the App Store"
+						>
+							<img
+								src="/static/download-on-the-app-store.svg"
+								alt="Download on the App Store"
+								width={140}
+								height={47}
+							/>
+						</a>
+					</div>
+					<p className="mt-5 text-sm">
 						<Link
 							to="/blog"
-							className="inline-block px-6 py-3 btn-secondary font-bold text-sm uppercase tracking-wider rounded-lg border border-carbon/10"
+							className="text-muted underline underline-offset-4 hover:text-hyper-green transition-colors"
 						>
 							Read the blog
 						</Link>
-					</div>
+					</p>
 				</div>
 			</main>
 

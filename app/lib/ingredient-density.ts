@@ -1,6 +1,8 @@
 /**
  * Ingredient density lookup for mass-to-volume conversion.
  * Density values in g/ml. Source: King Arthur Baking, USDA, gramstocups.io.
+ * Picker staples checked against the King Arthur Baking ingredient weight chart
+ * (https://www.kingarthurbaking.com/learn/ingredient-weight-chart), Oct 2026.
  *
  * Use normalizeForMatch(name) for lookup keys. Aliases map variants to canonical keys.
  */
@@ -24,8 +26,8 @@ const DENSITY_CANONICAL: Record<string, DensityGPerMl> = {
 	"plain flour": 0.53,
 	"ap flour": 0.53,
 	"white flour": 0.53,
-	"bread flour": 0.54,
-	"cake flour": 0.48,
+	"bread flour": 0.51,
+	"cake flour": 0.51,
 	"self raising flour": 0.53,
 	"selfraising flour": 0.53,
 	"self rising flour": 0.53,
@@ -37,22 +39,22 @@ const DENSITY_CANONICAL: Record<string, DensityGPerMl> = {
 	semolina: 0.71,
 	"almond flour": 0.41,
 	"almond meal": 0.41,
-	"coconut flour": 0.35,
+	"coconut flour": 0.54,
 	"oat flour": 0.42,
 	"corn flour": 0.48,
-	cornstarch: 0.38,
-	"corn starch": 0.38,
+	cornstarch: 0.47,
+	"corn starch": 0.47,
 	"potato starch": 0.4,
 	"tapioca starch": 0.38,
-	"rice flour": 0.5,
+	"rice flour": 0.6,
 	"buckwheat flour": 0.52,
 	"rye flour": 0.5,
 	"spelt flour": 0.48,
 	"chickpea flour": 0.5,
 	"besan flour": 0.5,
 	"00 flour": 0.53,
-	"strong bread flour": 0.54,
-	"strong flour": 0.54,
+	"strong bread flour": 0.51,
+	"strong flour": 0.51,
 	"pastry flour": 0.5,
 	"graham flour": 0.5,
 
@@ -61,10 +63,10 @@ const DENSITY_CANONICAL: Record<string, DensityGPerMl> = {
 	"white sugar": 0.85,
 	"caster sugar": 0.88,
 	"superfine sugar": 0.88,
-	"powdered sugar": 0.51,
-	"icing sugar": 0.51,
-	"confectioners sugar": 0.51,
-	"brown sugar": 0.93,
+	"powdered sugar": 0.48,
+	"icing sugar": 0.48,
+	"confectioners sugar": 0.48,
+	"brown sugar": 0.9,
 	"light brown sugar": 0.9,
 	"dark brown sugar": 0.93,
 	"demerara sugar": 0.88,
@@ -95,7 +97,7 @@ const DENSITY_CANONICAL: Record<string, DensityGPerMl> = {
 	lard: 0.9,
 	margarine: 0.93,
 	ghee: 0.96,
-	"peanut butter": 1.0,
+	"peanut butter": 1.14,
 	"almond butter": 0.98,
 	tahini: 1.0,
 	"sesame paste": 1.0,
@@ -150,7 +152,10 @@ const DENSITY_CANONICAL: Record<string, DensityGPerMl> = {
 	salt: 1.2,
 	"table salt": 1.2,
 	"sea salt": 1.2,
-	"kosher salt": 1.0,
+	// Kosher salt varies by brand (King Arthur: Morton 16 g/tbsp, Diamond Crystal 8 g/tbsp).
+	"kosher salt": 1.08,
+	"morton kosher salt": 1.08,
+	"diamond crystal kosher salt": 0.54,
 	"flaky salt": 0.9,
 	"cocoa powder": 0.35,
 	"cacao powder": 0.35,
@@ -183,7 +188,7 @@ const DENSITY_CANONICAL: Record<string, DensityGPerMl> = {
 	"risotto rice": 0.85,
 	"arborio rice": 0.85,
 	oats: 0.35,
-	"rolled oats": 0.35,
+	"rolled oats": 0.38,
 	"porridge oats": 0.35,
 	"quick oats": 0.38,
 	oatmeal: 0.35,
@@ -194,7 +199,7 @@ const DENSITY_CANONICAL: Record<string, DensityGPerMl> = {
 	polenta: 0.7,
 	cornmeal: 0.55,
 	grits: 0.55,
-	panko: 0.25,
+	panko: 0.21,
 	breadcrumbs: 0.3,
 	"dried breadcrumbs": 0.25,
 
@@ -204,12 +209,12 @@ const DENSITY_CANONICAL: Record<string, DensityGPerMl> = {
 	"cheddar cheese grated": 0.45,
 	"mozzarella grated": 0.35,
 	"cream cheese": 0.98,
-	ricotta: 0.52,
+	ricotta: 0.96,
 	"feta cheese": 0.55,
 	"blue cheese crumbled": 0.5,
 	"goat cheese": 0.55,
 	mascarpone: 0.95,
-	"cottage cheese": 0.8,
+	"cottage cheese": 0.96,
 
 	// Proteins and spreads
 	mayonnaise: 0.91,
@@ -317,7 +322,6 @@ const DENSITY_ALIASES: Record<string, string> = {
 	"heavy cream": "cream",
 	"double cream": "cream",
 	"single cream": "cream",
-	"greek yogurt": "yogurt",
 	"plain yogurt": "yogurt",
 
 	// Leavening
@@ -335,7 +339,6 @@ const DENSITY_ALIASES: Record<string, string> = {
 	"jasmine rice": "rice",
 	"risotto rice": "rice",
 	"arborio rice": "rice",
-	"rolled oats": "oats",
 	"porridge oats": "oats",
 	oatmeal: "oats",
 	"quick oats": "oats",

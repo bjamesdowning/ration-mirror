@@ -3,10 +3,19 @@ import { JsonLd } from "~/components/seo/JsonLd";
 import { PublicFooter } from "~/components/shell/PublicFooter";
 import { PublicHeader } from "~/components/shell/PublicHeader";
 import { MeasurementReference } from "~/components/tools/MeasurementReference";
+import { OvenTemperatureConverter } from "~/components/tools/OvenTemperatureConverter";
+import {
+	UNIT_CONVERTER_FAQ,
+	UnitConverterFaq,
+} from "~/components/tools/UnitConverterFaq";
 import { UnitConverterForm } from "~/components/tools/UnitConverterForm";
 import { APP_STORE_URL } from "~/lib/marketing";
 import { canonicalMeta, ogMeta } from "~/lib/seo";
-import { breadcrumbSchema, webAppSchema } from "~/lib/structured-data";
+import {
+	breadcrumbSchema,
+	faqSchema,
+	webAppSchema,
+} from "~/lib/structured-data";
 import type { Route } from "./+types/tools.unit-converter";
 
 export function meta(_: Route.MetaArgs) {
@@ -39,6 +48,7 @@ const unitConverterSchemas = [
 		{ name: "Tools", path: "/tools" },
 		{ name: "Unit Converter", path: "/tools/unit-converter" },
 	]),
+	faqSchema(UNIT_CONVERTER_FAQ),
 ];
 
 export default function UnitConverterPage() {
@@ -57,10 +67,11 @@ export default function UnitConverterPage() {
 
 			<PublicHeader breadcrumb="Tools" breadcrumbHref="/tools" />
 
-			<main className="relative z-20 flex-1 max-w-5xl mx-auto w-full px-6 py-14">
-				{/* Hero */}
-				<div className="mb-10">
-					<nav aria-label="Breadcrumb" className="mb-5">
+			<main className="relative z-20 flex flex-1 flex-col max-w-5xl mx-auto w-full px-6 py-6 md:py-14">
+				{/* Hero. On mobile the intro moves below the converter (CSS order only, same
+				    server-rendered HTML) so the result is visible above the fold. */}
+				<div className="order-1 mb-5 md:mb-3">
+					<nav aria-label="Breadcrumb" className="mb-3 md:mb-5">
 						<ol className="flex items-center gap-2 text-xs text-muted font-mono">
 							<li>
 								<Link
@@ -87,26 +98,38 @@ export default function UnitConverterPage() {
 					<span className="text-xs font-bold uppercase tracking-wider text-hyper-green">
 						Utility Bay
 					</span>
-					<h1 className="text-display text-3xl md:text-4xl text-carbon mt-2 mb-3">
+					<h1 className="text-display text-2xl md:text-4xl text-carbon mt-1 md:mt-2">
 						Cooking Unit Converter
 					</h1>
-					<p className="text-muted text-base max-w-2xl leading-relaxed">
-						Convert between cups, grams, ounces, tablespoons, and more. Select
-						an ingredient for precise weight↔volume conversions — because a cup
-						of flour is not the same weight as a cup of sugar.
-					</p>
 				</div>
+				<p className="order-3 mt-6 text-muted text-base max-w-2xl leading-relaxed md:order-2 md:mt-0 md:mb-10">
+					Convert between cups, grams, ounces, tablespoons, and more. Select an
+					ingredient for precise weight↔volume conversions — because a cup of
+					flour is not the same weight as a cup of sugar.
+				</p>
 
 				{/* Converter */}
-				<UnitConverterForm />
+				<div className="order-2 md:order-3">
+					<UnitConverterForm />
+				</div>
+
+				{/* Oven temperature */}
+				<div className="order-4 mt-16">
+					<OvenTemperatureConverter />
+				</div>
 
 				{/* Measurement reference */}
-				<div className="mt-16">
+				<div className="order-4 mt-16">
 					<MeasurementReference />
 				</div>
 
+				{/* FAQ */}
+				<div className="order-4 mt-16">
+					<UnitConverterFaq />
+				</div>
+
 				{/* CTA */}
-				<div className="mt-16 glass-panel rounded-2xl p-8 text-center">
+				<div className="order-4 mt-16 glass-panel rounded-2xl p-8 text-center">
 					<div className="w-8 h-[3px] bg-hyper-green rounded-full mx-auto mb-5" />
 					<h2 className="text-display text-xl text-carbon mb-3">
 						Stop converting by hand

@@ -7,41 +7,16 @@ import {
 	quantityInputErrorMessage,
 } from "~/lib/parse-quantity-input";
 import {
-	convertQuantity,
-	convertQuantityWithDensity,
-	getUnitFamily,
-	type SupportedUnit,
-} from "~/lib/units";
-
-// ─── Cooking-relevant unit groups ─────────────────────────────────────────────
-
-const VOLUME_UNITS: SupportedUnit[] = [
-	"tsp",
-	"tbsp",
-	"fl oz",
-	"cup",
-	"pt",
-	"qt",
-	"gal",
-	"ml",
-	"l",
-];
-const WEIGHT_UNITS: SupportedUnit[] = ["g", "kg", "oz", "lb"];
-const UNIT_LABELS: Record<string, string> = {
-	tsp: "tsp (teaspoon)",
-	tbsp: "tbsp (tablespoon)",
-	"fl oz": "fl oz (fluid ounce)",
-	cup: "cup",
-	pt: "pt (pint)",
-	qt: "qt (quart)",
-	gal: "gal (gallon)",
-	ml: "ml (milliliter)",
-	l: "l (liter)",
-	g: "g (gram)",
-	kg: "kg (kilogram)",
-	oz: "oz (ounce)",
-	lb: "lb (pound)",
-};
+	convertToolUnits,
+	getToolUnit,
+	isCrossKind,
+	TOOL_UNIT_GROUPS,
+	TOOL_UNITS,
+} from "~/lib/tool-units";
+import {
+	type ComboboxIngredient,
+	IngredientCombobox,
+} from "./IngredientCombobox";
 
 // ─── Ingredient catalogue ─────────────────────────────────────────────────────
 
@@ -84,6 +59,8 @@ export const INGREDIENT_CATEGORIES: IngredientCategory[] = [
 			{ label: "Maple syrup", key: "maple syrup" },
 			{ label: "Golden syrup", key: "golden syrup" },
 			{ label: "Molasses", key: "molasses" },
+			{ label: "Corn syrup", key: "corn syrup" },
+			{ label: "Agave syrup", key: "agave syrup" },
 		],
 	},
 	{
@@ -98,6 +75,7 @@ export const INGREDIENT_CATEGORIES: IngredientCategory[] = [
 			{ label: "Lard", key: "lard" },
 			{ label: "Margarine", key: "margarine" },
 			{ label: "Peanut butter", key: "peanut butter" },
+			{ label: "Mayonnaise", key: "mayonnaise" },
 			{ label: "Almond butter", key: "almond butter" },
 			{ label: "Tahini", key: "tahini" },
 		],
@@ -120,6 +98,8 @@ export const INGREDIENT_CATEGORIES: IngredientCategory[] = [
 			{ label: "Lemon juice", key: "lemon juice" },
 			{ label: "Orange juice", key: "orange juice" },
 			{ label: "Soy sauce", key: "soy sauce" },
+			{ label: "Sweetened condensed milk", key: "sweetened condensed milk" },
+			{ label: "Evaporated milk", key: "evaporated milk" },
 		],
 	},
 	{
@@ -153,6 +133,20 @@ export const INGREDIENT_CATEGORIES: IngredientCategory[] = [
 		],
 	},
 	{
+		category: "Chocolate, Nuts & Seeds",
+		items: [
+			{ label: "Chocolate chips", key: "chocolate chips" },
+			{ label: "Mixed nuts", key: "nuts" },
+			{ label: "Ground almonds", key: "ground almonds" },
+			{ label: "Walnuts (chopped)", key: "walnuts chopped" },
+			{ label: "Pecans (chopped)", key: "pecans chopped" },
+			{ label: "Cashews", key: "cashews" },
+			{ label: "Peanuts", key: "peanuts" },
+			{ label: "Hazelnuts", key: "hazelnuts" },
+			{ label: "Pistachios", key: "pistachios" },
+		],
+	},
+	{
 		category: "Cheese & Dairy",
 		items: [
 			{ label: "Cream cheese", key: "cream cheese" },
@@ -180,19 +174,24 @@ export const INGREDIENT_CATEGORIES: IngredientCategory[] = [
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function isWeightUnit(u: SupportedUnit): boolean {
-	const f = getUnitFamily(u);
-	return f === "weight_metric" || f === "weight_imperial";
-}
+const COMBOBOX_INGREDIENTS: ComboboxIngredient[] =
+	INGREDIENT_CATEGORIES.flatMap((cat) =>
+		cat.items.map((item) => ({ ...item, category: cat.category })),
+	);
 
-function isVolumeUnit(u: SupportedUnit): boolean {
-	return getUnitFamily(u) === "volume";
-}
-
-function isCrossFamily(from: SupportedUnit, to: SupportedUnit): boolean {
+function UnitOptions() {
 	return (
-		(isWeightUnit(from) && isVolumeUnit(to)) ||
-		(isVolumeUnit(from) && isWeightUnit(to))
+		<>
+			{TOOL_UNIT_GROUPS.map((group) => (
+				<optgroup key={group} label={group}>
+					{TOOL_UNITS.filter((u) => u.group === group).map((u) => (
+						<option key={u.id} value={u.id}>
+							{u.label}
+						</option>
+					))}
+				</optgroup>
+			))}
+		</>
 	);
 }
 
@@ -200,8 +199,8 @@ function isCrossFamily(from: SupportedUnit, to: SupportedUnit): boolean {
 
 export function UnitConverterForm() {
 	const [quantity, setQuantity] = useState<string>("1");
-	const [fromUnit, setFromUnit] = useState<SupportedUnit>("cup");
-	const [toUnit, setToUnit] = useState<SupportedUnit>("g");
+	const [fromUnit, setFromUnit] = useState<string>("cup");
+	const [toUnit, setToUnit] = useState<string>("g");
 	const [ingredientKey, setIngredientKey] =
 		useState<string>("all purpose flour");
 
@@ -219,32 +218,13 @@ export function UnitConverterForm() {
 			return { result: parsedQty, error: null, needsIngredient: false };
 		}
 
-		const cross = isCrossFamily(fromUnit, toUnit);
+		const cross = isCrossKind(fromUnit, toUnit);
+		const density = ingredientKey ? lookupDensity(ingredientKey) : null;
 
-		if (!cross) {
-			const r = convertQuantity(parsedQty, fromUnit, toUnit);
-			if (r === null) {
-				return {
-					result: null,
-					error:
-						"These units cannot be converted directly. Try selecting an ingredient to enable weight↔volume conversion.",
-					needsIngredient: false,
-				};
-			}
-			return { result: r, error: null, needsIngredient: false };
+		if (cross && !ingredientKey) {
+			return { result: null, error: null, needsIngredient: true };
 		}
-
-		// Cross-family: need ingredient density
-		if (!ingredientKey) {
-			return {
-				result: null,
-				error: null,
-				needsIngredient: true,
-			};
-		}
-
-		const density = lookupDensity(ingredientKey);
-		if (!density) {
+		if (cross && !density) {
 			return {
 				result: null,
 				error:
@@ -253,12 +233,11 @@ export function UnitConverterForm() {
 			};
 		}
 
-		const r = convertQuantityWithDensity(parsedQty, fromUnit, toUnit, density);
+		const r = convertToolUnits(parsedQty, fromUnit, toUnit, density);
 		if (r === null) {
 			return {
 				result: null,
-				error:
-					"Conversion failed. Check that both units are in supported families.",
+				error: "These units cannot be converted directly.",
 				needsIngredient: false,
 			};
 		}
@@ -274,12 +253,12 @@ export function UnitConverterForm() {
 		return null;
 	}, [ingredientKey]);
 
-	const cross = isCrossFamily(fromUnit, toUnit);
+	const cross = isCrossKind(fromUnit, toUnit);
 
 	return (
 		<div className="space-y-8">
 			{/* Converter form */}
-			<div className="glass-panel rounded-2xl p-6 md:p-8">
+			<div className="glass-panel relative z-30 rounded-2xl p-6 md:p-8">
 				<div className="flex flex-col gap-6 md:flex-row md:items-stretch md:gap-8">
 					{/* Left column: Amount + From */}
 					<div className="flex min-w-0 flex-1 flex-col gap-4">
@@ -324,24 +303,11 @@ export function UnitConverterForm() {
 							<select
 								id="conv-from"
 								value={fromUnit}
-								onChange={(e) => setFromUnit(e.target.value as SupportedUnit)}
+								onChange={(e) => setFromUnit(e.target.value)}
 								aria-label="Convert from unit"
 								className="w-full appearance-none rounded-lg bg-platinum px-4 py-3 text-carbon focus:ring-2 focus:ring-hyper-green/50 focus:outline-none"
 							>
-								<optgroup label="Volume">
-									{VOLUME_UNITS.map((u) => (
-										<option key={u} value={u}>
-											{UNIT_LABELS[u] ?? u}
-										</option>
-									))}
-								</optgroup>
-								<optgroup label="Weight">
-									{WEIGHT_UNITS.map((u) => (
-										<option key={u} value={u}>
-											{UNIT_LABELS[u] ?? u}
-										</option>
-									))}
-								</optgroup>
+								<UnitOptions />
 							</select>
 						</div>
 					</div>
@@ -389,24 +355,11 @@ export function UnitConverterForm() {
 							<select
 								id="conv-to"
 								value={toUnit}
-								onChange={(e) => setToUnit(e.target.value as SupportedUnit)}
+								onChange={(e) => setToUnit(e.target.value)}
 								aria-label="Convert to unit"
 								className="w-full appearance-none rounded-lg bg-platinum px-4 py-3 text-carbon focus:ring-2 focus:ring-hyper-green/50 focus:outline-none"
 							>
-								<optgroup label="Volume">
-									{VOLUME_UNITS.map((u) => (
-										<option key={u} value={u}>
-											{UNIT_LABELS[u] ?? u}
-										</option>
-									))}
-								</optgroup>
-								<optgroup label="Weight">
-									{WEIGHT_UNITS.map((u) => (
-										<option key={u} value={u}>
-											{UNIT_LABELS[u] ?? u}
-										</option>
-									))}
-								</optgroup>
+								<UnitOptions />
 							</select>
 						</div>
 					</div>
@@ -414,36 +367,22 @@ export function UnitConverterForm() {
 
 				{/* Ingredient dropdown — shown when weight↔volume, always available for context */}
 				<div className={`mt-6 ${cross ? "opacity-100" : "opacity-60"}`}>
-					<label
-						htmlFor="conv-ingredient"
-						className="text-label text-muted mb-1 block"
-					>
-						Ingredient{" "}
-						{cross && (
-							<span className="font-normal text-muted">
-								(required for weight ↔ volume)
-							</span>
-						)}
-					</label>
-					<select
-						id="conv-ingredient"
-						value={ingredientKey || ""}
-						onChange={(e) => setIngredientKey(e.target.value)}
-						aria-label="Select ingredient for density-based conversion"
-						aria-required={cross}
-						className="w-full appearance-none rounded-lg bg-platinum px-4 py-3 text-carbon focus:ring-2 focus:ring-hyper-green/50 focus:outline-none"
-					>
-						<option value="">Select ingredient…</option>
-						{INGREDIENT_CATEGORIES.map((cat) => (
-							<optgroup key={cat.category} label={cat.category}>
-								{cat.items.map((item) => (
-									<option key={item.key} value={item.key}>
-										{item.label}
-									</option>
-								))}
-							</optgroup>
-						))}
-					</select>
+					<IngredientCombobox
+						ingredients={COMBOBOX_INGREDIENTS}
+						value={ingredientKey}
+						onChange={setIngredientKey}
+						required={cross}
+						label={
+							<>
+								Ingredient{" "}
+								{cross && (
+									<span className="font-normal text-muted">
+										(required for weight ↔ volume)
+									</span>
+								)}
+							</>
+						}
+					/>
 				</div>
 
 				{/* Result summary banner */}
@@ -453,14 +392,15 @@ export function UnitConverterForm() {
 							{parsedQty !== null
 								? formatConversionResult(parsedQty)
 								: quantity}{" "}
-							{fromUnit}
+							{getToolUnit(fromUnit)?.symbol ?? fromUnit}
 						</span>{" "}
 						{selectedIngredientLabel ? (
 							<span className="text-muted">of {selectedIngredientLabel} </span>
 						) : null}
 						<span className="text-muted">= </span>
 						<span className="font-bold text-hyper-green">
-							{formatConversionResult(conversion.result)} {toUnit}
+							{formatConversionResult(conversion.result)}{" "}
+							{getToolUnit(toUnit)?.symbol ?? toUnit}
 						</span>
 					</div>
 				)}

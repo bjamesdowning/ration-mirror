@@ -304,7 +304,7 @@ export function SplashExperience() {
 					<p>
 						What you have, what you can cook, what to buy, and — if you want it
 						— calories and macros from the meals you actually cooked. On iPhone,
-						on the web, or inside Claude and ChatGPT.
+						on the web, or right inside Claude and ChatGPT.
 					</p>
 					<div className="splash-hero-actions">
 						<a

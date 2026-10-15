@@ -100,3 +100,50 @@ describe("isLikelyLiquidIngredient", () => {
 		expect(isLikelyLiquidIngredient("all purpose flour")).toBe(false);
 	});
 });
+
+describe("lookupDensity — corrected picker staples (King Arthur weight chart)", () => {
+	const CUP_ML = 236.588;
+	const gramsPerCup = (name: string) => (lookupDensity(name) ?? 0) * CUP_ML;
+
+	it.each([
+		["ricotta", 0.96],
+		["coconut flour", 0.54],
+		["cornstarch", 0.47],
+		["peanut butter", 1.14],
+		["cottage cheese", 0.96],
+		["rice flour", 0.6],
+		["powdered sugar", 0.48],
+		["icing sugar", 0.48],
+		["bread flour", 0.51],
+		["cake flour", 0.51],
+		["rolled oats", 0.38],
+		["panko", 0.21],
+		["brown sugar", 0.9],
+		["greek yogurt", 1.06],
+		["morton kosher salt", 1.08],
+		["diamond crystal kosher salt", 0.54],
+	])("%s is %d g/ml", (name, density) => {
+		expect(lookupDensity(name)).toBeCloseTo(density);
+	});
+
+	it("keeps generic kosher salt on the Morton value", () => {
+		expect(lookupDensity("kosher salt")).toBeCloseTo(1.08);
+	});
+
+	it("matches King Arthur grams per cup within 5%", () => {
+		const reference: Array<[string, number]> = [
+			["all purpose flour", 120],
+			["bread flour", 120],
+			["cake flour", 120],
+			["coconut flour", 128],
+			["powdered sugar", 113],
+			["brown sugar", 213],
+			["ricotta", 227],
+			["rolled oats", 89],
+			["panko", 50],
+		];
+		for (const [name, grams] of reference) {
+			expect(Math.abs(gramsPerCup(name) - grams) / grams).toBeLessThan(0.05);
+		}
+	});
+});

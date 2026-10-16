@@ -55,9 +55,9 @@ enum WidgetSnapshotLoader {
             cache.statusLine = statusLine
             let now = Date().timeIntervalSince1970
             if let tag {
-                var slice = snapshot.ate
-                slice.tagChoices = cache.snapshot?.ate.tagChoices ?? []
-                cache.ateByTag[tag] = slice
+                var slice = snapshot.eat
+                slice.tagChoices = cache.snapshot?.eat.tagChoices ?? []
+                cache.eatByTag[tag] = slice
                 cache.tagFetchedAt[tag] = now
                 if var base = cache.snapshot {
                     base.supply = snapshot.supply
@@ -65,8 +65,8 @@ enum WidgetSnapshotLoader {
                     cache.snapshot = base
                 } else {
                     var unfiltered = snapshot
-                    unfiltered.ate.foods = []
-                    unfiltered.ate.tagChoices = []
+                    unfiltered.eat.foods = []
+                    unfiltered.eat.tagChoices = []
                     cache.snapshot = unfiltered
                 }
             } else {
@@ -129,7 +129,7 @@ enum WidgetMutations {
         }
     }
 
-    static func eat(_ food: HomeWidgetAteFood) async {
+    static func eat(_ food: HomeWidgetEatFood) async {
         guard food.eatsOneStep else { return }
         let started = await mutate { cache -> Bool in
             guard cache.isReady else { return false }
@@ -159,13 +159,13 @@ enum WidgetMutations {
                     unit: food.unit
                 )
                 if var snapshot = cache.snapshot {
-                    snapshot.ate.foods = replacingQuantity(snapshot.ate.foods, cargoId: food.cargoId, quantity: nextQuantity)
+                    snapshot.eat.foods = replacingQuantity(snapshot.eat.foods, cargoId: food.cargoId, quantity: nextQuantity)
                     cache.snapshot = snapshot
                 }
-                for key in Array(cache.ateByTag.keys) {
-                    guard var slice = cache.ateByTag[key] else { continue }
+                for key in Array(cache.eatByTag.keys) {
+                    guard var slice = cache.eatByTag[key] else { continue }
                     slice.foods = replacingQuantity(slice.foods, cargoId: food.cargoId, quantity: nextQuantity)
-                    cache.ateByTag[key] = slice
+                    cache.eatByTag[key] = slice
                 }
                 cache.statusLine = nil
                 return true
@@ -183,10 +183,10 @@ enum WidgetMutations {
     }
 
     private static func replacingQuantity(
-        _ foods: [HomeWidgetAteFood],
+        _ foods: [HomeWidgetEatFood],
         cargoId: String,
         quantity: Double
-    ) -> [HomeWidgetAteFood] {
+    ) -> [HomeWidgetEatFood] {
         foods.map { $0.cargoId == cargoId ? $0.withQuantity(quantity) : $0 }
     }
 

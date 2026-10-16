@@ -5,7 +5,7 @@ struct HomeWidgetSupplyItem: Codable, Equatable, Sendable, Identifiable {
     let name: String
 }
 
-struct HomeWidgetAteFood: Codable, Equatable, Sendable, Identifiable {
+struct HomeWidgetEatFood: Codable, Equatable, Sendable, Identifiable {
     let cargoId: String
     let name: String
     let action: String
@@ -16,8 +16,8 @@ struct HomeWidgetAteFood: Codable, Equatable, Sendable, Identifiable {
     var id: String { cargoId }
     var eatsOneStep: Bool { action == "eat" }
 
-    func withQuantity(_ quantity: Double) -> HomeWidgetAteFood {
-        HomeWidgetAteFood(
+    func withQuantity(_ quantity: Double) -> HomeWidgetEatFood {
+        HomeWidgetEatFood(
             cargoId: cargoId,
             name: name,
             action: action,
@@ -52,9 +52,9 @@ struct HomeWidgetSnapshot: Codable, Equatable, Sendable {
         var items: [HomeWidgetSupplyItem]
     }
 
-    struct Ate: Codable, Equatable, Sendable {
+    struct Eat: Codable, Equatable, Sendable {
         var available: Bool
-        var foods: [HomeWidgetAteFood]
+        var foods: [HomeWidgetEatFood]
         var tagChoices: [HomeWidgetTagChoice]
     }
 
@@ -72,7 +72,7 @@ struct HomeWidgetSnapshot: Codable, Equatable, Sendable {
     }
 
     var supply: Supply
-    var ate: Ate
+    var eat: Eat
     var today: Today
 }
 
@@ -94,7 +94,7 @@ struct HomeWidgetCache: Codable, Equatable, Sendable {
     var schema: Int
     var state: String
     var snapshot: HomeWidgetSnapshot?
-    var ateByTag: [String: HomeWidgetSnapshot.Ate]
+    var eatByTag: [String: HomeWidgetSnapshot.Eat]
     var fetchedAt: TimeInterval?
     var tagFetchedAt: [String: TimeInterval]
     var statusLine: String?
@@ -116,7 +116,7 @@ struct HomeWidgetCache: Codable, Equatable, Sendable {
                     .init(id: "preview-bread", name: "Bread"),
                 ]
             ),
-            ate: .init(
+            eat: .init(
                 available: true,
                 foods: [
                     .init(cargoId: "preview-bread", name: "Bread", action: "eat", stepQuantity: 1, unit: "slice", quantity: 6),
@@ -139,7 +139,7 @@ struct HomeWidgetCache: Codable, Equatable, Sendable {
                 fat: .init(remaining: 30, goal: 60)
             )
         ),
-        ateByTag: [:],
+        eatByTag: [:],
         fetchedAt: nil,
         tagFetchedAt: [:],
         statusLine: nil,
@@ -155,7 +155,7 @@ struct HomeWidgetCache: Codable, Equatable, Sendable {
             schema: currentSchema,
             state: state,
             snapshot: nil,
-            ateByTag: [:],
+            eatByTag: [:],
             fetchedAt: Date().timeIntervalSince1970,
             tagFetchedAt: [:],
             statusLine: statusLine,

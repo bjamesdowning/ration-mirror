@@ -29,14 +29,14 @@ final class HomeWidgetCopyTests: XCTestCase {
 
     func testSnapshotDecodesWithoutKcal() throws {
         let json = """
-        {"supply":{"uncheckedCount":1,"items":[{"id":"a","name":"Milk"}]},"ate":{"available":false,"foods":[],"tagChoices":[{"slug":"snack","name":"Snack"}]},"today":{"status":"clear","title":null,"slotType":null,"meals":[],"uncheckedSupplyCount":1,"remainingKcal":null,"goalKcal":null,"protein":null,"carbs":null,"fat":null}}
+        {"supply":{"uncheckedCount":1,"items":[{"id":"a","name":"Milk"}]},"eat":{"available":false,"foods":[],"tagChoices":[{"slug":"snack","name":"Snack"}]},"today":{"status":"clear","title":null,"slotType":null,"meals":[],"uncheckedSupplyCount":1,"remainingKcal":null,"goalKcal":null,"protein":null,"carbs":null,"fat":null}}
         """.data(using: .utf8)!
         let snapshot = try JSONDecoder().decode(HomeWidgetSnapshot.self, from: json)
         XCTAssertEqual(snapshot.supply.items.first?.name, "Milk")
         XCTAssertNil(snapshot.today.remainingKcal)
         XCTAssertNil(snapshot.today.protein)
-        XCTAssertEqual(snapshot.ate.tagChoices.first?.slug, "snack")
-        XCTAssertFalse(snapshot.ate.available)
+        XCTAssertEqual(snapshot.eat.tagChoices.first?.slug, "snack")
+        XCTAssertFalse(snapshot.eat.available)
     }
 
     func testAPIBaseAllowsHttpsAndLocalhostOnly() {

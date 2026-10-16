@@ -17,7 +17,7 @@ struct CargoTagEntity: AppEntity, Identifiable {
 
 struct CargoTagQuery: EntityQuery {
     func entities(for identifiers: [CargoTagEntity.ID]) async throws -> [CargoTagEntity] {
-        let choices = HomeWidgetCacheStore.load()?.snapshot?.ate.tagChoices ?? []
+        let choices = HomeWidgetCacheStore.load()?.snapshot?.eat.tagChoices ?? []
         return identifiers.map { id in
             if let match = choices.first(where: { $0.slug == id }) {
                 return CargoTagEntity(id: match.slug, name: match.name)
@@ -27,7 +27,7 @@ struct CargoTagQuery: EntityQuery {
     }
 
     func suggestedEntities() async throws -> [CargoTagEntity] {
-        let choices = HomeWidgetCacheStore.load()?.snapshot?.ate.tagChoices ?? []
+        let choices = HomeWidgetCacheStore.load()?.snapshot?.eat.tagChoices ?? []
         return choices.map { CargoTagEntity(id: $0.slug, name: $0.name) }
     }
 }

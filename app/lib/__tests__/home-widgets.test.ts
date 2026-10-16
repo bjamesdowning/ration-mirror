@@ -2,27 +2,27 @@ import { describe, expect, it } from "vitest";
 import {
 	energyGlance,
 	macroGlance,
-	selectAteFoods,
+	selectEatFoods,
 	selectNextMeal,
 	selectSupplyPreview,
 	selectTodayMeals,
-	widgetAteAction,
+	widgetEatAction,
 } from "../home-widgets";
 
-describe("widgetAteAction", () => {
+describe("widgetEatAction", () => {
 	it("eats one discrete count and opens weight, volume, and dozen", () => {
-		expect(widgetAteAction("slice")).toBe("eat");
-		expect(widgetAteAction(" Pack ")).toBe("eat");
-		expect(widgetAteAction("g")).toBe("open");
-		expect(widgetAteAction("ml")).toBe("open");
-		expect(widgetAteAction("dozen")).toBe("open");
-		expect(widgetAteAction("kg")).toBe("open");
+		expect(widgetEatAction("slice")).toBe("eat");
+		expect(widgetEatAction(" Pack ")).toBe("eat");
+		expect(widgetEatAction("g")).toBe("open");
+		expect(widgetEatAction("ml")).toBe("open");
+		expect(widgetEatAction("dozen")).toBe("open");
+		expect(widgetEatAction("kg")).toBe("open");
 	});
 });
 
-describe("selectAteFoods", () => {
+describe("selectEatFoods", () => {
 	it("prefers one-tap foods and caps the row", () => {
-		const foods = selectAteFoods([
+		const foods = selectEatFoods([
 			{ id: "g", name: "Cheddar", unit: "g" },
 			{ id: "s", name: "Bread", unit: "slice" },
 			{ id: "s", name: "Bread duplicate", unit: "slice" },
@@ -37,7 +37,7 @@ describe("selectAteFoods", () => {
 	});
 
 	it("fills with open-amount foods when count steps are scarce", () => {
-		const foods = selectAteFoods([
+		const foods = selectEatFoods([
 			{ id: "g", name: "Milk", unit: "ml" },
 			{ id: "s", name: "  Ham  ", unit: "slice" },
 		]);

@@ -1,4 +1,4 @@
-/** Discrete units a Home Screen Ate button may eat as one step. Dozen is excluded. */
+/** Discrete units a Home Screen Eat button may eat as one step. Dozen is excluded. */
 const WIDGET_EAT_STEP_UNITS = new Set([
 	"unit",
 	"piece",
@@ -13,21 +13,21 @@ const WIDGET_EAT_STEP_UNITS = new Set([
 ]);
 
 export const WIDGET_SUPPLY_LIMIT = 5;
-export const WIDGET_ATE_LIMIT = 4;
+export const WIDGET_EAT_LIMIT = 4;
 export const WIDGET_TODAY_MEAL_LIMIT = 8;
 const WIDGET_NAME_MAX = 48;
 
-export type WidgetAteAction = "eat" | "open";
+export type WidgetEatAction = "eat" | "open";
 
 export type HomeWidgetSupplyItem = {
 	id: string;
 	name: string;
 };
 
-export type HomeWidgetAteFood = {
+export type HomeWidgetEatFood = {
 	cargoId: string;
 	name: string;
-	action: WidgetAteAction;
+	action: WidgetEatAction;
 	stepQuantity: number;
 	unit: string;
 	quantity: number;
@@ -70,7 +70,7 @@ export function clipWidgetName(raw: string): string {
 }
 
 /** One-tap eat is only for a single discrete count. Weight, volume, and dozen open the sheet. */
-export function widgetAteAction(unit: string): WidgetAteAction {
+export function widgetEatAction(unit: string): WidgetEatAction {
 	const normalized = unit.trim().toLowerCase();
 	return WIDGET_EAT_STEP_UNITS.has(normalized) ? "eat" : "open";
 }
@@ -89,13 +89,13 @@ export function selectSupplyPreview(
 	return preview;
 }
 
-export function selectAteFoods(
+export function selectEatFoods(
 	rows: Array<{ id: string; name: string; unit: string; quantity?: number }>,
-	limit = WIDGET_ATE_LIMIT,
-): HomeWidgetAteFood[] {
+	limit = WIDGET_EAT_LIMIT,
+): HomeWidgetEatFood[] {
 	const seen = new Set<string>();
-	const eat: HomeWidgetAteFood[] = [];
-	const open: HomeWidgetAteFood[] = [];
+	const eat: HomeWidgetEatFood[] = [];
+	const open: HomeWidgetEatFood[] = [];
 	for (const row of rows) {
 		if (!row.id || seen.has(row.id)) continue;
 		seen.add(row.id);
@@ -103,10 +103,10 @@ export function selectAteFoods(
 		if (!name) continue;
 		const unit = row.unit.trim().toLowerCase() || "unit";
 		const quantity = Number(row.quantity);
-		const food: HomeWidgetAteFood = {
+		const food: HomeWidgetEatFood = {
 			cargoId: row.id,
 			name,
-			action: widgetAteAction(unit),
+			action: widgetEatAction(unit),
 			stepQuantity: 1,
 			unit,
 			quantity: Number.isFinite(quantity) && quantity > 0 ? quantity : 0,
@@ -160,9 +160,14 @@ export function selectNextMeal(
 		orderIndex: number;
 		cooked: boolean;
 	}>,
-): { status: HomeWidgetMealStatus; title: string | null; slotType: string | null } {
+): {
+	status: HomeWidgetMealStatus;
+	title: string | null;
+	slotType: string | null;
+} {
 	const named = namedMeals(rows);
-	if (named.length === 0) return { status: "clear", title: null, slotType: null };
+	if (named.length === 0)
+		return { status: "clear", title: null, slotType: null };
 	const next = named.find((row) => !row.cooked);
 	if (!next) return { status: "done", title: null, slotType: null };
 	return { status: "planned", title: next.name, slotType: next.slotType };

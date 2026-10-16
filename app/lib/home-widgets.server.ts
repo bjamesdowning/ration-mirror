@@ -16,14 +16,14 @@ import type { FlagshipEvaluationContext } from "~/lib/feature-flags/context.serv
 import { isFeatureEnabled } from "~/lib/feature-flags/flags.server";
 import {
 	energyGlance,
+	type HomeWidgetMacro,
+	type HomeWidgetTagChoice,
 	macroGlance,
-	selectAteFoods,
+	selectEatFoods,
 	selectNextMeal,
 	selectSupplyPreview,
 	selectTodayMeals,
-	type HomeWidgetMacro,
-	type HomeWidgetTagChoice,
-	WIDGET_ATE_LIMIT,
+	WIDGET_EAT_LIMIT,
 	WIDGET_SUPPLY_LIMIT,
 } from "~/lib/home-widgets";
 import { getNutritionConsentStatus } from "~/lib/nutrition/consent.server";
@@ -34,9 +34,9 @@ export type HomeWidgetSnapshot = {
 		uncheckedCount: number;
 		items: ReturnType<typeof selectSupplyPreview>;
 	};
-	ate: {
+	eat: {
 		available: boolean;
-		foods: ReturnType<typeof selectAteFoods>;
+		foods: ReturnType<typeof selectEatFoods>;
 		tagChoices: HomeWidgetTagChoice[];
 	};
 	today: {
@@ -103,16 +103,16 @@ export async function loadHomeWidgetSnapshot(
 			.limit(WIDGET_SUPPLY_LIMIT);
 	}
 
-	const ateAvailable =
+	const eatAvailable =
 		(await isFeatureEnabled(env, "cargo-quick-eat", flagContext)) &&
 		(await isFeatureEnabled(env, "nutrition-cook-log-split", flagContext));
-	let ateFoods: ReturnType<typeof selectAteFoods> = [];
+	let eatFoods: ReturnType<typeof selectEatFoods> = [];
 	let tagChoices: HomeWidgetTagChoice[] = [];
-	if (ateAvailable) {
+	if (eatAvailable) {
 		const requested = tagSlug?.trim() ?? "";
 		const filtering = requested.length > 0;
 		if (filtering && !isValidTagSlug(requested)) {
-			ateFoods = [];
+			eatFoods = [];
 		} else {
 			const cargoRows = filtering
 				? await d1
@@ -151,7 +151,7 @@ export async function loadHomeWidgetSnapshot(
 						)
 						.orderBy(desc(cargo.updatedAt), desc(cargo.id))
 						.limit(24);
-			ateFoods = selectAteFoods(cargoRows, WIDGET_ATE_LIMIT);
+			eatFoods = selectEatFoods(cargoRows, WIDGET_EAT_LIMIT);
 		}
 		if (!filtering) {
 			tagChoices = await loadFoodTagChoices(d1, organizationId);
@@ -199,9 +199,9 @@ export async function loadHomeWidgetSnapshot(
 			uncheckedCount,
 			items: selectSupplyPreview(supplyItems),
 		},
-		ate: {
-			available: ateAvailable,
-			foods: ateFoods,
+		eat: {
+			available: eatAvailable,
+			foods: eatFoods,
 			tagChoices,
 		},
 		today: {

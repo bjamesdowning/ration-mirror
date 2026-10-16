@@ -40,7 +40,7 @@ struct EatCargoStepIntent: AppIntent {
 
     init() {}
 
-    init(food: HomeWidgetAteFood) {
+    init(food: HomeWidgetEatFood) {
         self.cargoId = food.cargoId
         self.unit = food.unit
         self.foodName = food.name
@@ -48,7 +48,7 @@ struct EatCargoStepIntent: AppIntent {
     }
 
     func perform() async throws -> some IntentResult {
-        let food = HomeWidgetAteFood(
+        let food = HomeWidgetEatFood(
             cargoId: cargoId,
             name: foodName,
             action: "eat",

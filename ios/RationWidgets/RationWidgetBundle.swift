@@ -5,7 +5,7 @@ import WidgetKit
 struct RationWidgetBundle: WidgetBundle {
     var body: some Widget {
         SupplyHomeWidget()
-        AteHomeWidget()
+        EatHomeWidget()
         TodayHomeWidget()
     }
 }

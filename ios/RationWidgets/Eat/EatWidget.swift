@@ -2,10 +2,10 @@ import AppIntents
 import SwiftUI
 import WidgetKit
 
-struct AteHomeWidget: Widget {
+struct EatHomeWidget: Widget {
     var body: some WidgetConfiguration {
         AppIntentConfiguration(
-            kind: "com.mayutic.ration.ate",
+            kind: "com.mayutic.ration.eat",
             intent: EatWidgetConfiguration.self,
             provider: EatWidgetProvider()
         ) { entry in
@@ -99,10 +99,10 @@ struct EatWidgetView: View {
     private var content: some View {
         if tagIsGone {
             WidgetEmptyLine(text: "That tag is gone", palette: palette)
-        } else if let ate {
-            if !ate.available {
+        } else if let eat {
+            if !eat.available {
                 WidgetEmptyLine(text: "Open Cargo to eat", palette: palette)
-            } else if ate.foods.isEmpty {
+            } else if eat.foods.isEmpty {
                 WidgetEmptyLine(
                     text: entry.eatTagName.map { HomeWidgetCopy.taggedEmpty(name: $0) } ?? "Nothing ready to eat",
                     palette: palette
@@ -124,7 +124,7 @@ struct EatWidgetView: View {
         }
     }
 
-    private func glance(_ food: HomeWidgetAteFood) -> some View {
+    private func glance(_ food: HomeWidgetEatFood) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(food.name)
                 .font(WidgetType.title())
@@ -139,7 +139,7 @@ struct EatWidgetView: View {
     }
 
     @ViewBuilder
-    private func row(_ food: HomeWidgetAteFood) -> some View {
+    private func row(_ food: HomeWidgetEatFood) -> some View {
         let saving = entry.cache.inFlightCargoIds.contains(food.cargoId) && !isEaten(food.cargoId)
         if food.eatsOneStep {
             Button(intent: EatCargoStepIntent(food: food)) {
@@ -172,14 +172,14 @@ struct EatWidgetView: View {
         }
     }
 
-    private func detail(for food: HomeWidgetAteFood) -> String {
+    private func detail(for food: HomeWidgetEatFood) -> String {
         if let hold = entry.cache.eatHold, hold.id == food.cargoId, hold.isActive(at: entry.date), let quantity = hold.quantity, let unit = hold.unit {
             return HomeWidgetCopy.eatDetail(quantity: quantity, unit: unit, step: food.stepQuantity)
         }
         return HomeWidgetCopy.eatDetail(quantity: food.quantity, unit: food.unit, step: food.stepQuantity)
     }
 
-    private func accessibility(for food: HomeWidgetAteFood) -> String {
+    private func accessibility(for food: HomeWidgetEatFood) -> String {
         if isEaten(food.cargoId) { return "Ate one \(food.unit) of \(food.name)" }
         return "Eat one \(food.unit) of \(food.name)"
     }
@@ -189,19 +189,19 @@ struct EatWidgetView: View {
         return hold.id == id && hold.isActive(at: entry.date)
     }
 
-    private var ate: HomeWidgetSnapshot.Ate? {
+    private var eat: HomeWidgetSnapshot.Eat? {
         guard entry.cache.isReady else { return nil }
         if let slug = entry.eatTagSlug {
-            return entry.cache.ateByTag[slug]
+            return entry.cache.eatByTag[slug]
         }
-        return entry.cache.snapshot?.ate
+        return entry.cache.snapshot?.eat
     }
 
-    private var foods: [HomeWidgetAteFood] { ate?.foods ?? [] }
+    private var foods: [HomeWidgetEatFood] { eat?.foods ?? [] }
 
     private var tagIsGone: Bool {
         guard let slug = entry.eatTagSlug, entry.cache.isReady else { return false }
-        let choices = entry.cache.snapshot?.ate.tagChoices ?? []
+        let choices = entry.cache.snapshot?.eat.tagChoices ?? []
         guard !choices.isEmpty else { return false }
         let listed = choices.contains { $0.slug == slug }
         return !listed && foods.isEmpty

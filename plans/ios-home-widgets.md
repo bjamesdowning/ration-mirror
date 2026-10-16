@@ -11,7 +11,7 @@ One WidgetKit extension (`com.mayutic.ration.widgets`) with three static widgets
 | Widget | Families | Action |
 | --- | --- | --- |
 | Supply | Small, medium, Lock Screen | Medium: up to five unchecked **Live** rows. A row marks that item purchased. It does not dock to Cargo. “+” and the header open Live with the jot sheet focused so the keyboard (and dictation) can take “butter, eggs, bread”. Lock Screen shows names and a count only. |
-| Ate | Small (2), medium (4) | Count units (unit, piece, slice, can, pack, and the other discrete counts except dozen) eat **1** of that unit via Quick Eat. Grams, millilitres, and dozen open the in-app Quick Eat sheet. One-tap also requires `cargo-quick-eat`. |
+| Eat | Small glance, medium (2), large (4) | Count units (unit, piece, slice, can, pack, and the other discrete counts except dozen) eat **1** of that unit via Quick Eat. Grams, millilitres, and dozen open the in-app Quick Eat sheet. One-tap also requires `cargo-quick-eat`. Edit Widget can limit the list to one cargo tag. |
 | Today | Small, medium | Read-only. Next uncooked meal, or “Nothing planned” / “All cooked”. Medium adds the Live unchecked count and remaining kcal only when goals, Manifest, and intake/goals consent are on. |
 
 No Control Center, Live Activity, or Siri intent. Mutation intents are not discoverable in Shortcuts.
@@ -47,7 +47,7 @@ No new permission prompts, no background modes, no ATS exception, extension API 
 Create the flag disabled (production app `4400dc10-dd7a-44b2-9905-7037fbd26f33`, dev `d2623663-dabd-4f7e-87a9-29339ddef4e6`):
 
 ```bash
-CI=true ./node_modules/.bin/wrangler flagship flags create 4400dc10-dd7a-44b2-9905-7037fbd26f33 ios-home-widgets --type boolean --default-variation off --disabled --description "iOS Home Screen widgets for Supply, Ate, and Today"
+CI=true ./node_modules/.bin/wrangler flagship flags create 4400dc10-dd7a-44b2-9905-7037fbd26f33 ios-home-widgets --type boolean --default-variation off --disabled --description "iOS Home Screen widgets for Supply, Eat, and Today"
 ```
 
-Enable later for iOS `clientVersion` ≥ `1.5.2` only. Ate one-tap also needs `cargo-quick-eat` (and its nutrition parents) on. Install the widget from the Home Screen gallery after that binary is on the phone, then open Ration once so the timeline reloads.
+Enable later for iOS `clientVersion` ≥ `1.5.3` only. Eat one-tap also needs `cargo-quick-eat` (and its nutrition parents) on. Install the widget from the Home Screen gallery after that binary is on the phone, then open Ration once so the timeline reloads.

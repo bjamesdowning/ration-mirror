@@ -158,7 +158,7 @@ export const FLAG_REGISTRY: Record<string, FlagRegistryEntry> = {
 	"ios-home-widgets": {
 		defaultEnabled: false,
 		description:
-			"iOS Home Screen widgets for Supply, Ate, and Today. Snapshot only; checks and Quick Eat stay on their existing routes.",
+			"iOS Home Screen widgets for Supply, Eat, and Today. Snapshot only; checks and Quick Eat stay on their existing routes.",
 		clientVisible: true,
 		clientKey: "iosHomeWidgets",
 	},

@@ -11,7 +11,7 @@ export const UNIT_CONVERTER_FAQ: FaqEntry[] = [
 	{
 		question: "How many grams are in a cup of sugar?",
 		answer:
-			"About 200 g for granulated sugar. Packed brown sugar is about 213 g, and powdered sugar is around 113 g.",
+			"About 200 g for granulated sugar. Packed brown sugar is about 213 g, and powdered sugar is around 114 g.",
 	},
 	{
 		question: "What's the difference between oz and fl oz?",

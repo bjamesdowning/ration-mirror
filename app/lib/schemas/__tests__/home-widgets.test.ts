@@ -17,4 +17,13 @@ describe("HomeWidgetQuerySchema", () => {
 		).toBe(false);
 		expect(HomeWidgetQuerySchema.safeParse({}).success).toBe(false);
 	});
+
+	it("accepts an optional eat tag and treats a blank tag as unset", () => {
+		expect(
+			HomeWidgetQuerySchema.parse({ date: "2026-10-05", tag: "snack" }).tag,
+		).toBe("snack");
+		expect(
+			HomeWidgetQuerySchema.parse({ date: "2026-10-05", tag: null }).tag,
+		).toBeNull();
+	});
 });

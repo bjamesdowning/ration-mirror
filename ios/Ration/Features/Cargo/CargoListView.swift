@@ -157,9 +157,13 @@ struct CargoListView: View {
         .onChange(of: env.deepLinkRouter.cargoEatPending, initial: true) { _, _ in
             applyPendingCargoEatIfNeeded()
         }
+        .onChange(of: env.deepLinkRouter.cargoTagPending, initial: true) { _, _ in
+            applyPendingCargoTagIfNeeded()
+        }
         .onChange(of: currentMainTab) { _, _ in
             applyPendingCargoItemIfNeeded()
             applyPendingCargoEatIfNeeded()
+            applyPendingCargoTagIfNeeded()
         }
         .tabDockAction(tag: .cargo, layer: .root) {
             IconFABMenuCore(systemImage: "plus.circle.fill", accessibilityLabel: "Cargo actions") {
@@ -189,6 +193,12 @@ struct CargoListView: View {
             path = [CargoDetailRoute(id: id)]
         }
         env.deepLinkRouter.acknowledgeCargoItem()
+    }
+
+    private func applyPendingCargoTagIfNeeded() {
+        guard currentMainTab == .cargo, let slug = env.deepLinkRouter.cargoTagPending else { return }
+        env.deepLinkRouter.acknowledgeCargoTag()
+        model.filters.selectedTags = [slug]
     }
 
     private func applyPendingCargoEatIfNeeded() {

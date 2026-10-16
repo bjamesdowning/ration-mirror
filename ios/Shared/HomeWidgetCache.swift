@@ -11,44 +11,98 @@ struct HomeWidgetAteFood: Codable, Equatable, Sendable, Identifiable {
     let action: String
     let stepQuantity: Double
     let unit: String
+    let quantity: Double
 
     var id: String { cargoId }
     var eatsOneStep: Bool { action == "eat" }
+
+    func withQuantity(_ quantity: Double) -> HomeWidgetAteFood {
+        HomeWidgetAteFood(
+            cargoId: cargoId,
+            name: name,
+            action: action,
+            stepQuantity: stepQuantity,
+            unit: unit,
+            quantity: quantity
+        )
+    }
+}
+
+struct HomeWidgetTagChoice: Codable, Equatable, Sendable, Identifiable {
+    let slug: String
+    let name: String
+
+    var id: String { slug }
+}
+
+struct HomeWidgetMeal: Codable, Equatable, Sendable {
+    let name: String
+    let slotType: String
+    let cooked: Bool
+}
+
+struct HomeWidgetMacro: Codable, Equatable, Sendable {
+    let remaining: Int
+    let goal: Int
 }
 
 struct HomeWidgetSnapshot: Codable, Equatable, Sendable {
     struct Supply: Codable, Equatable, Sendable {
-        let uncheckedCount: Int
-        let items: [HomeWidgetSupplyItem]
+        var uncheckedCount: Int
+        var items: [HomeWidgetSupplyItem]
     }
 
     struct Ate: Codable, Equatable, Sendable {
-        let available: Bool
-        let foods: [HomeWidgetAteFood]
+        var available: Bool
+        var foods: [HomeWidgetAteFood]
+        var tagChoices: [HomeWidgetTagChoice]
     }
 
     struct Today: Codable, Equatable, Sendable {
-        let status: String
-        let title: String?
-        let uncheckedSupplyCount: Int
-        let remainingKcal: Int?
-        let goalKcal: Int?
+        var status: String
+        var title: String?
+        var slotType: String?
+        var meals: [HomeWidgetMeal]
+        var uncheckedSupplyCount: Int
+        var remainingKcal: Int?
+        var goalKcal: Int?
+        var protein: HomeWidgetMacro?
+        var carbs: HomeWidgetMacro?
+        var fat: HomeWidgetMacro?
     }
 
-    let supply: Supply
-    let ate: Ate
-    let today: Today
+    var supply: Supply
+    var ate: Ate
+    var today: Today
+}
+
+struct WidgetHold: Codable, Equatable, Sendable {
+    var id: String
+    var name: String
+    var until: TimeInterval
+    var quantity: Double?
+    var unit: String?
+
+    static let duration: TimeInterval = 2
+
+    func isActive(at date: Date) -> Bool {
+        until > date.timeIntervalSince1970
+    }
 }
 
 struct HomeWidgetCache: Codable, Equatable, Sendable {
     var schema: Int
     var state: String
     var snapshot: HomeWidgetSnapshot?
+    var ateByTag: [String: HomeWidgetSnapshot.Ate]
     var fetchedAt: TimeInterval?
+    var tagFetchedAt: [String: TimeInterval]
     var statusLine: String?
     var inFlightCargoIds: [String]
+    var supplyHold: WidgetHold?
+    var eatHold: WidgetHold?
 
-    static let currentSchema = 1
+    static let currentSchema = 2
 
     static let placeholder = HomeWidgetCache(
         schema: currentSchema,
@@ -65,24 +119,51 @@ struct HomeWidgetCache: Codable, Equatable, Sendable {
             ate: .init(
                 available: true,
                 foods: [
-                    .init(cargoId: "preview-bread", name: "Bread", action: "eat", stepQuantity: 1, unit: "slice"),
-                    .init(cargoId: "preview-apple", name: "Apple", action: "eat", stepQuantity: 1, unit: "unit"),
-                ]
+                    .init(cargoId: "preview-bread", name: "Bread", action: "eat", stepQuantity: 1, unit: "slice", quantity: 6),
+                    .init(cargoId: "preview-apple", name: "Apple", action: "eat", stepQuantity: 1, unit: "unit", quantity: 3),
+                ],
+                tagChoices: []
             ),
             today: .init(
                 status: "planned",
                 title: "Lunch",
+                slotType: "lunch",
+                meals: [
+                    .init(name: "Lunch", slotType: "lunch", cooked: false),
+                ],
                 uncheckedSupplyCount: 3,
                 remainingKcal: 640,
-                goalKcal: 2000
+                goalKcal: 2000,
+                protein: .init(remaining: 82, goal: 140),
+                carbs: .init(remaining: 120, goal: 220),
+                fat: .init(remaining: 30, goal: 60)
             )
         ),
+        ateByTag: [:],
         fetchedAt: nil,
+        tagFetchedAt: [:],
         statusLine: nil,
-        inFlightCargoIds: []
+        inFlightCargoIds: [],
+        supplyHold: nil,
+        eatHold: nil
     )
 
     var isReady: Bool { state == "ready" && snapshot != nil }
+
+    static func empty(state: String, statusLine: String?) -> HomeWidgetCache {
+        HomeWidgetCache(
+            schema: currentSchema,
+            state: state,
+            snapshot: nil,
+            ateByTag: [:],
+            fetchedAt: Date().timeIntervalSince1970,
+            tagFetchedAt: [:],
+            statusLine: statusLine,
+            inFlightCargoIds: [],
+            supplyHold: nil,
+            eatHold: nil
+        )
+    }
 }
 
 enum HomeWidgetCacheStore {
@@ -141,5 +222,67 @@ enum HomeWidgetCopy {
             return "\(remainingKcal) kcal left"
         }
         return "\(-remainingKcal) kcal over"
+    }
+
+    static func macroLine(remaining: Int) -> String {
+        if remaining >= 0 {
+            return "\(remaining) g left"
+        }
+        return "\(-remaining) g over"
+    }
+
+    static func slotLabel(_ slotType: String?) -> String? {
+        guard let slotType else { return nil }
+        switch slotType.lowercased() {
+        case "breakfast": return "Breakfast"
+        case "lunch": return "Lunch"
+        case "dinner": return "Dinner"
+        case "snack": return "Snack"
+        default:
+            guard !slotType.isEmpty else { return nil }
+            return slotType.prefix(1).uppercased() + slotType.dropFirst()
+        }
+    }
+
+    static func calmLine(for state: String) -> String {
+        switch state {
+        case "signedOut": return "Open Ration to sign in"
+        case "disabled": return "Widgets are turned off"
+        default: return "Open Ration"
+        }
+    }
+
+    static func unitPhrase(count: Double, unit: String) -> String {
+        let amount: String
+        if count.rounded() == count {
+            amount = String(Int(count))
+        } else {
+            amount = String(format: "%g", count)
+        }
+        return "\(amount) \(plural(unit, count: count))"
+    }
+
+    static func eatDetail(quantity: Double, unit: String, step: Double) -> String {
+        let take = unitPhrase(count: step, unit: unit)
+        guard quantity > 0 else { return take }
+        return "\(unitPhrase(count: quantity, unit: unit)) · take \(Int(step.rounded()))"
+    }
+
+    static func taggedEmpty(name: String) -> String {
+        "Nothing tagged \(name)"
+    }
+
+    static func taggedSource(name: String) -> String {
+        "Tagged \(name)"
+    }
+
+    private static func plural(_ unit: String, count: Double) -> String {
+        guard abs(count - 1) > 0.001 else { return unit }
+        switch unit {
+        case "bunch": return "bunches"
+        default:
+            if unit.hasSuffix("s") { return unit }
+            return unit + "s"
+        }
     }
 }

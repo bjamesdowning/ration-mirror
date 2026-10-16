@@ -14,6 +14,7 @@ const WIDGET_EAT_STEP_UNITS = new Set([
 
 export const WIDGET_SUPPLY_LIMIT = 5;
 export const WIDGET_ATE_LIMIT = 4;
+export const WIDGET_TODAY_MEAL_LIMIT = 8;
 const WIDGET_NAME_MAX = 48;
 
 export type WidgetAteAction = "eat" | "open";
@@ -29,6 +30,23 @@ export type HomeWidgetAteFood = {
 	action: WidgetAteAction;
 	stepQuantity: number;
 	unit: string;
+	quantity: number;
+};
+
+export type HomeWidgetTagChoice = {
+	slug: string;
+	name: string;
+};
+
+export type HomeWidgetMeal = {
+	name: string;
+	slotType: string;
+	cooked: boolean;
+};
+
+export type HomeWidgetMacro = {
+	remaining: number;
+	goal: number;
 };
 
 export type HomeWidgetMealStatus = "clear" | "planned" | "done";
@@ -72,7 +90,7 @@ export function selectSupplyPreview(
 }
 
 export function selectAteFoods(
-	rows: Array<{ id: string; name: string; unit: string }>,
+	rows: Array<{ id: string; name: string; unit: string; quantity?: number }>,
 	limit = WIDGET_ATE_LIMIT,
 ): HomeWidgetAteFood[] {
 	const seen = new Set<string>();
@@ -84,17 +102,55 @@ export function selectAteFoods(
 		const name = clipWidgetName(row.name);
 		if (!name) continue;
 		const unit = row.unit.trim().toLowerCase() || "unit";
+		const quantity = Number(row.quantity);
 		const food: HomeWidgetAteFood = {
 			cargoId: row.id,
 			name,
 			action: widgetAteAction(unit),
 			stepQuantity: 1,
 			unit,
+			quantity: Number.isFinite(quantity) && quantity > 0 ? quantity : 0,
 		};
 		if (food.action === "eat") eat.push(food);
 		else open.push(food);
 	}
 	return [...eat, ...open].slice(0, limit);
+}
+
+function namedMeals(
+	rows: Array<{
+		name: string;
+		slotType: string;
+		orderIndex: number;
+		cooked: boolean;
+	}>,
+) {
+	return rows
+		.map((row) => ({ ...row, name: clipWidgetName(row.name) }))
+		.filter((row) => row.name.length > 0)
+		.sort((a, b) => {
+			const rank = (SLOT_RANK[a.slotType] ?? 9) - (SLOT_RANK[b.slotType] ?? 9);
+			if (rank !== 0) return rank;
+			return a.orderIndex - b.orderIndex;
+		});
+}
+
+export function selectTodayMeals(
+	rows: Array<{
+		name: string;
+		slotType: string;
+		orderIndex: number;
+		cooked: boolean;
+	}>,
+	limit = WIDGET_TODAY_MEAL_LIMIT,
+): HomeWidgetMeal[] {
+	return namedMeals(rows)
+		.slice(0, limit)
+		.map((row) => ({
+			name: row.name,
+			slotType: row.slotType,
+			cooked: row.cooked,
+		}));
 }
 
 export function selectNextMeal(
@@ -104,21 +160,12 @@ export function selectNextMeal(
 		orderIndex: number;
 		cooked: boolean;
 	}>,
-): { status: HomeWidgetMealStatus; title: string | null } {
-	const named = rows
-		.map((row) => ({ ...row, name: clipWidgetName(row.name) }))
-		.filter((row) => row.name.length > 0);
-	if (named.length === 0) return { status: "clear", title: null };
-	const uncooked = named
-		.filter((row) => !row.cooked)
-		.sort((a, b) => {
-			const rank = (SLOT_RANK[a.slotType] ?? 9) - (SLOT_RANK[b.slotType] ?? 9);
-			if (rank !== 0) return rank;
-			return a.orderIndex - b.orderIndex;
-		});
-	const next = uncooked[0];
-	if (!next) return { status: "done", title: null };
-	return { status: "planned", title: next.name };
+): { status: HomeWidgetMealStatus; title: string | null; slotType: string | null } {
+	const named = namedMeals(rows);
+	if (named.length === 0) return { status: "clear", title: null, slotType: null };
+	const next = named.find((row) => !row.cooked);
+	if (!next) return { status: "done", title: null, slotType: null };
+	return { status: "planned", title: next.name, slotType: next.slotType };
 }
 
 /** Signed remaining energy. Null when the person has no positive goal. */
@@ -133,5 +180,18 @@ export function energyGlance(
 	return {
 		remainingKcal: Math.round(goalKcal - consumedKcal),
 		goalKcal: Math.round(goalKcal),
+	};
+}
+
+/** Signed remaining grams. Null when that macro has no positive goal. */
+export function macroGlance(
+	goal: number | null,
+	consumed: number,
+): HomeWidgetMacro | null {
+	if (goal == null || !Number.isFinite(goal) || goal <= 0) return null;
+	if (!Number.isFinite(consumed) || consumed < 0) return null;
+	return {
+		remaining: Math.round(goal - consumed),
+		goal: Math.round(goal),
 	};
 }

@@ -2,6 +2,7 @@ import { and, asc, desc, eq, isNull, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import {
 	cargo,
+	cargoTag,
 	meal,
 	mealPlan,
 	mealPlanEntry,
@@ -9,18 +10,24 @@ import {
 	nutritionIntake,
 	supplyItem,
 	supplyList,
+	tag,
 } from "~/db/schema";
 import type { FlagshipEvaluationContext } from "~/lib/feature-flags/context.server";
 import { isFeatureEnabled } from "~/lib/feature-flags/flags.server";
 import {
 	energyGlance,
+	macroGlance,
 	selectAteFoods,
 	selectNextMeal,
 	selectSupplyPreview,
+	selectTodayMeals,
+	type HomeWidgetMacro,
+	type HomeWidgetTagChoice,
 	WIDGET_ATE_LIMIT,
 	WIDGET_SUPPLY_LIMIT,
 } from "~/lib/home-widgets";
 import { getNutritionConsentStatus } from "~/lib/nutrition/consent.server";
+import { isValidTagSlug } from "~/lib/tags";
 
 export type HomeWidgetSnapshot = {
 	supply: {
@@ -30,13 +37,19 @@ export type HomeWidgetSnapshot = {
 	ate: {
 		available: boolean;
 		foods: ReturnType<typeof selectAteFoods>;
+		tagChoices: HomeWidgetTagChoice[];
 	};
 	today: {
 		status: "clear" | "planned" | "done";
 		title: string | null;
+		slotType: string | null;
+		meals: ReturnType<typeof selectTodayMeals>;
 		uncheckedSupplyCount: number;
 		remainingKcal: number | null;
 		goalKcal: number | null;
+		protein: HomeWidgetMacro | null;
+		carbs: HomeWidgetMacro | null;
+		fat: HomeWidgetMacro | null;
 	};
 };
 
@@ -51,6 +64,7 @@ export async function loadHomeWidgetSnapshot(
 	organizationId: string,
 	userId: string,
 	date: string,
+	tagSlug: string | null = null,
 ): Promise<HomeWidgetSnapshot> {
 	const d1 = drizzle(db);
 	const [live] = await d1
@@ -93,20 +107,55 @@ export async function loadHomeWidgetSnapshot(
 		(await isFeatureEnabled(env, "cargo-quick-eat", flagContext)) &&
 		(await isFeatureEnabled(env, "nutrition-cook-log-split", flagContext));
 	let ateFoods: ReturnType<typeof selectAteFoods> = [];
+	let tagChoices: HomeWidgetTagChoice[] = [];
 	if (ateAvailable) {
-		const cargoRows = await d1
-			.select({
-				id: cargo.id,
-				name: cargo.name,
-				unit: cargo.unit,
-			})
-			.from(cargo)
-			.where(
-				and(eq(cargo.organizationId, organizationId), eq(cargo.domain, "food")),
-			)
-			.orderBy(desc(cargo.updatedAt), desc(cargo.id))
-			.limit(24);
-		ateFoods = selectAteFoods(cargoRows, WIDGET_ATE_LIMIT);
+		const requested = tagSlug?.trim() ?? "";
+		const filtering = requested.length > 0;
+		if (filtering && !isValidTagSlug(requested)) {
+			ateFoods = [];
+		} else {
+			const cargoRows = filtering
+				? await d1
+						.select({
+							id: cargo.id,
+							name: cargo.name,
+							unit: cargo.unit,
+							quantity: cargo.quantity,
+						})
+						.from(cargo)
+						.innerJoin(cargoTag, eq(cargoTag.cargoId, cargo.id))
+						.innerJoin(tag, eq(tag.id, cargoTag.tagId))
+						.where(
+							and(
+								eq(cargo.organizationId, organizationId),
+								eq(cargo.domain, "food"),
+								eq(tag.organizationId, organizationId),
+								eq(tag.slug, requested),
+							),
+						)
+						.orderBy(desc(cargo.updatedAt), desc(cargo.id))
+						.limit(24)
+				: await d1
+						.select({
+							id: cargo.id,
+							name: cargo.name,
+							unit: cargo.unit,
+							quantity: cargo.quantity,
+						})
+						.from(cargo)
+						.where(
+							and(
+								eq(cargo.organizationId, organizationId),
+								eq(cargo.domain, "food"),
+							),
+						)
+						.orderBy(desc(cargo.updatedAt), desc(cargo.id))
+						.limit(24);
+			ateFoods = selectAteFoods(cargoRows, WIDGET_ATE_LIMIT);
+		}
+		if (!filtering) {
+			tagChoices = await loadFoodTagChoices(d1, organizationId);
+		}
 	}
 
 	const meals = await d1
@@ -135,7 +184,7 @@ export async function loadHomeWidgetSnapshot(
 		})),
 	);
 
-	const energy = await loadEnergyGlance(
+	const nutrition = await loadNutritionGlance(
 		d1,
 		db,
 		env,
@@ -153,18 +202,60 @@ export async function loadHomeWidgetSnapshot(
 		ate: {
 			available: ateAvailable,
 			foods: ateFoods,
+			tagChoices,
 		},
 		today: {
 			status: nextMeal.status,
 			title: nextMeal.title,
+			slotType: nextMeal.slotType,
+			meals: selectTodayMeals(
+				meals.map((row) => ({
+					name: row.name,
+					slotType: row.slotType,
+					orderIndex: row.orderIndex,
+					cooked: row.cookedAt != null,
+				})),
+			),
 			uncheckedSupplyCount: uncheckedCount,
-			remainingKcal: energy?.remainingKcal ?? null,
-			goalKcal: energy?.goalKcal ?? null,
+			remainingKcal: nutrition.energy?.remainingKcal ?? null,
+			goalKcal: nutrition.energy?.goalKcal ?? null,
+			protein: nutrition.protein,
+			carbs: nutrition.carbs,
+			fat: nutrition.fat,
 		},
 	};
 }
 
-async function loadEnergyGlance(
+async function loadFoodTagChoices(
+	d1: ReturnType<typeof drizzle>,
+	organizationId: string,
+): Promise<HomeWidgetTagChoice[]> {
+	const rows = await d1
+		.selectDistinct({ slug: tag.slug, name: tag.name })
+		.from(cargoTag)
+		.innerJoin(tag, eq(cargoTag.tagId, tag.id))
+		.innerJoin(cargo, eq(cargoTag.cargoId, cargo.id))
+		.where(
+			and(eq(cargo.organizationId, organizationId), eq(cargo.domain, "food")),
+		)
+		.orderBy(asc(tag.name))
+		.limit(200);
+	return rows
+		.map((row) => ({
+			slug: row.slug.trim().toLowerCase(),
+			name: row.name.trim(),
+		}))
+		.filter((row) => row.slug.length > 0 && row.name.length > 0);
+}
+
+const emptyNutrition = {
+	energy: null,
+	protein: null,
+	carbs: null,
+	fat: null,
+};
+
+async function loadNutritionGlance(
 	d1: ReturnType<typeof drizzle>,
 	db: D1Database,
 	env: Env,
@@ -178,19 +269,22 @@ async function loadEnergyGlance(
 		isFeatureEnabled(env, "nutrition-goals", flagContext),
 		isFeatureEnabled(env, "nutrition-manifest", flagContext),
 	]);
-	if (!engine || !goalsOn || !manifestOn) return null;
+	if (!engine || !goalsOn || !manifestOn) return emptyNutrition;
 
 	const [goalsConsent, intakeConsent] = await Promise.all([
 		getNutritionConsentStatus(db, userId, "goals"),
 		getNutritionConsentStatus(db, userId, "intake"),
 	]);
 	if (goalsConsent.state !== "active" || intakeConsent.state !== "active") {
-		return null;
+		return emptyNutrition;
 	}
 
 	const goalRows = await d1
 		.select({
 			dailyEnergyKcal: nutritionGoal.dailyEnergyKcal,
+			proteinG: nutritionGoal.proteinG,
+			carbsG: nutritionGoal.carbsG,
+			fatG: nutritionGoal.fatG,
 			effectiveFrom: nutritionGoal.effectiveFrom,
 			effectiveTo: nutritionGoal.effectiveTo,
 		})
@@ -203,7 +297,7 @@ async function loadEnergyGlance(
 			row.effectiveFrom <= date &&
 			(row.effectiveTo == null || row.effectiveTo >= date),
 	);
-	if (goal?.dailyEnergyKcal == null) return null;
+	if (!goal) return emptyNutrition;
 
 	const crossOrg =
 		(await isFeatureEnabled(env, "nutrition-cross-org-diary", flagContext)) &&
@@ -218,10 +312,17 @@ async function loadEnergyGlance(
 	}
 	const [sumRow] = await d1
 		.select({
-			total: sql<number>`coalesce(sum(${nutritionIntake.energyKcal}), 0)`,
+			energy: sql<number>`coalesce(sum(${nutritionIntake.energyKcal}), 0)`,
+			protein: sql<number>`coalesce(sum(${nutritionIntake.proteinG}), 0)`,
+			carbs: sql<number>`coalesce(sum(${nutritionIntake.carbsG}), 0)`,
+			fat: sql<number>`coalesce(sum(${nutritionIntake.fatG}), 0)`,
 		})
 		.from(nutritionIntake)
 		.where(and(...intakeWhere));
-	const consumed = Number(sumRow?.total ?? 0);
-	return energyGlance(goal.dailyEnergyKcal, consumed);
+	return {
+		energy: energyGlance(goal.dailyEnergyKcal, Number(sumRow?.energy ?? 0)),
+		protein: macroGlance(goal.proteinG, Number(sumRow?.protein ?? 0)),
+		carbs: macroGlance(goal.carbsG, Number(sumRow?.carbs ?? 0)),
+		fat: macroGlance(goal.fatG, Number(sumRow?.fat ?? 0)),
+	};
 }

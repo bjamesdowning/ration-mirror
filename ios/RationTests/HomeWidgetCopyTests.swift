@@ -19,15 +19,23 @@ final class HomeWidgetCopyTests: XCTestCase {
         XCTAssertNil(HomeWidgetCopy.energyLine(remainingKcal: nil))
         XCTAssertEqual(HomeWidgetCopy.energyLine(remainingKcal: 640), "640 kcal left")
         XCTAssertEqual(HomeWidgetCopy.energyLine(remainingKcal: -40), "40 kcal over")
+        XCTAssertEqual(HomeWidgetCopy.macroLine(remaining: 82), "82 g left")
+        XCTAssertEqual(HomeWidgetCopy.macroLine(remaining: -12), "12 g over")
+        XCTAssertEqual(HomeWidgetCopy.eatDetail(quantity: 6, unit: "slice", step: 1), "6 slices · take 1")
+        XCTAssertEqual(HomeWidgetCopy.eatDetail(quantity: 0, unit: "slice", step: 1), "1 slice")
+        XCTAssertEqual(HomeWidgetCopy.slotLabel("snack"), "Snack")
+        XCTAssertEqual(HomeWidgetCopy.taggedEmpty(name: "Snack"), "Nothing tagged Snack")
     }
 
     func testSnapshotDecodesWithoutKcal() throws {
         let json = """
-        {"supply":{"uncheckedCount":1,"items":[{"id":"a","name":"Milk"}]},"ate":{"available":false,"foods":[]},"today":{"status":"clear","title":null,"uncheckedSupplyCount":1,"remainingKcal":null,"goalKcal":null}}
+        {"supply":{"uncheckedCount":1,"items":[{"id":"a","name":"Milk"}]},"ate":{"available":false,"foods":[],"tagChoices":[{"slug":"snack","name":"Snack"}]},"today":{"status":"clear","title":null,"slotType":null,"meals":[],"uncheckedSupplyCount":1,"remainingKcal":null,"goalKcal":null,"protein":null,"carbs":null,"fat":null}}
         """.data(using: .utf8)!
         let snapshot = try JSONDecoder().decode(HomeWidgetSnapshot.self, from: json)
         XCTAssertEqual(snapshot.supply.items.first?.name, "Milk")
         XCTAssertNil(snapshot.today.remainingKcal)
+        XCTAssertNil(snapshot.today.protein)
+        XCTAssertEqual(snapshot.ate.tagChoices.first?.slug, "snack")
         XCTAssertFalse(snapshot.ate.available)
     }
 

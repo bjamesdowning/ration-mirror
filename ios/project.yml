@@ -88,6 +88,11 @@ targets:
     sources:
       - path: RationWidgets
       - path: Shared
+      - path: Ration/Resources/Fonts
+        includes:
+          - SpaceMono-Regular.ttf
+          - SpaceMono-Bold.ttf
+        buildPhase: resources
     entitlements:
       path: RationWidgets/RationWidgets.entitlements
       properties:

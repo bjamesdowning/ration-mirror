@@ -16,7 +16,8 @@ export function isRealISODate(value: string): boolean {
 	);
 }
 
-/** Device-local calendar day for the Home Screen widget snapshot. */
+/** Device-local calendar day for the Home Screen widget snapshot. `tag` filters Eat only. */
 export const HomeWidgetQuerySchema = z.object({
 	date: z.string().refine(isRealISODate, "Expected YYYY-MM-DD"),
+	tag: z.string().trim().min(1).max(80).nullable().optional(),
 });

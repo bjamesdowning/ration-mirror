@@ -31,6 +31,7 @@ final class DeepLinkRouter {
     private(set) var supplyComposePending = false
     private(set) var cargoItemPending: String?
     private(set) var cargoEatPending: String?
+    private(set) var cargoTagPending: String?
     private(set) var mealPending: String?
 
     var pending: AppEnvironment.DeepLinkDestination? {
@@ -61,6 +62,7 @@ final class DeepLinkRouter {
         supplyComposePending = false
         cargoItemPending = nil
         cargoEatPending = nil
+        cargoTagPending = nil
         mealPending = nil
     }
 
@@ -78,6 +80,9 @@ final class DeepLinkRouter {
             openScan()
         case .cargo:
             selectedTab = .cargo
+        case .cargoTagged(let slug):
+            selectedTab = .cargo
+            cargoTagPending = slug
         case .cargoItem(let id):
             selectedTab = .cargo
             cargoItemPending = id
@@ -125,6 +130,7 @@ final class DeepLinkRouter {
     func acknowledgeSupplyCompose() { supplyComposePending = false }
     func acknowledgeCargoItem() { cargoItemPending = nil }
     func acknowledgeCargoEat() { cargoEatPending = nil }
+    func acknowledgeCargoTag() { cargoTagPending = nil }
     func acknowledgeMeal() { mealPending = nil }
 }
 

@@ -781,7 +781,7 @@ export function buildMobileOpenApiDocument(baseUrl: string) {
 			"/api/mobile/v1/widgets/home": {
 				get: {
 					summary:
-						"Home Screen widget snapshot (Live supply, Ate foods, today). Flag ios-home-widgets. date is the device-local YYYY-MM-DD.",
+						"Home Screen widget snapshot (Live supply, Eat foods, today). Flag ios-home-widgets. date is the device-local YYYY-MM-DD. Optional tag limits Eat to one food-domain cargo tag slug.",
 					security: [{ bearerAuth: [] }],
 					responses: {
 						"200": { description: "Widget snapshot" },

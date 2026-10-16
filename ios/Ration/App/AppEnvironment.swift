@@ -10,6 +10,7 @@ final class AppEnvironment {
         case ask
         case scan
         case cargo
+        case cargoTagged(slug: String)
         case cargoItem(id: String)
         case meal(id: String)
         case galleyGenerate

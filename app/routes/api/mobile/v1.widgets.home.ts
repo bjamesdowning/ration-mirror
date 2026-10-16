@@ -41,8 +41,10 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		}
 
 		const url = new URL(request.url);
+		const rawTag = url.searchParams.get("tag")?.trim() ?? "";
 		const parsed = HomeWidgetQuerySchema.safeParse({
 			date: url.searchParams.get("date"),
+			tag: rawTag.length > 0 ? rawTag : null,
 		});
 		if (!parsed.success) {
 			throw data(
@@ -58,6 +60,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 			organizationId,
 			userId,
 			parsed.data.date,
+			parsed.data.tag ?? null,
 		);
 	} catch (e) {
 		return handleApiError(e);

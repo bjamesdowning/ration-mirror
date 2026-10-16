@@ -13,6 +13,9 @@ enum AppDeepLink {
             if url.path.lowercased() == "/eat" {
                 return parseCargoEat(url)
             }
+            if let slug = cargoTagSlug(url) {
+                return .cargoTagged(slug: slug)
+            }
             return .cargo
         case "galley":
             let path = url.path.lowercased()
@@ -61,6 +64,23 @@ enum AppDeepLink {
 
         return .manifestAddEntry(mealId: mealId, date: date)
     }
+
+    /// One cargo-tag slug. A missing or multi-tag query opens Cargo unfiltered.
+    private static func cargoTagSlug(_ url: URL) -> String? {
+        let path = url.path
+        guard path.isEmpty || path == "/" else { return nil }
+        guard let raw = queryValue(url, name: "tags")?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased(),
+              !raw.isEmpty,
+              !raw.contains(","),
+              raw.count <= 50,
+              raw.unicodeScalars.allSatisfy({ slugScalars.contains($0) })
+        else { return nil }
+        return raw
+    }
+
+    private static let slugScalars = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyz0123456789-")
 
     private static func parseCargoEat(_ url: URL) -> AppEnvironment.DeepLinkDestination? {
         guard let id = queryValue(url, name: "id"), isUUID(id) else { return nil }

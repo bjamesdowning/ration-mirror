@@ -6,6 +6,10 @@ final class AppDeepLinkTests: XCTestCase {
         XCTAssertEqual(AppDeepLink.parse("ration://ask"), .ask)
         XCTAssertEqual(AppDeepLink.parse("ration://scan"), .scan)
         XCTAssertEqual(AppDeepLink.parse("ration://cargo"), .cargo)
+        XCTAssertEqual(AppDeepLink.parse("ration://cargo?tags=snack"), .cargoTagged(slug: "snack"))
+        XCTAssertEqual(AppDeepLink.parse("ration://cargo?tags=Snack"), .cargoTagged(slug: "snack"))
+        XCTAssertEqual(AppDeepLink.parse("ration://cargo?tags=a,b"), .cargo)
+        XCTAssertEqual(AppDeepLink.parse("ration://cargo?tags=../x"), .cargo)
         XCTAssertEqual(AppDeepLink.parse("ration://galley/generate"), .galleyGenerate)
         XCTAssertEqual(
             AppDeepLink.parse("ration://galley/import"),

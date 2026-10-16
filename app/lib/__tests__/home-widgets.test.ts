@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
 	energyGlance,
+	macroGlance,
 	selectAteFoods,
 	selectNextMeal,
 	selectSupplyPreview,
+	selectTodayMeals,
 	widgetAteAction,
 } from "../home-widgets";
 
@@ -82,16 +84,45 @@ describe("selectNextMeal", () => {
 					cooked: false,
 				},
 			]),
-		).toEqual({ status: "planned", title: "Soup" });
+		).toEqual({ status: "planned", title: "Soup", slotType: "lunch" });
 	});
 
 	it("distinguishes an empty day from a finished day", () => {
-		expect(selectNextMeal([])).toEqual({ status: "clear", title: null });
+		expect(selectNextMeal([])).toEqual({
+			status: "clear",
+			title: null,
+			slotType: null,
+		});
 		expect(
 			selectNextMeal([
 				{ name: "Stew", slotType: "dinner", orderIndex: 0, cooked: true },
 			]),
-		).toEqual({ status: "done", title: null });
+		).toEqual({ status: "done", title: null, slotType: null });
+	});
+});
+
+describe("selectTodayMeals", () => {
+	it("keeps cooked meals and orders breakfast before snack", () => {
+		expect(
+			selectTodayMeals([
+				{ name: "Nuts", slotType: "snack", orderIndex: 0, cooked: false },
+				{ name: "Oats", slotType: "breakfast", orderIndex: 0, cooked: true },
+				{ name: "Soup", slotType: "lunch", orderIndex: 0, cooked: false },
+			]),
+		).toEqual([
+			{ name: "Oats", slotType: "breakfast", cooked: true },
+			{ name: "Soup", slotType: "lunch", cooked: false },
+			{ name: "Nuts", slotType: "snack", cooked: false },
+		]);
+	});
+});
+
+describe("macroGlance", () => {
+	it("returns signed remaining grams only for a positive goal", () => {
+		expect(macroGlance(140, 58.2)).toEqual({ remaining: 82, goal: 140 });
+		expect(macroGlance(50, 62)).toEqual({ remaining: -12, goal: 50 });
+		expect(macroGlance(null, 10)).toBeNull();
+		expect(macroGlance(0, 0)).toBeNull();
 	});
 });
 

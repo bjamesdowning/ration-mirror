@@ -1990,7 +1990,7 @@ Bearer-authenticated REST surface for the **iOS app** at `/api/mobile/v1/*`. Web
 | `GET` | `/api/mobile/v1/billing/status` | Personal entitlements, `accountTier` / `organizationTier`, purchase eligibility, credits |
 | `POST` | `/api/mobile/v1/scan` | Multipart receipt upload |
 | `GET` | `/api/mobile/v1/supply` | Active supply list + items |
-| `GET` | `/api/mobile/v1/widgets/home?date=` | Home Screen widget snapshot. Flag `ios-home-widgets`. `date` is the device-local `YYYY-MM-DD`. Kcal is omitted without goals and intake consent. |
+| `GET` | `/api/mobile/v1/widgets/home?date=&tag=` | Home Screen widget snapshot. Flag `ios-home-widgets`. `date` is the device-local `YYYY-MM-DD`. Optional `tag` limits Eat to one food-domain cargo tag slug; Supply and Today ignore it. Kcal and macros are omitted without goals and intake consent. |
 | `POST` / `DELETE` | `/api/mobile/v1/supply/items` / `.../:id` | Add / remove supply items; `POST .../:id` snoozes item (`{ duration: "24h" \| "3d" \| "1w" }`) |
 | `GET` / `DELETE` | `/api/mobile/v1/supply/snoozes` / `.../:snoozeId` | List active snoozes / unsnooze |
 | `GET` | `/api/mobile/v1/hub` | Hub widgets; `latestSupplyList` includes `itemCount`, `uncheckedCount`, `purchasedCount` before sliced `items`. Aggregates are coerced to Ints; a malformed optional widget is omitted without zeroing the rest of Hub. |

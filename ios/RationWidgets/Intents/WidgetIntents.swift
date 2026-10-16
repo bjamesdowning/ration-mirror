@@ -35,12 +35,16 @@ struct EatCargoStepIntent: AppIntent {
     @Parameter(title: "Name")
     var foodName: String
 
+    @Parameter(title: "Quantity", default: 0)
+    var quantity: Double
+
     init() {}
 
     init(food: HomeWidgetAteFood) {
         self.cargoId = food.cargoId
         self.unit = food.unit
         self.foodName = food.name
+        self.quantity = food.quantity
     }
 
     func perform() async throws -> some IntentResult {
@@ -49,7 +53,8 @@ struct EatCargoStepIntent: AppIntent {
             name: foodName,
             action: "eat",
             stepQuantity: 1,
-            unit: unit
+            unit: unit,
+            quantity: quantity
         )
         await WidgetMutations.eat(food)
         return .result()

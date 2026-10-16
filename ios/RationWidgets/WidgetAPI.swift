@@ -71,8 +71,12 @@ enum WidgetAuth {
 }
 
 enum WidgetAPI {
-    static func snapshot(date: String) async throws -> HomeWidgetSnapshot {
-        try await send(path: "widgets/home", method: "GET", query: [URLQueryItem(name: "date", value: date)], body: nil)
+    static func snapshot(date: String, tag: String?) async throws -> HomeWidgetSnapshot {
+        var query = [URLQueryItem(name: "date", value: date)]
+        if let tag, !tag.isEmpty {
+            query.append(URLQueryItem(name: "tag", value: tag))
+        }
+        return try await send(path: "widgets/home", method: "GET", query: query, body: nil)
     }
 
     static func markPurchased(itemId: String) async throws {

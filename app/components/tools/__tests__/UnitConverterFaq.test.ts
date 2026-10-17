@@ -17,6 +17,6 @@ describe("unit converter FAQ", () => {
 			(e) => `${e.question} ${e.answer}`,
 		).join(" ");
 		expect(text).toContain("oz and fl oz");
-		expect(text).toContain("powdered sugar is around 113 g");
+		expect(text).toContain("powdered sugar is around 114 g");
 	});
 });

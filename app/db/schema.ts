@@ -197,7 +197,10 @@ export const invitation = sqliteTable(
 		organizationId: text("organization_id")
 			.notNull()
 			.references(() => organization.id, { onDelete: "cascade" }),
-		token: text("token").notNull().unique(), // Shareable link token
+		email: text("email").notNull().default(""),
+		// Nullable: Better Auth 1.7 invitation inserts do not set this column.
+		// App-created share links still write a token.
+		token: text("token").unique(),
 		role: text("role").notNull(), // 'admin' | 'member'
 		status: text("status").notNull().default("pending"), // 'pending' | 'accepted' | 'canceled'
 		expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
@@ -1725,6 +1728,9 @@ export {
 	jwks,
 	oauthAccessToken,
 	oauthClient,
+	oauthClientAssertion,
+	oauthClientResource,
 	oauthConsent,
 	oauthRefreshToken,
+	oauthResource,
 } from "./oauth-schema";

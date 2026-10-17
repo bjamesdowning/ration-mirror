@@ -8,17 +8,26 @@ import {
 } from "~/lib/auth-secondary-storage.server";
 
 function createMemoryKV(): KVNamespace {
-	const store = new Map<string, string>();
+	const store = new Map<string, { value: string; metadata: unknown }>();
 	return {
-		get: vi.fn(async (key: string) => store.get(key) ?? null),
-		put: vi.fn(async (key: string, value: string) => {
-			store.set(key, value);
-		}),
+		get: vi.fn(async (key: string) => store.get(key)?.value ?? null),
+		put: vi.fn(
+			async (key: string, value: string, options?: { metadata?: unknown }) => {
+				store.set(key, { value, metadata: options?.metadata ?? null });
+			},
+		),
 		delete: vi.fn(async (key: string) => {
 			store.delete(key);
 		}),
 		list: vi.fn(),
-		getWithMetadata: vi.fn(),
+		getWithMetadata: vi.fn(async (key: string) => {
+			const row = store.get(key);
+			return {
+				value: row?.value ?? null,
+				metadata: row?.metadata ?? null,
+				cacheStatus: null,
+			};
+		}),
 	} as unknown as KVNamespace;
 }
 
@@ -48,6 +57,22 @@ describe("createBetterAuthSecondaryStorage", () => {
 
 		await storage.delete("sess-1");
 		expect(await storage.get("sess-1")).toBeNull();
+	});
+
+	it("getAndDelete returns the value once", async () => {
+		const kv = createMemoryKV();
+		const storage = createBetterAuthSecondaryStorage(kv);
+		await storage.set("once", "payload", 120);
+		expect(await storage.getAndDelete("once")).toBe("payload");
+		expect(await storage.get("once")).toBeNull();
+		expect(await storage.getAndDelete("once")).toBeNull();
+	});
+
+	it("increment counts inside one window", async () => {
+		const kv = createMemoryKV();
+		const storage = createBetterAuthSecondaryStorage(kv);
+		expect(await storage.increment("rl", 10)).toBe(1);
+		expect(await storage.increment("rl", 10)).toBe(2);
 	});
 
 	it("clamps TTL below 60s up to KV minimum", async () => {

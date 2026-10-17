@@ -1,0 +1,1 @@
+ALTER TABLE `invitation` ADD `email` text DEFAULT '' NOT NULL;

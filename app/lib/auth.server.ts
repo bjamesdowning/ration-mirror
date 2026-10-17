@@ -81,7 +81,7 @@ const member = ac.newRole({
 	data: ["read", "write"],
 });
 
-export function createAuth(env: Cloudflare.Env) {
+export function createAuth(env: Cloudflare.Env): Auth {
 	const db = drizzle(env.DB, { schema });
 
 	const authEnv = env as Cloudflare.Env & {
@@ -108,6 +108,7 @@ export function createAuth(env: Cloudflare.Env) {
 	// Dev-only: enable email/password for Dev Login (dev@ration.app / ration-dev).
 	// Only when BETTER_AUTH_URL is localhost — never in production.
 	const isDev = env.BETTER_AUTH_URL.includes("localhost");
+	const mcpResource = resolveMcpResourceAudience(env);
 
 	return betterAuth({
 		...(isDev && {
@@ -129,12 +130,20 @@ export function createAuth(env: Cloudflare.Env) {
 				oauthConsent: schema.oauthConsent,
 				oauthAccessToken: schema.oauthAccessToken,
 				oauthRefreshToken: schema.oauthRefreshToken,
+				oauthResource: schema.oauthResource,
+				oauthClientResource: schema.oauthClientResource,
+				oauthClientAssertion: schema.oauthClientAssertion,
 			},
 		}),
 		// KV read-through cache; D1 remains authoritative for revoke/purge.
 		secondaryStorage: createBetterAuthSecondaryStorage(env.RATION_KV),
 		session: {
 			storeSessionInDatabase: true,
+		},
+		// D1 stays the magic-link source of truth. With secondary storage set,
+		// Better Auth 1.7 otherwise keeps verification only in KV.
+		verification: {
+			storeInDatabase: true,
 		},
 		user: {
 			additionalFields: {
@@ -187,7 +196,13 @@ export function createAuth(env: Cloudflare.Env) {
 			oauthProvider({
 				loginPage: "/oauth/sign-in",
 				consentPage: "/oauth/consent",
-				validAudiences: [resolveMcpResourceAudience(env)],
+				// One MCP resource, same identifier as the old validAudiences entry.
+				// Per-client linkage stays off so a client that re-authorizes can
+				// still request that single resource without a new registration row.
+				resources: [mcpResource],
+				enforcePerClientResources: false,
+				clientRegistrationDefaultResources: [mcpResource],
+				clientRegistrationAllowedResources: [mcpResource],
 				accessTokenExpiresIn: OAUTH_ACCESS_TOKEN_TTL_SEC,
 				allowDynamicClientRegistration: true,
 				allowUnauthenticatedClientRegistration: true,
@@ -395,7 +410,11 @@ export function createAuth(env: Cloudflare.Env) {
 	});
 }
 
-export type Auth = ReturnType<typeof createAuth>;
+// Better Auth 1.7's inferred instance is too large for declaration emit
+// (TS7056 / TS2742). The `betterAuth({...})` call below is still checked.
+// Call sites use `handler` and `api`.
+// biome-ignore lint/suspicious/noExplicitAny: declaration-emit boundary for Better Auth 1.7
+export type Auth = any;
 
 /**
  * Module-level auth instance cache, keyed on BETTER_AUTH_SECRET.

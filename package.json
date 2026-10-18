@@ -1,6 +1,6 @@
 {
 	"name": "ration",
-	"version": "1.9.25",
+	"version": "1.9.26",
 	"private": true,
 	"license": "SEE LICENSE IN LICENSE",
 	"type": "module",
@@ -53,7 +53,7 @@
 		"@cloudflare/ai-chat": "^0.9.3",
 		"@cloudflare/think": "^0.12.1",
 		"@fontsource/space-mono": "^5.2.9",
-		"@modelcontextprotocol/sdk": "^1.29.0",
+		"@modelcontextprotocol/sdk": "1.32.1",
 		"@react-router/cloudflare": "7.18.4",
 		"@stripe/react-stripe-js": "^5.6.1",
 		"@stripe/stripe-js": "^8.11.0",
@@ -65,7 +65,7 @@
 		"isbot": "^5.1.39",
 		"jose": "^6.1.3",
 		"lucide-react": "^0.576.0",
-		"mermaid": "^11.16.0",
+		"mermaid": "11.17.2",
 		"react": "^19.2.5",
 		"react-dom": "^19.2.5",
 		"react-markdown": "^10.1.0",
@@ -93,7 +93,7 @@
 		"obug": "2.1.1",
 		"tailwindcss": "^4.2.4",
 		"typescript": "^5.9.3",
-		"vite": "^7.3.2",
+		"vite": "7.3.7",
 		"vite-tsconfig-paths": "^6.1.1",
 		"vitest": "^4.1.5",
 		"wrangler": "^4.112.0"
@@ -112,6 +112,6 @@
 		"qs": "6.16.1",
 		"rollup": "^4.60.2",
 		"undici": "^7.25.0",
-		"vite": "7.3.2"
+		"vite": "7.3.7"
 	}
 }

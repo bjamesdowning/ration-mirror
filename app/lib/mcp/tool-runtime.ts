@@ -1,4 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { AnySchema } from "@modelcontextprotocol/sdk/server/zod-compat.js";
 import type { z } from "zod";
 import { buildClaimRecoveryPaths } from "../agent/claim.constants";
 import { checkRateLimit } from "../rate-limiter.server";
@@ -371,7 +372,9 @@ export function registerSharedMcpTool(
 		{
 			description: definition.description,
 			inputSchema: definition.inputSchema.shape,
-			outputSchema: ToolEnvelopeSchema,
+			// SDK 1.32 types this against its own Zod copy. The app schema is
+			// still a Zod object at runtime and is what gets registered.
+			outputSchema: ToolEnvelopeSchema as unknown as AnySchema,
 			annotations: {
 				readOnlyHint: isRead,
 				destructiveHint: definition.destructiveHint ?? false,

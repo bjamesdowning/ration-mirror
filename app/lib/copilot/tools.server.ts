@@ -1,4 +1,4 @@
-import { tool } from "ai";
+import { type ToolSet, tool } from "ai";
 import { z } from "zod";
 import { log } from "../logging.server";
 import type { McpToolContext } from "../mcp/auth";
@@ -175,7 +175,7 @@ export function toAiSdkTools(
 		onApprovalRequested?: (toolName: string) => void;
 		onApprovalResolved?: (toolName: string) => void;
 	},
-) {
+): ToolSet {
 	const toolEnv = envWithCopilotContext(env, ctx);
 	const defs = createCopilotToolDefs(toolEnv);
 

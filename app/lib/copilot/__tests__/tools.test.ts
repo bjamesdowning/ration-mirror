@@ -241,7 +241,12 @@ describe("createCopilotToolDefs", () => {
 		expect(execute).toBeTypeOf("function");
 		const result = await execute?.(
 			{ itemId, confirm: false },
-			{ toolCallId: "test", messages: [], abortSignal: undefined as never },
+			{
+				toolCallId: "test",
+				messages: [],
+				abortSignal: undefined,
+				context: {},
+			},
 		);
 		expect(result).toMatchObject({
 			ok: true,
@@ -265,7 +270,12 @@ describe("createCopilotToolDefs", () => {
 				itemId: "00000000-0000-0000-0000-000000000001",
 				quantity: 1,
 			},
-			{ toolCallId: "test", messages: [], abortSignal: undefined as never },
+			{
+				toolCallId: "test",
+				messages: [],
+				abortSignal: undefined,
+				context: {},
+			},
 		);
 		expect(result).toMatchObject({
 			ok: false,

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { shouldApplyCopilotServerTranscript } from "../copilot/stream-resume.client";
 import {
 	copilotCancelRequestIds,
 	INITIAL_COPILOT_TURN_STATE,
@@ -187,5 +188,25 @@ describe("Copilot turn lifecycle", () => {
 				requestId: "late",
 			}),
 		).toEqual(INITIAL_COPILOT_TURN_STATE);
+	});
+
+	it("keeps the turn active after Deny so the charged reply can be shown", () => {
+		const awaiting = reduceCopilotTurnState(
+			reduceCopilotTurnState(INITIAL_COPILOT_TURN_STATE, {
+				type: "started",
+				requestId: "request-1",
+			}),
+			{ type: "approval_requested", requestId: "request-1" },
+		);
+		const denied = reduceCopilotTurnState(awaiting, {
+			type: "approval_resolved",
+			approved: false,
+		});
+		expect(denied.status).toBe("active");
+		expect(denied.expectingApprovalContinuation).toBe(true);
+		expect(denied.activeRequestId).toBe("request-1");
+		expect(isCopilotTurnActive(denied)).toBe(true);
+		expect(shouldApplyCopilotServerTranscript(denied)).toBe(true);
+		expect(shouldIgnoreCopilotTurnEnd(denied, "request-1")).toBe(true);
 	});
 });

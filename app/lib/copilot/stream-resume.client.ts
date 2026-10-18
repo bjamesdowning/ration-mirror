@@ -151,7 +151,8 @@ export function mergeCopilotServerTranscript<
 	);
 	if (serverUserIndex < 0) return current;
 
-	let next = current;
+	const texts: string[] = [];
+	let onlyServer: ServerTranscriptMessage | null = null;
 	for (
 		let index = serverUserIndex + 1;
 		index < serverMessages.length;
@@ -162,9 +163,17 @@ export function mergeCopilotServerTranscript<
 		if (server.role !== "assistant") continue;
 		const text = assistantTextFromServerMessage(server);
 		if (text.trim().length === 0) continue;
-		next = applyServerAssistantText(next, userIndex, server, text);
+		texts.push(text);
+		onlyServer = texts.length === 1 ? server : null;
 	}
-	return next;
+	if (texts.length === 0) return current;
+	const combined = texts.join("");
+	if (texts.length === 1 && onlyServer) {
+		return applyServerAssistantText(current, userIndex, onlyServer, combined);
+	}
+	// Several assistant rows share one local bubble. Keep the local id so a
+	// combined string cannot overwrite one of the server rows.
+	return applyServerAssistantText(current, userIndex, {}, combined);
 }
 
 function applyServerAssistantText<T extends VisibleTranscriptMessage>(
@@ -225,41 +234,54 @@ function applyServerAssistantText<T extends VisibleTranscriptMessage>(
 	];
 }
 
+/** Trailing assistant text at `cf_agent_stream_resuming`, before the replay. */
+export function copilotTurnAssistantBaseline<
+	T extends VisibleTranscriptMessage,
+>(messages: readonly T[]): string {
+	const userIndex = lastUserIndex(messages);
+	if (userIndex < 0) return "";
+	const trailing = trailingTurnAssistantIndex(messages, userIndex);
+	if (trailing < 0) return "";
+	return messages[trailing]?.content ?? "";
+}
+
 /**
  * A `replay: true` stream repeats a continuation that already arrived via
- * `chat_messages`. Replace the current-turn bubble when the replay extends
- * it, and leave it alone when the bubble already contains that text.
+ * `chat_messages`. `baseline` is the bubble captured at `stream_resuming`,
+ * so a preamble stays in front of the replayed summary.
+ * Replace the current-turn bubble when the replay extends it, and leave it
+ * alone when the bubble already contains that text.
  */
 export function applyCopilotReplayText<T extends VisibleTranscriptMessage>(
 	current: T[],
 	replayedText: string,
+	baseline = "",
 ): T[] {
 	if (replayedText.length === 0) return current;
+	const text =
+		baseline.length > 0 ? `${baseline}${replayedText}` : replayedText;
 	const userIndex = lastUserIndex(current);
 	if (userIndex < 0) return current;
 	const trailing = trailingTurnAssistantIndex(current, userIndex);
 	if (trailing < 0) {
-		if (replayedText.trim().length === 0) return current;
+		if (text.trim().length === 0) return current;
 		return [
 			...current,
 			{
 				id: crypto.randomUUID(),
 				role: "assistant",
-				content: replayedText,
+				content: text,
 			} as T,
 		];
 	}
 	const existing = current[trailing];
 	if (!existing) return current;
-	if (
-		existing.content === replayedText ||
-		existing.content.startsWith(replayedText)
-	) {
+	if (existing.content === text || existing.content.startsWith(text)) {
 		return current;
 	}
-	if (replayedText.startsWith(existing.content)) {
+	if (text.startsWith(existing.content)) {
 		const copy = current.slice();
-		copy[trailing] = { ...existing, content: replayedText };
+		copy[trailing] = { ...existing, content: text };
 		return copy;
 	}
 	return current;

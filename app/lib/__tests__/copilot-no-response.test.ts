@@ -6,13 +6,16 @@ import {
 	copilotEventKeepsTurnAlive,
 	copilotResumeAckFrame,
 	copilotServerTranscriptHasAnswer,
+	copilotTurnAssistantBaseline,
 	mergeCopilotServerTranscript,
 	serverTranscriptFromCopilotEvent,
 	shouldApplyCopilotServerTranscript,
 } from "../copilot/stream-resume.client";
 import {
+	copilotBillingBlockAfterBalanceCheck,
 	copilotStepExceedsBalance,
 	copilotTurnUsageDecision,
+	copilotUsageAfterInsufficientCredits,
 } from "../copilot/turn-usage";
 
 describe("copilot resume handshake", () => {
@@ -408,6 +411,51 @@ describe("copilot server transcript", () => {
 		]);
 	});
 
+	it("keeps a preamble and appends the post-approval summary from a second assistant row", () => {
+		const local = [
+			{ id: "user-1", role: "user" as const, content: "preedit cargo beans" },
+			{
+				id: "local-preamble",
+				role: "assistant" as const,
+				content: "Let me update that for you. ",
+			},
+		];
+		const merged = mergeCopilotServerTranscript(local, [
+			{ id: "user-1", role: "user", content: "preedit cargo beans" },
+			{
+				id: "server-pause",
+				role: "assistant",
+				content: "Let me update that for you. ",
+			},
+			{
+				id: "server-summary",
+				role: "assistant",
+				content: "after tool for preedit cargo beans ",
+			},
+		]);
+		expect(merged).toEqual([
+			{ id: "user-1", role: "user", content: "preedit cargo beans" },
+			{
+				id: "local-preamble",
+				role: "assistant",
+				content:
+					"Let me update that for you. after tool for preedit cargo beans ",
+			},
+		]);
+		const baseline = copilotTurnAssistantBaseline(local);
+		expect(baseline).toBe("Let me update that for you. ");
+		expect(
+			applyCopilotReplayText(
+				local,
+				"after tool for preedit cargo beans ",
+				baseline,
+			),
+		).toEqual(merged);
+		expect(
+			applyCopilotReplayText(local, "after tool for preedit cargo beans "),
+		).toEqual(local);
+	});
+
 	it("ignores tool-only updates", () => {
 		expect(
 			assistantTextFromServerMessage({
@@ -516,5 +564,69 @@ describe("copilot turn usage", () => {
 				creditBalance: 0,
 			}),
 		).toBe(false);
+	});
+
+	it("clears a billing block after a top-up and does not charge the canned reply", () => {
+		expect(
+			copilotBillingBlockAfterBalanceCheck({
+				blocked: true,
+				mode: "credits",
+				totalTokens: 20_001,
+				pendingTokens: 0,
+				bracketCreditsCharged: 1,
+				creditBalance: 10,
+			}),
+		).toBe(false);
+		expect(
+			copilotBillingBlockAfterBalanceCheck({
+				blocked: true,
+				mode: "credits",
+				totalTokens: 20_001,
+				pendingTokens: 0,
+				bracketCreditsCharged: 1,
+				creditBalance: 0,
+			}),
+		).toBe(true);
+		expect(
+			copilotTurnUsageDecision({
+				status: "completed",
+				parts: [
+					{
+						type: "text",
+						text: "This conversation exhausted its credit allowance.",
+					},
+				],
+				suppressCommit: true,
+			}),
+		).toBe("discard");
+	});
+
+	it("persists the billing block when credits are insufficient", () => {
+		expect(
+			copilotUsageAfterInsufficientCredits({
+				billingBlocked: false,
+				totalUsageTokens: 240,
+			}),
+		).toEqual({
+			billingBlocked: true,
+			totalUsageTokens: 240,
+			persist: true,
+		});
+	});
+
+	it("commits an abort after an approved tool ran, even with no answer text", () => {
+		expect(
+			copilotTurnUsageDecision({
+				status: "aborted",
+				parts: [{ type: "step-start" }],
+				toolRan: true,
+			}),
+		).toBe("commit");
+		expect(
+			copilotTurnUsageDecision({
+				status: "aborted",
+				parts: [],
+			}),
+		).toBe("discard");
 	});
 });

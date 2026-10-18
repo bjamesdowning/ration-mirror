@@ -40,6 +40,7 @@ import {
 	copilotEventKeepsTurnAlive,
 	copilotResumeAckFrame,
 	copilotServerTranscriptHasAnswer,
+	copilotTurnAssistantBaseline,
 	mergeCopilotServerTranscript,
 	serverTranscriptFromCopilotEvent,
 	shouldApplyCopilotServerTranscript,
@@ -250,6 +251,9 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 	const stopFallbackRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const turnStateRef = useRef<CopilotTurnState>(INITIAL_COPILOT_TURN_STATE);
 	const replayTextRef = useRef(new Map<string, string>());
+	const replayBaselineRef = useRef(new Map<string, string>());
+	const messagesRef = useRef(messages);
+	messagesRef.current = messages;
 	const sessionUsageRef = useRef<CopilotSessionUsage | null>(null);
 	const lastActivityAtRef = useRef<number>(Date.now());
 	const wasOpenRef = useRef(false);
@@ -421,6 +425,7 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 			setToolSucceeded(null);
 			toolNameByCallIdRef.current.clear();
 			replayTextRef.current.clear();
+			replayBaselineRef.current.clear();
 			setTurnPhase("idle");
 			setApproval(null);
 			transitionTurn({ type: "ended" });
@@ -663,6 +668,12 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 					requestId: continuationId,
 				});
 			}
+			if (event.type === "cf_agent_stream_resuming" && continuationId) {
+				replayBaselineRef.current.set(
+					continuationId,
+					copilotTurnAssistantBaseline(messagesRef.current),
+				);
+			}
 			const serverTranscript = serverTranscriptFromCopilotEvent(event);
 			if (
 				serverTranscript &&
@@ -714,7 +725,11 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 							const nextText = `${replayTextRef.current.get(requestId) ?? ""}${action.text}`;
 							replayTextRef.current.set(requestId, nextText);
 							setMessages((current) => {
-								const next = applyCopilotReplayText(current, nextText);
+								const next = applyCopilotReplayText(
+									current,
+									nextText,
+									replayBaselineRef.current.get(requestId) ?? "",
+								);
 								if (next !== current) persistSession(next);
 								return next;
 							});
@@ -1339,11 +1354,7 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 			setApproval(null);
 			lastActivityAtRef.current = Date.now();
 			transitionTurn({ type: "approval_resolved", approved });
-			if (approved) {
-				setTurnPhase("thinking");
-			} else {
-				endTurn({ clearApproval: true });
-			}
+			setTurnPhase("thinking");
 		} catch {
 			setApproval(null);
 			setError("Unable to send the approval response.");

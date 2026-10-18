@@ -29,12 +29,41 @@ function partHasToolOutput(part: UsagePart): boolean {
 export function copilotTurnUsageDecision(input: {
 	status: "completed" | "error" | "aborted";
 	parts?: ReadonlyArray<UsagePart> | null;
+	/** A tool executed earlier in this turn, including the pause half. */
+	toolRan?: boolean;
+	/** The canned blocked reply. Its text must not raise the bracket. */
+	suppressCommit?: boolean;
 }): CopilotTurnUsageDecision {
+	if (input.suppressCommit) return "discard";
 	const parts = input.parts ?? [];
 	if (parts.some(partHasAnswerText)) return "commit";
 	if (parts.some(partHasToolOutput)) return "commit";
+	if (input.toolRan) return "commit";
 	if (input.status === "error" || input.status === "aborted") return "discard";
 	return "hold";
+}
+
+/**
+ * A persisted block stays only while the next bracket is still unaffordable.
+ * A top-up that covers that bracket clears it. Callers persist the result.
+ */
+export function copilotBillingBlockAfterBalanceCheck(input: {
+	blocked: boolean;
+	mode: "allowance" | "credits" | "onboarding_briefing";
+	totalTokens: number;
+	pendingTokens: number;
+	bracketCreditsCharged: number;
+	creditBalance: number;
+}): boolean {
+	if (!input.blocked) return false;
+	return copilotStepExceedsBalance(input);
+}
+
+/** Insufficient credits sticks the block. The caller must persist it. */
+export function copilotUsageAfterInsufficientCredits<
+	T extends { billingBlocked: boolean },
+>(state: T): T & { billingBlocked: true; persist: true } {
+	return { ...state, billingBlocked: true, persist: true };
 }
 
 /**

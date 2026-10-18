@@ -79,8 +79,10 @@ import {
 	toAiSdkTools,
 } from "../app/lib/copilot/tools.server";
 import {
+	copilotBillingBlockAfterBalanceCheck,
 	copilotStepExceedsBalance,
 	copilotTurnUsageDecision,
+	copilotUsageAfterInsufficientCredits,
 } from "../app/lib/copilot/turn-usage";
 import {
 	buildAgentFlagContext,
@@ -257,6 +259,8 @@ type CopilotAgentUsageConfig = {
 	uncommittedUsageTokens?: number;
 	/** Set when the next bracket is unaffordable. Survives hibernation. */
 	billingBlocked?: boolean;
+	/** An approved tool already ran in this turn. Survives hibernation. */
+	toolRanThisTurn?: boolean;
 };
 
 async function resolveNativeFeatureFlags(
@@ -288,6 +292,10 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 	private billingBlocked = false;
 	/** Held tokens and the billing block are restored once per isolate wake. */
 	private heldUsageRestored = false;
+	/** Set in afterToolCall, including the continuation after Approve. */
+	private toolRanThisTurn = false;
+	/** The canned blocked reply must not raise the credit bracket. */
+	private suppressBlockedReplyCharge = false;
 	private sessionMessageCount = 0;
 	private sessionWarningsEmitted = new Set<SessionLimitWarningSeverity>();
 	private conversationModelPreset: CopilotModelPreset = "fast";
@@ -372,12 +380,14 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 				: {}),
 			uncommittedUsageTokens: this.uncommittedUsageTokens,
 			billingBlocked: this.billingBlocked,
+			toolRanThisTurn: this.toolRanThisTurn,
 		});
 	}
 
 	private resetUsageForCharge(chargeOpenedAt: number, totalTokens = 0): void {
 		this.totalUsageTokens = Math.max(0, Math.ceil(totalTokens));
 		this.uncommittedUsageTokens = 0;
+		this.toolRanThisTurn = false;
 		this.sessionWarningsEmitted.clear();
 		this.boundChargeOpenedAt = chargeOpenedAt;
 		this.persistUsageConfig();
@@ -419,6 +429,7 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 				);
 			}
 			if (cfg.billingBlocked === true) this.billingBlocked = true;
+			if (cfg.toolRanThisTurn === true) this.toolRanThisTurn = true;
 		}
 	}
 
@@ -585,6 +596,7 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 
 	async beforeTurn(ctx: TurnContext) {
 		const identity = decodeAgentName(this.name);
+		this.suppressBlockedReplyCharge = false;
 		this.nativeFeatureFlags = await resolveNativeFeatureFlags(
 			this.env,
 			identity.userId,
@@ -592,8 +604,12 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 		);
 		this.sessionMessageCount = ctx.messages.length;
 		const charge = await this.hydrateCumulativeUsage(identity);
-		if (!ctx.continuation && this.uncommittedUsageTokens !== 0) {
+		if (
+			!ctx.continuation &&
+			(this.uncommittedUsageTokens !== 0 || this.toolRanThisTurn)
+		) {
 			this.uncommittedUsageTokens = 0;
+			this.toolRanThisTurn = false;
 			this.persistUsageConfig();
 		}
 		if (charge?.mode === "onboarding_briefing") {
@@ -716,7 +732,26 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 				chatStreamStallTimeoutMs: inference.chatStreamStallTimeoutMs,
 			};
 		}
+		if (this.billingBlocked && charge) {
+			const creditBalance =
+				charge.mode === "credits"
+					? await checkBalance(this.env, identity.organizationId)
+					: 0;
+			const stillBlocked = copilotBillingBlockAfterBalanceCheck({
+				blocked: true,
+				mode: charge.mode,
+				totalTokens: this.totalUsageTokens,
+				pendingTokens: this.uncommittedUsageTokens,
+				bracketCreditsCharged: charge.bracketCreditsCharged,
+				creditBalance,
+			});
+			if (!stillBlocked) {
+				this.billingBlocked = false;
+				this.persistUsageConfig();
+			}
+		}
 		if (this.billingBlocked) {
+			this.suppressBlockedReplyCharge = true;
 			return {
 				system: `${ctx.system}\n\nThis conversation exhausted its credit allowance. Do not call tools. Tell the user to add credits and start a new chat, or start a new chat after the allowance resets.`,
 				activeTools: [],
@@ -922,6 +957,8 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 	}
 
 	afterToolCall(ctx: ToolCallResultContext) {
+		this.toolRanThisTurn = true;
+		this.persistUsageConfig();
 		const identity = decodeAgentName(this.name);
 		writeCopilotMetric(
 			this.env,
@@ -1040,16 +1077,26 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 	}
 
 	async onChatResponse(result: ChatResponseResult) {
+		const toolRan = this.toolRanThisTurn;
+		const suppressCommit = this.suppressBlockedReplyCharge;
 		const decision = copilotTurnUsageDecision({
 			status: result.status,
 			parts: result.message.parts,
+			toolRan,
+			suppressCommit,
 		});
+		this.toolRanThisTurn = false;
+		this.suppressBlockedReplyCharge = false;
 		if (decision === "discard") {
 			this.uncommittedUsageTokens = 0;
 			this.persistUsageConfig();
 			return;
 		}
-		if (decision !== "commit") return;
+		if (decision !== "commit") {
+			if (toolRan || suppressCommit) this.persistUsageConfig();
+			return;
+		}
+		if (toolRan) this.persistUsageConfig();
 		await this.commitUncommittedUsage();
 	}
 
@@ -1076,10 +1123,15 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 				memory: this.totalUsageTokens,
 				kv: charge.totalTokens,
 			});
+			this.billingBlocked = false;
 			this.persistUsageConfig();
 		} catch (error) {
 			if (error instanceof InsufficientCreditsError) {
-				this.billingBlocked = true;
+				const next = copilotUsageAfterInsufficientCredits({
+					billingBlocked: this.billingBlocked,
+				});
+				this.billingBlocked = next.billingBlocked;
+				if (next.persist) this.persistUsageConfig();
 				this.broadcast(
 					JSON.stringify({
 						type: "error",

@@ -61,7 +61,8 @@ export function reduceCopilotTurnState(
 			};
 		case "approval_resolved":
 			if (state.status !== "awaiting_approval") return state;
-			if (!event.approved) return INITIAL_COPILOT_TURN_STATE;
+			// Deny still auto-continues. Think writes a reply and charges it,
+			// so the turn stays active until that reply arrives.
 			return {
 				...state,
 				status: "active",

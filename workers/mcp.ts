@@ -1,5 +1,5 @@
-// biome-ignore assist/source/organizeImports: zod must evaluate before the MCP SDK
-import { ZodType } from "zod";
+// First import. See workers/zod-init.ts. Do not reorder.
+import "./zod-init";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { createMcpHandler } from "agents/mcp";
 import {
@@ -27,16 +27,6 @@ import { logMcpOAuthVerifyFailure } from "../app/lib/oauth-telemetry.server";
 import { fetchLogContext, runWithOpsEnv } from "../app/lib/ops-context.server";
 import { checkRateLimit } from "../app/lib/rate-limiter.server";
 import { MCP_SERVER_VERSION } from "../app/lib/version";
-
-// Esbuild wraps zod 4 in a lazy `__esm` init and hoists `z.custom` out of it.
-// `@modelcontextprotocol/sdk` calls `z.custom` while evaluating `types.js`,
-// before that init assigns `ZodCustom`, and workerd then rejects the upload
-// with "Class2 is not a constructor". `ZodType` is assigned inside the init,
-// and this import is first so that init runs before the SDK module. Do not
-// remove the import or this read.
-if (typeof ZodType !== "function") {
-	throw new Error("MCP worker: zod did not initialize");
-}
 
 const PROTECTED_RESOURCE_PATHS = new Set([
 	"/.well-known/oauth-protected-resource",

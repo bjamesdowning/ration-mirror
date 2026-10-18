@@ -1,12 +1,25 @@
 #!/usr/bin/env bash
-# Match Cloudflare Workers Builds before a push.
-# Install is bun 1.4.3 with a frozen lockfile from an empty node_modules.
-# Deploy commands are the dashboard commands, with wrangler told not to upload.
-# Each bundle must start in Miniflare and answer one request.
+# Match Cloudflare Workers Builds for the commit at HEAD.
+# The install, build, and dry-run happen in a git archive copy so the shared
+# checkout's node_modules stays put and uncommitted files cannot hide a failure.
 set -euo pipefail
 
-root="$(cd "$(dirname "$0")/.." && pwd)"
-cd "$root"
+source_root="$(cd "$(dirname "$0")/.." && pwd)"
+if ! git -C "$source_root" rev-parse --verify HEAD >/dev/null 2>&1; then
+	echo "workers-builds-gate: $source_root has no HEAD commit" >&2
+	exit 1
+fi
+
+commit="$(git -C "$source_root" rev-parse HEAD)"
+archive_root="$(mktemp -d "${TMPDIR:-/tmp}/ration-workers-builds-gate.XXXXXX")"
+cleanup() {
+	rm -rf "$archive_root"
+}
+trap cleanup EXIT
+
+echo "workers-builds-gate: git archive $commit"
+git -C "$source_root" archive HEAD | tar -x -C "$archive_root"
+cd "$archive_root"
 
 if ! grep -q '"deploy": "bun run build && wrangler deploy build/server/index.js"' package.json; then
 	echo "workers-builds-gate: package.json deploy script drifted from the ration Worker" >&2
@@ -25,8 +38,7 @@ echo "workers-builds-gate: rm -rf node_modules && bunx bun@1.4.3 install --froze
 rm -rf node_modules
 bunx bun@1.4.3 install --frozen-lockfile
 
-out_root="${TMPDIR:-/tmp}/ration-workers-builds-gate"
-rm -rf "$out_root"
+out_root="$archive_root/workers-builds-out"
 mkdir -p "$out_root/app" "$out_root/mcp" "$out_root/copilot"
 
 # ration — build command `bun run build`, deploy command `bun run deploy`

@@ -1,8 +1,8 @@
 # Quick Commit
 
-Run the full pre-commit pipeline: lint, unit tests, typecheck, E2E tests (local env), iOS checks when relevant, generate and apply migrations, then commit and push changes.
+Run the full pre-commit pipeline: lint, unit tests, typecheck, E2E tests (local env), iOS checks when relevant, generate and apply migrations, commit locally, then the Workers Builds gate. Do not push.
 
-Prefer `/long-commit` when the change still needs review, Flagship gating, or fix-ups. Use this only when the diff is already reviewed and ready to ship.
+Prefer `/long-commit` when the change still needs review, Flagship gating, or fix-ups. Use this only when the diff is already reviewed and ready to commit. A separate reviewer still has to review the diff against `origin/main` for build, runtime, bundling, and dependency risk before anyone pushes.
 
 ## Verify command hygiene (required — exit-code integrity)
 
@@ -79,9 +79,12 @@ If the log says failed but the wrapper exit is 0 (classic `| tail` without `pipe
    git commit -m "YOUR_COMMIT_MESSAGE"
    ```
 
-12. Push the changes to the remote repository:
+12. Workers Builds gate for the commit just created. It archives `HEAD`, so uncommitted files are not included, and it does not delete this checkout's `node_modules`. A startup error or a status of 500 or above fails. If it fails, fix and commit again, then rerun it. Do not push the failing commit.
    ```bash
-   git push
+   bash scripts/workers-builds-gate.sh
    ```
+   Require exit 0, and require the log to include `workers-builds-gate: all three workers started` plus `startup ok` for `ration`, `ration-mcp`, and `ration-copilot`, each with `status=` below 500.
+
+13. Stop. Do not `git push`. Report the commit SHA. Pushing waits for a separate review of the diff against `origin/main`.
 
 **Note:** Only proceed with commit if all checks pass. The commit message should clearly describe what changed.

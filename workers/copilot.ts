@@ -1,3 +1,5 @@
+// First import. See workers/zod-init.ts. Do not reorder.
+import "./zod-init";
 import {
 	type ChatErrorContext,
 	type PrepareStepContext,

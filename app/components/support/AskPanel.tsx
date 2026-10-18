@@ -39,7 +39,7 @@ import {
 	copilotContinuationRequestId,
 	copilotEventKeepsTurnAlive,
 	copilotResumeAckFrame,
-	copilotServerTranscriptHasAnswer,
+	copilotTranscriptEventHasAnswer,
 	copilotTurnAssistantBaseline,
 	mergeCopilotServerTranscript,
 	serverTranscriptFromCopilotEvent,
@@ -679,7 +679,10 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 				serverTranscript &&
 				shouldApplyCopilotServerTranscript(turnStateRef.current)
 			) {
-				const hasAnswer = copilotServerTranscriptHasAnswer(serverTranscript);
+				const hasAnswer = copilotTranscriptEventHasAnswer(
+					event.type,
+					serverTranscript,
+				);
 				setMessages((current) => {
 					const next = mergeCopilotServerTranscript(current, serverTranscript);
 					if (next !== current) persistSession(next);

@@ -6,11 +6,17 @@ import {
 	copilotEventKeepsTurnAlive,
 	copilotResumeAckFrame,
 	copilotServerTranscriptHasAnswer,
+	copilotTranscriptEventHasAnswer,
 	copilotTurnAssistantBaseline,
 	mergeCopilotServerTranscript,
 	serverTranscriptFromCopilotEvent,
 	shouldApplyCopilotServerTranscript,
 } from "../copilot/stream-resume.client";
+import {
+	INITIAL_COPILOT_TURN_STATE,
+	reduceCopilotTurnState,
+	shouldIgnoreCopilotTurnEnd,
+} from "../copilot/turn-lifecycle.client";
 import {
 	copilotBillingBlockAfterBalanceCheck,
 	copilotStepExceedsBalance,
@@ -454,6 +460,96 @@ describe("copilot server transcript", () => {
 		expect(
 			applyCopilotReplayText(local, "after tool for preedit cargo beans "),
 		).toEqual(local);
+	});
+
+	it("keeps a fast Think 0.12 continuation open after a preamble message_updated", () => {
+		const local = [
+			{ id: "user-1", role: "user" as const, content: "preedit cargo beans" },
+			{
+				id: "local-preamble",
+				role: "assistant" as const,
+				content: "Let me update that for you. ",
+			},
+		];
+		const pauseMessage = {
+			id: "server-pause",
+			role: "assistant",
+			content: "Let me update that for you. ",
+		};
+		const messageUpdated = serverTranscriptFromCopilotEvent({
+			type: "cf_agent_message_updated",
+			message: pauseMessage,
+		});
+		expect(messageUpdated).toEqual([pauseMessage]);
+		expect(copilotServerTranscriptHasAnswer(messageUpdated ?? [])).toBe(true);
+		expect(
+			copilotTranscriptEventHasAnswer(
+				"cf_agent_message_updated",
+				messageUpdated ?? [],
+			),
+		).toBe(false);
+		expect(mergeCopilotServerTranscript(local, messageUpdated ?? [])).toEqual(
+			local,
+		);
+
+		const approved = reduceCopilotTurnState(
+			reduceCopilotTurnState(
+				reduceCopilotTurnState(INITIAL_COPILOT_TURN_STATE, {
+					type: "started",
+					requestId: "pause-1",
+				}),
+				{ type: "approval_requested", requestId: "pause-1" },
+			),
+			{ type: "approval_resolved", approved: true },
+		);
+		const continuationId = copilotContinuationRequestId({
+			type: "cf_agent_use_chat_response",
+			id: "cont-fast",
+			continuation: true,
+		});
+		expect(continuationId).toBe("cont-fast");
+		const resumed = reduceCopilotTurnState(approved, {
+			type: "continuation_started",
+			requestId: continuationId ?? "cont-fast",
+		});
+		expect(resumed.seenPostApprovalActivity).toBe(false);
+		expect(shouldIgnoreCopilotTurnEnd(resumed, continuationId)).toBe(true);
+		expect(
+			shouldIgnoreCopilotTurnEnd(
+				reduceCopilotTurnState(resumed, { type: "post_approval_activity" }),
+				continuationId,
+			),
+		).toBe(false);
+
+		const chatMessages = serverTranscriptFromCopilotEvent({
+			type: "cf_agent_chat_messages",
+			messages: [
+				{ id: "user-1", role: "user", content: "preedit cargo beans" },
+				pauseMessage,
+				{
+					id: "server-summary",
+					role: "assistant",
+					content: "after tool for preedit cargo beans ",
+				},
+			],
+		});
+		expect(chatMessages).not.toBeNull();
+		expect(
+			copilotTranscriptEventHasAnswer(
+				"cf_agent_chat_messages",
+				chatMessages ?? [],
+			),
+		).toBe(true);
+		expect(shouldApplyCopilotServerTranscript(resumed)).toBe(true);
+		expect(mergeCopilotServerTranscript(local, chatMessages ?? [])).toEqual([
+			{ id: "user-1", role: "user", content: "preedit cargo beans" },
+			{
+				id: "local-preamble",
+				role: "assistant",
+				content:
+					"Let me update that for you. after tool for preedit cargo beans ",
+			},
+		]);
 	});
 
 	it("ignores tool-only updates", () => {

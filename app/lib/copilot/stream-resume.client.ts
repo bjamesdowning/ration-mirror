@@ -97,6 +97,19 @@ export function copilotServerTranscriptHasAnswer(
 	);
 }
 
+/**
+ * `cf_agent_message_updated` for the pause row repeats the preamble. Counting
+ * it as activity lets a fast Think 0.12 continuation finish the turn before
+ * `chat_messages` arrives, which drops the summary.
+ */
+export function copilotTranscriptEventHasAnswer(
+	eventType: string | undefined,
+	messages: readonly ServerTranscriptMessage[],
+): boolean {
+	if (eventType === "cf_agent_message_updated") return false;
+	return copilotServerTranscriptHasAnswer(messages);
+}
+
 export type VisibleTranscriptMessage = {
 	id: string;
 	role: "user" | "assistant";

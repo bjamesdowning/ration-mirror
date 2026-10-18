@@ -65,7 +65,24 @@ export async function loader({ request, params, context }: Route.LoaderArgs) {
 	};
 }
 
-export async function action({ request, params, context }: Route.ActionArgs) {
+type CargoDetailActionResult =
+	| { success: true }
+	| { success: false; error: string }
+	| {
+			success: false;
+			errors: {
+				formErrors: string[];
+				fieldErrors: Record<string, string[] | undefined>;
+			};
+	  }
+	| null
+	| ReturnType<typeof handleApiError>;
+
+export async function action({
+	request,
+	params,
+	context,
+}: Route.ActionArgs): Promise<CargoDetailActionResult> {
 	const {
 		groupId,
 		session: { user },
@@ -129,7 +146,14 @@ export async function action({ request, params, context }: Route.ActionArgs) {
 
 			const parsed = CargoItemSchema.safeParse(payload);
 			if (!parsed.success) {
-				return { success: false, errors: parsed.error.flatten() };
+				const flat = parsed.error.flatten();
+				return {
+					success: false,
+					errors: {
+						formErrors: flat.formErrors,
+						fieldErrors: flat.fieldErrors,
+					},
+				};
 			}
 
 			const updated = await updateItem(

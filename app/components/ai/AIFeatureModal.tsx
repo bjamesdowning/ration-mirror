@@ -145,7 +145,7 @@ export function AIFeatureIntroView({
 						href="/legal/terms"
 						className="underline hover:text-carbon dark:hover:text-white transition-colors"
 					>
-						Learn more
+						Read the terms
 					</a>
 					.
 				</p>

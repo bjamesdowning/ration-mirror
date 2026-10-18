@@ -18,12 +18,15 @@ describe("ai-config.server", () => {
 		["plan_week", "MEDIUM", 8_192, undefined],
 		["import_url", "MINIMAL", 4_096, undefined],
 		["nutrition_estimate", "MINIMAL", 1_024, undefined],
-	])("GATEWAY_FEATURE_CONFIG[%s] profile: thinking=%s maxOutput=%s media=%s", (feature, thinking, maxOutput, media) => {
-		const profile = GATEWAY_FEATURE_CONFIG[feature];
-		expect(profile.thinkingLevel).toBe(thinking);
-		expect(profile.maxOutputTokens).toBe(maxOutput);
-		expect(profile.mediaResolution).toBe(media);
-	});
+	])(
+		"GATEWAY_FEATURE_CONFIG[%s] profile: thinking=%s maxOutput=%s media=%s",
+		(feature, thinking, maxOutput, media) => {
+			const profile = GATEWAY_FEATURE_CONFIG[feature];
+			expect(profile.thinkingLevel).toBe(thinking);
+			expect(profile.maxOutputTokens).toBe(maxOutput);
+			expect(profile.mediaResolution).toBe(media);
+		},
+	);
 
 	it("getGenerationConfig includes thinking, maxOutputTokens, and mediaResolution when set", () => {
 		expect(getGenerationConfig(GATEWAY_FEATURE_CONFIG.scan)).toEqual({
@@ -61,18 +64,16 @@ describe("ai-config.server", () => {
 		});
 	});
 
-	it.each<ThinkingLevel>([
-		"MINIMAL",
-		"LOW",
-		"MEDIUM",
-		"HIGH",
-	])("getGenerationConfig accepts thinking level %s via profile", (level) => {
-		const config = getGenerationConfig({
-			thinkingLevel: level,
-			maxOutputTokens: 512,
-		});
-		expect(config.generationConfig.thinkingConfig.thinkingLevel).toBe(level);
-		expect(config.generationConfig.maxOutputTokens).toBe(512);
-		expect(config.generationConfig.mediaResolution).toBeUndefined();
-	});
+	it.each<ThinkingLevel>(["MINIMAL", "LOW", "MEDIUM", "HIGH"])(
+		"getGenerationConfig accepts thinking level %s via profile",
+		(level) => {
+			const config = getGenerationConfig({
+				thinkingLevel: level,
+				maxOutputTokens: 512,
+			});
+			expect(config.generationConfig.thinkingConfig.thinkingLevel).toBe(level);
+			expect(config.generationConfig.maxOutputTokens).toBe(512);
+			expect(config.generationConfig.mediaResolution).toBeUndefined();
+		},
+	);
 });

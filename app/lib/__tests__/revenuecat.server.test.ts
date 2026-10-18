@@ -126,9 +126,11 @@ describe("setRevenueCatSubscriberAttributes", () => {
 				}),
 			}),
 		);
-		const body = JSON.parse(
-			(fetchMock.mock.calls[0]?.[1] as { body: string }).body,
-		);
+		const init = fetchMock.mock.calls[0]?.[1] as { body: string } | undefined;
+		if (!init) {
+			throw new Error("expected RevenueCat attribute request");
+		}
+		const body = JSON.parse(init.body);
 		expect(body.attributes.organization_id.value).toBe("org_a");
 	});
 });

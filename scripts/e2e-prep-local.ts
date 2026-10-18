@@ -42,10 +42,30 @@ async function applyPendingMigrations(): Promise<{
 	output: string;
 }> {
 	const mf = new Miniflare({
-		modules: true,
-		script: "",
-		d1Persist: D1_PERSIST,
-		d1Databases: { DATABASE: LOCAL_D1_UUID },
+		// Miniflare 5 stores the D1 plugin under `<root>/d1`, which is D1_PERSIST.
+		resourcePersistencePath: WRANGLER_STATE_V3,
+		workers: [
+			{
+				config: {
+					name: "ration-e2e-prep",
+					compatibilityDate: "2026-03-01",
+					env: {
+						DATABASE: { type: "d1", id: LOCAL_D1_UUID },
+					},
+					manifest: {
+						mainModule: "index.js",
+						modulesRoot: ROOT,
+						modules: {
+							"index.js": {
+								type: "esm",
+								contents:
+									"export default { async fetch() { return new Response('ok') } }",
+							},
+						},
+					},
+				},
+			},
+		],
 	});
 	const lines: string[] = [];
 	try {

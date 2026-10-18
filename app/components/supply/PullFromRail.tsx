@@ -170,7 +170,7 @@ export function PullFromRail({
 			</aside>
 			<dialog
 				ref={dialogRef}
-				className="fixed inset-x-0 bottom-0 z-40 m-0 mt-auto max-h-[85dvh] w-full max-w-none overflow-auto rounded-t-2xl border border-platinum bg-ceramic p-4 backdrop:bg-carbon/40 lg:hidden"
+				className="fixed inset-x-0 bottom-0 z-40 m-0 mt-auto max-h-[85dvh] w-full max-w-none overflow-auto rounded-t-2xl border border-platinum bg-ceramic p-4 backdrop:bg-black/40 lg:hidden"
 				onClose={() => onOpenChange(false)}
 			>
 				{panel("pull-from-sheet")}

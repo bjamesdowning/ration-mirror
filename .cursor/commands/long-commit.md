@@ -234,9 +234,9 @@ Re-state approval: must be **Ready for commit pipeline** (equivalent to Clean af
 
 ---
 
-## Phase 5 — Local verify → commit → push
+## Phase 5 — Local verify → local commit, no push
 
-This is the **local quality gate**. GitLab CI verify jobs may be disabled to conserve minutes; do not assume remote CI will catch failures. **Only proceed to commit/push if every required step succeeds.**
+This is the **local quality gate**. GitLab CI verify jobs may be disabled to conserve minutes; do not assume remote CI will catch failures. **Only proceed to the local commit if every required step succeeds.** Do not push from this command. A separate reviewer has to review the diff against `origin/main` for build, runtime, bundling, and dependency risk first. Phase 13 also waits for Billy's approval; that approval does not replace this gate or the independent review.
 
 Obey **Verify command hygiene** above for every command in this phase. Record each gate’s real exit code before claiming pass.
 
@@ -289,7 +289,13 @@ Obey **Verify command hygiene** above for every command in this phase. Record ea
    ```
    Prefer proving migrations locally / against `ration-db-dev` first when the change is migration-heavy.
 
-10. Inspect what will be committed:
+10. Workers Builds gate, required before every local commit that can be pushed, including hotfixes and phase 13. This deletes `node_modules`, reinstalls with Bun 1.4.3 from a frozen lockfile, runs the ration build, then dry-runs the ration, ration-mcp, and ration-copilot deploy commands and loads each bundle in Miniflare. Any startup error fails the gate. Run it after the other checks so it does not wipe `node_modules` out from under them. Do not `wrangler deploy` without `--dry-run`.
+    ```bash
+    bash scripts/workers-builds-gate.sh
+    ```
+    Require exit 0, and require the log to include `workers-builds-gate: all three workers started` plus `startup ok` for `ration`, `ration-mcp`, and `ration-copilot`.
+
+11. Inspect what will be committed:
     ```bash
     git status
     git diff
@@ -297,13 +303,13 @@ Obey **Verify command hygiene** above for every command in this phase. Record ea
     ```
     Refuse to commit secrets (`.env`, `.dev.vars`, credentials, private keys).
 
-11. Stage relevant changes:
+12. Stage relevant changes:
     ```bash
     git add .
     ```
     (Exclude secret files if present; warn the user.)
 
-12. Commit with a conventional message including the version tag(s), e.g. `[v1.6.29]` and `[ios-v1.1.1]` when iOS ships. If a new flag was added, name the key and note dashboard flag stays **off**. Use a HEREDOC:
+13. Commit locally with a conventional message including the version tag(s), e.g. `[v1.6.29]` and `[ios-v1.1.1]` when iOS ships. If a new flag was added, name the key and note dashboard flag stays **off**. Use a HEREDOC:
     ```bash
     git commit -m "$(cat <<'EOF'
     type: short why-focused summary
@@ -313,12 +319,9 @@ Obey **Verify command hygiene** above for every command in this phase. Record ea
     )"
     ```
 
-13. Push (triggers Workers Builds production deploy):
-    ```bash
-    git push
-    ```
+14. Stop. Do **not** `git push` on the implementing agent's review alone. Report the commit SHA and the diff summary. A separate reviewer reviews the diff against `origin/main` for build, runtime, bundling, and dependency risk before anyone pushes. Pushing `main` is the production deploy. Phase 13 stays unpushed until that review and Billy's approval both exist; his approval does not skip the Workers Builds gate.
 
-If any check fails: fix, re-run the failed step (and dependents), then continue. Do **not** use `--no-verify` or skip hooks. Do **not** commit/push while a required gate’s exit code is non-zero or its success marker is missing.
+If any check fails: fix, re-run the failed step (and dependents), then continue. Do **not** use `--no-verify` or skip hooks. Do **not** commit while a required gate’s exit code is non-zero or its success marker is missing.
 
 ### After push (operator, not automated)
 
@@ -336,7 +339,7 @@ After a successful push (or a hard stop), report:
 2. **Review** — blockers / concerns / suggestions / dead code
 3. **Fixes** — what changed in Phase 3 (include flag additions)
 4. **Deferred** — follow-ups (MR workflow, staging Worker, etc.)
-5. **Pipeline** — each gate with **exit code** and pass/fail (lint / unit / typecheck / flag:check / e2e / ios / migrate). Never list a gate as ✓ without exit `0` + success marker when applicable.
+5. **Pipeline** — each gate with **exit code** and pass/fail (lint / unit / typecheck / flag:check / e2e / ios / migrate / workers-builds). Never list a gate as ✓ without exit `0` + success marker when applicable. The workers-builds gate also needs `workers-builds-gate: all three workers started` and `startup ok` for ration, ration-mcp, and ration-copilot.
 6. **Git** — commit hash, message, remote status (or why commit/push did not run)
 7. **Dogfood** — one-line next step (e.g. “Enable `my-flag` for your userId in Flagship”)
 
@@ -346,7 +349,7 @@ For **pattern C**, also list: web version, iOS marketing/build versions, contrac
 
 ## Notes
 
-- This command **implies** commit + push authority (same as `/quick-commit`). Pushing `main` **is** the production deploy trigger via Workers Builds.
+- This command **implies** local commit authority after the gates pass. It does **not** authorize `git push`. Pushing `main` is the production deploy trigger via Workers Builds, and it waits for a separate review of the diff against `origin/main`.
 - For review-only, use `/code-review`.
 - For already-clean diffs with no flag decision needed, use `/quick-commit`.
 - Adding gates: use `/add-feature-flag` (invoked from Phase 3 when Phase 0.5 requires a flag).

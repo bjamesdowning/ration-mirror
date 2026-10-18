@@ -1,6 +1,6 @@
 {
 	"name": "ration",
-	"version": "1.9.28",
+	"version": "1.9.29",
 	"private": true,
 	"license": "SEE LICENSE IN LICENSE",
 	"type": "module",
@@ -43,7 +43,8 @@
 		"dev:mcp": "wrangler dev --config wrangler.mcp.jsonc --env dev",
 		"deploy:mcp": "wrangler deploy --config wrangler.mcp.jsonc --env=''",
 		"dev:copilot": "wrangler dev --config wrangler.copilot.jsonc --env dev",
-		"deploy:copilot": "wrangler deploy --config wrangler.copilot.jsonc --env=''"
+		"deploy:copilot": "wrangler deploy --config wrangler.copilot.jsonc --env=''",
+		"test:workers-builds": "bash scripts/workers-builds-gate.sh"
 	},
 	"dependencies": {
 		"@ai-sdk/google": "^3",

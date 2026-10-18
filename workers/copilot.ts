@@ -2,6 +2,7 @@
 import "./zod-init";
 import {
 	type ChatErrorContext,
+	type ChatResponseResult,
 	type PrepareStepContext,
 	type StepContext,
 	Think,
@@ -77,6 +78,7 @@ import {
 	COPILOT_MCP_SCOPES,
 	toAiSdkTools,
 } from "../app/lib/copilot/tools.server";
+import { copilotTurnUsageDecision } from "../app/lib/copilot/turn-usage";
 import {
 	buildAgentFlagContext,
 	buildFlagContext,
@@ -274,6 +276,8 @@ async function resolveNativeFeatureFlags(
 export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 	workspaceBash = false;
 	private totalUsageTokens = 0;
+	/** Step tokens not yet billed. Committed only when the turn has answer text. */
+	private uncommittedUsageTokens = 0;
 	private billingBlocked = false;
 	private sessionMessageCount = 0;
 	private sessionWarningsEmitted = new Set<SessionLimitWarningSeverity>();
@@ -558,6 +562,7 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 	}
 
 	async beforeTurn(ctx: TurnContext) {
+		if (!ctx.continuation) this.uncommittedUsageTokens = 0;
 		const identity = decodeAgentName(this.name);
 		this.nativeFeatureFlags = await resolveNativeFeatureFlags(
 			this.env,
@@ -933,8 +938,84 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 		const usageTokens =
 			ctx.usage.totalTokens ??
 			(ctx.usage.inputTokens ?? 0) + (ctx.usage.outputTokens ?? 0);
+		this.uncommittedUsageTokens += Math.max(0, Math.ceil(usageTokens));
+		const charge = await this.hydrateCumulativeUsage(identity);
+		if (charge?.mode === "onboarding_briefing" && !charge.onboardingConsumed) {
+			if (this.onboardingTurnDenied) {
+				this.onboardingTurnDenied = false;
+				this.onboardingShouldCountTurn = false;
+				this.onboardingActiveTurn = null;
+				return;
+			}
+			if (!this.onboardingShouldCountTurn) {
+				return;
+			}
+			// Multi-step tool loops re-enter beforeTurn; only burn the grant when
+			// this user turn is finished (not after the first tool step).
+			if (
+				isOnboardingAgentStepContinuing({
+					finishReason: ctx.finishReason,
+					toolCallsLength: ctx.toolCalls?.length ?? 0,
+				})
+			) {
+				return;
+			}
+			this.onboardingShouldCountTurn = false;
+			this.onboardingActiveTurn = null;
+			const nextTurnsUsed = (charge.onboardingTurnsUsed ?? 0) + 1;
+			const consumed = isOnboardingBriefingExhausted(nextTurnsUsed);
+			const nextCharge = {
+				...charge,
+				modelPreset: ONBOARDING_BRIEFING_MODEL_PRESET,
+				onboardingTurnsUsed: nextTurnsUsed,
+				onboardingConsumed: consumed,
+			};
+			await persistConversationCharge(
+				this.env,
+				identity.organizationId,
+				identity.conversationId,
+				nextCharge,
+			);
+			if (consumed) {
+				await finalizeOnboardingBriefing(this.env, identity.userId);
+				writeCopilotMetric(
+					this.env,
+					"onboarding_briefing_completed",
+					{ ...identity, source: "agent" },
+					identity.conversationId,
+				);
+			} else {
+				writeCopilotMetric(
+					this.env,
+					"onboarding_briefing_turn_completed",
+					{ ...identity, source: "agent" },
+					identity.conversationId,
+					{ doubles: [nextTurnsUsed] },
+				);
+			}
+		}
+	}
+
+	async onChatResponse(result: ChatResponseResult) {
+		const decision = copilotTurnUsageDecision({
+			status: result.status,
+			parts: result.message.parts,
+		});
+		if (decision === "discard") {
+			this.uncommittedUsageTokens = 0;
+			return;
+		}
+		if (decision !== "commit") return;
+		await this.commitUncommittedUsage();
+	}
+
+	private async commitUncommittedUsage() {
+		const pending = this.uncommittedUsageTokens;
+		if (pending <= 0) return;
+		this.uncommittedUsageTokens = 0;
+		const identity = decodeAgentName(this.name);
 		this.totalUsageTokens = resolveCumulativeUsageTokens({
-			memory: this.totalUsageTokens + usageTokens,
+			memory: this.totalUsageTokens + pending,
 		});
 		this.persistUsageConfig();
 		let charge: Awaited<
@@ -995,60 +1076,6 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 			this.totalUsageTokens,
 			this.sessionMessageCount,
 		);
-		if (charge.mode === "onboarding_briefing" && !charge.onboardingConsumed) {
-			if (this.onboardingTurnDenied) {
-				this.onboardingTurnDenied = false;
-				this.onboardingShouldCountTurn = false;
-				this.onboardingActiveTurn = null;
-				return;
-			}
-			if (!this.onboardingShouldCountTurn) {
-				return;
-			}
-			// Multi-step tool loops re-enter beforeTurn; only burn the grant when
-			// this user turn is finished (not after the first tool step).
-			if (
-				isOnboardingAgentStepContinuing({
-					finishReason: ctx.finishReason,
-					toolCallsLength: ctx.toolCalls?.length ?? 0,
-				})
-			) {
-				return;
-			}
-			this.onboardingShouldCountTurn = false;
-			this.onboardingActiveTurn = null;
-			const nextTurnsUsed = (charge.onboardingTurnsUsed ?? 0) + 1;
-			const consumed = isOnboardingBriefingExhausted(nextTurnsUsed);
-			const nextCharge = {
-				...charge,
-				modelPreset: ONBOARDING_BRIEFING_MODEL_PRESET,
-				onboardingTurnsUsed: nextTurnsUsed,
-				onboardingConsumed: consumed,
-			};
-			await persistConversationCharge(
-				this.env,
-				identity.organizationId,
-				identity.conversationId,
-				nextCharge,
-			);
-			if (consumed) {
-				await finalizeOnboardingBriefing(this.env, identity.userId);
-				writeCopilotMetric(
-					this.env,
-					"onboarding_briefing_completed",
-					{ ...identity, source: "agent" },
-					identity.conversationId,
-				);
-			} else {
-				writeCopilotMetric(
-					this.env,
-					"onboarding_briefing_turn_completed",
-					{ ...identity, source: "agent" },
-					identity.conversationId,
-					{ doubles: [nextTurnsUsed] },
-				);
-			}
-		}
 	}
 
 	override async fetch(request: Request): Promise<Response> {

@@ -34,6 +34,13 @@ import {
 	formatCopilotTokenCount,
 	mergeSessionUsageSnapshots,
 } from "~/lib/copilot/session-usage";
+import {
+	assistantTextFromServerMessage,
+	copilotEventKeepsTurnAlive,
+	copilotResumeAckFrame,
+	mergeCopilotServerTranscript,
+	serverTranscriptFromCopilotEvent,
+} from "~/lib/copilot/stream-resume.client";
 import { resolveCopilotToolEnd } from "~/lib/copilot/tool-event.client";
 import {
 	type CopilotTurnEvent,
@@ -95,7 +102,15 @@ type CopilotSessionLimitWarning = {
 
 type CopilotEvent = {
 	type: string;
-	message?: CopilotMessage;
+	message?: CopilotMessage & {
+		parts?: Array<{ type?: string; text?: string }>;
+	};
+	messages?: Array<{
+		id?: string;
+		role?: string;
+		content?: string;
+		parts?: Array<{ type?: string; text?: string }>;
+	}>;
 	messageId?: string;
 	text?: string;
 	status?: { toolCallId: string; toolName: string; label: string };
@@ -451,6 +466,10 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 			setError(
 				"Copilot stopped responding. Please try again — the previous turn was ended to unblock the chat.",
 			);
+			cancelCopilotRequest(
+				socketRef.current,
+				turnStateRef.current.activeRequestId,
+			);
 			endTurn({ persist: true, focus: true, clearApproval: true });
 		}, 5_000);
 		return () => clearInterval(id);
@@ -615,6 +634,34 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 
 	const handleEvent = useCallback(
 		(event: CopilotEvent) => {
+			if (copilotEventKeepsTurnAlive(event.type)) {
+				lastActivityAtRef.current = Date.now();
+			}
+			const resumeAck = copilotResumeAckFrame(event);
+			if (resumeAck && socketRef.current?.readyState === WebSocket.OPEN) {
+				socketRef.current.send(JSON.stringify(resumeAck));
+			}
+			const serverTranscript = serverTranscriptFromCopilotEvent(event);
+			if (serverTranscript) {
+				const hasAnswer = serverTranscript.some(
+					(message) =>
+						assistantTextFromServerMessage(message).trim().length > 0,
+				);
+				setMessages((current) => {
+					const next = mergeCopilotServerTranscript(current, serverTranscript);
+					if (next !== current) persistSession(next);
+					return next;
+				});
+				if (hasAnswer) {
+					markPostApprovalActivity();
+					if (isCopilotTurnActive(turnStateRef.current)) {
+						setTurnPhase("streaming");
+					}
+					setError((current) =>
+						current?.startsWith("Copilot stopped responding.") ? null : current,
+					);
+				}
+			}
 			if (event.type === "cf_agent_use_chat_response") {
 				const action = decodeAgentResponseFrame(event as AgentResponseFrame);
 				const turnStatus = turnStateRef.current.status;

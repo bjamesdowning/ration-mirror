@@ -16,6 +16,9 @@ import { normalizeForCargoDedup } from "./matching.server";
 import {
 	chunkArray,
 	D1_MAX_SUPPLY_ROWS_PER_STATEMENT,
+	D1_SAFE_BOUND_PARAMS,
+	packByBindBudget,
+	SUPPLY_ITEM_INSERT_COLUMNS,
 } from "./query-utils.server";
 import { getQueueJob } from "./queue-job.server";
 import { ensureLiveSupplyList, getSupplyListById } from "./supply.server";
@@ -736,6 +739,35 @@ function cargoTotals(rows: CargoIndexRow[]) {
 	return map;
 }
 
+/**
+ * `manualLiveInsert` binds `createdAt` as well as `SUPPLY_ITEM_INSERT_COLUMNS`.
+ * 5 × 18 = 90, which stays under D1's batch ceiling only when that INSERT is
+ * not combined with another insert or the Live revision touch.
+ */
+const MANUAL_LIVE_INSERT_BINDS_PER_ROW = SUPPLY_ITEM_INSERT_COLUMNS + 1;
+const MANUAL_LIVE_ROWS_PER_INSERT = Math.floor(
+	D1_SAFE_BOUND_PARAMS / MANUAL_LIVE_INSERT_BINDS_PER_ROW,
+);
+
+function statementBindCount(statement: { toSQL: () => { params: unknown[] } }) {
+	return statement.toSQL().params.length;
+}
+
+async function runUnderD1BindBudget(
+	d1: ReturnType<typeof drizzle>,
+	statements: Array<{
+		bindCount: number;
+		// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch statement types
+		value: any;
+	}>,
+) {
+	for (const batch of packByBindBudget(statements, D1_SAFE_BOUND_PARAMS)) {
+		if (batch.length === 0) continue;
+		// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
+		await d1.batch(batch as [any, ...any[]]);
+	}
+}
+
 function manualLiveInsert(item: SupplyItemRow, liveListId: string, now: Date) {
 	const base = computeBaseFields(item.quantity, item.unit, item.name);
 	return {
@@ -928,21 +960,27 @@ export async function copyItemsToLive(options: {
 	}
 
 	if (selected.length > 0) {
-		const statements = [
-			...updates,
-			...chunkArray(inserts, D1_MAX_SUPPLY_ROWS_PER_STATEMENT).map((chunk) =>
-				d1.insert(supplyItem).values(chunk),
-			),
-			d1
-				.update(supplyList)
-				.set({
-					updatedAt: now,
-					revision: (live.revision ?? 0) + 1,
-				})
-				.where(eq(supplyList.id, live.id)),
-		];
-		// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
-		await d1.batch(statements as [any, ...any[]]);
+		const revision = d1
+			.update(supplyList)
+			.set({
+				updatedAt: now,
+				revision: (live.revision ?? 0) + 1,
+			})
+			.where(eq(supplyList.id, live.id));
+		// Updates are sparse. The revision touch is its own statement and its
+		// binds count toward the same batch budget. Each multi-row insert runs
+		// alone: two chunks plus this touch exceed D1's 100-parameter ceiling.
+		await runUnderD1BindBudget(d1, [
+			...updates.map((statement) => ({
+				bindCount: statementBindCount(statement),
+				value: statement,
+			})),
+			{ bindCount: statementBindCount(revision), value: revision },
+		]);
+		for (const chunk of chunkArray(inserts, MANUAL_LIVE_ROWS_PER_INSERT)) {
+			// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
+			await d1.batch([d1.insert(supplyItem).values(chunk)] as [any, ...any[]]);
+		}
 	}
 
 	if (options.clientKey) {
@@ -1039,19 +1077,24 @@ export async function undoAddToLive(options: {
 	}
 
 	if (deletes.length + updates.length > 0) {
-		const statements = [
-			...deletes,
-			...updates,
-			d1
-				.update(supplyList)
-				.set({
-					updatedAt: now,
-					revision: (live.revision ?? 0) + 1,
-				})
-				.where(eq(supplyList.id, live.id)),
-		];
-		// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
-		await d1.batch(statements as [any, ...any[]]);
+		const revision = d1
+			.update(supplyList)
+			.set({
+				updatedAt: now,
+				revision: (live.revision ?? 0) + 1,
+			})
+			.where(eq(supplyList.id, live.id));
+		await runUnderD1BindBudget(d1, [
+			...deletes.map((statement) => ({
+				bindCount: statementBindCount(statement),
+				value: statement,
+			})),
+			...updates.map((statement) => ({
+				bindCount: statementBindCount(statement),
+				value: statement,
+			})),
+			{ bindCount: statementBindCount(revision), value: revision },
+		]);
 	}
 
 	return {

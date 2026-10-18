@@ -680,10 +680,12 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 				icon={<ShoppingCartIcon className="w-6 h-6 text-hyper-green" />}
 				title="Supply"
 				titleRowExtra={
-					<span className="inline-flex items-center gap-1 rounded-full bg-hyper-green/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-hyper-green">
-						<span className="h-1.5 w-1.5 rounded-full bg-hyper-green motion-safe:animate-pulse" />
-						Live
-					</span>
+					multiListsEnabled ? (
+						<span className="inline-flex items-center gap-1 rounded-full bg-hyper-green/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-hyper-green">
+							<span className="h-1.5 w-1.5 rounded-full bg-hyper-green motion-safe:animate-pulse" />
+							Live
+						</span>
+					) : null
 				}
 				itemCount={filteredItems.length}
 				showSearch={true}
@@ -701,7 +703,13 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 					className="py-10"
 				/>
 			) : (
-				<div className="grid gap-6 pb-36 md:pb-0 lg:grid-cols-[minmax(0,1fr)_22.5rem]">
+				<div
+					className={`grid gap-6 pb-36 md:pb-0${
+						multiListsEnabled && organizationId
+							? " lg:grid-cols-[minmax(0,1fr)_22.5rem]"
+							: ""
+					}`}
+				>
 					<div className="min-w-0 space-y-6">
 						{multiListsEnabled && catalog && displayList && (
 							<div className="flex flex-wrap items-center gap-2">

@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { beforeEach, describe, expect, it } from "vitest";
 import { cargo, supplyItem, supplyList } from "~/db/schema";
+import { D1_MAX_BOUND_PARAMS } from "~/lib/query-utils.server";
 import {
 	completeSupplyList,
 	getUnpurchasedSupplyItemIdsToClear,
@@ -384,6 +385,71 @@ describe("copyItemsToLive", () => {
 			.from(supplyItem)
 			.where(eq(supplyItem.id, liveItemId));
 		expect(row?.isPurchased).toBe(true);
+	});
+
+	it("keeps add-to-live batches under D1's 100 bound parameters", async () => {
+		const batchBinds: number[] = [];
+		const bindsByStatement = new WeakMap<object, number>();
+		const originalPrepare = db.prepare.bind(db);
+		const originalBatch = db.batch.bind(db);
+		db.prepare = ((query: string) => {
+			const statement = originalPrepare(query);
+			const binds = query.split("?").length - 1;
+			bindsByStatement.set(statement, binds);
+			const originalBind = statement.bind.bind(statement);
+			statement.bind = ((...params: unknown[]) => {
+				const bound = originalBind(...params);
+				bindsByStatement.set(bound, binds);
+				return bound;
+			}) as typeof statement.bind;
+			return statement;
+		}) as typeof db.prepare;
+		db.batch = (async (statements: D1PreparedStatement[]) => {
+			let total = 0;
+			for (const statement of statements) {
+				const binds = bindsByStatement.get(statement);
+				if (binds == null) {
+					throw new Error(
+						"D1 batch statement was not prepared on this database",
+					);
+				}
+				total += binds;
+			}
+			// D1 rejects the whole batch script at 100. Node sqlite allows 999.
+			if (total >= D1_MAX_BOUND_PARAMS) {
+				throw new Error(`too many SQL variables (${total})`);
+			}
+			batchBinds.push(total);
+			return originalBatch(statements);
+		}) as typeof db.batch;
+
+		const ids: string[] = [];
+		for (let index = 0; index < 98; index++) {
+			ids.push(await insertItem(d1, savedId, { name: `Staple ${index}` }));
+		}
+		const copied = await copyItemsToLive({
+			env: envFor(db),
+			organizationId: ORG,
+			sourceListId: savedId,
+			mode: "add_all",
+			itemIds: ids,
+		});
+		expect(copied.result.counts.added).toBe(98);
+		const undone = await undoAddToLive({
+			env: envFor(db),
+			organizationId: ORG,
+			sourceListId: savedId,
+			added: copied.result.added.map((row) => ({
+				liveItemId: row.liveItemId,
+			})),
+			merged: [],
+		});
+		expect(undone.undone.deleted).toBe(98);
+		expect(batchBinds.length).toBeGreaterThan(1);
+		expect(Math.max(...batchBinds)).toBeGreaterThanOrEqual(90);
+		for (const binds of batchBinds) {
+			expect(binds).toBeLessThan(D1_MAX_BOUND_PARAMS);
+		}
 	});
 });
 

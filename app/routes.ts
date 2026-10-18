@@ -81,6 +81,8 @@ export default [
 
 		// Supply
 		route("supply", "routes/hub/supply.tsx"),
+		route("supply/lists", "routes/hub/supply.lists.tsx"),
+		route("supply/lists/:id", "routes/hub/supply.lists.$id.tsx"),
 
 		// Manifest (Meal Planning Calendar)
 		route("manifest", "routes/hub/manifest.tsx"),

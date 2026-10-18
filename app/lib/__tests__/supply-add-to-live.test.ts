@@ -434,8 +434,8 @@ describe("saved list status", () => {
 			manualOnly: true,
 		});
 		expect(byName.get("Milk")?.lastDockedAt).toBe("2026-10-01T00:00:00.000Z");
-		expect(byName.get("Eggs")?.live.state).toBe("in_cart");
-		expect(byName.get("Rice")?.live.state).toBe("none");
+		expect(byName.get("Eggs")?.live?.state).toBe("in_cart");
+		expect(byName.get("Rice")?.live?.state).toBe("none");
 		expect(byName.get("Rice")?.inCargo).toBe(2);
 		expect(byName.get("Rice")?.lastDockedAt).toBeNull();
 	});

@@ -640,6 +640,20 @@ export type SavedListLiveStatus =
 			liveItemId: string;
 	  };
 
+type LoadedSupplyList = NonNullable<
+	Awaited<ReturnType<typeof getSupplyListById>>
+>;
+
+export type SavedListView = Omit<LoadedSupplyList, "items"> & {
+	items: Array<
+		LoadedSupplyList["items"][number] & {
+			live?: SavedListLiveStatus;
+			inCargo?: number;
+			lastDockedAt?: string | null;
+		}
+	>;
+};
+
 const LAST_BOUGHT_WINDOW_MS = 365 * 24 * 60 * 60 * 1000;
 
 function emptyAddToLiveResult(): SupplyAddToLiveResult {
@@ -1109,7 +1123,7 @@ export async function getSavedListView(
 	organizationId: string,
 	listId: string,
 	now = new Date(),
-) {
+): Promise<SavedListView | null> {
 	const list = await getSupplyListById(env.DB, organizationId, listId);
 	if (!list) return null;
 	if (resolveSupplyListState(list) === "live") return list;

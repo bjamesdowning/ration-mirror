@@ -2,6 +2,8 @@ import { RefreshCw } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
 	data,
+	Link,
+	redirect,
 	useFetcher,
 	useLocation,
 	useRevalidator,
@@ -33,15 +35,14 @@ import { Toast } from "~/components/shell/Toast";
 import { UpgradePrompt } from "~/components/shell/UpgradePrompt";
 import { AddItemForm } from "~/components/supply/AddItemForm";
 import { ExportMenu } from "~/components/supply/ExportMenu";
+import { PullFromRail } from "~/components/supply/PullFromRail";
 import { ReplenishModal } from "~/components/supply/ReplenishModal";
 import { ReplenishReceiptModal } from "~/components/supply/ReplenishReceiptModal";
 import { ShareModal } from "~/components/supply/ShareModal";
 import { SnoozedItemsPanel } from "~/components/supply/SnoozedItemsPanel";
 import { SupplyCollaborationPoll } from "~/components/supply/SupplyCollaborationPoll";
 import { SupplyHorizonPicker } from "~/components/supply/SupplyHorizonPicker";
-import { SupplyLibraryActions } from "~/components/supply/SupplyLibraryActions";
 import { SupplyList } from "~/components/supply/SupplyList";
-import { SupplyListSwitcher } from "~/components/supply/SupplyListSwitcher";
 import { SupplyShoppingBar } from "~/components/supply/SupplyShoppingBar";
 import { usePageFilters } from "~/hooks/usePageFilters";
 import { useToast } from "~/hooks/useToast";
@@ -66,11 +67,13 @@ import {
 	createSupplyListFromSelectedMeals,
 	getActiveSnoozes,
 	getSupplyList,
-	getSupplyListById,
 } from "~/lib/supply.server";
 import { resolveSupplyListTarget } from "~/lib/supply-list-access.server";
 import { isSupplyMultiListsEnabled } from "~/lib/supply-list-flag.server";
-import { LIVE_ONLY_DOCK_MESSAGE } from "~/lib/supply-list-kinds";
+import {
+	LIVE_ONLY_DOCK_MESSAGE,
+	resolveSupplyListState,
+} from "~/lib/supply-list-kinds";
 import { loadSupplyListRow } from "~/lib/supply-list-target.server";
 import { getSupplyCatalog } from "~/lib/supply-lists.server";
 import { filterSupplyItemsByCargoTags } from "~/lib/supply-tags";
@@ -109,8 +112,7 @@ export function shouldRevalidate({
 			key === "domain" ||
 			key === "tags" ||
 			key === "sort" ||
-			key === "hidePurchased" ||
-			key === "list"
+			key === "hidePurchased"
 		)
 			continue;
 		if (currentUrl.searchParams.get(key) !== nextUrl.searchParams.get(key)) {
@@ -148,9 +150,20 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		context.cloudflare.env,
 		flagContext,
 	);
+	const requestUrl = new URL(request.url);
 	const requestedListId = multiListsEnabled
-		? new URL(request.url).searchParams.get("list")
+		? requestUrl.searchParams.get("list")
 		: null;
+	if (requestedListId) {
+		const requested = await loadSupplyListRow(
+			context.cloudflare.env.DB,
+			groupId,
+			requestedListId,
+		);
+		if (requested && resolveSupplyListState(requested) !== "live") {
+			throw redirect(`/hub/supply/lists/${requestedListId}`);
+		}
+	}
 
 	const [
 		listResult,
@@ -161,9 +174,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		manifestWeekMealsResult,
 		snoozesResult,
 	] = await Promise.allSettled([
-		requestedListId
-			? getSupplyListById(context.cloudflare.env.DB, groupId, requestedListId)
-			: getSupplyList(context.cloudflare.env.DB, groupId),
+		getSupplyList(context.cloudflare.env.DB, groupId),
 		multiListsEnabled
 			? getSupplyCatalog(context.cloudflare.env, groupId)
 			: Promise.resolve(null),
@@ -192,15 +203,6 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 	let list = listResult.value;
 	if (!list) {
 		list = await getSupplyList(context.cloudflare.env.DB, groupId);
-	} else if (requestedListId) {
-		const row = await loadSupplyListRow(
-			context.cloudflare.env.DB,
-			groupId,
-			requestedListId,
-		);
-		if (!row || row.kind === "live") {
-			list = await getSupplyList(context.cloudflare.env.DB, groupId);
-		}
 	}
 	const catalog = catalogResult.value;
 	const activeSelections = activeSelectionsResult.value;
@@ -250,6 +252,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		),
 		multiListsEnabled,
 		catalog,
+		organizationId: groupId,
 	};
 }
 
@@ -381,6 +384,7 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 		canManageSupplySettings,
 		multiListsEnabled = false,
 		catalog = null,
+		organizationId,
 	} = loaderData;
 	const location = useLocation();
 	type SyncResult = {
@@ -406,6 +410,7 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 	const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
 	const [showReplenishModal, setShowReplenishModal] = useState(false);
 	const [showReplenishReceipt, setShowReplenishReceipt] = useState(false);
+	const [pullOpen, setPullOpen] = useState(false);
 	const cameraRef = useRef<CameraInputHandle>(null);
 	const revalidator = useRevalidator();
 	const dashboardData = useRouteLoaderData("routes/hub") as
@@ -431,8 +436,7 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 	const dockToast = useToast({ duration: 4000 });
 	const isLiveList =
 		!multiListsEnabled || !displayList?.kind || displayList.kind === "live";
-
-	const libraryFetcher = useFetcher();
+	const pullLists = [...(catalog?.saved ?? []), ...(catalog?.templates ?? [])];
 	const {
 		activeDomain,
 		currentTags,
@@ -675,6 +679,12 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 			<PageHeader
 				icon={<ShoppingCartIcon className="w-6 h-6 text-hyper-green" />}
 				title="Supply"
+				titleRowExtra={
+					<span className="inline-flex items-center gap-1 rounded-full bg-hyper-green/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-hyper-green">
+						<span className="h-1.5 w-1.5 rounded-full bg-hyper-green motion-safe:animate-pulse" />
+						Live
+					</span>
+				}
 				itemCount={filteredItems.length}
 				showSearch={true}
 				searchPlaceholder="Search items..."
@@ -691,192 +701,171 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 					className="py-10"
 				/>
 			) : (
-				<div className="space-y-6 pb-36 md:pb-0">
-					{multiListsEnabled && catalog && displayList && (
-						<div className="space-y-3">
-							<SupplyListSwitcher
-								catalog={catalog}
-								selectedId={displayList.id}
-								onCreate={() => {
-									const name = window.prompt("New list name", "Shopping");
-									if (!name) return;
-									libraryFetcher.submit(
-										JSON.stringify({ name, kind: "saved" }),
-										{
-											method: "POST",
-											action: "/api/supply-lists/catalog",
-											encType: "application/json",
-										},
-									);
-								}}
-								onSnapshot={() => {
-									const name = window.prompt(
-										"Save Live as list",
-										`Supply ${new Date().toLocaleDateString()}`,
-									);
-									if (!name) return;
-									libraryFetcher.submit(
-										JSON.stringify({
-											name,
-											kind: "saved",
-											seed: { type: "copy" },
-										}),
-										{
-											method: "POST",
-											action: "/api/supply-lists/catalog",
-											encType: "application/json",
-										},
-									);
-								}}
-							/>
-							<SupplyLibraryActions
-								listId={displayList.id}
-								state={
-									displayList.archivedAt
-										? "archived"
-										: (displayList.kind ?? "live")
-								}
-								atCapacity={
-									catalog.capacity.limit !== -1 &&
-									catalog.capacity.current >= catalog.capacity.limit
-								}
-							/>
-							<SupplyCollaborationPoll
-								key={displayList.id}
-								enabled
-								listId={displayList.id}
-								revision={displayList.revision ?? 0}
-							/>
-						</div>
-					)}
-					{/* Sync status banner — visible during background or manual list update */}
-					{isLiveList && fetcher.state !== "idle" && (
-						<output
-							className="flex items-center gap-2 px-4 py-2 rounded-lg bg-hyper-green/10 text-hyper-green text-sm font-medium"
-							aria-live="polite"
-						>
-							<span className="animate-pulse">●</span>
-							Updating list from Cargo, Galley, and Manifest...
-						</output>
-					)}
+				<div className="grid gap-6 pb-36 md:pb-0 lg:grid-cols-[minmax(0,1fr)_22.5rem]">
+					<div className="min-w-0 space-y-6">
+						{multiListsEnabled && catalog && displayList && (
+							<div className="flex flex-wrap items-center gap-2">
+								<Link
+									to="/hub/supply/lists"
+									className="btn-secondary inline-flex min-h-11 items-center rounded-lg px-3 text-sm font-semibold"
+								>
+									Lists
+								</Link>
+								<button
+									type="button"
+									className="btn-secondary min-h-11 rounded-lg px-3 text-sm font-semibold lg:hidden"
+									onClick={() => setPullOpen(true)}
+								>
+									Pull from
+								</button>
+								<SupplyCollaborationPoll
+									key={displayList.id}
+									enabled
+									listId={displayList.id}
+									revision={displayList.revision ?? 0}
+								/>
+							</div>
+						)}
+						{/* Sync status banner — visible during background or manual list update */}
+						{isLiveList && fetcher.state !== "idle" && (
+							<output
+								className="flex items-center gap-2 px-4 py-2 rounded-lg bg-hyper-green/10 text-hyper-green text-sm font-medium"
+								aria-live="polite"
+							>
+								<span className="animate-pulse">●</span>
+								Updating list from Cargo, Galley, and Manifest...
+							</output>
+						)}
 
-					<SupplyShoppingBar
-						purchasedCount={progressPurchasedCount}
-						totalCount={progressTotalCount}
-					/>
-					{isLiveList && (
-						<div className="hidden md:block glass-panel rounded-xl p-4">
-							<p className="text-xs font-semibold text-muted uppercase tracking-widest mb-3">
-								Manifest planning
-							</p>
-							<SupplyHorizonPicker
-								horizonDays={supplyWindow.horizonDays}
-								windowEndDate={supplyWindow.endDate}
-								canEdit={canManageSupplySettings}
-								showStepper
-								onHorizonChange={() => handleRefreshList()}
-							/>
-						</div>
-					)}
-					<div className="hidden md:block">
-						<PanelToolbar
-							primaryAction={
-								<div className="flex gap-2">
-									{isLiveList && (
+						<SupplyShoppingBar
+							purchasedCount={progressPurchasedCount}
+							totalCount={progressTotalCount}
+						/>
+						{isLiveList && (
+							<div className="hidden md:block glass-panel rounded-xl p-4">
+								<p className="text-xs font-semibold text-muted uppercase tracking-widest mb-3">
+									Manifest planning
+								</p>
+								<SupplyHorizonPicker
+									horizonDays={supplyWindow.horizonDays}
+									windowEndDate={supplyWindow.endDate}
+									canEdit={canManageSupplySettings}
+									showStepper
+									onHorizonChange={() => handleRefreshList()}
+								/>
+							</div>
+						)}
+						<div className="hidden md:block">
+							<PanelToolbar
+								primaryAction={
+									<div className="flex gap-2">
+										{isLiveList && (
+											<button
+												type="button"
+												onClick={handleRefreshList}
+												disabled={fetcher.state !== "idle"}
+												className="flex items-center gap-2 px-4 py-2 font-semibold rounded-lg text-sm transition-all btn-secondary"
+											>
+												<RefreshCw
+													className={`w-4 h-4 ${fetcher.state !== "idle" ? "animate-spin" : ""}`}
+												/>
+												Refresh list
+											</button>
+										)}
 										<button
 											type="button"
-											onClick={handleRefreshList}
-											disabled={fetcher.state !== "idle"}
-											className="flex items-center gap-2 px-4 py-2 font-semibold rounded-lg text-sm transition-all btn-secondary"
+											onClick={() => setShowReplenishModal(true)}
+											disabled={isDocking}
+											className="flex items-center gap-2 px-4 py-2 font-bold rounded-lg text-sm transition-all shadow-sm bg-hyper-green text-on-hyper-green hover:shadow-glow-sm"
 										>
-											<RefreshCw
-												className={`w-4 h-4 ${fetcher.state !== "idle" ? "animate-spin" : ""}`}
-											/>
-											Refresh list
+											<CheckIcon className="w-4 h-4" />
+											Replenish Cargo
 										</button>
-									)}
-									<button
-										type="button"
-										onClick={() => setShowReplenishModal(true)}
-										disabled={isDocking}
-										className="flex items-center gap-2 px-4 py-2 font-bold rounded-lg text-sm transition-all shadow-sm bg-hyper-green text-on-hyper-green hover:shadow-glow-sm"
-									>
-										<CheckIcon className="w-4 h-4" />
-										Replenish Cargo
-									</button>
-								</div>
-							}
-							secondaryAction={
-								<div className="flex gap-2">
-									<ExportMenu listId={displayList.id} />
-									<button
-										type="button"
-										onClick={() => setShowShareModal(true)}
-										className="flex items-center gap-2 px-4 py-3 btn-secondary font-semibold rounded-lg transition-all"
-									>
-										<ShareIcon className="w-4 h-4" />
-										Share
-									</button>
-								</div>
-							}
-							quickAddPlaceholder="Add Item"
-							showQuickAdd={showQuickAdd}
-							onToggleQuickAdd={() => setShowQuickAdd(!showQuickAdd)}
-							quickAddForm={
+									</div>
+								}
+								secondaryAction={
+									<div className="flex gap-2">
+										<ExportMenu listId={displayList.id} />
+										<button
+											type="button"
+											onClick={() => setShowShareModal(true)}
+											className="flex items-center gap-2 px-4 py-3 btn-secondary font-semibold rounded-lg transition-all"
+										>
+											<ShareIcon className="w-4 h-4" />
+											Share
+										</button>
+									</div>
+								}
+								quickAddPlaceholder="Add Item"
+								showQuickAdd={showQuickAdd}
+								onToggleQuickAdd={() => setShowQuickAdd(!showQuickAdd)}
+								quickAddForm={
+									<AddItemForm
+										listId={displayList.id}
+										defaultDomain={
+											activeDomain === "all" ? "food" : activeDomain
+										}
+									/>
+								}
+							/>
+						</div>
+
+						{/* Mobile Quick Add Form */}
+						{showQuickAdd && (
+							<div
+								data-testid="supply-quick-add"
+								className="glass-panel rounded-xl p-6 md:hidden animate-fade-in"
+							>
 								<AddItemForm
 									listId={displayList.id}
 									defaultDomain={activeDomain === "all" ? "food" : activeDomain}
+									onAdd={() => setShowQuickAdd(false)}
 								/>
-							}
-						/>
-					</div>
+							</div>
+						)}
 
-					{/* Mobile Quick Add Form */}
-					{showQuickAdd && (
-						<div
-							data-testid="supply-quick-add"
-							className="glass-panel rounded-xl p-6 md:hidden animate-fade-in"
-						>
-							<AddItemForm
-								listId={displayList.id}
-								defaultDomain={activeDomain === "all" ? "food" : activeDomain}
-								onAdd={() => setShowQuickAdd(false)}
+						{/* No Search Results */}
+						{filteredItems.length === 0 && searchQuery && (
+							<EmptyPanel
+								icon={<SearchIcon className="w-12 h-12 text-muted" />}
+								title="No Results"
+								description={`No items found matching "${searchQuery}"`}
+								className="py-12"
 							/>
-						</div>
-					)}
+						)}
 
-					{/* No Search Results */}
-					{filteredItems.length === 0 && searchQuery && (
-						<EmptyPanel
-							icon={<SearchIcon className="w-12 h-12 text-muted" />}
-							title="No Results"
-							description={`No items found matching "${searchQuery}"`}
-							className="py-12"
-						/>
-					)}
+						{/* Supply List Content */}
+						{!(filteredItems.length === 0 && searchQuery) && (
+							<SupplyList
+								key={displayList.id}
+								list={{ ...displayList, items: filteredItems }}
+								cargoRows={cargo ?? []}
+								mealTagsByMealId={mealTagsByMealId}
+								filterDomain="all"
+								filterSearch=""
+								sortMode={sortMode}
+								onRefresh={() => revalidator.revalidate()}
+							/>
+						)}
 
-					{/* Supply List Content */}
-					{!(filteredItems.length === 0 && searchQuery) && (
-						<SupplyList
-							key={displayList.id}
-							list={{ ...displayList, items: filteredItems }}
-							cargoRows={cargo ?? []}
-							mealTagsByMealId={mealTagsByMealId}
-							filterDomain="all"
-							filterSearch=""
-							sortMode={sortMode}
-							onRefresh={() => revalidator.revalidate()}
+						{/* Snoozed Items (collapsible) */}
+						{snoozes.length > 0 && (
+							<SnoozedItemsPanel
+								snoozes={snoozes}
+								listId={displayList.id}
+								cargoRows={cargo ?? []}
+							/>
+						)}
+					</div>
+					{multiListsEnabled && organizationId ? (
+						<PullFromRail
+							lists={pullLists}
+							organizationId={organizationId}
+							liveItemCount={displayList.items?.length ?? 0}
+							open={pullOpen}
+							onOpenChange={setPullOpen}
 						/>
-					)}
-
-					{/* Snoozed Items (collapsible) */}
-					{snoozes.length > 0 && (
-						<SnoozedItemsPanel
-							snoozes={snoozes}
-							listId={displayList.id}
-							cargoRows={cargo ?? []}
-						/>
-					)}
+					) : null}
 				</div>
 			)}
 

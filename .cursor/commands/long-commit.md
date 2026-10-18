@@ -240,10 +240,11 @@ This is the **local quality gate**. GitLab CI verify jobs may be disabled to con
 
 Obey **Verify command hygiene** above for every command in this phase. Record each gate’s real exit code before claiming pass.
 
-1. Sync dependencies:
+1. Sync dependencies with the Bun that Workers Builds uses (1.4.3). This step must not rewrite `bun.lock`. A lockfile saved by another Bun can pass a local install and still fail `bun install --frozen-lockfile` in the build.
    ```bash
-   bun install
+   bunx bun@1.4.3 install --frozen-lockfile
    ```
+   Require exit 0. If Bun reports that overrides changed since `bun.lock` was saved, regenerate with `bunx bun@1.4.3 install` (not frozen), remove `node_modules`, and run the frozen install again before committing. Do not commit a lockfile written by a different Bun.
 
 2. Lint:
    ```bash

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+	copilotCancelRequestIds,
 	INITIAL_COPILOT_TURN_STATE,
 	isCopilotTurnActive,
 	reduceCopilotTurnState,
@@ -152,5 +153,39 @@ describe("Copilot turn lifecycle", () => {
 		expect(shouldIgnoreCopilotTurnEnd(withActivity, "continuation-2")).toBe(
 			false,
 		);
+	});
+
+	it("cancels the resumed continuation id as well as the original request", () => {
+		const approved = reduceCopilotTurnState(
+			reduceCopilotTurnState(
+				reduceCopilotTurnState(INITIAL_COPILOT_TURN_STATE, {
+					type: "started",
+					requestId: "be5807c4",
+				}),
+				{ type: "approval_requested", requestId: "be5807c4" },
+			),
+			{ type: "approval_resolved", approved: true },
+		);
+		const resumed = reduceCopilotTurnState(approved, {
+			type: "continuation_started",
+			requestId: "6ed6aa78",
+		});
+		expect(copilotCancelRequestIds(resumed)).toEqual(["be5807c4", "6ed6aa78"]);
+		expect(
+			copilotCancelRequestIds(
+				reduceCopilotTurnState(resumed, { type: "stop_requested" }),
+			),
+		).toEqual(["be5807c4", "6ed6aa78"]);
+		expect(
+			copilotCancelRequestIds(
+				reduceCopilotTurnState(resumed, { type: "ended" }),
+			),
+		).toEqual([]);
+		expect(
+			reduceCopilotTurnState(INITIAL_COPILOT_TURN_STATE, {
+				type: "continuation_started",
+				requestId: "late",
+			}),
+		).toEqual(INITIAL_COPILOT_TURN_STATE);
 	});
 });

@@ -35,16 +35,20 @@ import {
 	mergeSessionUsageSnapshots,
 } from "~/lib/copilot/session-usage";
 import {
-	assistantTextFromServerMessage,
+	applyCopilotReplayText,
+	copilotContinuationRequestId,
 	copilotEventKeepsTurnAlive,
 	copilotResumeAckFrame,
+	copilotServerTranscriptHasAnswer,
 	mergeCopilotServerTranscript,
 	serverTranscriptFromCopilotEvent,
+	shouldApplyCopilotServerTranscript,
 } from "~/lib/copilot/stream-resume.client";
 import { resolveCopilotToolEnd } from "~/lib/copilot/tool-event.client";
 import {
 	type CopilotTurnEvent,
 	type CopilotTurnState,
+	copilotCancelRequestIds,
 	INITIAL_COPILOT_TURN_STATE,
 	isCopilotTurnActive,
 	reduceCopilotTurnState,
@@ -124,6 +128,8 @@ type CopilotEvent = {
 	id?: string;
 	body?: string;
 	done?: boolean;
+	replay?: boolean;
+	continuation?: boolean;
 	usage?: CopilotSessionUsage;
 	warning?: CopilotSessionLimitWarning;
 };
@@ -174,6 +180,17 @@ function cancelCopilotRequest(
 	} catch {
 		return false;
 	}
+}
+
+function cancelRunningCopilotRequests(
+	socket: WebSocket | null,
+	state: CopilotTurnState,
+): boolean {
+	let sent = false;
+	for (const requestId of copilotCancelRequestIds(state)) {
+		if (cancelCopilotRequest(socket, requestId)) sent = true;
+	}
+	return sent;
 }
 
 function webBlockedHref(blocked: NonNullable<CopilotEvent["blocked"]>): string {
@@ -232,6 +249,7 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 	const toolLingerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const stopFallbackRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const turnStateRef = useRef<CopilotTurnState>(INITIAL_COPILOT_TURN_STATE);
+	const replayTextRef = useRef(new Map<string, string>());
 	const sessionUsageRef = useRef<CopilotSessionUsage | null>(null);
 	const lastActivityAtRef = useRef<number>(Date.now());
 	const wasOpenRef = useRef(false);
@@ -318,8 +336,7 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 	}, []);
 
 	const expireIdleConversation = useCallback(() => {
-		const { activeRequestId } = turnStateRef.current;
-		cancelCopilotRequest(socketRef.current, activeRequestId);
+		cancelRunningCopilotRequests(socketRef.current, turnStateRef.current);
 		turnStateRef.current = INITIAL_COPILOT_TURN_STATE;
 		setTurnState(INITIAL_COPILOT_TURN_STATE);
 		connectionGenerationRef.current += 1;
@@ -403,6 +420,7 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 			setCompletedToolName(null);
 			setToolSucceeded(null);
 			toolNameByCallIdRef.current.clear();
+			replayTextRef.current.clear();
 			setTurnPhase("idle");
 			setApproval(null);
 			transitionTurn({ type: "ended" });
@@ -466,10 +484,7 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 			setError(
 				"Copilot stopped responding. Please try again — the previous turn was ended to unblock the chat.",
 			);
-			cancelCopilotRequest(
-				socketRef.current,
-				turnStateRef.current.activeRequestId,
-			);
+			cancelRunningCopilotRequests(socketRef.current, turnStateRef.current);
 			endTurn({ persist: true, focus: true, clearApproval: true });
 		}, 5_000);
 		return () => clearInterval(id);
@@ -641,12 +656,19 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 			if (resumeAck && socketRef.current?.readyState === WebSocket.OPEN) {
 				socketRef.current.send(JSON.stringify(resumeAck));
 			}
+			const continuationId = copilotContinuationRequestId(event);
+			if (continuationId) {
+				transitionTurn({
+					type: "continuation_started",
+					requestId: continuationId,
+				});
+			}
 			const serverTranscript = serverTranscriptFromCopilotEvent(event);
-			if (serverTranscript) {
-				const hasAnswer = serverTranscript.some(
-					(message) =>
-						assistantTextFromServerMessage(message).trim().length > 0,
-				);
+			if (
+				serverTranscript &&
+				shouldApplyCopilotServerTranscript(turnStateRef.current)
+			) {
+				const hasAnswer = copilotServerTranscriptHasAnswer(serverTranscript);
 				setMessages((current) => {
 					const next = mergeCopilotServerTranscript(current, serverTranscript);
 					if (next !== current) persistSession(next);
@@ -686,6 +708,19 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 				switch (action.kind) {
 					case "text_delta":
 						markPostApprovalActivity();
+						if (event.replay === true) {
+							const requestId =
+								typeof event.id === "string" ? event.id : "replay";
+							const nextText = `${replayTextRef.current.get(requestId) ?? ""}${action.text}`;
+							replayTextRef.current.set(requestId, nextText);
+							setMessages((current) => {
+								const next = applyCopilotReplayText(current, nextText);
+								if (next !== current) persistSession(next);
+								return next;
+							});
+							setTurnPhase("streaming");
+							break;
+						}
 						appendAssistant(action.text);
 						break;
 					case "reasoning_start":
@@ -1013,8 +1048,7 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 			clearStopFallback();
 			const socket = socketRef.current;
 			if (socket) {
-				const { activeRequestId } = turnStateRef.current;
-				cancelCopilotRequest(socket, activeRequestId);
+				cancelRunningCopilotRequests(socket, turnStateRef.current);
 				socket.onmessage = null;
 				socket.onerror = null;
 				socket.onclose = null;
@@ -1045,10 +1079,7 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 		if (wasOpen && !isOpen) {
 			const backgrounded = backgroundCopilotSession(turnStateRef.current);
 			if (backgrounded.shouldCancelActiveRequest) {
-				cancelCopilotRequest(
-					socketRef.current,
-					turnStateRef.current.activeRequestId,
-				);
+				cancelRunningCopilotRequests(socketRef.current, turnStateRef.current);
 			}
 			turnStateRef.current = backgrounded.turnState;
 			setTurnState(backgrounded.turnState);
@@ -1219,7 +1250,7 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 			return;
 		}
 
-		if (cancelCopilotRequest(socket, activeRequestId)) {
+		if (cancelRunningCopilotRequests(socket, turnStateRef.current)) {
 			setApproval(null);
 			transitionTurn({ type: "stop_requested" });
 			clearStopFallback();
@@ -1234,8 +1265,7 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 	}
 
 	function resetConversationState(options?: { preserveDraft?: boolean }) {
-		const { activeRequestId } = turnStateRef.current;
-		cancelCopilotRequest(socketRef.current, activeRequestId);
+		cancelRunningCopilotRequests(socketRef.current, turnStateRef.current);
 		transitionTurn({ type: "ended" });
 		connectionGenerationRef.current += 1;
 		socketRef.current?.close();

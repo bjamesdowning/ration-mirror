@@ -78,7 +78,10 @@ import {
 	COPILOT_MCP_SCOPES,
 	toAiSdkTools,
 } from "../app/lib/copilot/tools.server";
-import { copilotTurnUsageDecision } from "../app/lib/copilot/turn-usage";
+import {
+	copilotStepExceedsBalance,
+	copilotTurnUsageDecision,
+} from "../app/lib/copilot/turn-usage";
 import {
 	buildAgentFlagContext,
 	buildFlagContext,
@@ -250,6 +253,10 @@ type CopilotAgentUsageConfig = {
 	/** Ask client Flagship identity — survives Durable Object hibernation. */
 	originatingPlatform?: "web" | "ios";
 	originatingVersion?: string;
+	/** Step tokens held until the turn commits or discards. Survives hibernation. */
+	uncommittedUsageTokens?: number;
+	/** Set when the next bracket is unaffordable. Survives hibernation. */
+	billingBlocked?: boolean;
 };
 
 async function resolveNativeFeatureFlags(
@@ -276,9 +283,11 @@ async function resolveNativeFeatureFlags(
 export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 	workspaceBash = false;
 	private totalUsageTokens = 0;
-	/** Step tokens not yet billed. Committed only when the turn has answer text. */
+	/** Step tokens not yet billed. Committed when the turn has answer text or tool output. */
 	private uncommittedUsageTokens = 0;
 	private billingBlocked = false;
+	/** Held tokens and the billing block are restored once per isolate wake. */
+	private heldUsageRestored = false;
 	private sessionMessageCount = 0;
 	private sessionWarningsEmitted = new Set<SessionLimitWarningSeverity>();
 	private conversationModelPreset: CopilotModelPreset = "fast";
@@ -361,11 +370,14 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 			...(this.originatingClient.clientVersion
 				? { originatingVersion: this.originatingClient.clientVersion }
 				: {}),
+			uncommittedUsageTokens: this.uncommittedUsageTokens,
+			billingBlocked: this.billingBlocked,
 		});
 	}
 
 	private resetUsageForCharge(chargeOpenedAt: number, totalTokens = 0): void {
 		this.totalUsageTokens = Math.max(0, Math.ceil(totalTokens));
+		this.uncommittedUsageTokens = 0;
 		this.sessionWarningsEmitted.clear();
 		this.boundChargeOpenedAt = chargeOpenedAt;
 		this.persistUsageConfig();
@@ -397,6 +409,16 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 					: {}),
 			};
 			this.clientSource = cfg.originatingPlatform === "ios" ? "mobile" : "web";
+		}
+		if (!this.heldUsageRestored) {
+			this.heldUsageRestored = true;
+			if (typeof cfg.uncommittedUsageTokens === "number") {
+				this.uncommittedUsageTokens = Math.max(
+					0,
+					Math.ceil(cfg.uncommittedUsageTokens),
+				);
+			}
+			if (cfg.billingBlocked === true) this.billingBlocked = true;
 		}
 	}
 
@@ -562,7 +584,6 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 	}
 
 	async beforeTurn(ctx: TurnContext) {
-		if (!ctx.continuation) this.uncommittedUsageTokens = 0;
 		const identity = decodeAgentName(this.name);
 		this.nativeFeatureFlags = await resolveNativeFeatureFlags(
 			this.env,
@@ -571,6 +592,10 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 		);
 		this.sessionMessageCount = ctx.messages.length;
 		const charge = await this.hydrateCumulativeUsage(identity);
+		if (!ctx.continuation && this.uncommittedUsageTokens !== 0) {
+			this.uncommittedUsageTokens = 0;
+			this.persistUsageConfig();
+		}
 		if (charge?.mode === "onboarding_briefing") {
 			this.onboardingTurnDenied = false;
 			this.onboardingActiveTurn = null;
@@ -938,8 +963,26 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 		const usageTokens =
 			ctx.usage.totalTokens ??
 			(ctx.usage.inputTokens ?? 0) + (ctx.usage.outputTokens ?? 0);
-		this.uncommittedUsageTokens += Math.max(0, Math.ceil(usageTokens));
 		const charge = await this.hydrateCumulativeUsage(identity);
+		this.uncommittedUsageTokens += Math.max(0, Math.ceil(usageTokens));
+		if (charge?.mode === "credits") {
+			const creditBalance = await checkBalance(
+				this.env,
+				identity.organizationId,
+			);
+			if (
+				copilotStepExceedsBalance({
+					mode: charge.mode,
+					totalTokens: this.totalUsageTokens,
+					pendingTokens: this.uncommittedUsageTokens,
+					bracketCreditsCharged: charge.bracketCreditsCharged,
+					creditBalance,
+				})
+			) {
+				this.billingBlocked = true;
+			}
+		}
+		this.persistUsageConfig();
 		if (charge?.mode === "onboarding_briefing" && !charge.onboardingConsumed) {
 			if (this.onboardingTurnDenied) {
 				this.onboardingTurnDenied = false;
@@ -1003,6 +1046,7 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 		});
 		if (decision === "discard") {
 			this.uncommittedUsageTokens = 0;
+			this.persistUsageConfig();
 			return;
 		}
 		if (decision !== "commit") return;

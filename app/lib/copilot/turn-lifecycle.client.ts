@@ -1,6 +1,8 @@
 export type CopilotTurnState = {
 	status: "idle" | "active" | "awaiting_approval" | "stopping";
 	activeRequestId: string | null;
+	/** Request id from `cf_agent_stream_resuming` / a continuation done frame. */
+	continuationRequestId: string | null;
 	/** Frame/request id of the stream that paused for approval (pause terminals). */
 	pauseRequestId: string | null;
 	/**
@@ -14,6 +16,7 @@ export type CopilotTurnState = {
 
 export type CopilotTurnEvent =
 	| { type: "started"; requestId: string }
+	| { type: "continuation_started"; requestId: string }
 	| { type: "approval_requested"; requestId?: string | null }
 	| { type: "approval_resolved"; approved: boolean }
 	| { type: "post_approval_activity" }
@@ -23,6 +26,7 @@ export type CopilotTurnEvent =
 export const INITIAL_COPILOT_TURN_STATE: CopilotTurnState = {
 	status: "idle",
 	activeRequestId: null,
+	continuationRequestId: null,
 	pauseRequestId: null,
 	expectingApprovalContinuation: false,
 	seenPostApprovalActivity: false,
@@ -40,6 +44,10 @@ export function reduceCopilotTurnState(
 				status: "active",
 				activeRequestId: event.requestId,
 			};
+		case "continuation_started":
+			if (state.status === "idle") return state;
+			if (state.continuationRequestId === event.requestId) return state;
+			return { ...state, continuationRequestId: event.requestId };
 		case "approval_requested":
 			// Accept while active, or late when idle (missed earlier frame).
 			if (state.status !== "active" && state.status !== "idle") return state;
@@ -99,6 +107,19 @@ export function shouldIgnoreCopilotTurnEnd(
 		return true;
 	}
 	return false;
+}
+
+/** Original request id plus the resumed continuation id, without duplicates. */
+export function copilotCancelRequestIds(state: CopilotTurnState): string[] {
+	const ids: string[] = [];
+	if (state.activeRequestId) ids.push(state.activeRequestId);
+	if (
+		state.continuationRequestId &&
+		state.continuationRequestId !== state.activeRequestId
+	) {
+		ids.push(state.continuationRequestId);
+	}
+	return ids;
 }
 
 export function isCopilotTurnActive(state: CopilotTurnState): boolean {

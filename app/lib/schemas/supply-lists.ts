@@ -10,6 +10,7 @@ import { UnitSchema } from "./units";
 
 export const SupplyListKindCreateSchema = z.enum(["saved", "template"]);
 export const SupplyCopyModeSchema = z.enum(["missing_only", "add_all"]);
+export const SupplyCopyOnExistingSchema = z.enum(["skip", "add_more"]);
 export const SupplyTransferModeSchema = z.enum(["copy", "move"]);
 
 export const SupplyCatalogCreateSchema = z.object({
@@ -38,7 +39,34 @@ export const SupplyListArchiveSchema = z.object({
 
 export const SupplyCopyToLiveSchema = z.object({
 	mode: SupplyCopyModeSchema.default("missing_only"),
+	onExisting: SupplyCopyOnExistingSchema.default("skip"),
 	itemIds: z.array(z.string().uuid()).max(SUPPLY_SAVED_ITEM_LIMIT).optional(),
+	clientKey: z.string().uuid().optional(),
+});
+
+export const SupplyUndoAddToLiveSchema = z.object({
+	added: z
+		.array(
+			z.object({
+				sourceItemId: z.string().uuid().optional(),
+				liveItemId: z.string().uuid(),
+			}),
+		)
+		.max(SUPPLY_SAVED_ITEM_LIMIT)
+		.default([]),
+	merged: z
+		.array(
+			z.object({
+				sourceItemId: z.string().uuid().optional(),
+				liveItemId: z.string().uuid(),
+				prevQuantity: z.number(),
+				prevUnit: z.string().min(1).max(32),
+				quantity: z.number().optional(),
+				unit: z.string().min(1).max(32).optional(),
+			}),
+		)
+		.max(SUPPLY_SAVED_ITEM_LIMIT)
+		.default([]),
 });
 
 export const SupplyItemsTransferSchema = z.object({

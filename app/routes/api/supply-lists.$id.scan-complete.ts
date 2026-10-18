@@ -11,6 +11,7 @@ import {
 	SupplyScanCompleteRequestSchema,
 } from "~/lib/schemas/supply-scan";
 import { resolveSupplyListTarget } from "~/lib/supply-list-access.server";
+import { LIVE_ONLY_DOCK_MESSAGE } from "~/lib/supply-list-kinds";
 import {
 	completeSupplyScan,
 	SupplyScanError,
@@ -41,7 +42,8 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 		organizationId: groupId,
 		listId,
 		flagContext: buildWebFlagContext(request, env, { user }),
-		allowedStates: ["live", "saved"],
+		allowedStates: ["live"],
+		message: LIVE_ONLY_DOCK_MESSAGE,
 	});
 
 	await assertFeatureEnabled(

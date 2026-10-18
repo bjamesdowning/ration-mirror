@@ -6,6 +6,7 @@ import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import { SupplyItemSchema } from "~/lib/schemas/supply";
 import { addSupplyItem } from "~/lib/supply.server";
 import { resolveSupplyListTarget } from "~/lib/supply-list-access.server";
+import { MUTABLE_SUPPLY_LIST_STATES } from "~/lib/supply-list-kinds";
 import type { Route } from "./+types/supply-lists.$id.items";
 
 /**
@@ -46,7 +47,7 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 			flagContext: buildWebFlagContext(request, context.cloudflare.env, {
 				user,
 			}),
-			allowedStates: ["live", "saved"],
+			allowedStates: MUTABLE_SUPPLY_LIST_STATES,
 		});
 		const json = await request.json();
 		const input = SupplyItemSchema.parse(json);

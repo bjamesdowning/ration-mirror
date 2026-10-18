@@ -7,6 +7,7 @@ import { buildFlagContext } from "~/lib/feature-flags/flags.server";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import { SupplyScanMatchQuerySchema } from "~/lib/schemas/supply-scan";
 import { resolveSupplyListTarget } from "~/lib/supply-list-access.server";
+import { LIVE_ONLY_DOCK_MESSAGE } from "~/lib/supply-list-kinds";
 import { getSupplyScanMatch, SupplyScanError } from "~/lib/supply-scan.server";
 import type { Route } from "./+types/supply-lists.$id.scan-match";
 
@@ -28,7 +29,8 @@ export async function loader({ request, context, params }: Route.LoaderArgs) {
 		organizationId: groupId,
 		listId,
 		flagContext: buildWebFlagContext(request, env, { user }),
-		allowedStates: ["live", "saved"],
+		allowedStates: ["live"],
+		message: LIVE_ONLY_DOCK_MESSAGE,
 	});
 
 	await assertFeatureEnabled(

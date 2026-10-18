@@ -38,7 +38,8 @@ export async function requireSupplyListTarget(
 	listId: string,
 	options: {
 		multiListsEnabled: boolean;
-		allowedStates?: SupplyListState[];
+		allowedStates?: readonly SupplyListState[];
+		message?: string;
 	},
 ): Promise<{ list: SupplyListRow; state: SupplyListState }> {
 	const list = await loadSupplyListRow(db, organizationId, listId);
@@ -49,7 +50,7 @@ export async function requireSupplyListTarget(
 		throw new SupplyListNotFoundError();
 	}
 	if (options.allowedStates && !options.allowedStates.includes(state)) {
-		throw new InvalidListStateError(state);
+		throw new InvalidListStateError(state, options.message);
 	}
 	return { list, state };
 }

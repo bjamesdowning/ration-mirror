@@ -68,7 +68,9 @@ import {
 	getSupplyList,
 	getSupplyListById,
 } from "~/lib/supply.server";
+import { resolveSupplyListTarget } from "~/lib/supply-list-access.server";
 import { isSupplyMultiListsEnabled } from "~/lib/supply-list-flag.server";
+import { LIVE_ONLY_DOCK_MESSAGE } from "~/lib/supply-list-kinds";
 import { loadSupplyListRow } from "~/lib/supply-list-target.server";
 import { getSupplyCatalog } from "~/lib/supply-lists.server";
 import { filterSupplyItemsByCargoTags } from "~/lib/supply-tags";
@@ -320,6 +322,18 @@ export async function action({ request, context }: Route.ActionArgs) {
 				return { error: "Invalid or missing list ID" };
 			}
 			const { listId } = parsed.data;
+			await resolveSupplyListTarget({
+				env: context.cloudflare.env,
+				organizationId: groupId,
+				listId,
+				flagContext: buildWebFlagContext(
+					request,
+					context.cloudflare.env,
+					session,
+				),
+				allowedStates: ["live"],
+				message: LIVE_ONLY_DOCK_MESSAGE,
+			});
 			const userSettings = await getUserSettings(
 				context.cloudflare.env.DB,
 				userId,

@@ -150,8 +150,7 @@ export const FLAG_REGISTRY: Record<string, FlagRegistryEntry> = {
 	},
 	"supply-multi-lists": {
 		defaultEnabled: false,
-		description:
-			"Supply list library: saved lists, templates, history, and quick add to Live",
+		description: "Saved lists that pull into Live Supply",
 		clientVisible: true,
 		clientKey: "supplyMultiLists",
 	},

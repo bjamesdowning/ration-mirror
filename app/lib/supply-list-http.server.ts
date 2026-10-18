@@ -10,6 +10,7 @@ import {
 	SupplyItemsTransferSchema,
 	SupplyListDuplicateSchema,
 	SupplyOperationsBatchSchema,
+	SupplyUndoAddToLiveSchema,
 } from "./schemas/supply-lists";
 import { getSupplyListById } from "./supply.server";
 import { resolveSupplyListTarget } from "./supply-list-access.server";
@@ -27,6 +28,7 @@ import {
 	resetPurchasedSupplyItems,
 	snapshotLiveSupplyList,
 	transferSupplyItems,
+	undoAddToLive,
 } from "./supply-lists.server";
 import { parseSupplyQuickAdd } from "./supply-quick-add";
 
@@ -168,14 +170,36 @@ export async function handleSupplyCopyToLive(
 	try {
 		await assertSupplyMultiListsEnabled(auth.env, auth.flagContext);
 		const input = SupplyCopyToLiveSchema.parse(body ?? {});
-		const list = await copyItemsToLive({
+		const copied = await copyItemsToLive({
 			env: auth.env,
 			organizationId: auth.organizationId,
 			sourceListId: listId,
 			mode: input.mode,
+			onExisting: input.onExisting,
 			itemIds: input.itemIds,
+			clientKey: input.clientKey,
 		});
-		return { list };
+		return { list: copied.list, result: copied.result };
+	} catch (error) {
+		return handleApiError(error);
+	}
+}
+
+export async function handleSupplyUndoAddToLive(
+	auth: AuthSlice,
+	listId: string,
+	body: unknown,
+) {
+	try {
+		await assertSupplyMultiListsEnabled(auth.env, auth.flagContext);
+		const input = SupplyUndoAddToLiveSchema.parse(body ?? {});
+		return await undoAddToLive({
+			env: auth.env,
+			organizationId: auth.organizationId,
+			sourceListId: listId,
+			added: input.added,
+			merged: input.merged,
+		});
 	} catch (error) {
 		return handleApiError(error);
 	}
@@ -235,7 +259,7 @@ export async function handleSupplyBulkAdd(
 			organizationId: auth.organizationId,
 			listId,
 			flagContext: auth.flagContext,
-			allowedStates: ["live", "saved"],
+			allowedStates: ["live", "saved", "template"],
 		});
 		return await addSupplyItemsBulk(
 			auth.env.DB,

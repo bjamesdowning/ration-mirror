@@ -7,6 +7,7 @@ import { log, redactId } from "~/lib/logging.server";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import { completeSupplyList } from "~/lib/supply.server";
 import { resolveSupplyListTarget } from "~/lib/supply-list-access.server";
+import { LIVE_ONLY_DOCK_MESSAGE } from "~/lib/supply-list-kinds";
 import { resolveUnitDisplayMode } from "~/lib/unit-display-mode";
 import type { Route } from "./+types/supply-lists.$id.complete";
 
@@ -54,7 +55,8 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 			flagContext: buildWebFlagContext(request, context.cloudflare.env, {
 				user,
 			}),
-			allowedStates: ["live", "saved"],
+			allowedStates: ["live"],
+			message: LIVE_ONLY_DOCK_MESSAGE,
 		});
 		const userSettings = await getUserSettings(
 			context.cloudflare.env.DB,

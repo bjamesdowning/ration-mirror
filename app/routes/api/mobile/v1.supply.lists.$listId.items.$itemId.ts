@@ -13,6 +13,7 @@ import {
 	updateSupplyItem,
 } from "~/lib/supply.server";
 import { resolveSupplyListTarget } from "~/lib/supply-list-access.server";
+import { MUTABLE_SUPPLY_LIST_STATES } from "~/lib/supply-list-kinds";
 import type { Route } from "./+types/v1.supply.lists.$listId.items.$itemId";
 
 export async function action({ request, context, params }: Route.ActionArgs) {
@@ -45,7 +46,8 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 			flagContext: buildMobileFlagContext(request, env, {
 				user: { id: userId },
 			}),
-			allowedStates: request.method === "POST" ? ["live"] : ["live", "saved"],
+			allowedStates:
+				request.method === "POST" ? ["live"] : MUTABLE_SUPPLY_LIST_STATES,
 		});
 		if (request.method === "DELETE") {
 			await deleteSupplyItem(env.DB, organizationId, listId, itemId);

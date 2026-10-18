@@ -10,6 +10,7 @@ import {
 	updateSupplyList,
 } from "~/lib/supply.server";
 import { resolveSupplyListTarget } from "~/lib/supply-list-access.server";
+import { getSavedListView } from "~/lib/supply-lists.server";
 import type { Route } from "./+types/supply-lists.$id";
 
 /**
@@ -27,7 +28,7 @@ export async function loader({ request, context, params }: Route.LoaderArgs) {
 	}
 
 	try {
-		await resolveSupplyListTarget({
+		const target = await resolveSupplyListTarget({
 			env: context.cloudflare.env,
 			organizationId: groupId,
 			listId,
@@ -35,11 +36,10 @@ export async function loader({ request, context, params }: Route.LoaderArgs) {
 				user,
 			}),
 		});
-		const list = await getSupplyListById(
-			context.cloudflare.env.DB,
-			groupId,
-			listId,
-		);
+		const list =
+			target.state === "live"
+				? await getSupplyListById(context.cloudflare.env.DB, groupId, listId)
+				: await getSavedListView(context.cloudflare.env, groupId, listId);
 
 		if (!list) {
 			throw data({ error: "Grocery list not found" }, { status: 404 });

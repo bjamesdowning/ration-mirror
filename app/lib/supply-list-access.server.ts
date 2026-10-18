@@ -12,7 +12,8 @@ export async function resolveSupplyListTarget(options: {
 	organizationId: string;
 	listId: string;
 	flagContext: FlagshipEvaluationContext;
-	allowedStates?: SupplyListState[];
+	allowedStates?: readonly SupplyListState[];
+	message?: string;
 }) {
 	const multiListsEnabled = await isSupplyMultiListsEnabled(
 		options.env,
@@ -25,6 +26,7 @@ export async function resolveSupplyListTarget(options: {
 		{
 			multiListsEnabled,
 			allowedStates: options.allowedStates,
+			message: options.message,
 		},
 	);
 }

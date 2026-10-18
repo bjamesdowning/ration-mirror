@@ -7,6 +7,7 @@ import { addSupplyItem } from "~/lib/supply.server";
 import { lookupSupplyBarcode } from "~/lib/supply-barcode.server";
 import { resolveSupplyListTarget } from "~/lib/supply-list-access.server";
 import { assertSupplyMultiListsEnabled } from "~/lib/supply-list-flag.server";
+import { MUTABLE_SUPPLY_LIST_STATES } from "~/lib/supply-list-kinds";
 import type { Route } from "./+types/supply-lists.$id.barcode";
 
 export async function action({ request, context, params }: Route.ActionArgs) {
@@ -27,7 +28,7 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 			organizationId: groupId,
 			listId: params.id,
 			flagContext,
-			allowedStates: ["live", "saved"],
+			allowedStates: MUTABLE_SUPPLY_LIST_STATES,
 		});
 		const input = SupplyBarcodeLookupSchema.parse(await request.json());
 		const lookup = await lookupSupplyBarcode(env, input.barcode);

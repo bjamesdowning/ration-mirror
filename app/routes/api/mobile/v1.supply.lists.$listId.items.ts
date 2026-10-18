@@ -6,6 +6,7 @@ import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import { MobileCreateSupplyItemSchema } from "~/lib/schemas/mobile/supply";
 import { addSupplyItem } from "~/lib/supply.server";
 import { resolveSupplyListTarget } from "~/lib/supply-list-access.server";
+import { MUTABLE_SUPPLY_LIST_STATES } from "~/lib/supply-list-kinds";
 import type { Route } from "./+types/v1.supply.lists.$listId.items";
 
 export async function action({ request, context, params }: Route.ActionArgs) {
@@ -38,7 +39,7 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 			flagContext: buildMobileFlagContext(request, env, {
 				user: { id: userId },
 			}),
-			allowedStates: ["live", "saved"],
+			allowedStates: MUTABLE_SUPPLY_LIST_STATES,
 		});
 		const input = MobileCreateSupplyItemSchema.parse(await request.json());
 		const item = await addSupplyItem(env.DB, organizationId, listId, input);

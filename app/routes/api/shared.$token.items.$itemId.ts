@@ -11,6 +11,7 @@ import { InvalidListStateError } from "~/lib/supply-list-errors";
 import { isSupplyMultiListsEnabled } from "~/lib/supply-list-flag.server";
 import {
 	canMutateSharedSupplyList,
+	LIVE_ONLY_CHECK_MESSAGE,
 	resolveSupplyListState,
 } from "~/lib/supply-list-kinds";
 import type { Route } from "./+types/shared.$token.items.$itemId";
@@ -72,7 +73,7 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 				);
 			}
 			if (!canMutateSharedSupplyList(state)) {
-				throw new InvalidListStateError(state);
+				throw new InvalidListStateError(state, LIVE_ONLY_CHECK_MESSAGE);
 			}
 		}
 

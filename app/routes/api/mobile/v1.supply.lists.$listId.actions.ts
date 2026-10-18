@@ -9,6 +9,7 @@ import {
 	handleSupplyOperations,
 	handleSupplyResetPurchased,
 	handleSupplyTransfer,
+	handleSupplyUndoAddToLive,
 } from "~/lib/supply-list-http.server";
 import type { Route } from "./+types/v1.supply.lists.$listId.actions";
 
@@ -40,6 +41,9 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 	}
 	if (actionName === "copy-to-live") {
 		return handleSupplyCopyToLive(slice, listId, body);
+	}
+	if (actionName === "undo-add-to-live") {
+		return handleSupplyUndoAddToLive(slice, listId, body);
 	}
 	if (actionName === "transfer")
 		return handleSupplyTransfer(slice, listId, body);

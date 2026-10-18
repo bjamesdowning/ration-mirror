@@ -22,7 +22,10 @@ import {
 	type SupplyItemOrigin,
 } from "~/lib/supply-item-origins";
 import { isSupplyMultiListsEnabled } from "~/lib/supply-list-flag.server";
-import { resolveSupplyListState } from "~/lib/supply-list-kinds";
+import {
+	canMutateSharedSupplyList,
+	resolveSupplyListState,
+} from "~/lib/supply-list-kinds";
 import type { Route } from "./+types/shared.$token";
 
 interface SharedItem {
@@ -95,6 +98,7 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
 
 	// Determine if the viewer is an admin/owner of the list's organization,
 	// which grants them the ability to add items directly from this shared view.
+	const canCheck = canMutateSharedSupplyList(state);
 	let canAddItems = false;
 	try {
 		const auth = getAuth(context.cloudflare.env);
@@ -108,7 +112,11 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
 						deq(m.userId, session.user.id),
 					),
 			});
-			if (membership && ["owner", "admin"].includes(membership.role)) {
+			if (
+				canCheck &&
+				membership &&
+				["owner", "admin"].includes(membership.role)
+			) {
 				canAddItems = true;
 			}
 		}
@@ -116,17 +124,19 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
 		// Non-critical — fall back to read-only view
 	}
 
-	return { list, canAddItems };
+	return { list, canAddItems, canCheck };
 }
 
 function SharedGroceryItem({
 	item,
 	token,
+	readOnly = false,
 	onOptimisticToggle,
 	onOptimisticUpdate,
 }: {
 	item: SharedItem;
 	token: string | undefined;
+	readOnly?: boolean;
 	onOptimisticToggle: (itemId: string, isPurchased: boolean) => void;
 	onOptimisticUpdate: (
 		itemId: string,
@@ -147,7 +157,7 @@ function SharedGroceryItem({
 			: item.isPurchased);
 
 	const handleToggle = () => {
-		if (!token || isPending) return;
+		if (readOnly || !token || isPending) return;
 		if (item.isPurchased) {
 			const nextPurchased = false;
 			onOptimisticToggle(item.id, nextPurchased);
@@ -189,36 +199,38 @@ function SharedGroceryItem({
 					: "bg-ceramic hover:bg-platinum/30"
 			}`}
 		>
-			<button
-				type="button"
-				onClick={handleToggle}
-				disabled={!token || isPending}
-				className={`w-5 h-5 flex items-center justify-center rounded-md border-2 transition-all ${
-					optimisticPurchased
-						? "border-hyper-green bg-hyper-green text-white"
-						: "border-muted hover:border-hyper-green"
-				}`}
-				aria-label={
-					optimisticPurchased ? "Mark as not purchased" : "Mark as purchased"
-				}
-			>
-				{optimisticPurchased && (
-					<svg
-						aria-hidden="true"
-						className="w-3 h-3"
-						fill="none"
-						viewBox="0 0 24 24"
-						stroke="currentColor"
-					>
-						<path
-							strokeLinecap="round"
-							strokeLinejoin="round"
-							strokeWidth={3}
-							d="M5 13l4 4L19 7"
-						/>
-					</svg>
-				)}
-			</button>
+			{readOnly ? null : (
+				<button
+					type="button"
+					onClick={handleToggle}
+					disabled={!token || isPending}
+					className={`w-5 h-5 flex items-center justify-center rounded-md border-2 transition-all ${
+						optimisticPurchased
+							? "border-hyper-green bg-hyper-green text-white"
+							: "border-muted hover:border-hyper-green"
+					}`}
+					aria-label={
+						optimisticPurchased ? "Mark as not purchased" : "Mark as purchased"
+					}
+				>
+					{optimisticPurchased && (
+						<svg
+							aria-hidden="true"
+							className="w-3 h-3"
+							fill="none"
+							viewBox="0 0 24 24"
+							stroke="currentColor"
+						>
+							<path
+								strokeLinecap="round"
+								strokeLinejoin="round"
+								strokeWidth={3}
+								d="M5 13l4 4L19 7"
+							/>
+						</svg>
+					)}
+				</button>
+			)}
 			<span
 				className={`flex-1 ${optimisticPurchased ? "line-through text-muted" : "text-carbon"}`}
 			>
@@ -328,9 +340,10 @@ function AdminAddItemBar({
 }
 
 export default function SharedListPage() {
-	const { list, canAddItems } = useLoaderData<{
+	const { list, canAddItems, canCheck } = useLoaderData<{
 		list: SharedList;
 		canAddItems: boolean;
+		canCheck: boolean;
 	}>();
 	const { token } = useParams();
 	const revalidator = useRevalidator();
@@ -400,17 +413,23 @@ export default function SharedListPage() {
 						Shared List
 					</div>
 					<h1 className="text-display text-2xl text-carbon">{list.name}</h1>
-					<div className="mt-3 flex items-center gap-3">
-						<div className="flex-1 h-2 bg-platinum rounded-full overflow-hidden">
-							<div
-								className="h-full bg-hyper-green rounded-full transition-all duration-300"
-								style={{ width: `${progressPercent}%` }}
-							/>
+					{canCheck ? (
+						<div className="mt-3 flex items-center gap-3">
+							<div className="flex-1 h-2 bg-platinum rounded-full overflow-hidden">
+								<div
+									className="h-full bg-hyper-green rounded-full transition-all duration-300"
+									style={{ width: `${progressPercent}%` }}
+								/>
+							</div>
+							<span className="text-sm text-muted">
+								{purchased}/{total} items
+							</span>
 						</div>
-						<span className="text-sm text-muted">
-							{purchased}/{total} items
-						</span>
-					</div>
+					) : (
+						<p className="mt-3 text-sm text-muted">
+							Saved list. Add items to Live Supply to shop them.
+						</p>
+					)}
 				</div>
 			</header>
 
@@ -438,6 +457,7 @@ export default function SharedListPage() {
 										key={item.id}
 										item={item}
 										token={token}
+										readOnly={!canCheck}
 										onOptimisticToggle={handleOptimisticToggle}
 										onOptimisticUpdate={handleOptimisticUpdate}
 									/>

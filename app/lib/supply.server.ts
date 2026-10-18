@@ -72,11 +72,14 @@ import {
 } from "./supply-list-errors";
 import {
 	canAddFromMealSupplyList,
+	canDockSupplyList,
 	canIssueSupplyShareToken,
 	canMutateSharedSupplyList,
 	canMutateSupplyItems,
 	canShopSupplyList,
 	isUniqueConstraintError,
+	LIVE_ONLY_CHECK_MESSAGE,
+	LIVE_ONLY_DOCK_MESSAGE,
 	pickLegacyLiveCandidate,
 	resolveSupplyListState,
 	SUPPLY_LIST_NAME,
@@ -780,7 +783,7 @@ export async function updateSharedItemPurchased(
 		archivedAt: list.archivedAt ?? null,
 	});
 	if (!canMutateSharedSupplyList(sharedState)) {
-		throw new InvalidListStateError(sharedState);
+		throw new InvalidListStateError(sharedState, LIVE_ONLY_CHECK_MESSAGE);
 	}
 
 	const [item] = await d1
@@ -1000,6 +1003,10 @@ export async function updateSupplyItem(
 		.where(and(eq(supplyItem.id, itemId), eq(supplyItem.listId, listId)));
 
 	if (!existing) throw new Error("Supply item not found");
+
+	if (data.isPurchased !== undefined && !canShopSupplyList(state)) {
+		throw new InvalidListStateError(state, LIVE_ONLY_CHECK_MESSAGE);
+	}
 
 	const nextQuantity = data.quantity ?? existing.quantity;
 	const nextUnit = data.unit ?? existing.unit;
@@ -1916,7 +1923,7 @@ export function mergeContributionsByKey(
 	}));
 }
 
-async function getUnpurchasedSupplyItemIdsToClear(
+export async function getUnpurchasedSupplyItemIdsToClear(
 	d1: ReturnType<typeof drizzle>,
 	listId: string,
 ): Promise<string[]> {
@@ -2500,8 +2507,8 @@ export async function completeSupplyList(
 	const list = await loadSupplyListRow(env.DB, organizationId, listId);
 	if (!list) throw new SupplyListNotFoundError();
 	const state = resolveSupplyListState(list);
-	if (!canShopSupplyList(state)) {
-		throw new InvalidListStateError(state);
+	if (!canDockSupplyList(state)) {
+		throw new InvalidListStateError(state, LIVE_ONLY_DOCK_MESSAGE);
 	}
 
 	// 1. Get purchased items
@@ -2551,10 +2558,7 @@ export async function completeSupplyList(
 		summary: results,
 		cargoSelectionsCleared: reconcileResult.cargoSelectionsCleared,
 		cargoSelectionsReduced: reconcileResult.cargoSelectionsReduced,
-		message:
-			state === "saved"
-				? "Cargo replenished; Live Supply recalculated"
-				: undefined,
+		message: undefined,
 	};
 }
 

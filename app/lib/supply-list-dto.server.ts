@@ -1,5 +1,6 @@
 import {
 	canAddFromMealSupplyList,
+	canAddToLive,
 	canArchiveSupplyList,
 	canDeleteSupplyList,
 	canDockSupplyList,
@@ -25,6 +26,7 @@ export function supplyListCapabilities(state: SupplyListState) {
 		canDock: canDockSupplyList(state),
 		canResetPurchased: canResetPurchasedSupplyList(state),
 		canAddFromMeal: canAddFromMealSupplyList(state),
+		canAddToLive: canAddToLive(state),
 	};
 }
 

@@ -38,12 +38,24 @@ export function resolveSupplyListState(list: {
 	return "saved";
 }
 
+/** Only Live is shopped. Saved, template, and history pull into Live. */
+export const LIVE_ONLY_CHECK_MESSAGE =
+	"Only Live Supply can be checked off. Add it to Live instead.";
+export const LIVE_ONLY_DOCK_MESSAGE =
+	"Only Live Supply can be docked. Add items to Live instead.";
+
+export const MUTABLE_SUPPLY_LIST_STATES = [
+	"live",
+	"saved",
+	"template",
+] as const satisfies readonly SupplyListState[];
+
 export function canShopSupplyList(state: SupplyListState): boolean {
-	return state === "live" || state === "saved";
+	return state === "live";
 }
 
 export function canMutateSupplyItems(state: SupplyListState): boolean {
-	return state === "live" || state === "saved";
+	return state === "live" || state === "saved" || state === "template";
 }
 
 export function canSyncSupplyList(state: SupplyListState): boolean {
@@ -67,11 +79,16 @@ export function canArchiveSupplyList(state: SupplyListState): boolean {
 }
 
 export function canDockSupplyList(state: SupplyListState): boolean {
-	return canShopSupplyList(state);
+	return state === "live";
 }
 
 export function canResetPurchasedSupplyList(state: SupplyListState): boolean {
-	return canShopSupplyList(state);
+	return state === "live";
+}
+
+/** Saved, template, and archived lists contribute rows to Live. Live does not. */
+export function canAddToLive(state: SupplyListState): boolean {
+	return state === "saved" || state === "template" || state === "archived";
 }
 
 export function canAddFromMealSupplyList(state: SupplyListState): boolean {
@@ -83,9 +100,9 @@ export function canIssueSupplyShareToken(state: SupplyListState): boolean {
 	return state === "live" || state === "saved" || state === "archived";
 }
 
-/** Shared purchased toggles stay Live/Saved-only. Archived is read-only. */
+/** Shared purchased toggles exist only on Live. Every other share is read-only. */
 export function canMutateSharedSupplyList(state: SupplyListState): boolean {
-	return canShopSupplyList(state);
+	return state === "live";
 }
 
 /** Flag-off clients may only address Live. Non-Live IDs 404, never leak as 403. */

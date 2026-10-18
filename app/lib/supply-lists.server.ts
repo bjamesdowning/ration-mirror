@@ -1,6 +1,7 @@
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import {
+	kitchenEvent,
 	supplyItem,
 	supplyList,
 	supplyOperation,
@@ -10,7 +11,7 @@ import {
 } from "~/db/schema";
 import { computeBaseFields, effectiveBaseFields } from "./base-quantity";
 import { checkCapacity } from "./capacity.server";
-import { fetchOrgCargoIndex } from "./cargo-index.server";
+import { type CargoIndexRow, fetchOrgCargoIndex } from "./cargo-index.server";
 import { normalizeForCargoDedup } from "./matching.server";
 import {
 	chunkArray,
@@ -19,7 +20,10 @@ import {
 import { getQueueJob } from "./queue-job.server";
 import { ensureLiveSupplyList, getSupplyListById } from "./supply.server";
 import { inferSupplyCategory } from "./supply-categories";
-import { normalizeSupplyOrigins } from "./supply-item-origins";
+import {
+	isManualOnlySupplyItem,
+	normalizeSupplyOrigins,
+} from "./supply-item-origins";
 import { insertSupplyListWithQuota } from "./supply-list-capacity.server";
 import {
 	catalogSummaryFromRow,
@@ -31,10 +35,13 @@ import {
 	SupplyListNotFoundError,
 } from "./supply-list-errors";
 import {
+	canAddToLive,
 	canArchiveSupplyList,
 	canMutateSupplyItems,
+	canResetPurchasedSupplyList,
 	canShopSupplyList,
 	isUniqueConstraintError,
+	LIVE_ONLY_CHECK_MESSAGE,
 	resolveSupplyListState,
 	SUPPLY_SAVED_ITEM_LIMIT,
 	type SupplyCreatedFrom,
@@ -400,8 +407,8 @@ export async function resetPurchasedSupplyItems(
 	const list = await loadSupplyListRow(db, organizationId, listId);
 	if (!list) throw new SupplyListNotFoundError();
 	const state = resolveSupplyListState(list);
-	if (!canShopSupplyList(state)) {
-		throw new InvalidListStateError(state);
+	if (!canResetPurchasedSupplyList(state)) {
+		throw new InvalidListStateError(state, LIVE_ONLY_CHECK_MESSAGE);
 	}
 	const d1 = drizzle(db);
 	const now = new Date();
@@ -598,12 +605,196 @@ export async function addSupplyItemsBulk(
 	return { added, merged };
 }
 
+export type SupplyAddToLiveSkipReason = "on_live" | "in_cart" | "in_cargo";
+
+export type SupplyAddToLiveResult = {
+	added: Array<{ sourceItemId: string; liveItemId: string }>;
+	merged: Array<{
+		sourceItemId: string;
+		liveItemId: string;
+		prevQuantity: number;
+		prevUnit: string;
+		quantity: number;
+		unit: string;
+	}>;
+	skipped: Array<{
+		sourceItemId: string;
+		reason: SupplyAddToLiveSkipReason;
+	}>;
+	counts: {
+		added: number;
+		merged: number;
+		skippedOnLive: number;
+		skippedInCart: number;
+		skippedInCargo: number;
+	};
+};
+
+export type SavedListLiveStatus =
+	| { state: "none" }
+	| {
+			state: "on_live" | "in_cart";
+			quantity: number;
+			unit: string;
+			manualOnly: boolean;
+			liveItemId: string;
+	  };
+
+const LAST_BOUGHT_WINDOW_MS = 365 * 24 * 60 * 60 * 1000;
+
+function emptyAddToLiveResult(): SupplyAddToLiveResult {
+	return {
+		added: [],
+		merged: [],
+		skipped: [],
+		counts: {
+			added: 0,
+			merged: 0,
+			skippedOnLive: 0,
+			skippedInCart: 0,
+			skippedInCargo: 0,
+		},
+	};
+}
+
+function pushSkip(
+	result: SupplyAddToLiveResult,
+	sourceItemId: string,
+	reason: SupplyAddToLiveSkipReason,
+) {
+	result.skipped.push({ sourceItemId, reason });
+	if (reason === "on_live") result.counts.skippedOnLive += 1;
+	else if (reason === "in_cart") result.counts.skippedInCart += 1;
+	else result.counts.skippedInCargo += 1;
+}
+
+function groupLiveItems(items: SupplyItemRow[]) {
+	const byKey = new Map<string, SupplyItemRow[]>();
+	for (const item of items) {
+		const key = itemIdentity(item.name, item.domain);
+		const group = byKey.get(key);
+		if (group) group.push(item);
+		else byKey.set(key, [item]);
+	}
+	return byKey;
+}
+
+export function liveStatusForItems(rows: SupplyItemRow[]): SavedListLiveStatus {
+	const unpurchased = rows.filter((row) => !row.isPurchased);
+	if (unpurchased.length > 0) {
+		const manual = unpurchased.find((row) => isManualOnlySupplyItem(row));
+		const primary = manual ?? unpurchased[0];
+		const sameUnit = unpurchased.every((row) => row.unit === primary.unit);
+		const quantity = sameUnit
+			? unpurchased.reduce((sum, row) => sum + row.quantity, 0)
+			: primary.quantity;
+		return {
+			state: "on_live",
+			quantity,
+			unit: primary.unit,
+			manualOnly: Boolean(manual),
+			liveItemId: primary.id,
+		};
+	}
+	const purchased = rows.filter((row) => row.isPurchased);
+	if (purchased.length > 0) {
+		const primary = purchased[0];
+		return {
+			state: "in_cart",
+			quantity: primary.quantity,
+			unit: primary.unit,
+			manualOnly: isManualOnlySupplyItem(primary),
+			liveItemId: primary.id,
+		};
+	}
+	return { state: "none" };
+}
+
+function cargoTotals(rows: CargoIndexRow[]) {
+	const map = new Map<string, { base: number; quantity: number }>();
+	for (const row of rows) {
+		const key = itemIdentity(row.name, row.domain || "food");
+		const current = map.get(key) ?? { base: 0, quantity: 0 };
+		current.base += row.baseQuantity ?? row.quantity;
+		current.quantity += row.quantity;
+		map.set(key, current);
+	}
+	return map;
+}
+
+function manualLiveInsert(item: SupplyItemRow, liveListId: string, now: Date) {
+	const base = computeBaseFields(item.quantity, item.unit, item.name);
+	return {
+		id: crypto.randomUUID(),
+		listId: liveListId,
+		name: item.name,
+		quantity: item.quantity,
+		unit: item.unit,
+		baseQuantity: base.baseQuantity,
+		baseUnit: base.baseUnit,
+		domain: item.domain,
+		isPurchased: false,
+		sourceMealId: null,
+		sourceMealIds: [] as string[],
+		sourceOrigins: ["manual"] as Array<
+			"manual" | "manifest" | "galley" | "cargo"
+		>,
+		sourceCargoId: null,
+		note: item.note,
+		category: item.category,
+		sortOrder: item.sortOrder,
+		createdAt: now,
+		updatedAt: now,
+	};
+}
+
+function eventTime(value: unknown): Date | null {
+	if (value instanceof Date && !Number.isNaN(value.getTime())) return value;
+	if (typeof value === "number" && Number.isFinite(value)) {
+		return new Date(value < 1e12 ? value * 1000 : value);
+	}
+	if (typeof value === "string") {
+		const parsed = Date.parse(value);
+		if (Number.isFinite(parsed)) return new Date(parsed);
+		const asNumber = Number(value);
+		if (Number.isFinite(asNumber)) return eventTime(asNumber);
+	}
+	return null;
+}
+
+async function readAddToLiveReplay(
+	db: D1Database,
+	organizationId: string,
+	clientKey: string,
+): Promise<SupplyAddToLiveResult | null> {
+	const d1 = drizzle(db);
+	const [row] = await d1
+		.select()
+		.from(supplyOperation)
+		.where(
+			and(
+				eq(supplyOperation.organizationId, organizationId),
+				eq(supplyOperation.operationId, clientKey),
+				eq(supplyOperation.operationType, "add_to_live"),
+			),
+		)
+		.limit(1);
+	if (!row?.resultJson) return null;
+	try {
+		return JSON.parse(row.resultJson) as SupplyAddToLiveResult;
+	} catch {
+		return null;
+	}
+}
+
 export async function copyItemsToLive(options: {
 	env: Env;
 	organizationId: string;
 	sourceListId: string;
 	mode: "missing_only" | "add_all";
+	onExisting?: "skip" | "add_more";
 	itemIds?: string[];
+	clientKey?: string;
 }) {
 	const source = await loadSupplyListRow(
 		options.env.DB,
@@ -611,94 +802,342 @@ export async function copyItemsToLive(options: {
 		options.sourceListId,
 	);
 	if (!source) throw new SupplyListNotFoundError();
+	const sourceState = resolveSupplyListState(source);
+	if (!canAddToLive(sourceState)) {
+		throw new InvalidListStateError(
+			sourceState,
+			"Add items to Live from a saved list.",
+		);
+	}
 	const live = await ensureLiveSupplyList(
 		options.env.DB,
 		options.organizationId,
 	);
 	if (!live) throw new SupplyListNotFoundError();
 
+	if (options.clientKey) {
+		const replay = await readAddToLiveReplay(
+			options.env.DB,
+			options.organizationId,
+			options.clientKey,
+		);
+		if (replay) {
+			const list = await getSupplyListById(
+				options.env.DB,
+				options.organizationId,
+				live.id,
+			);
+			return { list, result: replay };
+		}
+	}
+
 	const sourceItems = await loadItems(options.env.DB, source.id);
 	const selected = options.itemIds
 		? sourceItems.filter((item) => options.itemIds?.includes(item.id))
 		: sourceItems;
-	const liveItems = live.items;
-	const liveByKey = new Map(
-		liveItems.map((item) => [itemIdentity(item.name, item.domain), item]),
-	);
-
-	const cargoByKey = new Map<string, number>();
-	if (options.mode === "missing_only") {
-		const cargo = await fetchOrgCargoIndex(
-			options.env.DB,
-			options.organizationId,
-		);
-		for (const row of cargo) {
-			const key = itemIdentity(row.name, row.domain);
-			cargoByKey.set(
-				key,
-				(cargoByKey.get(key) ?? 0) + (row.baseQuantity ?? row.quantity),
-			);
-		}
-	}
+	const onExisting = options.onExisting ?? "skip";
+	const explicitItems = options.itemIds != null;
+	const liveByKey = groupLiveItems(live.items);
+	const skipCargo =
+		options.mode === "missing_only" &&
+		!explicitItems &&
+		onExisting !== "add_more";
+	const cargoByKey = skipCargo
+		? cargoTotals(
+				await fetchOrgCargoIndex(options.env.DB, options.organizationId),
+			)
+		: new Map<string, { base: number; quantity: number }>();
 
 	const d1 = drizzle(options.env.DB);
 	const now = new Date();
-	const inserts: ReturnType<typeof cloneSupplyItemValues>[] = [];
+	const inserts: ReturnType<typeof manualLiveInsert>[] = [];
 	// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch statement types
 	const updates: any[] = [];
+	const result = emptyAddToLiveResult();
 
 	for (const item of selected) {
 		const key = itemIdentity(item.name, item.domain);
-		if (options.mode === "missing_only") {
-			const cargoQty = cargoByKey.get(key) ?? 0;
-			const liveQty = liveByKey.get(key)?.baseQuantity ?? 0;
-			if (cargoQty + liveQty >= (item.baseQuantity || item.quantity)) continue;
-		}
-		const existing = liveByKey.get(key);
-		if (existing) {
-			const merged = mergeSupplyItemQuantities(existing, item);
-			updates.push(
-				d1
-					.update(supplyItem)
-					.set({
-						...merged,
-						updatedAt: now,
-						note: existing.note ?? item.note,
-						category: existing.category ?? item.category,
-					})
-					.where(eq(supplyItem.id, existing.id)),
+		const group = liveByKey.get(key) ?? [];
+		const status = liveStatusForItems(group);
+		if (status.state === "on_live" || status.state === "in_cart") {
+			if (onExisting !== "add_more") {
+				pushSkip(result, item.id, status.state);
+				continue;
+			}
+			const manual = group.find(
+				(row) => !row.isPurchased && isManualOnlySupplyItem(row),
 			);
-		} else {
-			inserts.push(
-				cloneSupplyItemValues({ ...item, isPurchased: false }, live.id, {
-					resetPurchased: true,
-				}),
-			);
+			if (status.state === "on_live" && manual) {
+				const prevQuantity = manual.quantity;
+				const prevUnit = manual.unit;
+				const merged = mergeSupplyItemQuantities(manual, item);
+				updates.push(
+					d1
+						.update(supplyItem)
+						.set({ ...merged, updatedAt: now })
+						.where(eq(supplyItem.id, manual.id)),
+				);
+				manual.quantity = merged.quantity;
+				manual.unit = merged.unit;
+				manual.baseQuantity = merged.baseQuantity;
+				manual.baseUnit = merged.baseUnit;
+				result.merged.push({
+					sourceItemId: item.id,
+					liveItemId: manual.id,
+					prevQuantity,
+					prevUnit,
+					quantity: merged.quantity,
+					unit: merged.unit,
+				});
+				result.counts.merged += 1;
+				continue;
+			}
+		} else if (skipCargo) {
+			const needed = item.baseQuantity || item.quantity;
+			const cargoBase = cargoByKey.get(key)?.base ?? 0;
+			if (needed > 0 && cargoBase >= needed) {
+				pushSkip(result, item.id, "in_cargo");
+				continue;
+			}
 		}
+
+		const inserted = manualLiveInsert(item, live.id, now);
+		inserts.push(inserted);
+		group.push(inserted as unknown as SupplyItemRow);
+		liveByKey.set(key, group);
+		result.added.push({ sourceItemId: item.id, liveItemId: inserted.id });
+		result.counts.added += 1;
 	}
 
-	if (liveItems.length + inserts.length > 10_000) {
+	if (live.items.length + inserts.length > 10_000) {
 		throw new SupplyItemLimitError(10_000);
 	}
 
-	const statements = [
-		...updates,
-		...chunkArray(inserts, D1_MAX_SUPPLY_ROWS_PER_STATEMENT).map((chunk) =>
-			d1.insert(supplyItem).values(chunk),
-		),
-		d1
-			.update(supplyList)
-			.set({
-				updatedAt: now,
-				revision: (live.revision ?? 0) + 1,
-			})
-			.where(eq(supplyList.id, live.id)),
-	];
-	if (statements.length > 0) {
+	if (selected.length > 0) {
+		const statements = [
+			...updates,
+			...chunkArray(inserts, D1_MAX_SUPPLY_ROWS_PER_STATEMENT).map((chunk) =>
+				d1.insert(supplyItem).values(chunk),
+			),
+			d1
+				.update(supplyList)
+				.set({
+					updatedAt: now,
+					revision: (live.revision ?? 0) + 1,
+				})
+				.where(eq(supplyList.id, live.id)),
+		];
 		// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
 		await d1.batch(statements as [any, ...any[]]);
 	}
-	return getSupplyListById(options.env.DB, options.organizationId, live.id);
+
+	if (options.clientKey) {
+		await d1
+			.insert(supplyOperation)
+			.values({
+				id: crypto.randomUUID(),
+				organizationId: options.organizationId,
+				listId: source.id,
+				operationId: options.clientKey,
+				operationType: "add_to_live",
+				appliedAt: now,
+				resultJson: JSON.stringify(result),
+			})
+			.onConflictDoNothing();
+	}
+
+	const list = await getSupplyListById(
+		options.env.DB,
+		options.organizationId,
+		live.id,
+	);
+	return { list, result };
+}
+
+export async function undoAddToLive(options: {
+	env: Env;
+	organizationId: string;
+	sourceListId: string;
+	added: Array<{ liveItemId: string }>;
+	merged: Array<{
+		liveItemId: string;
+		prevQuantity: number;
+		prevUnit: string;
+		quantity?: number;
+	}>;
+}) {
+	const source = await loadSupplyListRow(
+		options.env.DB,
+		options.organizationId,
+		options.sourceListId,
+	);
+	if (!source) throw new SupplyListNotFoundError();
+	const sourceState = resolveSupplyListState(source);
+	if (!canAddToLive(sourceState)) {
+		throw new InvalidListStateError(sourceState);
+	}
+	const live = await ensureLiveSupplyList(
+		options.env.DB,
+		options.organizationId,
+	);
+	if (!live) throw new SupplyListNotFoundError();
+
+	const d1 = drizzle(options.env.DB);
+	const liveItems = await loadItems(options.env.DB, live.id);
+	const byId = new Map(liveItems.map((item) => [item.id, item]));
+	const now = new Date();
+	// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch statement types
+	const deletes: any[] = [];
+	// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch statement types
+	const updates: any[] = [];
+	let deleted = 0;
+	let restored = 0;
+
+	for (const row of options.added) {
+		const item = byId.get(row.liveItemId);
+		if (!item || item.isPurchased || !isManualOnlySupplyItem(item)) continue;
+		deletes.push(d1.delete(supplyItem).where(eq(supplyItem.id, item.id)));
+		deleted += 1;
+	}
+	for (const row of options.merged) {
+		const item = byId.get(row.liveItemId);
+		if (!item || item.isPurchased || !isManualOnlySupplyItem(item)) continue;
+		if (
+			row.quantity !== undefined &&
+			Math.abs(item.quantity - row.quantity) > 1e-6
+		) {
+			continue;
+		}
+		const base = computeBaseFields(row.prevQuantity, row.prevUnit, item.name);
+		updates.push(
+			d1
+				.update(supplyItem)
+				.set({
+					quantity: row.prevQuantity,
+					unit: row.prevUnit,
+					baseQuantity: base.baseQuantity,
+					baseUnit: base.baseUnit,
+					updatedAt: now,
+				})
+				.where(eq(supplyItem.id, item.id)),
+		);
+		restored += 1;
+	}
+
+	if (deletes.length + updates.length > 0) {
+		const statements = [
+			...deletes,
+			...updates,
+			d1
+				.update(supplyList)
+				.set({
+					updatedAt: now,
+					revision: (live.revision ?? 0) + 1,
+				})
+				.where(eq(supplyList.id, live.id)),
+		];
+		// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
+		await d1.batch(statements as [any, ...any[]]);
+	}
+
+	return {
+		list: await getSupplyListById(
+			options.env.DB,
+			options.organizationId,
+			live.id,
+		),
+		undone: { deleted, restored },
+	};
+}
+
+export async function lastDockedAtByNormalizedName(
+	db: D1Database,
+	organizationId: string,
+	names: string[],
+	now = new Date(),
+) {
+	const wanted = new Set(
+		names.map((name) => normalizeForCargoDedup(name)).filter((name) => name),
+	);
+	const queryNames = new Set<string>();
+	for (const name of names) {
+		const trimmed = name.trim().toLowerCase();
+		if (trimmed) queryNames.add(trimmed);
+		const normalized = normalizeForCargoDedup(name);
+		if (normalized) queryNames.add(normalized);
+	}
+	const found = new Map<string, string>();
+	if (wanted.size === 0 || queryNames.size === 0) return found;
+
+	const cutoff = new Date(now.getTime() - LAST_BOUGHT_WINDOW_MS);
+	const d1 = drizzle(db);
+	for (const chunk of chunkArray([...queryNames], 90)) {
+		if (chunk.length === 0) continue;
+		const rows = await d1
+			.select({
+				subjectName: kitchenEvent.subjectName,
+				occurredAt: sql<number>`max(${kitchenEvent.occurredAt})`,
+			})
+			.from(kitchenEvent)
+			.where(
+				and(
+					eq(kitchenEvent.organizationId, organizationId),
+					eq(kitchenEvent.eventType, "supply_docked"),
+					gte(kitchenEvent.occurredAt, cutoff),
+					sql`lower(${kitchenEvent.subjectName}) in (${sql.join(
+						chunk.map((name) => sql`${name}`),
+						sql`, `,
+					)})`,
+				),
+			)
+			.groupBy(sql`lower(${kitchenEvent.subjectName})`);
+		for (const row of rows) {
+			const key = normalizeForCargoDedup(row.subjectName);
+			if (!wanted.has(key)) continue;
+			const at = eventTime(row.occurredAt);
+			if (!at) continue;
+			const iso = at.toISOString();
+			const prev = found.get(key);
+			if (!prev || iso > prev) found.set(key, iso);
+		}
+	}
+	return found;
+}
+
+export async function getSavedListView(
+	env: Env,
+	organizationId: string,
+	listId: string,
+	now = new Date(),
+) {
+	const list = await getSupplyListById(env.DB, organizationId, listId);
+	if (!list) return null;
+	if (resolveSupplyListState(list) === "live") return list;
+
+	const live = await ensureLiveSupplyList(env.DB, organizationId);
+	const liveByKey = groupLiveItems(live?.items ?? []);
+	const cargoByKey = cargoTotals(
+		await fetchOrgCargoIndex(env.DB, organizationId),
+	);
+	const lastDocked = await lastDockedAtByNormalizedName(
+		env.DB,
+		organizationId,
+		list.items.map((item) => item.name),
+		now,
+	);
+
+	return {
+		...list,
+		items: list.items.map((item) => {
+			const key = itemIdentity(item.name, item.domain);
+			return {
+				...item,
+				live: liveStatusForItems(liveByKey.get(key) ?? []),
+				inCargo: cargoByKey.get(key)?.quantity ?? 0,
+				lastDockedAt: lastDocked.get(normalizeForCargoDedup(item.name)) ?? null,
+			};
+		}),
+	};
 }
 
 export async function transferSupplyItems(options: {
@@ -1307,8 +1746,17 @@ export async function applySupplyOperations(options: {
 	);
 	if (!list) throw new SupplyListNotFoundError();
 	const state = resolveSupplyListState(list);
-	if (!canMutateSupplyItems(state) && state !== "live") {
+	if (!canMutateSupplyItems(state)) {
 		throw new InvalidListStateError(state);
+	}
+	const checksOffLive = options.operations.some(
+		(op) =>
+			op.type === "toggle_purchased" ||
+			op.type === "reset_purchased" ||
+			(op.type === "update_item" && op.payload?.isPurchased !== undefined),
+	);
+	if (checksOffLive && !canShopSupplyList(state)) {
+		throw new InvalidListStateError(state, LIVE_ONLY_CHECK_MESSAGE);
 	}
 
 	const d1 = drizzle(options.env.DB);

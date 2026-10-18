@@ -11,7 +11,11 @@ import {
 	getSupplyListById,
 	updateSupplyItem,
 } from "../../supply.server";
-import { SUPPLY_MULTI_LISTS_FLAG } from "../../supply-list-kinds";
+import {
+	LIVE_ONLY_DOCK_MESSAGE,
+	MUTABLE_SUPPLY_LIST_STATES,
+	SUPPLY_MULTI_LISTS_FLAG,
+} from "../../supply-list-kinds";
 import { requireSupplyListTarget } from "../../supply-list-target.server";
 import {
 	archiveSupplyList,
@@ -91,7 +95,7 @@ export function createSupplyToolDefs(env: McpToolsEnv) {
 					}
 					await requireSupplyListTarget(env.DB, ctx.organizationId, a.listId, {
 						multiListsEnabled: true,
-						allowedStates: ["live", "saved"],
+						allowedStates: MUTABLE_SUPPLY_LIST_STATES,
 					});
 					list = await getSupplyListById(env.DB, ctx.organizationId, a.listId);
 				}
@@ -276,7 +280,7 @@ export function createSupplyToolDefs(env: McpToolsEnv) {
 		defineSharedTool({
 			name: "complete_supply_list",
 			description:
-				"Dock all purchased items from the active supply list into pantry inventory and remove them from the list. Destructive — pass confirm:true.",
+				"Dock purchased items from Live Supply into pantry inventory and remove them from the list. Saved lists cannot be docked — add items to Live first. Destructive — pass confirm:true.",
 			inputSchema: z.object({
 				confirm: z.boolean(),
 				listId: z.string().uuid().optional(),
@@ -308,7 +312,8 @@ export function createSupplyToolDefs(env: McpToolsEnv) {
 					}
 					await requireSupplyListTarget(env.DB, ctx.organizationId, a.listId, {
 						multiListsEnabled: true,
-						allowedStates: ["live", "saved"],
+						allowedStates: ["live"],
+						message: LIVE_ONLY_DOCK_MESSAGE,
 					});
 					list = await getSupplyListById(env.DB, ctx.organizationId, a.listId);
 				}

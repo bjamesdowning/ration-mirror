@@ -265,6 +265,10 @@ export default [
 		"routes/api/supply-lists.$id.copy-to-live.ts",
 	),
 	route(
+		"api/supply-lists/:id/undo-add-to-live",
+		"routes/api/supply-lists.$id.undo-add-to-live.ts",
+	),
+	route(
 		"api/supply-lists/:id/add-staples",
 		"routes/api/supply-lists.$id.add-staples.ts",
 	),

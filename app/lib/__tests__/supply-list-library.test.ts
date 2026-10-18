@@ -1,12 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { nextQuotaSlot } from "~/lib/supply-list-capacity.server";
 import {
+	canAddToLive,
 	canArchiveSupplyList,
 	canDeleteSupplyList,
+	canDockSupplyList,
 	canIssueSupplyShareToken,
 	canMutateSharedSupplyList,
 	canMutateSupplyItems,
 	canRenameSupplyList,
+	canResetPurchasedSupplyList,
 	canShopSupplyList,
 	canSnoozeSupplyList,
 	canSyncSupplyList,
@@ -86,7 +89,17 @@ describe("list states", () => {
 			resolveSupplyListState({ kind: "saved", archivedAt: new Date() }),
 		).toBe("archived");
 		expect(canShopSupplyList("archived")).toBe(false);
-		expect(canMutateSupplyItems("template")).toBe(false);
+		expect(canShopSupplyList("saved")).toBe(false);
+		expect(canShopSupplyList("live")).toBe(true);
+		expect(canDockSupplyList("saved")).toBe(false);
+		expect(canDockSupplyList("live")).toBe(true);
+		expect(canResetPurchasedSupplyList("saved")).toBe(false);
+		expect(canMutateSupplyItems("template")).toBe(true);
+		expect(canMutateSupplyItems("archived")).toBe(false);
+		expect(canAddToLive("saved")).toBe(true);
+		expect(canAddToLive("template")).toBe(true);
+		expect(canAddToLive("archived")).toBe(true);
+		expect(canAddToLive("live")).toBe(false);
 		expect(canSyncSupplyList("saved")).toBe(false);
 		expect(canSyncSupplyList("live")).toBe(true);
 		expect(canSnoozeSupplyList("saved")).toBe(false);
@@ -94,7 +107,6 @@ describe("list states", () => {
 		expect(canDeleteSupplyList("live")).toBe(false);
 		expect(canArchiveSupplyList("live")).toBe(false);
 		expect(canArchiveSupplyList("saved")).toBe(true);
-		expect(canShopSupplyList("saved")).toBe(true);
 	});
 
 	it("hides non-Live lists when the library flag is off", () => {
@@ -111,7 +123,7 @@ describe("list states", () => {
 		expect(canIssueSupplyShareToken("archived")).toBe(true);
 		expect(canIssueSupplyShareToken("template")).toBe(false);
 		expect(canMutateSharedSupplyList("live")).toBe(true);
-		expect(canMutateSharedSupplyList("saved")).toBe(true);
+		expect(canMutateSharedSupplyList("saved")).toBe(false);
 		expect(canMutateSharedSupplyList("archived")).toBe(false);
 		expect(canMutateSharedSupplyList("template")).toBe(false);
 	});

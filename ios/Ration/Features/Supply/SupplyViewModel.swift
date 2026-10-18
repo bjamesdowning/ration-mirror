@@ -304,16 +304,18 @@ final class SupplyViewModel {
                 name: createdList.name,
                 kind: "saved",
                 state: "saved",
+                createdFrom: "manual",
                 itemCount: 0,
                 purchasedCount: 0,
-                revision: nil
+                revision: nil,
+                capabilities: nil
             )
             if !itemText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 _ = try await api.addSupplyItems(listId: createdList.id, text: itemText)
             }
             await loadCatalog(api: api, snapshots: snapshots, organizationId: organizationId)
-            await selectList(summary, api: api, snapshots: snapshots, organizationId: organizationId)
             errorMessage = nil
+            dockMessage = "Saved \(summary.name). Pull it into Live when you shop."
             return true
         } catch {
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
@@ -583,6 +585,9 @@ final class SupplyViewModel {
         }
     }
 
+    /// Saved lists never dock. SupplyViewModel.dock returns before any complete call when the list is not Live.
+    static let docksSavedLists = false
+
     func dock(
         api: RationAPI,
         snapshots: SnapshotStore,
@@ -595,18 +600,18 @@ final class SupplyViewModel {
             errorMessage = "Docking requires a network connection."
             return
         }
+        guard isLiveList else {
+            errorMessage = "Only Live Supply can be docked. Add items to Live instead."
+            return
+        }
         isDocking = true
         defer { isDocking = false }
         do {
-            let result = try await (isLiveList
-                ? api.completeSupply(listId: list.id)
-                : api.completeNamedSupplyList(id: list.id))
+            let result = try await api.completeSupply(listId: list.id)
             Haptics.success()
             errorMessage = nil
             paywallContext = nil
-            dockMessage = isLiveList
-                ? "Docked \(result.docked) items into Cargo"
-                : (result.message ?? "Cargo replenished; Live Supply recalculated")
+            dockMessage = "Docked \(result.docked) items into Cargo"
             lastHapticMilestone = 0
             await load(api: api, snapshots: snapshots, online: online, organizationId: organizationId)
         } catch let error as APIError {

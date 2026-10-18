@@ -117,10 +117,22 @@ extension RationAPI {
         try await client.delete("supply/lists/\(id)")
     }
 
-    func copySupplyListToLive(id: String, itemIds: [String]?) async throws -> SupplyResponse {
+    func copySupplyListToLive(
+        id: String,
+        itemIds: [String]?,
+        mode: String = "missing_only",
+        onExisting: String = "skip"
+    ) async throws -> SupplyCopyToLiveResponse {
         try await client.post(
             "supply/lists/\(id)/copy-to-live",
-            body: SupplyCopyToLiveRequest(mode: "add_all", itemIds: itemIds)
+            body: SupplyCopyToLiveRequest(mode: mode, onExisting: onExisting, itemIds: itemIds)
+        )
+    }
+
+    func undoAddToLive(id: String, result: SupplyAddToLiveResult) async throws -> SupplyResponse {
+        try await client.post(
+            "supply/lists/\(id)/undo-add-to-live",
+            body: SupplyUndoAddToLiveRequest(added: result.added, merged: result.merged)
         )
     }
 

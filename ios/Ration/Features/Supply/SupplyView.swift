@@ -27,13 +27,8 @@ struct SupplyView: View {
     @State private var paywallContext: PaywallContext?
     @State private var showingQuickAdd = false
     @State private var showingLists = false
-    @State private var showingNewList = false
-    @State private var showingRename = false
-    @State private var renameText = ""
-    @State private var showingDeleteConfirm = false
+    @State private var showingPullFrom = false
     @State private var showingDockConfirm = false
-    @State private var choosingForLive = false
-    @State private var selectedForLive: Set<String> = []
     @State private var hasTriggeredAutoSync = false
     @State private var showingReplenishReceipt = false
     @State private var showingSupplyScanCamera = false
@@ -91,12 +86,16 @@ struct SupplyView: View {
                             }
                             .buttonStyle(SecondaryButtonStyle())
                             .disabled(model.isSyncing)
+                            if model.multiListsEnabled {
+                                Button("Pull from list") { showingPullFrom = true }
+                                    .buttonStyle(SecondaryButtonStyle())
+                            }
                         }
                         .padding(24)
                     }
                 }
             }
-            .navigationTitle(model.isLiveList ? "Supply" : (model.list?.name ?? "Supply"))
+            .navigationTitle("Supply")
             .toolbar {
                 GlobalPageToolbar(
                     hasActiveFilters: model.filters.hasActiveFilters,
@@ -107,6 +106,19 @@ struct SupplyView: View {
                     onOpenGroupSettings: onOpenGroupSettings,
                     onOpenSettings: onOpenSettings
                 )
+                if model.multiListsEnabled {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button {
+                            showingLists = true
+                        } label: {
+                            Image(systemName: "list.bullet.rectangle")
+                        }
+                        .accessibilityLabel("Lists")
+                    }
+                }
+            }
+            .navigationDestination(isPresented: $showingLists) {
+                SupplyListsLibraryView()
             }
             .background(Theme.ceramic)
             .safeAreaInset(edge: .top, spacing: 0) {
@@ -233,74 +245,21 @@ struct SupplyView: View {
                     )
                 }
             }
-            .sheet(isPresented: $showingLists) {
-                SupplyListsSheet(
-                    catalog: model.catalog,
-                    selectedId: model.list?.id
-                ) { summary in
-                    choosingForLive = false
-                    selectedForLive = []
-                    guard let organizationId else { return }
-                    Task {
-                        await model.selectList(
-                            summary,
+            .sheet(isPresented: $showingPullFrom) {
+                if let organizationId {
+                    PullFromListSheet(
+                        catalog: model.catalog,
+                        organizationId: organizationId,
+                        liveItemCount: model.totalCount
+                    ) {
+                        await model.load(
                             api: env.api,
                             snapshots: env.snapshots,
-                            organizationId: organizationId
-                        )
-                    }
-                } onNewList: {
-                    showingNewList = true
-                }
-            }
-            .sheet(isPresented: $showingNewList) {
-                SupplyNewListSheet { name, text in
-                    guard let organizationId else { return false }
-                    return await model.createSavedList(
-                        name: name,
-                        itemText: text,
-                        api: env.api,
-                        snapshots: env.snapshots,
-                        organizationId: organizationId
-                    )
-                }
-            }
-            .alert("Rename list", isPresented: $showingRename) {
-                TextField("Name", text: $renameText)
-                Button("Save") {
-                    let name = renameText
-                    Task {
-                        guard let organizationId else { return }
-                        _ = await model.renameCurrentList(
-                            to: name,
-                            api: env.api,
-                            snapshots: env.snapshots,
+                            online: env.network.isOnline,
                             organizationId: organizationId
                         )
                     }
                 }
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text("This only changes the list name. Items stay put.")
-            }
-            .confirmationDialog(
-                "Delete this list?",
-                isPresented: $showingDeleteConfirm,
-                titleVisibility: .visible
-            ) {
-                Button("Delete list", role: .destructive) {
-                    Task {
-                        guard let organizationId else { return }
-                        await model.deleteCurrentList(
-                            api: env.api,
-                            snapshots: env.snapshots,
-                            organizationId: organizationId
-                        )
-                    }
-                }
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text("Items on this list are removed. Live Supply is not affected.")
             }
             .confirmationDialog(
                 "Dock bought items to Cargo?",
@@ -429,23 +388,9 @@ struct SupplyView: View {
                         Label("Lists", systemImage: "list.bullet")
                     }
                     Button {
-                        showingNewList = true
+                        showingPullFrom = true
                     } label: {
-                        Label("New list", systemImage: "square.and.pencil")
-                    }
-                    if !model.isLiveList {
-                        Button {
-                            renameText = model.list?.name ?? ""
-                            showingRename = true
-                        } label: {
-                            Label("Rename list", systemImage: "pencil")
-                        }
-                        .disabled(model.activeListState == "archived")
-                        Button(role: .destructive) {
-                            showingDeleteConfirm = true
-                        } label: {
-                            Label("Delete list", systemImage: "trash")
-                        }
+                        Label("Pull from list", systemImage: "arrow.down.doc")
                     }
                 }
                 if env.session.clientFlags.isAiDockFromReceiptEnabled {
@@ -460,7 +405,7 @@ struct SupplyView: View {
                 } label: {
                     Label("Dock bought items to Cargo", systemImage: "shippingbox.fill")
                 }
-                .disabled(model.purchasedCount == 0 || model.isDocking || !model.canEditCurrentList)
+                .disabled(model.purchasedCount == 0 || model.isDocking || !model.isLiveList)
             }
         }
         .onChange(of: env.deepLinkRouter.supplyComposePending, initial: true) { _, pending in
@@ -531,36 +476,6 @@ struct SupplyView: View {
                     }
                 }
             }
-            if model.multiListsEnabled, !model.isLiveList {
-                Section {
-                    if choosingForLive {
-                        Button(selectedForLive.isEmpty ? "Add selected to Live" : "Add \(selectedForLive.count) to Live") {
-                            let ids = Array(selectedForLive)
-                            choosingForLive = false
-                            selectedForLive = []
-                            Task { await model.addItemsToLive(itemIds: ids, api: env.api) }
-                        }
-                        .disabled(selectedForLive.isEmpty)
-                        Button("Cancel") {
-                            choosingForLive = false
-                            selectedForLive = []
-                        }
-                    } else {
-                        Button("Add all to Live") {
-                            Task { await model.addItemsToLive(itemIds: nil, api: env.api) }
-                        }
-                        .disabled(model.totalCount == 0)
-                        Button("Choose items") {
-                            choosingForLive = true
-                            selectedForLive = []
-                        }
-                        .disabled(model.totalCount == 0)
-                    }
-                } footer: {
-                    Text("Copies onto Live Supply and leaves this list as-is. Check items off, then dock, when you shop this list itself.")
-                        .textCase(nil)
-                }
-            }
             if model.totalCount > 0 {
                 Section {
                     EmptyView()
@@ -622,15 +537,6 @@ struct SupplyView: View {
                             }
                         },
                         onSnooze: { snoozeItem = item },
-                        liveSelection: choosingForLive
-                            ? (selectedForLive.contains(item.id), {
-                                if selectedForLive.contains(item.id) {
-                                    selectedForLive.remove(item.id)
-                                } else {
-                                    selectedForLive.insert(item.id)
-                                }
-                            })
-                            : nil,
                         onDelete: {
                             model.runMutation {
                                 await model.deleteItem(item, api: env.api, snapshots: env.snapshots, online: env.network.isOnline, organizationId: organizationId)
@@ -719,7 +625,6 @@ private struct SupplyListItemRow: View {
     let onCheckOff: () -> Void
     let onCheck: () -> Void
     let onSnooze: () -> Void
-    var liveSelection: (selected: Bool, toggle: () -> Void)? = nil
     let onDelete: () -> Void
     @ScaledMetric(relativeTo: .body) private var checkIconPoints: CGFloat = 28
 
@@ -758,16 +663,6 @@ private struct SupplyListItemRow: View {
             )
             .rationCaption()
             .accessibilityHidden(true)
-
-            if let liveSelection {
-                Button(action: liveSelection.toggle) {
-                    Image(systemName: liveSelection.selected ? "checkmark.circle.fill" : "circle")
-                        .foregroundStyle(liveSelection.selected ? Theme.hyperGreen : Theme.muted)
-                }
-                .buttonStyle(.plain)
-                .frame(minWidth: 44, minHeight: 44)
-                .accessibilityLabel(liveSelection.selected ? "Remove \(item.name) from Live copy" : "Add \(item.name) to Live")
-            }
         }
         .accessibilityElement(children: .contain)
         .swipeActions(edge: .leading) {

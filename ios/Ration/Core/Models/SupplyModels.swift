@@ -29,6 +29,14 @@ enum SupplyItemOrigin: String, Codable, Sendable, Hashable, CaseIterable {
     static let displayOrder: [SupplyItemOrigin] = [.manifest, .galley, .cargo, .manual]
 }
 
+struct SavedListItemLive: Codable, Sendable, Hashable {
+    let state: String
+    let quantity: Double?
+    let unit: String?
+    let manualOnly: Bool?
+    let liveItemId: String?
+}
+
 struct SupplyItem: Codable, Sendable, Identifiable, Hashable {
     let id: String
     let name: String
@@ -39,6 +47,9 @@ struct SupplyItem: Codable, Sendable, Identifiable, Hashable {
     let domain: String
     let isPurchased: Bool
     let sourceOrigins: [SupplyItemOrigin]?
+    let live: SavedListItemLive?
+    let inCargo: Double?
+    let lastDockedAt: String?
 
     init(
         id: String,
@@ -49,7 +60,10 @@ struct SupplyItem: Codable, Sendable, Identifiable, Hashable {
         isPurchased: Bool,
         sourceOrigins: [SupplyItemOrigin]? = nil,
         baseQuantity: Double? = nil,
-        baseUnit: String? = nil
+        baseUnit: String? = nil,
+        live: SavedListItemLive? = nil,
+        inCargo: Double? = nil,
+        lastDockedAt: String? = nil
     ) {
         self.id = id
         self.name = name
@@ -60,6 +74,9 @@ struct SupplyItem: Codable, Sendable, Identifiable, Hashable {
         self.domain = domain
         self.isPurchased = isPurchased
         self.sourceOrigins = sourceOrigins
+        self.live = live
+        self.inCargo = inCargo
+        self.lastDockedAt = lastDockedAt
     }
 
     init(from decoder: Decoder) throws {
@@ -73,6 +90,9 @@ struct SupplyItem: Codable, Sendable, Identifiable, Hashable {
         domain = try c.decode(String.self, forKey: .domain)
         isPurchased = try c.decode(Bool.self, forKey: .isPurchased)
         sourceOrigins = try c.decodeIfPresent([SupplyItemOrigin].self, forKey: .sourceOrigins)
+        live = try c.decodeIfPresent(SavedListItemLive.self, forKey: .live)
+        inCargo = try c.decodeIfPresent(Double.self, forKey: .inCargo)
+        lastDockedAt = try c.decodeIfPresent(String.self, forKey: .lastDockedAt)
     }
 
     var resolvedSourceOrigins: [SupplyItemOrigin] {
@@ -127,7 +147,10 @@ struct SupplyList: Codable, Sendable, Identifiable {
             unit: existing.unit,
             domain: existing.domain,
             isPurchased: isPurchased,
-            sourceOrigins: existing.sourceOrigins
+            sourceOrigins: existing.sourceOrigins,
+            live: existing.live,
+            inCargo: existing.inCargo,
+            lastDockedAt: existing.lastDockedAt
         )
 
         var newUnchecked = resolvedUncheckedCount
@@ -228,14 +251,22 @@ struct SupplyUnsnoozeResponse: Codable, Sendable {
     let unsnoozed: Bool
 }
 
+struct SupplyListCapabilities: Codable, Sendable {
+    let canShop: Bool?
+    let canDock: Bool?
+    let canAddToLive: Bool?
+}
+
 struct SupplyCatalogSummary: Codable, Sendable, Identifiable {
     let id: String
     let name: String
     let kind: String?
     let state: String?
+    let createdFrom: String?
     let itemCount: Int?
     let purchasedCount: Int?
     let revision: Int?
+    let capabilities: SupplyListCapabilities?
 }
 
 struct SupplyCatalogCapacity: Codable, Sendable {
@@ -269,7 +300,46 @@ struct SupplyDuplicateRequest: Codable, Sendable {
 
 struct SupplyCopyToLiveRequest: Codable, Sendable {
     let mode: String
+    let onExisting: String
     let itemIds: [String]?
+}
+
+struct SupplyAddToLiveCounts: Codable, Sendable {
+    let added: Int
+    let merged: Int
+    let skippedOnLive: Int
+    let skippedInCart: Int
+    let skippedInCargo: Int
+}
+
+struct SupplyAddToLiveResult: Codable, Sendable {
+    struct Added: Codable, Sendable {
+        let sourceItemId: String?
+        let liveItemId: String
+    }
+
+    struct Merged: Codable, Sendable {
+        let sourceItemId: String?
+        let liveItemId: String
+        let prevQuantity: Double
+        let prevUnit: String
+        let quantity: Double
+        let unit: String
+    }
+
+    let added: [Added]
+    let merged: [Merged]
+    let counts: SupplyAddToLiveCounts
+}
+
+struct SupplyCopyToLiveResponse: Codable, Sendable {
+    let list: SupplyList?
+    let result: SupplyAddToLiveResult?
+}
+
+struct SupplyUndoAddToLiveRequest: Codable, Sendable {
+    let added: [SupplyAddToLiveResult.Added]
+    let merged: [SupplyAddToLiveResult.Merged]
 }
 
 struct SupplyBulkAddRequest: Codable, Sendable {

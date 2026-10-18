@@ -780,7 +780,7 @@ The supply list bridges the Galley and Cargo — it holds ingredients needed to 
 - **Snooze** — An item can be snoozed for a duration (via `supply_snooze` table, keyed on `normalizedName + domain`). Snoozed items are silently excluded from all future syncs until the snooze expires or is manually dismissed. Useful for items that are always on hand.
 - **Share** — Crew Member only. Public URL at `/shared/:token`. On Live, any visitor can toggle purchased state via `PATCH /api/shared/:token/items/:itemId` (rate-limited by IP, no session required). Saved and archived share links are read-only. Shared rows show origin badges; the page refreshes when the tab regains focus. Live share links work with the library flag off. Saved-list tokens additionally require `supply-multi-lists`; Template tokens are not issued.
 - **Export** — `GET /api/supply-lists/:id/export?format=text|markdown` for clipboard/note-app sharing.
-- **Mobile shopping UI** — Stacked list rows with title-case names, tap-to-edit quantity pills, one-tap check-off at the listed (or edited) amount, sticky progress/sort/domain bar, and hide-bought toggle. Quantities display via mode-aware `presentQuantity()` / iOS `QuantityPresenter` (readable units, vulgar fractions where appropriate).
+- **Mobile shopping UI** — Live Supply stays the Supply tab: stacked rows, title-case names, tap-to-edit quantity pills, one-tap check-off, sticky progress/sort/domain bar, and hide-bought toggle. With `supply-multi-lists`, Lists is a pushed library and a saved list is its own screen that adds into Live. Pull from list is a sheet over Live. Quantities display via mode-aware `presentQuantity()` / iOS `QuantityPresenter` (readable units, vulgar fractions where appropriate).
 
 ---
 

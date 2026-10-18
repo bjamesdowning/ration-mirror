@@ -99,9 +99,7 @@ struct SupplyScanReviewView: View {
         self.catalog = catalog
         self.onSuccess = onSuccess
         _model = State(initialValue: SupplyScanReviewViewModel(match: context.match))
-        let formatter = DateFormatter()
-        formatter.dateStyle = .medium
-        _newListName = State(initialValue: "Receipt \(formatter.string(from: Date()))")
+        _newListName = State(initialValue: SavedListLogic.receiptListName())
     }
 
     var body: some View {
@@ -218,7 +216,7 @@ struct SupplyScanReviewView: View {
                         }
                         Section("New list") {
                             TextField("List name", text: $newListName)
-                            Button("Save as new list") {
+                            Button("Save as saved list") {
                                 Task {
                                     await saveReviewed(
                                         listId: nil,

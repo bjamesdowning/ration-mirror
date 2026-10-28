@@ -6,7 +6,7 @@ server and purchases via the RevenueCat SDK.
 
 ## Requirements
 
-- Xcode 16+ (iOS 18 deployment target)
+- Xcode 26+ (iOS 26 deployment target)
 - [XcodeGen](https://github.com/yonyz/XcodeGen) to generate the `.xcodeproj` from `project.yml`:
   ```bash
   brew install xcodegen
@@ -24,7 +24,7 @@ Set your **Apple Developer Team ID** in `project.yml` (`DEVELOPMENT_TEAM`) befor
 building to a device, then re-run `xcodegen generate`.
 
 **Versioning:** User-facing app version is `MARKETING_VERSION` in `project.yml`
-(currently **1.5.3**). `CURRENT_PROJECT_VERSION` is the monotonic build number for
+(currently **1.5.6**). `CURRENT_PROJECT_VERSION` is the monotonic build number for
 TestFlight / App Store uploads. Follow the same patch/minor rules as the web app
 (`1.X.1`–`1.X.49`, then `1.(X+1).0`); see `.cursor/rules/ration-master.mdc`.
 After editing `project.yml`, run `bun run ios:generate`.
@@ -303,7 +303,7 @@ Settings PATCH accepts `hubProfile` and `hubLayout` for customizable Hub widgets
 
 **Hub Quick Stats (iOS 1.2.15):** `hub-stats` uses a centered 2×2 segmented quad (Cargo / Expiring / Meals ready / Supply) with hairline cross dividers; counts stay tappable to the same destinations. Compact (`sm`) size omits labels.
 
-**Copilot Textual markdown (iOS 1.2.16):** Assistant replies (Ask + onboarding briefing) render with Textual `StructuredText` — structured lists/headings/code, Hyper-Green links, native text selection. Requires iOS 18. MarkdownUI removed.
+**Copilot Textual markdown (iOS 1.2.16):** Assistant replies (Ask + onboarding briefing) render with Textual `StructuredText` — structured lists/headings/code, Hyper-Green links, native text selection. Requires iOS 26. MarkdownUI removed.
 
 **Manifest date chrome (iOS 1.3.25+):** Week navigator uses edge chevrons (≥44pt), a
 tappable range label that opens a **Go to date** month grid with planned (Hyper-Green) and

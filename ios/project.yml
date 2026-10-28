@@ -3,7 +3,7 @@ options:
   bundleIdPrefix: com.mayutic
   developmentTeam: M2KJH5GDGH
   deploymentTarget:
-    iOS: "18.0"
+    iOS: "26.0"
   createIntermediateGroups: true
   groupSortPosition: top
   knownRegions:
@@ -15,8 +15,8 @@ options:
 
 settings:
   base:
-    MARKETING_VERSION: "1.5.5"
-    CURRENT_PROJECT_VERSION: "140"
+    MARKETING_VERSION: "1.5.6"
+    CURRENT_PROJECT_VERSION: "141"
     SWIFT_VERSION: "5.9"
     # Set your Apple Developer Team ID here (must match App Store Connect / AASA).
     DEVELOPMENT_TEAM: "M2KJH5GDGH"

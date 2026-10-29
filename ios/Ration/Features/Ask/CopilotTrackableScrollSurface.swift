@@ -11,7 +11,7 @@ struct CopilotTrackableScrollSurface<Content: View>: View {
         GeometryReader { geometry in
             ScrollView {
                 content()
-                    .frame(maxWidth: .infinity, minHeight: geometry.size.height + 1)
+                    .frame(maxWidth: .infinity, minHeight: geometry.size.height + 1, alignment: .top)
             }
             .scrollDismissesKeyboard(.interactively)
             .copilotDockScrollMargins(hasTabAction: hasTabAction)

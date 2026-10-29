@@ -55,9 +55,6 @@ struct OrgSwitcherBar: View {
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
-            .background(Theme.surface)
-            .clipShape(Capsule())
-            .overlay(Capsule().stroke(Theme.platinum, lineWidth: 1))
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Group settings")

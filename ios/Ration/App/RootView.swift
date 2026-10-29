@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// Auth gate — routes between launch splash, sign-in, onboarding, and the main tab shell.
 struct RootView: View {
@@ -193,9 +194,17 @@ struct MainTabView: View {
                 .tag(MainTab.supply)
                 .accessibilityIdentifier("tab.supply")
         }
-        .tabViewBottomAccessory {
+        .overlay(alignment: .bottom) {
             if showCopilotBar {
                 copilotDock
+                    .padding(.bottom, env.copilotScroll.tabBarOverlap + env.copilotScroll.keyboardInset)
+            }
+        }
+        .background {
+            TabBarOverlapReader { overlap in
+                if abs(env.copilotScroll.tabBarOverlap - overlap) > 0.5 {
+                    env.copilotScroll.tabBarOverlap = overlap
+                }
             }
         }
         .environment(env.ask)
@@ -287,7 +296,7 @@ struct MainTabView: View {
                         isExpanded: env.copilotScroll.isExpanded,
                         hasTabAction: env.tabDock.hasAction(for: selectedTab),
                         keyboardInset: 0
-                    )
+                    ) + env.copilotScroll.tabBarOverlap
                 )
             }
         }
@@ -302,6 +311,12 @@ struct MainTabView: View {
                     hubTabReselectToken += 1
                 }
             }
+        }
+        .onAppear {
+            env.copilotScroll.reservesDockSpace = showCopilotBar
+        }
+        .onChange(of: showCopilotBar) { _, shown in
+            env.copilotScroll.reservesDockSpace = shown
         }
         .onChange(of: selectedTab) { _, tab in
             activatedTabs.insert(tab)
@@ -458,6 +473,38 @@ struct MainTabView: View {
 
     private var shellReadyKey: String {
         "\(env.launch.isStartupComplete)-\(env.launch.startupGeneration)-\(env.session.activeOrganizationId ?? "nil")-\(env.session.orgGeneration)"
+    }
+}
+
+/// Distance from the bottom safe area up to the top of the floating tab bar.
+struct TabBarOverlapReader: UIViewRepresentable {
+    var onOverlap: (CGFloat) -> Void
+
+    func makeUIView(context: Context) -> UIView {
+        let view = UIView()
+        view.isUserInteractionEnabled = false
+        view.backgroundColor = .clear
+        return view
+    }
+
+    func updateUIView(_ uiView: UIView, context: Context) {
+        DispatchQueue.main.async {
+            guard let window = uiView.window ?? uiView.superview?.window else { return }
+            guard let tabBar = Self.tabBar(in: window.rootViewController) else { return }
+            let tabTop = tabBar.convert(tabBar.bounds, to: window).minY
+            let safeBottom = window.bounds.maxY - window.safeAreaInsets.bottom
+            let overlap = max(0, safeBottom - tabTop)
+            onOverlap(overlap)
+        }
+    }
+
+    private static func tabBar(in viewController: UIViewController?) -> UITabBar? {
+        guard let viewController else { return nil }
+        if let tab = viewController as? UITabBarController { return tab.tabBar }
+        for child in viewController.children {
+            if let tabBar = tabBar(in: child) { return tabBar }
+        }
+        return nil
     }
 }
 

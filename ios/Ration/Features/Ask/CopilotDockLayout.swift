@@ -9,6 +9,10 @@ enum CopilotDockLayout {
     static let dockRowSpacing: CGFloat = 8
     static let expandedInputBarHeight: CGFloat = 64
     static let collapsedChatChipSize: CGFloat = 48
+    /// Fallback until the live tab bar is measured. On the iPhone 16e / iOS 26.3
+    /// simulator the bar is 83pt and the home-indicator inset is 34pt, so an overlay
+    /// aligned to the safe area needs the remaining 49pt to sit on top of the bar.
+    static let tabBarOverlapFallback: CGFloat = 49
 
     /// Copilot dock height above the tab bar (excludes tab bar clearance).
     static func dockHeight(isExpanded: Bool, hasTabAction: Bool) -> CGFloat {
@@ -21,7 +25,8 @@ enum CopilotDockLayout {
         return dockBottomPadding + rowHeight
     }
 
-    /// Scroll margin for the dock in `tabViewBottomAccessory`. The accessory sits above the tab bar, so this is the dock height only.
+    /// Shrinks the scroll view so its frame ends where the overlay dock begins.
+    /// The dock itself is lifted by `tabBarOverlap`; this margin is only the dock.
     static func scrollContentMarginForInsetDock(
         isExpanded: Bool,
         hasTabAction: Bool = true,

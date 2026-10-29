@@ -201,9 +201,9 @@ struct DashboardView: View {
                     }
                 }
                 .padding(16)
-                .frame(maxWidth: .infinity, minHeight: geometry.size.height + 1)
-                .copilotDockContentPadding()
+                .frame(maxWidth: .infinity, minHeight: geometry.size.height + 1, alignment: .top)
             }
+            .copilotDockContentPadding()
             .refreshable {
                 await reload()
             }

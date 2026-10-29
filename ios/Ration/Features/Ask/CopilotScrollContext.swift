@@ -14,6 +14,10 @@ final class CopilotScrollContext {
     private(set) var keyboardAnimationDuration: Double = 0.25
     private(set) var keyboardAnimationCurve: UIView.AnimationCurve = .easeInOut
     private(set) var isComposerFocused = false
+    /// True while the Copilot dock is on screen. Scroll views shrink only then.
+    var reservesDockSpace = false
+    /// How far the floating tab bar rises above the bottom safe area.
+    var tabBarOverlap: CGFloat = CopilotDockLayout.tabBarOverlapFallback
 
     private var canAutoExpand = true
     private var lastOffset: CGFloat = 0
@@ -431,7 +435,8 @@ private struct CopilotDockScrollMarginsModifier: ViewModifier {
     let hasTabAction: Bool
 
     private var margin: CGFloat {
-        CopilotDockLayout.fixedScrollContentMargin(hasTabAction: hasTabAction)
+        guard scrollContext.reservesDockSpace else { return 0 }
+        return CopilotDockLayout.fixedScrollContentMargin(hasTabAction: hasTabAction)
             + max(
                 0,
                 scrollContext.composerHeight - CopilotDockLayout.expandedInputBarHeight
@@ -439,8 +444,7 @@ private struct CopilotDockScrollMarginsModifier: ViewModifier {
     }
 
     func body(content: Content) -> some View {
-        content
-            .contentMargins(.bottom, margin, for: .scrollContent)
+        content.padding(.bottom, margin)
     }
 }
 
@@ -449,7 +453,8 @@ private struct CopilotDockContentPaddingModifier: ViewModifier {
     let hasTabAction: Bool
 
     private var margin: CGFloat {
-        CopilotDockLayout.fixedScrollContentMargin(hasTabAction: hasTabAction)
+        guard scrollContext.reservesDockSpace else { return 0 }
+        return CopilotDockLayout.fixedScrollContentMargin(hasTabAction: hasTabAction)
             + max(
                 0,
                 scrollContext.composerHeight - CopilotDockLayout.expandedInputBarHeight

@@ -87,6 +87,12 @@ final class SessionStore {
         orgSelectionOrganizations = nil
     }
 
+#if DEBUG
+    func installSessionForTesting(_ session: SessionResponse) {
+        self.session = session
+    }
+#endif
+
     /// Enter org-selection mode after deleting the active group or losing org access.
     func beginOrgSelection(organizations: [OrgMembership]) {
         if orgSelectionOrganizations != nil {

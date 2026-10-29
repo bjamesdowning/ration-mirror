@@ -193,6 +193,11 @@ struct MainTabView: View {
                 .tag(MainTab.supply)
                 .accessibilityIdentifier("tab.supply")
         }
+        .tabViewBottomAccessory {
+            if showCopilotBar {
+                copilotDock
+            }
+        }
         .environment(env.ask)
         .environment(env.copilotScroll)
         .environment(env.tabDock)
@@ -241,62 +246,6 @@ struct MainTabView: View {
                 onDecline: { askConsent.decline() }
             )
             .presentationDetents([.large])
-        }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            if showCopilotBar {
-                CopilotBottomDock(
-                    scrollContext: env.copilotScroll,
-                    tabDock: env.tabDock,
-                    selectedTab: selectedTab,
-                    draft: Binding(
-                        get: { env.ask.draft },
-                        set: { env.ask.draft = $0 }
-                    ),
-                    isExhausted: isCopilotExhausted,
-                    isTurnActive: env.ask.model.isTurnActive,
-                    isStopping: env.ask.model.isStopping,
-                    isAwaitingApproval: env.ask.model.isAwaitingApproval,
-                    onOpenSheet: {
-                        guard let organizationId = env.session.activeOrganizationId else {
-                            env.ask.openSheet()
-                            return
-                        }
-                        Task {
-                            await env.ask.prepareSheetPresentation(
-                                auth: env.auth,
-                                organizationId: organizationId,
-                                snapshots: env.snapshots
-                            )
-                        }
-                    },
-                    onSend: { text in
-                        guard let organizationId = env.session.activeOrganizationId else { return false }
-                        if env.session.hasAIConsent {
-                            return await env.ask.sendFromBar(
-                                text,
-                                api: env.api,
-                                auth: env.auth,
-                                organizationId: organizationId,
-                                snapshots: env.snapshots
-                            )
-                        }
-                        askConsent.presentIfNeeded(session: env.session) {
-                            Task {
-                                _ = await env.ask.sendFromBar(
-                                    text,
-                                    api: env.api,
-                                    auth: env.auth,
-                                    organizationId: organizationId,
-                                    snapshots: env.snapshots
-                                )
-                            }
-                        }
-                        return false
-                    },
-                    onStop: { await env.ask.model.stop() },
-                    onExhaustedTap: { showingCopilotPaywall = true }
-                )
-            }
         }
         .fullScreenCover(isPresented: Binding(
             get: { canOpenAsk && env.ask.isSheetPresented },
@@ -450,6 +399,61 @@ struct MainTabView: View {
                 env.ask.updateAutoExpandPolicy(scrollContext: env.copilotScroll)
             }
         }
+    }
+
+    private var copilotDock: some View {
+        CopilotBottomDock(
+            scrollContext: env.copilotScroll,
+            tabDock: env.tabDock,
+            selectedTab: selectedTab,
+            draft: Binding(
+                get: { env.ask.draft },
+                set: { env.ask.draft = $0 }
+            ),
+            isExhausted: isCopilotExhausted,
+            isTurnActive: env.ask.model.isTurnActive,
+            isStopping: env.ask.model.isStopping,
+            isAwaitingApproval: env.ask.model.isAwaitingApproval,
+            onOpenSheet: {
+                guard let organizationId = env.session.activeOrganizationId else {
+                    env.ask.openSheet()
+                    return
+                }
+                Task {
+                    await env.ask.prepareSheetPresentation(
+                        auth: env.auth,
+                        organizationId: organizationId,
+                        snapshots: env.snapshots
+                    )
+                }
+            },
+            onSend: { text in
+                guard let organizationId = env.session.activeOrganizationId else { return false }
+                if env.session.hasAIConsent {
+                    return await env.ask.sendFromBar(
+                        text,
+                        api: env.api,
+                        auth: env.auth,
+                        organizationId: organizationId,
+                        snapshots: env.snapshots
+                    )
+                }
+                askConsent.presentIfNeeded(session: env.session) {
+                    Task {
+                        _ = await env.ask.sendFromBar(
+                            text,
+                            api: env.api,
+                            auth: env.auth,
+                            organizationId: organizationId,
+                            snapshots: env.snapshots
+                        )
+                    }
+                }
+                return false
+            },
+            onStop: { await env.ask.model.stop() },
+            onExhaustedTap: { showingCopilotPaywall = true }
+        )
     }
 
     private var shellReadyKey: String {

@@ -17,6 +17,7 @@ struct GlobalPageToolbar: ToolbarContent {
         ToolbarItem(placement: .topBarLeading) {
             OrgSwitcherBar(onTap: onOpenGroupSettings)
         }
+        .sharedBackgroundVisibility(.hidden)
         ToolbarItem(placement: .topBarTrailing) {
             HStack(spacing: 12) {
                 if isRefreshing {
@@ -50,6 +51,7 @@ struct GlobalPageToolbar: ToolbarContent {
                 ProfileAvatarButton(imageURL: env.session.userImageURL, action: onOpenSettings)
             }
         }
+        .sharedBackgroundVisibility(.hidden)
     }
 }
 

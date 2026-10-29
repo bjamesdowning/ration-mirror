@@ -15,8 +15,8 @@ options:
 
 settings:
   base:
-    MARKETING_VERSION: "1.5.6"
-    CURRENT_PROJECT_VERSION: "141"
+    MARKETING_VERSION: "1.5.7"
+    CURRENT_PROJECT_VERSION: "142"
     SWIFT_VERSION: "5.9"
     # Set your Apple Developer Team ID here (must match App Store Connect / AASA).
     DEVELOPMENT_TEAM: "M2KJH5GDGH"
@@ -66,6 +66,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.mayutic.ration
         GENERATE_INFOPLIST_FILE: NO
         INFOPLIST_FILE: Ration/App/Info.plist
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ENABLE_USER_SCRIPT_SANDBOXING: YES
         TARGETED_DEVICE_FAMILY: "1"

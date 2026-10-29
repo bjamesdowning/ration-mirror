@@ -9,7 +9,6 @@ enum CopilotDockLayout {
     static let dockRowSpacing: CGFloat = 8
     static let expandedInputBarHeight: CGFloat = 64
     static let collapsedChatChipSize: CGFloat = 48
-    static let tabBarClearance: CGFloat = 56
 
     /// Copilot dock height above the tab bar (excludes tab bar clearance).
     static func dockHeight(isExpanded: Bool, hasTabAction: Bool) -> CGFloat {
@@ -22,14 +21,13 @@ enum CopilotDockLayout {
         return dockBottomPadding + rowHeight
     }
 
-    /// Scroll margin when dock lives in `TabView.safeAreaInset` (includes tab bar clearance).
+    /// Scroll margin for the dock in `tabViewBottomAccessory`. The accessory sits above the tab bar, so this is the dock height only.
     static func scrollContentMarginForInsetDock(
         isExpanded: Bool,
         hasTabAction: Bool = true,
         keyboardInset: CGFloat = 0
     ) -> CGFloat {
         dockHeight(isExpanded: isExpanded, hasTabAction: hasTabAction)
-            + tabBarClearance
             + max(0, keyboardInset)
     }
 

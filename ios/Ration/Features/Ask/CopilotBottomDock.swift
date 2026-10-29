@@ -23,7 +23,6 @@ struct CopilotBottomDock: View {
         dockContent
             .padding(.horizontal, CopilotDockLayout.dockHorizontalPadding)
             .padding(.bottom, CopilotDockLayout.dockBottomPadding)
-            .padding(.bottom, CopilotDockLayout.tabBarClearance)
             .frame(maxWidth: .infinity, alignment: .bottom)
             .fixedSize(horizontal: false, vertical: true)
         .animation(MotionPolicy.dockSpring, value: tabDock.revision)

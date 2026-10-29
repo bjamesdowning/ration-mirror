@@ -197,7 +197,13 @@ struct MainTabView: View {
         .overlay(alignment: .bottom) {
             if showCopilotBar {
                 copilotDock
-                    .padding(.bottom, env.copilotScroll.tabBarOverlap + env.copilotScroll.keyboardInset)
+                    .padding(
+                        .bottom,
+                        CopilotDockLayout.dockOverlayPadding(
+                            tabBarOverlap: env.copilotScroll.tabBarOverlap,
+                            keyboardInset: env.copilotScroll.keyboardInset
+                        )
+                    )
             }
         }
         .background {

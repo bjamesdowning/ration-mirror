@@ -24,8 +24,45 @@ final class TabAccessoryLayoutProbeTests: XCTestCase {
         dock=\(dock)
         """
         XCTAssertLessThanOrEqual(dock.maxY, tabBar.minY + 1, report)
-        XCTAssertLessThanOrEqual(scroll.maxY, dock.minY + 1, report)
+        XCTAssertGreaterThanOrEqual(scroll.maxY, tabBar.minY - 1, report)
+        XCTAssertGreaterThan(scroll.maxY, dock.minY + 40, report)
         window.isHidden = true
+    }
+
+    func testFocusedComposerDoesNotJumpToTheStatusArea() throws {
+        let box = FrameBox()
+        let host = UIHostingController(rootView: FocusDockProbe(box: box))
+        let window = try makeWindow(root: host)
+        _ = waitForTabBar(in: window)
+        let settle = Date().addingTimeInterval(1.0)
+        while Date() < settle { pump() }
+
+        let field = try XCTUnwrap(findTextField(in: window))
+        XCTAssertTrue(field.becomeFirstResponder())
+        let keyboardDeadline = Date().addingTimeInterval(3)
+        var guide = CGRect.null
+        while Date() < keyboardDeadline {
+            pump()
+            guide = window.keyboardLayoutGuide.layoutFrame
+            if guide.height > 80 { break }
+        }
+        pump()
+        let dock = try XCTUnwrap(box.frames["dock"])
+        let report = "guide=\(guide) dock=\(dock) window=\(window.bounds)"
+        XCTAssertGreaterThan(dock.minY, 160, report)
+        if guide.height > 80 {
+            XCTAssertLessThanOrEqual(dock.maxY, guide.minY + 16, report)
+            XCTAssertGreaterThan(dock.maxY, guide.minY - 24, report)
+        }
+        window.isHidden = true
+    }
+
+    private func findTextField(in view: UIView) -> UITextField? {
+        if let field = view as? UITextField { return field }
+        for child in view.subviews {
+            if let field = findTextField(in: child) { return field }
+        }
+        return nil
     }
 
     private func makeWindow(root: UIViewController) throws -> UIWindow {
@@ -88,6 +125,33 @@ private struct FrameMarker: UIViewRepresentable {
     }
 }
 
+private struct FocusDockProbe: View {
+    let box: FrameBox
+    @State private var text = ""
+    private let scroll = CopilotScrollContext()
+
+    var body: some View {
+        TabView {
+            Text("Hub")
+                .tabItem { Label("Hub", systemImage: "square.grid.2x2") }
+        }
+        .overlay(alignment: .bottom) {
+            TextField("Ask Ration", text: $text)
+                .frame(height: CopilotDockLayout.expandedInputBarHeight)
+                .padding(.horizontal, 16)
+                .background(FrameMarker(name: "dock", box: box))
+                .padding(
+                    .bottom,
+                    CopilotDockLayout.dockOverlayPadding(
+                        tabBarOverlap: CopilotDockLayout.tabBarOverlapFallback,
+                        keyboardInset: scroll.keyboardInset
+                    )
+                )
+        }
+        .copilotKeyboardObserved(scroll)
+    }
+}
+
 private struct DockClearanceProbe: View {
     let box: FrameBox
     @State private var overlap = CopilotDockLayout.tabBarOverlapFallback
@@ -105,7 +169,11 @@ private struct DockClearanceProbe: View {
                         .frame(maxWidth: .infinity, minHeight: geometry.size.height + 1, alignment: .top)
                     }
                     .background(FrameMarker(name: "scroll", box: box))
-                    .padding(.bottom, CopilotDockLayout.dockHeight(isExpanded: true, hasTabAction: true))
+                    .contentMargins(
+                        .bottom,
+                        CopilotDockLayout.dockHeight(isExpanded: true, hasTabAction: true),
+                        for: .scrollContent
+                    )
                 }
                 .navigationTitle("Hub")
             }
@@ -120,7 +188,10 @@ private struct DockClearanceProbe: View {
             }
             .padding(.bottom, CopilotDockLayout.dockBottomPadding)
             .background(FrameMarker(name: "dock", box: box))
-            .padding(.bottom, overlap)
+            .padding(
+                .bottom,
+                CopilotDockLayout.dockOverlayPadding(tabBarOverlap: overlap, keyboardInset: 0)
+            )
         }
         .background {
             TabBarOverlapReader { measured in

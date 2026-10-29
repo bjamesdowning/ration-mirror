@@ -33,6 +33,17 @@ final class CopilotDockLayoutTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(withoutAction, CopilotDockLayout.collapsedChatChipSize)
     }
 
+    func testDockOverlayPaddingDoesNotStackTheKeyboard() {
+        XCTAssertEqual(
+            CopilotDockLayout.dockOverlayPadding(tabBarOverlap: 49, keyboardInset: 0),
+            49
+        )
+        XCTAssertEqual(
+            CopilotDockLayout.dockOverlayPadding(tabBarOverlap: 49, keyboardInset: 336),
+            0
+        )
+    }
+
     func testTabBarOverlapFallbackMatchesMeasuredRemainder() {
         XCTAssertEqual(CopilotDockLayout.tabBarOverlapFallback, 49)
     }

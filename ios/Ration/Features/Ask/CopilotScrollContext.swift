@@ -444,7 +444,7 @@ private struct CopilotDockScrollMarginsModifier: ViewModifier {
     }
 
     func body(content: Content) -> some View {
-        content.padding(.bottom, margin)
+        content.contentMargins(.bottom, margin, for: .scrollContent)
     }
 }
 
@@ -462,7 +462,7 @@ private struct CopilotDockContentPaddingModifier: ViewModifier {
     }
 
     func body(content: Content) -> some View {
-        content.padding(.bottom, margin)
+        content.contentMargins(.bottom, margin, for: .scrollContent)
     }
 }
 

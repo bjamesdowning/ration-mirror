@@ -25,8 +25,8 @@ enum CopilotDockLayout {
         return dockBottomPadding + rowHeight
     }
 
-    /// Shrinks the scroll view so its frame ends where the overlay dock begins.
-    /// The dock itself is lifted by `tabBarOverlap`; this margin is only the dock.
+    /// Extra space at the end of scroll content so the last row can clear the dock.
+    /// This is a content margin, not frame padding, so the scroll view stays full-bleed.
     static func scrollContentMarginForInsetDock(
         isExpanded: Bool,
         hasTabAction: Bool = true,
@@ -52,6 +52,14 @@ enum CopilotDockLayout {
             hasTabAction: hasTabAction,
             keyboardInset: keyboardInset
         )
+    }
+
+    /// Overlay padding while the dock is bottom-aligned in the safe area.
+    /// SwiftUI already includes the keyboard in that safe area, so a second
+    /// `keyboardInset` throws the field to the top of the screen. With the keyboard
+    /// up, add nothing. With it down, add only the tab-bar overlap.
+    static func dockOverlayPadding(tabBarOverlap: CGFloat, keyboardInset: CGFloat) -> CGFloat {
+        keyboardInset > 0 ? 0 : max(0, tabBarOverlap)
     }
 
     /// Toast / undo banner offset above the dock inset region.

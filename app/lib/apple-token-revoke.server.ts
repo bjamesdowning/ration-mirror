@@ -6,6 +6,8 @@ import { log, redactId } from "~/lib/logging.server";
 
 const APPLE_REVOKE_URL = "https://appleid.apple.com/auth/revoke";
 const APPLE_TOKEN_URL = "https://appleid.apple.com/auth/token";
+/** Runs inline during Apple sign-in, so a slow Apple response must not stall it. */
+const APPLE_TOKEN_EXCHANGE_TIMEOUT_MS = 5_000;
 
 export type AppleRevokeTokenHint = "refresh_token" | "access_token";
 
@@ -174,6 +176,7 @@ export async function exchangeAppleAuthorizationCode(params: {
 			code: params.code,
 			grant_type: "authorization_code",
 		}),
+		signal: AbortSignal.timeout(APPLE_TOKEN_EXCHANGE_TIMEOUT_MS),
 	});
 	if (!response.ok) return null;
 	const payload = (await response.json()) as { refresh_token?: unknown };

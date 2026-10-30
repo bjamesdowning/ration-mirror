@@ -84,6 +84,7 @@ import {
 	copilotTurnUsageDecision,
 	copilotUsageAfterInsufficientCredits,
 } from "../app/lib/copilot/turn-usage";
+import { InvalidRationClientHeaderError } from "../app/lib/feature-flags/context.server";
 import {
 	buildAgentFlagContext,
 	buildMobileFlagContext,
@@ -1356,6 +1357,14 @@ export default {
 							env,
 							{ error: "unauthorized" },
 							{ status: 401 },
+						);
+					}
+					if (error instanceof InvalidRationClientHeaderError) {
+						return jsonResponse(
+							request,
+							env,
+							{ error: error.message, code: "invalid_client_header" },
+							{ status: 400 },
 						);
 					}
 					if (

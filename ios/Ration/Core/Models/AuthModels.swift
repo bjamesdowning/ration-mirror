@@ -9,10 +9,6 @@ struct TokenPair: Codable, Sendable {
     let expiresIn: Int
 }
 
-struct MagicLinkResponse: Codable, Sendable {
-    let sent: Bool
-}
-
 // MARK: - Session / Organization
 
 struct MobileUser: Codable, Sendable, Identifiable {
@@ -66,10 +62,9 @@ struct AICosts: Codable, Sendable {
     }
 }
 
-/// Boolean client-safe Flagship flags from `GET /api/mobile/v1/session`.
-/// Missing keys default off (fail closed for AI entry points).
+/// Kill-switch flags from `GET /api/mobile/v1/session` for AI entry points.
+/// Missing keys default off. Every other 1.5 feature ships on and is not read here.
 struct ClientFlags: Codable, Sendable, Equatable {
-    var appleWebLogin: Bool?
     var rationCopilot: Bool?
     var aiImportUrl: Bool?
     var aiImportWeb: Bool?
@@ -79,31 +74,6 @@ struct ClientFlags: Codable, Sendable, Equatable {
     var aiDockFromReceipt: Bool?
     var aiGenerateMeal: Bool?
     var aiPlanWeek: Bool?
-    var appReviewLogin: Bool?
-    /// USDA resolve + cargo/meal nutrition panels (additive; ignored by older clients).
-    var nutritionEngine: Bool?
-    /// AI nutrient fill on AI ingest after USDA miss.
-    var nutritionAiEstimate: Bool?
-    /// Manifest day totals / plate-up intake.
-    var nutritionManifest: Bool?
-    /// Personal nutrition goals and summary charts.
-    var nutritionGoals: Bool?
-    /// Separate Manifest Cook from private Log my serving (additive).
-    var nutritionCookLogSplit: Bool?
-    /// Cargo Quick Eat composed snack shortcut (additive).
-    var cargoQuickEat: Bool?
-    /// Optional private notes on Eat / Quick Eat intake logs (additive).
-    var nutritionIntakeNotes: Bool?
-    /// Personal diary aggregates across kitchens (additive).
-    var nutritionCrossOrgDiary: Bool?
-    /// Manifest Macros history page (additive; missing/false = no button, no route).
-    var nutritionMacrosHistory: Bool?
-    /// Feature enablement onboarding + web AI consent parity (additive).
-    var featureEnablementConsent: Bool?
-    /// Supply list library (additive; missing/false = Live singleton).
-    var supplyMultiLists: Bool?
-    /// Home Screen widgets (additive; missing/false = widgets stay blank).
-    var iosHomeWidgets: Bool?
 
     static let disabled = ClientFlags()
 
@@ -118,26 +88,6 @@ struct ClientFlags: Codable, Sendable, Equatable {
     }
     var isAiGenerateMealEnabled: Bool { aiGenerateMeal == true }
     var isAiPlanWeekEnabled: Bool { aiPlanWeek == true }
-    var isAppReviewLoginEnabled: Bool { appReviewLogin == true }
-    var isNutritionEngineEnabled: Bool { nutritionEngine == true }
-    var isNutritionAiEstimateEnabled: Bool { nutritionAiEstimate == true }
-    var isNutritionManifestEnabled: Bool { nutritionManifest == true }
-    var isNutritionGoalsEnabled: Bool { nutritionGoals == true }
-    var isNutritionCookLogSplitEnabled: Bool { nutritionCookLogSplit == true }
-    var isCargoQuickEatEnabled: Bool {
-        cargoQuickEat == true && nutritionCookLogSplit == true
-    }
-    var isNutritionIntakeNotesEnabled: Bool { nutritionIntakeNotes == true }
-    var isNutritionCrossOrgDiaryEnabled: Bool { nutritionCrossOrgDiary == true }
-    var isNutritionMacrosHistoryEnabled: Bool { nutritionMacrosHistory == true }
-    var isFeatureEnablementConsentEnabled: Bool { featureEnablementConsent == true }
-    var isSupplyMultiListsEnabled: Bool { supplyMultiLists == true }
-    var isIosHomeWidgetsEnabled: Bool { iosHomeWidgets == true }
-}
-
-/// `GET /api/mobile/v1/client-flags` (unsigned)
-struct ClientFlagsResponse: Codable, Sendable {
-    let clientFlags: ClientFlags
 }
 
 /// `GET /api/mobile/v1/session`
@@ -272,6 +222,7 @@ struct ShareRevokeResponse: Codable, Sendable {
 struct AccountDeleteResponse: Codable, Sendable {
     let success: Bool
     let deleted: Bool
+    let message: String?
 }
 
 struct AccountDeletionPreviewResponse: Codable, Sendable {

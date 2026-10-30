@@ -1,6 +1,6 @@
 import { data } from "react-router";
 import { handleApiError } from "~/lib/error-handler";
-import { buildFlagContext } from "~/lib/feature-flags/flags.server";
+import { buildMobileFlagContext } from "~/lib/feature-flags/flags.server";
 import {
 	mapMealGenerateSubmitError,
 	submitMealGenerate,
@@ -50,7 +50,9 @@ export async function action({ request, context }: Route.ActionArgs) {
 			userId,
 			organizationId,
 			customization: parsed.data.customization,
-			flagContext: buildFlagContext(request, env, { user: { id: userId } }),
+			flagContext: buildMobileFlagContext(request, env, {
+				user: { id: userId },
+			}),
 		});
 	} catch (e) {
 		mapMealGenerateSubmitError(e);

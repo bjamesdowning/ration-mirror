@@ -2,7 +2,6 @@ import Foundation
 
 enum WidgetAPIError: Error {
     case signedOut
-    case disabled
     case unavailable
 }
 
@@ -146,10 +145,6 @@ enum WidgetAPI {
         if http.statusCode == 401, retry {
             _ = try await WidgetAuth.refresh()
             return try await send(path: path, method: method, query: query, body: body, retry: false)
-        }
-        // Only the snapshot route is the widget kill switch. Mutation 403s stay on their own flags.
-        if http.statusCode == 403, path == "widgets/home" {
-            throw WidgetAPIError.disabled
         }
         guard (200..<300).contains(http.statusCode) else {
             throw WidgetAPIError.unavailable

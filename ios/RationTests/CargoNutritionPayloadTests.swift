@@ -37,8 +37,7 @@ final class CargoNutritionPayloadTests: XCTestCase {
     func testEditOmitsNutritionWhenNotEdited() {
         let payload = CargoNutritionPayload.forEdit(
             current: usdaMilk(),
-            nutritionEdited: false,
-            engineEnabled: true
+            nutritionEdited: false
         )
         XCTAssertNil(payload)
     }
@@ -47,27 +46,10 @@ final class CargoNutritionPayloadTests: XCTestCase {
         let override = usdaMilk().applyingMacros(energyKcal: 200)
         let payload = CargoNutritionPayload.forEdit(
             current: override,
-            nutritionEdited: true,
-            engineEnabled: true
+            nutritionEdited: true
         )
         XCTAssertEqual(payload?.source, "user_override")
         XCTAssertEqual(payload?.displayNutrients?.energyKcal, 200)
-    }
-
-    func testEditOmitsWhenEngineDisabledEvenIfEdited() {
-        let payload = CargoNutritionPayload.forEdit(
-            current: usdaMilk().applyingMacros(energyKcal: 10),
-            nutritionEdited: true,
-            engineEnabled: false
-        )
-        XCTAssertNil(payload)
-    }
-
-    func testCreateSendsNutritionWhenPresent() {
-        let snap = usdaMilk()
-        let payload = CargoNutritionPayload.forCreate(current: snap, engineEnabled: true)
-        XCTAssertEqual(payload?.source, "usda")
-        XCTAssertNotNil(payload?.per100g)
     }
 
     func testUnitOnlyUpdateEncodesWithoutNutritionKey() throws {
@@ -79,8 +61,7 @@ final class CargoNutritionPayloadTests: XCTestCase {
             tags: ["dairy"],
             nutrition: CargoNutritionPayload.forEdit(
                 current: usdaMilk(),
-                nutritionEdited: false,
-                engineEnabled: true
+                nutritionEdited: false
             )
         )
         let data = try JSON.encoder.encode(body)
@@ -94,8 +75,7 @@ final class CargoNutritionPayloadTests: XCTestCase {
             unit: "l",
             nutrition: CargoNutritionPayload.forEdit(
                 current: usdaMilk().applyingMacros(energyKcal: 120, proteinG: 8),
-                nutritionEdited: true,
-                engineEnabled: true
+                nutritionEdited: true
             )
         )
         let data = try JSON.encoder.encode(body)

@@ -21,13 +21,14 @@ Browse topics below, or open Ask Ration from the hub for the same answers with l
 - [Galley (recipes and provisions)](./12-galley-recipes.md) — Create meals, cook from stock, and select for Supply.
 - [Import a recipe (URL, social, or photo)](./13-add-meals-url-import.md) — Pull a recipe from a website, social video, or photo into Galley.
 - [AI meal generation](./14-ai-meal-generation.md) — Generate recipe ideas from your pantry.
-- [Manifest (meal plan)](./15-manifest-meal-plan.md) — Schedule meals, consume entries, and share the week.
-- [Supply (shopping list)](./16-supply-shopping-list.md) — Sync, shop, snooze, share, and dock purchases into Cargo.
+- [Manifest (meal plan)](./15-manifest-meal-plan.md) — Schedule meals, consume entries, share the week, and (iPhone) Macros averages.
+- [Supply (shopping list)](./16-supply-shopping-list.md) — Live Supply, saved lists and Pull from (iPhone), snooze, share, and dock into Cargo.
 - [Matching cookable meals](./17-matching-cookable-meals.md) — Strict vs partial pantry match for meals ready to cook.
-- [Hub dashboard and settings](./18-hub-dashboard-and-settings.md) — Widgets, Feature enablement, preferences, developer tools, and account purge.
+- [Hub dashboard and settings](./18-hub-dashboard-and-settings.md) — Hub widgets, Feature enablement, preferences, developer tools, and account purge.
 - [Nutrition overview](./24-nutrition-overview.md) — USDA match, blank on miss, AI estimates, confidence, and where nutrition appears.
 - [Macro tracking, goals, and intake](./25-nutrition-goals-and-tracking.md) — Macro Tracking, Manifest Eat plate-up (servings or g/oz), calendar retention, and Flight Recorder.
 - [Editing nutrition](./26-editing-nutrition.md) — Edit on scan review or Cargo later; user overrides and verified labels.
+- [Home Screen widgets (iPhone)](./27-ios-home-screen-widgets.md) — Supply, Eat, and Today widgets; sign in in the app.
 
 ## Billing and credits
 
@@ -58,7 +59,7 @@ Browse topics below, or open Ask Ration from the hub for the same answers with l
 
 ## Troubleshooting
 
-- [Common troubleshooting](./60-troubleshooting-common.md) — Credits, wrong group, scan stuck, import holder, share blocked.
+- [Common troubleshooting](./60-troubleshooting-common.md) — Credits, wrong group, scan stuck, import holder, share blocked, update required, widgets.
 - [Billing troubleshooting](./61-billing-issues.md) — Missing credits, portal access, and what to tell support.
 
 ## Legal

@@ -179,17 +179,6 @@ struct SupplyResponse: Codable, Sendable {
     let list: SupplyList?
 }
 
-struct CreateSupplyItemRequest: Encodable, Sendable {
-    let name: String
-    var quantity: Double = 1
-    var unit: String = "unit"
-    var domain: String = "food"
-}
-
-struct CreateSupplyItemResponse: Codable, Sendable {
-    let item: SupplyItem
-}
-
 // MARK: - Supply sync / dock
 
 struct SupplySyncResponse: Codable, Sendable {
@@ -349,10 +338,6 @@ struct SupplyBulkAddRequest: Codable, Sendable {
 struct SupplyBulkAddResponse: Codable, Sendable {
     let added: Int
     let merged: Int
-}
-
-struct SupplyRenameRequest: Codable, Sendable {
-    let name: String
 }
 
 struct SupplyDeleteResponse: Codable, Sendable {

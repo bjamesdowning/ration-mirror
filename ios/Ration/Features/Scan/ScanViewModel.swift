@@ -8,8 +8,8 @@ final class ScanViewModel {
     enum State {
         case idle
         case uploading
-        case processing(requestId: String)
-        case completed(requestId: String)
+        case processing
+        case completed
         case confirming
         case confirmed(added: Int, updated: Int)
         case failed(String)
@@ -61,15 +61,9 @@ final class ScanViewModel {
                     return
                 }
                 Haptics.light()
-                state = .processing(requestId: requestId)
+                state = .processing
                 Task { await AIErrorHandling.refreshCredits(session: session, api: api) }
-                await poll(
-                    requestId: requestId,
-                    api: api,
-                    generation: generation,
-                    nutritionEngine: session.clientFlags.isNutritionEngineEnabled,
-                    nutritionAiEstimate: session.clientFlags.isNutritionAiEstimateEnabled
-                )
+                await poll(requestId: requestId, api: api, generation: generation)
             } catch is CancellationError {
                 return
             } catch {
@@ -87,13 +81,7 @@ final class ScanViewModel {
         }
     }
 
-    func poll(
-        requestId: String,
-        api: RationAPI,
-        generation: Int,
-        nutritionEngine: Bool = false,
-        nutritionAiEstimate: Bool = false
-    ) async {
+    func poll(requestId: String, api: RationAPI, generation: Int) async {
         let poller = AIJobPoller<ScanStatusResponse>(
             fetchStatus: { try await api.scanStatus(requestId: $0) },
             interpretStatus: { result in
@@ -110,13 +98,8 @@ final class ScanViewModel {
             let items = result.items ?? []
             reviewItems = items.map { EditableScanResultItem(from: $0) }
             editingItemId = nil
-            state = .completed(requestId: requestId)
-            await resolveNutritionIfNeeded(
-                api: api,
-                generation: generation,
-                nutritionEngine: nutritionEngine,
-                nutritionAiEstimate: nutritionAiEstimate
-            )
+            state = .completed
+            await resolveNutritionNames(reviewItems.map(\.name), api: api, generation: generation)
         } catch is CancellationError {
             return
         } catch AIJobPollError.timedOut {
@@ -137,31 +120,7 @@ final class ScanViewModel {
 
     /// Soft-fail USDA / AI estimate proposal after OCR (web ScanResultsModal parity).
     /// Resolves in chunks so kcal can appear progressively while the user reviews.
-    func resolveNutritionIfNeeded(
-        api: RationAPI,
-        generation: Int,
-        nutritionEngine: Bool,
-        nutritionAiEstimate: Bool
-    ) async {
-        guard nutritionEngine else {
-            isResolvingNutrition = false
-            nutritionLookupFailed = false
-            return
-        }
-        await resolveNutritionNames(
-            reviewItems.map(\.name),
-            api: api,
-            generation: generation,
-            nutritionAiEstimate: nutritionAiEstimate
-        )
-    }
-
-    private func resolveNutritionNames(
-        _ names: [String],
-        api: RationAPI,
-        generation: Int,
-        nutritionAiEstimate: Bool
-    ) async {
+    private func resolveNutritionNames(_ names: [String], api: RationAPI, generation: Int) async {
         let unique = NutritionResolveChunking.uniqueTrimmedNames(names)
         guard !unique.isEmpty else {
             isResolvingNutrition = false
@@ -181,10 +140,7 @@ final class ScanViewModel {
         for chunk in NutritionResolveChunking.chunks(unique) {
             guard isCurrent(generation) else { return }
             do {
-                let response = try await api.resolveNutrition(
-                    names: chunk,
-                    ingestSource: nutritionAiEstimate ? "scan_review" : nil
-                )
+                let response = try await api.resolveNutrition(names: chunk, ingestSource: "scan_review")
                 guard isCurrent(generation) else { return }
                 anyOk = true
                 for (name, snap) in response.snapshots {
@@ -219,9 +175,7 @@ final class ScanViewModel {
 
     func saveEdit(
         _ updated: EditableScanResultItem,
-        api: RationAPI? = nil,
-        nutritionEngine: Bool = false,
-        nutritionAiEstimate: Bool = false
+        api: RationAPI? = nil
     ) -> String? {
         guard let index = reviewItems.firstIndex(where: { $0.id == updated.id }) else { return nil }
         let previousName = reviewItems[index].name.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -235,15 +189,10 @@ final class ScanViewModel {
         reviewItems[index] = toSave
         editingItemId = nil
         Haptics.light()
-        if nameChanged, !isOverride, nutritionEngine, let api {
+        if nameChanged, !isOverride, let api {
             let generation = submissionGeneration
             Task {
-                await resolveNutritionNames(
-                    [nextName],
-                    api: api,
-                    generation: generation,
-                    nutritionAiEstimate: nutritionAiEstimate
-                )
+                await resolveNutritionNames([nextName], api: api, generation: generation)
             }
         }
         return nil
@@ -259,7 +208,7 @@ final class ScanViewModel {
         }
     }
 
-    func confirmToCargo(api: RationAPI, nutritionAiEstimate: Bool = false) async {
+    func confirmToCargo(api: RationAPI) async {
         guard editingItemId == nil else {
             state = .failed("Finish editing before adding to Cargo.")
             return
@@ -271,10 +220,7 @@ final class ScanViewModel {
         }
         state = .confirming
         let batchItems = chosen.map { $0.toBatchCargoItem() }
-        let request = BatchCargoRequest(
-            items: batchItems,
-            ingestSource: nutritionAiEstimate ? "scan_review" : nil
-        )
+        let request = BatchCargoRequest(items: batchItems, ingestSource: "scan_review")
         do {
             let result = try await api.batchAddCargo(request)
             if let ctx = CapacityUpgrade.context(fromBatchErrors: result.errors) {

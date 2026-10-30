@@ -2,6 +2,7 @@ import { eq, like } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import * as schema from "~/db/schema";
 import { buildPersonalOrgRecords } from "~/lib/agent/org-records.server";
+import { storeAppleRefreshTokenFromAuthorizationCode } from "~/lib/apple-token-revoke.server";
 import { getAuth } from "~/lib/auth.server";
 import {
 	ACCOUNT_NOT_FOUND_CODE,
@@ -380,6 +381,14 @@ export async function authenticateMobileSocial(
 
 	if (isSignUp) {
 		await stampTosIfMissing(env, user.id);
+	}
+
+	if (input.provider === "apple" && input.authorizationCode) {
+		await storeAppleRefreshTokenFromAuthorizationCode(
+			env,
+			user.id,
+			input.authorizationCode,
+		);
 	}
 
 	if (isSignUp && input.provider === "apple" && input.fullName) {

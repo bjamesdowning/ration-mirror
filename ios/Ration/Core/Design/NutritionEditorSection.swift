@@ -124,20 +124,7 @@ struct NutritionEditorSection: View {
 
 /// Pure helper for cargo update payloads — send nutrition only when the user edited macros.
 enum CargoNutritionPayload {
-    static func forEdit(
-        current: NutritionSnapshot?,
-        nutritionEdited: Bool,
-        engineEnabled: Bool
-    ) -> NutritionSnapshot? {
-        guard engineEnabled, nutritionEdited else { return nil }
-        return current
-    }
-
-    static func forCreate(
-        current: NutritionSnapshot?,
-        engineEnabled: Bool
-    ) -> NutritionSnapshot? {
-        guard engineEnabled else { return nil }
-        return current
+    static func forEdit(current: NutritionSnapshot?, nutritionEdited: Bool) -> NutritionSnapshot? {
+        nutritionEdited ? current : nil
     }
 }

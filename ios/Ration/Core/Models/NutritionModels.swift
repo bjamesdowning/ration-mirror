@@ -1,7 +1,7 @@
 import Foundation
 
 // MARK: - Nutrition Goals
-// `GET/POST/PATCH/DELETE /api/mobile/v1/nutrition/goals` — gated by `nutrition-goals`.
+// `GET/POST/PATCH/DELETE /api/mobile/v1/nutrition/goals`
 
 struct NutritionGoal: Codable, Sendable, Identifiable, Equatable {
     let id: String
@@ -28,7 +28,6 @@ struct NutritionGoalResponse: Codable, Sendable {
 }
 
 struct NutritionGoalClearResponse: Codable, Sendable {
-    /// Server returns boolean; tolerate legacy numeric counts from older deploys.
     let cleared: Bool
     let goal: NutritionGoal?
     let operationId: String?
@@ -39,25 +38,6 @@ struct NutritionGoalClearResponse: Codable, Sendable {
         self.goal = goal
         self.operationId = operationId
         self.replayed = replayed
-    }
-
-    init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        // `decodeIfPresent(Bool)` throws on Int — tolerate both wire shapes.
-        if let bool = try? c.decode(Bool.self, forKey: .cleared) {
-            cleared = bool
-        } else if let count = try? c.decode(Int.self, forKey: .cleared) {
-            cleared = count > 0
-        } else {
-            cleared = false
-        }
-        goal = try c.decodeIfPresent(NutritionGoal.self, forKey: .goal)
-        operationId = try c.decodeIfPresent(String.self, forKey: .operationId)
-        replayed = try c.decodeIfPresent(Bool.self, forKey: .replayed)
-    }
-
-    private enum CodingKeys: String, CodingKey {
-        case cleared, goal, operationId, replayed
     }
 }
 
@@ -147,6 +127,13 @@ struct FeatureEnablementSetRequest: Encodable, Sendable {
     }
 }
 
+struct FeatureEnablementEnableRequest: Encodable, Sendable {
+    let action = "enable"
+    let feature: String
+    let affirmed = true
+    let requestId: String
+}
+
 struct FeatureEnablementEraseRequest: Encodable, Sendable {
     let action = "erase"
     let dataset: String
@@ -169,14 +156,8 @@ struct NutritionConsentWithdrawRequest: Encodable, Sendable {
     let requestId: String
 }
 
-struct NutritionDataEraseRequest: Encodable, Sendable {
-    let action = "erase"
-    let dataset: String
-    let requestId: String
-}
-
 // MARK: - Nutrition Summary
-// `GET /api/mobile/v1/nutrition/summary?from=&to=` — gated by `nutrition-goals` OR `nutrition-manifest`.
+// `GET /api/mobile/v1/nutrition/summary?from=&to=`
 
 struct NutritionDayTotals: Codable, Sendable, Identifiable, Equatable {
     var id: String { date }
@@ -319,7 +300,7 @@ struct MacrosHistoryResponse: Codable, Sendable, Equatable {
 }
 
 // MARK: - Cargo / Meal nutrition snapshots
-// Additive JSON on cargo/meal detail — ignored by older clients; gated by `nutritionEngine` in UI.
+// Nutrition JSON on cargo/meal detail.
 
 struct NutrientValues: Codable, Sendable, Equatable, Hashable {
     var energyKcal: Double?

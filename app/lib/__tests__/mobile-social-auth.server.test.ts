@@ -14,7 +14,14 @@ const updateUser = vi.fn().mockReturnValue({ where: vi.fn() });
 const kvPut = vi.fn().mockResolvedValue(undefined);
 const kvDelete = vi.fn().mockResolvedValue(undefined);
 
+const storeAppleRefreshToken = vi.fn().mockResolvedValue(undefined);
+
 let memberPresent = true;
+
+vi.mock("~/lib/apple-token-revoke.server", () => ({
+	storeAppleRefreshTokenFromAuthorizationCode: (...args: unknown[]) =>
+		storeAppleRefreshToken(...args),
+}));
 
 vi.mock("~/lib/auth.server", () => ({
 	getAuth: () => ({
@@ -228,6 +235,33 @@ describe("authenticateMobileSocial", () => {
 		});
 		expect(signInSocial).not.toHaveBeenCalled();
 		expect(issueMobileTokenPair).not.toHaveBeenCalled();
+	});
+
+	it("exchanges the Apple authorization code after sign-in", async () => {
+		await authenticateMobileSocial(env, {
+			provider: "apple",
+			idToken: googleIdToken("user@example.com"),
+			nonce: "raw-nonce",
+			authorizationCode: "apple-code",
+			intent: "signIn",
+		});
+
+		expect(storeAppleRefreshToken).toHaveBeenCalledWith(
+			env,
+			"user-1",
+			"apple-code",
+		);
+	});
+
+	it("skips the Apple code exchange when no code is sent", async () => {
+		await authenticateMobileSocial(env, {
+			provider: "apple",
+			idToken: googleIdToken("user@example.com"),
+			nonce: "raw-nonce",
+			intent: "signIn",
+		});
+
+		expect(storeAppleRefreshToken).not.toHaveBeenCalled();
 	});
 
 	it("does not forward Apple fullName to Better Auth on Sign In", async () => {

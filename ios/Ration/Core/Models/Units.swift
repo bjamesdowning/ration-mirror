@@ -36,8 +36,4 @@ enum RationUnits {
     static func units(in group: Group, from list: [String] = all) -> [String] {
         list.filter { Self.group(for: $0) == group }
     }
-
-    static func isSupported(_ unit: String) -> Bool {
-        all.contains(unit)
-    }
 }

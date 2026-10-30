@@ -2,16 +2,11 @@ import Foundation
 
 /// Resolves visible Hub widgets from profile + custom layout — mirrors web `resolveLayout`.
 enum HubLayoutEngine {
-    static func isNutritionWidget(_ id: String) -> Bool {
-        id == HubWidgetID.nutritionToday.rawValue || id == HubWidgetID.nutritionTrends.rawValue
-    }
-
     /// All registered widgets ordered for editing — custom layout (or preset) with any
     /// missing widgets appended as hidden, so the editor always lists every widget.
     static func initEditableWidgets(
         profile: HubProfile?,
-        layout: HubLayoutPayload?,
-        nutritionWidgetsEnabled: Bool = false
+        layout: HubLayoutPayload?
     ) -> [HubWidgetLayout] {
         let registered = Set(HubWidgetID.allCases.map(\.rawValue))
         var base: [HubWidgetLayout]
@@ -32,22 +27,15 @@ enum HubLayoutEngine {
             ))
         }
 
-        let sorted = base.sorted { $0.order < $1.order }
-        if nutritionWidgetsEnabled { return sorted }
-        return sorted.filter { !isNutritionWidget($0.id) }
+        return base.sorted { $0.order < $1.order }
     }
 
     /// Visible widgets in render order.
     static func resolveLayout(
         profile: HubProfile?,
-        layout: HubLayoutPayload?,
-        nutritionWidgetsEnabled: Bool = false
+        layout: HubLayoutPayload?
     ) -> [HubWidgetLayout] {
-        initEditableWidgets(
-            profile: profile,
-            layout: layout,
-            nutritionWidgetsEnabled: nutritionWidgetsEnabled
-        ).filter(\.visible)
+        initEditableWidgets(profile: profile, layout: layout).filter(\.visible)
     }
 
     static func moveWidget(_ widgets: [HubWidgetLayout], id: String, direction: MoveDirection) -> [HubWidgetLayout] {

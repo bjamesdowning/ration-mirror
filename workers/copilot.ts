@@ -86,7 +86,8 @@ import {
 } from "../app/lib/copilot/turn-usage";
 import {
 	buildAgentFlagContext,
-	buildFlagContext,
+	buildMobileFlagContext,
+	buildWebFlagContext,
 	isFeatureEnabled,
 } from "../app/lib/feature-flags/flags.server";
 import {
@@ -1217,9 +1218,11 @@ export default {
 
 				try {
 					const identity = await authenticateCopilot(env, request);
-					const flagContext = buildFlagContext(request, env, {
-						user: { id: identity.userId },
-					});
+					const flagSession = { user: { id: identity.userId } };
+					const flagContext =
+						identity.source === "mobile"
+							? buildMobileFlagContext(request, env, flagSession)
+							: buildWebFlagContext(request, env, flagSession);
 					const featureEnablementOn = await isFeatureEnabled(
 						env,
 						"feature-enablement-consent",

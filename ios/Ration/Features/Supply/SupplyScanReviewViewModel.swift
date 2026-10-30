@@ -76,28 +76,11 @@ final class SupplyScanReviewViewModel {
 
     /// Soft-fail USDA / AI estimate proposal (parity with cargo scan review).
     /// Resolves in chunks so kcal can appear progressively while the user reviews.
-    func resolveNutritionIfNeeded(
-        api: RationAPI,
-        nutritionEngine: Bool,
-        nutritionAiEstimate: Bool
-    ) async {
-        guard nutritionEngine else {
-            isResolvingNutrition = false
-            nutritionLookupFailed = false
-            return
-        }
-        await resolveNutritionNames(
-            rows.map(\.dockName),
-            api: api,
-            nutritionAiEstimate: nutritionAiEstimate
-        )
+    func resolveNutrition(api: RationAPI) async {
+        await resolveNutritionNames(rows.map(\.dockName), api: api)
     }
 
-    private func resolveNutritionNames(
-        _ names: [String],
-        api: RationAPI,
-        nutritionAiEstimate: Bool
-    ) async {
+    private func resolveNutritionNames(_ names: [String], api: RationAPI) async {
         let unique = NutritionResolveChunking.uniqueTrimmedNames(names)
         guard !unique.isEmpty else {
             isResolvingNutrition = false
@@ -112,10 +95,7 @@ final class SupplyScanReviewViewModel {
         var anyOk = false
         for chunk in NutritionResolveChunking.chunks(unique) {
             do {
-                let response = try await api.resolveNutrition(
-                    names: chunk,
-                    ingestSource: nutritionAiEstimate ? "scan_review" : nil
-                )
+                let response = try await api.resolveNutrition(names: chunk, ingestSource: "scan_review")
                 anyOk = true
                 for (name, snap) in response.snapshots {
                     for index in rows.indices {
@@ -161,9 +141,7 @@ final class SupplyScanReviewViewModel {
 
     func saveEdit(
         _ updated: EditableScanResultItem,
-        api: RationAPI? = nil,
-        nutritionEngine: Bool = false,
-        nutritionAiEstimate: Bool = false
+        api: RationAPI? = nil
     ) -> String? {
         guard let index = rows.firstIndex(where: { $0.id == updated.id }) else {
             return "Could not save this item."
@@ -178,13 +156,9 @@ final class SupplyScanReviewViewModel {
         }
         rows[index].applyDockEdit(toSave)
         editingItem = nil
-        if nameChanged, !isOverride, nutritionEngine, let api {
+        if nameChanged, !isOverride, let api {
             Task {
-                await resolveNutritionNames(
-                    [nextName],
-                    api: api,
-                    nutritionAiEstimate: nutritionAiEstimate
-                )
+                await resolveNutritionNames([nextName], api: api)
             }
         }
         return nil

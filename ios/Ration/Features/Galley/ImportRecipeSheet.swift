@@ -105,9 +105,7 @@ struct ImportRecipeSheet: View {
                             creditCost: creditCost,
                             costLabel: "per import",
                             nextSteps: "Review the imported meal before adding to Galley.",
-                            hint: clientFlags.isNutritionEngineEnabled
-                                ? "Nutrition (when available): USDA match first; AI estimates are labelled—edit before saving."
-                                : nil
+                            hint: AIFeatureInlineIntro.nutritionHint
                         )
                         .padding(16)
                     }
@@ -127,6 +125,8 @@ struct ImportRecipeSheet: View {
                 set: { if !$0 { consent.decline() } }
             )) {
                 AIConsentGateView(
+                    errorMessage: consent.errorMessage,
+                    isAccepting: consent.isAccepting,
                     onAccept: { Task { await consent.accept(api: env.api, session: env.session) } },
                     onDecline: { consent.decline() }
                 )

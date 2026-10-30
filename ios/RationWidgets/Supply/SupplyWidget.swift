@@ -31,7 +31,13 @@ struct SupplyWidgetProvider: AppIntentTimelineProvider {
     }
 
     func snapshot(for configuration: WidgetAppearanceIntent, in context: Context) async -> RationWidgetEntry {
-        RationWidgetEntry(date: Date(), cache: .placeholder, appearance: configuration.appearance, eatTagSlug: nil, eatTagName: nil)
+        RationWidgetEntry(
+            date: Date(),
+            cache: WidgetSnapshotLoader.snapshotCache(isPreview: context.isPreview),
+            appearance: configuration.appearance,
+            eatTagSlug: nil,
+            eatTagName: nil
+        )
     }
 
     func timeline(for configuration: WidgetAppearanceIntent, in context: Context) async -> Timeline<RationWidgetEntry> {
@@ -53,6 +59,7 @@ struct SupplyWidgetView: View {
         case .accessoryCircular:
             Text(circularText)
                 .font(.headline.monospacedDigit())
+                .accessibilityLabel(HomeWidgetCopy.supplyHeadline(uncheckedCount: count))
         case .accessoryRectangular:
             VStack(alignment: .leading, spacing: 2) {
                 Text(HomeWidgetCopy.supplyHeadline(uncheckedCount: count))
@@ -136,7 +143,8 @@ struct SupplyWidgetView: View {
 
     private var header: some View {
         WidgetHeader(wordmark: "SUPPLY", source: "Live", destination: WidgetLinks.supply, palette: palette) {
-            if entry.cache.isReady, family != .accessoryInline && family != .accessoryCircular && family != .accessoryRectangular {
+            // systemSmall ignores Link and only follows widgetURL.
+            if entry.cache.isReady, family == .systemMedium || family == .systemLarge {
                 Link(destination: WidgetLinks.supplyCompose) {
                     Image(systemName: "plus")
                         .font(.body.weight(.bold))

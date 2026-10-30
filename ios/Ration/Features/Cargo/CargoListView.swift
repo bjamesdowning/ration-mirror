@@ -204,12 +204,6 @@ struct CargoListView: View {
     private func applyPendingCargoEatIfNeeded() {
         guard currentMainTab == .cargo, let id = env.deepLinkRouter.cargoEatPending else { return }
         env.deepLinkRouter.acknowledgeCargoEat()
-        guard env.session.clientFlags.isCargoQuickEatEnabled else {
-            if path.last?.id != id {
-                path = [CargoDetailRoute(id: id)]
-            }
-            return
-        }
         Task {
             if let detail = try? await env.api.cargoItem(id: id) {
                 eatItem = detail.item
@@ -329,7 +323,6 @@ struct CargoListView: View {
                             onEdit: { editingItem = item }
                         )
                         .cargoTrailingSwipeActions(
-                            showEat: env.session.clientFlags.isCargoQuickEatEnabled,
                             onEat: { eatItem = item },
                             onDelete: {
                                 model.runMutation {
@@ -355,7 +348,6 @@ struct CargoListView: View {
                             }
                         )
                         .cargoTrailingSwipeActions(
-                            showEat: env.session.clientFlags.isCargoQuickEatEnabled,
                             onEat: {
                                 Task {
                                     if let item = await resolveSearchCargoItem(result) {

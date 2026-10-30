@@ -35,9 +35,4 @@ final class SavedListViewModelTests: XCTestCase {
         )
         XCTAssertEqual(SavedListLogic.toast(for: undone), "Nothing new to add")
     }
-
-    func testSavedListsCannotDockFromTheSupplyTab() {
-        XCTAssertFalse(SupplyViewModel.docksSavedLists)
-        XCTAssertFalse(SavedListLogic.supplyTabDocksSavedLists)
-    }
 }

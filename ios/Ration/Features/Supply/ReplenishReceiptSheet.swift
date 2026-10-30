@@ -28,9 +28,7 @@ struct ReplenishReceiptSheet: View {
                         creditCost: creditCost,
                         costLabel: "per scan",
                         nextSteps: "Choose camera, photo library, or upload a file, then review matches before docking to Cargo. Supported: JPEG, PNG, WebP, PDF · max 5MB.",
-                        hint: env.session.clientFlags.isNutritionEngineEnabled
-                            ? "Nutrition (when available): USDA match first; AI estimates are labelled—edit before saving."
-                            : nil
+                        hint: AIFeatureInlineIntro.nutritionHint
                     )
 
                     if let errorMessage {

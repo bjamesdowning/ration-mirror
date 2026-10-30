@@ -15,12 +15,11 @@ final class SessionStore {
 
     var needsOrgSelection: Bool { orgSelectionOrganizations != nil }
 
-    /// Shared AI-consent flag (see H-8) — populated at app start by `RootView`
+    /// Shared AI-consent flag, populated at app start by `RootView`
     /// via `loadSettings()` + `applyConsent(_:)` and read by
-    /// `AIConsentCoordinator.presentIfNeeded` across all four AI entry points
-    /// (scan, generate, import, plan-week), so consent granted from any one of
-    /// them is immediately visible to the others without a second network
-    /// fetch or a second prompt.
+    /// `AIConsentCoordinator.presentIfNeeded` at every AI entry point, so
+    /// consent granted from any one of them is immediately visible to the
+    /// others without a second network fetch or a second prompt.
     private(set) var hasAIConsent = false
 
     var activeOrganizationId: String? {
@@ -40,7 +39,7 @@ final class SessionStore {
     var isCrewMember: Bool { session?.isCrewMember ?? false }
     /// Personal Crew subscription ownership (purchase / Settings Membership).
     var isAccountCrewMember: Bool { session?.isAccountCrewMember ?? false }
-    /// Client-safe Flagship flags; defaults off until session loads.
+    /// Kill-switch flags for AI and Copilot entry points; off until the session loads.
     var clientFlags: ClientFlags { session?.flags ?? .disabled }
     var userImageURL: URL? {
         AvatarURLResolver.resolve(session?.user.image)
@@ -78,7 +77,7 @@ final class SessionStore {
         hasAIConsent = false
     }
 
-    /// Clears the in-memory session cache — called on forced logout (H-2).
+    /// Clears the in-memory session cache on forced logout.
     /// Unlike org switch, a forced 401 has no valid token left to re-fetch
     /// with, so this must be an explicit clear rather than a re-fetch.
     func clear() {
@@ -134,7 +133,7 @@ final class SessionStore {
             billing?.setBillingOrganizationId(organizationId)
         }
         if let userId = session?.user.id, let organizationId = activeOrganizationId {
-            nutrition?.configure(userId: userId, organizationId: organizationId)
+            nutrition?.configure(userId: userId)
             nutritionConsent?.configure(userId: userId, organizationId: organizationId)
         }
         orgGeneration += 1

@@ -65,7 +65,6 @@ export const loader = async ({ request, context }: Route.LoaderArgs) => {
 		const activeOrganizationId = session?.session?.activeOrganizationId ?? null;
 
 		const url = new URL(request.url);
-		// Hub document loads: server-owned web platform — do not use buildFlagContext
 		const flagContext = buildWebFlagContext(request, env, session);
 		const clientFlags = await getClientSafeFlags(env, flagContext);
 		clientFlags.appleWebLogin =

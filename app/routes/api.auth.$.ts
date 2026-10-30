@@ -1,7 +1,7 @@
 import { rateLimitResponse } from "~/lib/rate-limiter.server";
 import { assertAppleWebLoginAllowed } from "../lib/apple-web-login.server";
 import { getAuth } from "../lib/auth.server";
-import { buildFlagContext } from "../lib/feature-flags/flags.server";
+import { buildWebFlagContext } from "../lib/feature-flags/flags.server";
 import { withDefaultMcpResourceOnTokenExchange } from "../lib/oauth-auth-prepare.server";
 import { stripOAuthOrgSelectedFromCookieHeader } from "../lib/oauth-cookies.server";
 import { checkRateLimit } from "../lib/rate-limiter.server";
@@ -79,7 +79,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 	await enforceAuthRateLimit(request, env);
 	const auth = getAuth(env);
 	const session = await auth.api.getSession({ headers: request.headers });
-	const flagContext = buildFlagContext(request, env, session);
+	const flagContext = buildWebFlagContext(request, env, session);
 	await assertAppleWebLoginAllowed(env, request, flagContext);
 	return auth.handler(await prepareAuthHandlerRequest(request, env));
 }
@@ -89,7 +89,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 	await enforceAuthRateLimit(request, env);
 	const auth = getAuth(env);
 	const session = await auth.api.getSession({ headers: request.headers });
-	const flagContext = buildFlagContext(request, env, session);
+	const flagContext = buildWebFlagContext(request, env, session);
 	await assertAppleWebLoginAllowed(env, request, flagContext);
 	const { setCookie } = await prepareWebSignupIntent(env, request);
 	const response = await auth.handler(

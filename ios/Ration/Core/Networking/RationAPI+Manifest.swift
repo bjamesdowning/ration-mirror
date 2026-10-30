@@ -13,16 +13,6 @@ extension RationAPI {
         try await client.post("manifest", body: entry)
     }
 
-    func consumeManifestEntries(
-        _ entryIds: [String],
-        confirmInsufficient: Bool? = nil
-    ) async throws -> ManifestConsumeResponse {
-        try await client.post(
-            "manifest/consume",
-            body: ManifestConsumeRequest(entryIds: entryIds, confirmInsufficient: confirmInsufficient)
-        )
-    }
-
     func toggleManifestDaySupply(date: String) async throws -> ManifestSupplyDayToggleResponse {
         try await client.post("manifest/supply-days/\(date)", body: EmptyBody())
     }
@@ -58,7 +48,7 @@ extension RationAPI {
         try await client.delete("manifest/entries/\(entryId)")
     }
 
-    // Cook — shared, org-scoped Cargo/preparation mutation (nutrition-cook-log-split).
+    // Cook — shared, org-scoped Cargo/preparation mutation.
     func cookManifestEntries(
         _ entryIds: [String],
         confirmInsufficient: Bool? = nil

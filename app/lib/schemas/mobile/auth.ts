@@ -66,6 +66,8 @@ export const MobileSocialAuthSchema = z
 			provider: z.literal("apple"),
 			idToken: z.string().min(1),
 			nonce: z.string().min(1),
+			/** One-time code exchanged for a revocable refresh token. */
+			authorizationCode: z.string().min(1).max(4096).optional(),
 			fullName: AppleFullNameSchema.optional(),
 		}),
 	])

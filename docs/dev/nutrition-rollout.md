@@ -1,5 +1,7 @@
 # Nutrition foundation hardening — operator rollout
 
+> **Historical (1.3.x → 1.4.x rollout).** Since iOS 1.5.0, every nutrition flag except `nutrition-async-recompute` is `iosAlwaysOn` (on for iOS ≥ 1.5.0 without Flagship rules), iOS builds below `IOS_MIN_SUPPORTED_VERSION` get **426** `upgrade_required`, and the mobile undo route no longer falls back to KV tokens. Web and MCP still follow the Flagship rules below. Current behavior: [feature-flags.md](feature-flags.md).
+
 ## Compatibility contract (App Store `1.3.17` + current web)
 
 One production API serves everyone. Safety comes from **flags default off** + **platform/version gates**, not from a separate backend. A `userId` allowlist is **not** required.

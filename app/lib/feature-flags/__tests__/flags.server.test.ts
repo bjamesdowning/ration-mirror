@@ -9,6 +9,11 @@ const mockRegistry = vi.hoisted(() => ({
 			clientVisible: true,
 			clientKey: "smokeTest",
 		},
+		"ios-shipped": {
+			defaultEnabled: false,
+			description: "unit test only",
+			iosAlwaysOn: true,
+		},
 	},
 	getClientFlagKey: (_flag: string, entry: { clientKey?: string }) =>
 		entry.clientKey ?? _flag,
@@ -18,7 +23,10 @@ const mockRegistry = vi.hoisted(() => ({
 
 vi.mock("../registry", () => mockRegistry);
 
-import { buildWebFlagContext } from "../context.server";
+import {
+	buildWebFlagContext,
+	type FlagshipEvaluationContext,
+} from "../context.server";
 import {
 	applyClientFlagDependencies,
 	getClientSafeFlags,
@@ -95,27 +103,6 @@ describe("getClientSafeFlags", () => {
 			nutritionIntakeNotes: true,
 			nutritionCrossOrgDiary: true,
 		});
-
-		expect(
-			applyClientFlagDependencies({
-				nutritionEngine: false,
-				nutritionManifest: true,
-				nutritionMacrosHistory: true,
-			}),
-		).toMatchObject({
-			nutritionManifest: false,
-			nutritionMacrosHistory: false,
-		});
-		expect(
-			applyClientFlagDependencies({
-				nutritionEngine: true,
-				nutritionManifest: true,
-				nutritionMacrosHistory: true,
-			}),
-		).toMatchObject({
-			nutritionManifest: true,
-			nutritionMacrosHistory: true,
-		});
 	});
 });
 
@@ -172,5 +159,68 @@ describe("isFeatureEnabled", () => {
 			userId: "u1",
 		});
 		expect(enabled).toBe(false);
+	});
+
+	describe("iosAlwaysOn", () => {
+		function envWithFlagshipOff() {
+			const getBooleanValue = vi.fn().mockResolvedValue(false);
+			return {
+				env: {
+					...createMockEnv(),
+					FLAGS: { getBooleanValue } as unknown as Flagship,
+				},
+				getBooleanValue,
+			};
+		}
+
+		it("is on for iOS at the feature floor without asking Flagship", async () => {
+			const { env, getBooleanValue } = envWithFlagshipOff();
+			for (const clientVersion of ["1.5.0", "1.5.11", "2.0"]) {
+				const enabled = await isFeatureEnabled(env, "ios-shipped" as never, {
+					clientPlatform: "ios",
+					clientVersion,
+				});
+				expect(enabled).toBe(true);
+			}
+			expect(getBooleanValue).not.toHaveBeenCalled();
+		});
+
+		it("leaves older iOS, web, MCP, and unknown versions to Flagship", async () => {
+			const { env, getBooleanValue } = envWithFlagshipOff();
+			const contexts: FlagshipEvaluationContext[] = [
+				{ clientPlatform: "ios", clientVersion: "1.4.31" },
+				{ clientPlatform: "ios", clientVersion: "unknown" },
+				{ clientPlatform: "ios" },
+				{ clientPlatform: "web", clientVersion: "1.9.30" },
+				{ clientPlatform: "mcp", clientVersion: "1.9.30" },
+			];
+			for (const context of contexts) {
+				expect(
+					await isFeatureEnabled(env, "ios-shipped" as never, context),
+				).toBe(false);
+			}
+			expect(getBooleanValue).toHaveBeenCalledTimes(contexts.length);
+		});
+
+		it("still honors an emergency override on iOS", async () => {
+			const env = {
+				...createMockEnv(),
+				FEATURE_FLAG_OVERRIDES: JSON.stringify({ "ios-shipped": false }),
+			};
+			const enabled = await isFeatureEnabled(env, "ios-shipped" as never, {
+				clientPlatform: "ios",
+				clientVersion: "1.5.11",
+			});
+			expect(enabled).toBe(false);
+		});
+
+		it("does not turn on flags without the marker", async () => {
+			const { env } = envWithFlagshipOff();
+			const enabled = await isFeatureEnabled(env, "smoke-test" as never, {
+				clientPlatform: "ios",
+				clientVersion: "1.5.11",
+			});
+			expect(enabled).toBe(false);
+		});
 	});
 });

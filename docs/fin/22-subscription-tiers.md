@@ -14,7 +14,7 @@ Enjoying household Crew capacity does **not** mean you personally own a Crew sub
 |----------|-----------------|
 | Inventory items | 35 |
 | Meals | 15 |
-| Supply lists | 3 |
+| Supply lists | 3 (Live Supply included; saved lists on iPhone) |
 | Owned groups | 1 |
 | Invite members | Not available |
 | Share supply / manifest links | Not available |

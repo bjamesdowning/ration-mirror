@@ -45,12 +45,8 @@ enum AppConfig {
     static let authCallbackHost = "ration.mayutic.com"
 
     static let supportEmail = "support@mayutic.com"
-    static let gitlabIssuesURL = URL(string: "https://gitlab.com/mayutic/ration/application/-/issues")!
-    static let webOriginURL = URL(string: "https://ration.mayutic.com")!
     /// Product how-to guide (`docs/fin` → `/help`). Same corpus Ask Ration searches.
     static let userGuideURL = URL(string: "https://ration.mayutic.com/help")!
-    /// Developer MCP connected-agents panel on web Settings.
-    static let helpDocsURL = URL(string: "https://ration.mayutic.com/hub/settings#connected-agents")!
     static let blogURL = URL(string: "https://ration.mayutic.com/blog")!
     static let termsURL = URL(string: "https://ration.mayutic.com/legal/terms")!
     static let privacyURL = URL(string: "https://ration.mayutic.com/legal/privacy")!
@@ -71,15 +67,6 @@ enum AppConfig {
             return plist
         }
         return nil
-    }
-
-    /// Reversed Google iOS client ID for `CFBundleURLSchemes` (derived from `GIDClientID`).
-    static var googleIOSURLScheme: String? {
-        guard let clientID = googleIOSClientID else { return nil }
-        let suffix = ".apps.googleusercontent.com"
-        guard clientID.hasSuffix(suffix) else { return nil }
-        let idPart = String(clientID.dropLast(suffix.count))
-        return "com.googleusercontent.apps.\(idPart)"
     }
 }
 

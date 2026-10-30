@@ -38,9 +38,10 @@ enum AvatarURLResolver {
         }
     }
 
-    /// Org logo paths require Bearer auth on GET.
+    /// Org logo paths require Bearer auth on GET. Only Ration's own origin gets the token.
     static func requiresAuthentication(_ url: URL) -> Bool {
-        url.path.hasPrefix("/api/organization/avatar/")
+        url.host?.lowercased() == AppConfig.webOrigin.host?.lowercased()
+            && url.path.hasPrefix("/api/organization/avatar/")
     }
 
     private static func isAllowedHost(_ host: String) -> Bool {

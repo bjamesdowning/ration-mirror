@@ -114,19 +114,6 @@ final class NutritionModelsDecodingTests: XCTestCase {
         XCTAssertNil(response.goal)
     }
 
-    /// Legacy / mistaken server payloads returned the open-goal count as an Int.
-    func testDecodesNutritionGoalClearResponseWithNumericCleared() throws {
-        let json = Data(#"{"cleared": 1, "goal": null}"#.utf8)
-        let response = try decoder.decode(NutritionGoalClearResponse.self, from: json)
-        XCTAssertTrue(response.cleared)
-    }
-
-    func testDecodesNutritionGoalClearResponseWithZeroCleared() throws {
-        let json = Data(#"{"cleared": 0, "goal": null}"#.utf8)
-        let response = try decoder.decode(NutritionGoalClearResponse.self, from: json)
-        XCTAssertFalse(response.cleared)
-    }
-
     // MARK: - Nutrition Summary
 
     func testDecodesNutritionSummaryWithDaysAndGoal() throws {

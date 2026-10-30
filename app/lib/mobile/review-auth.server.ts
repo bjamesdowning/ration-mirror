@@ -6,6 +6,7 @@ import {
 	type MobileTokenPair,
 } from "~/lib/mobile/token.server";
 import type { MobileReviewLoginInput } from "~/lib/schemas/mobile/auth";
+import { timingSafeEqualString } from "~/lib/timing-safe-equal";
 import { CURRENT_TOS_VERSION } from "~/lib/tos.constants";
 
 export class MobileReviewAuthError extends Error {
@@ -24,18 +25,6 @@ type ReviewSecrets = {
 	password: string;
 	userId: string;
 };
-
-/** Constant-time string compare for equal-length inputs (returns false if lengths differ). */
-export function timingSafeEqualString(a: string, b: string): boolean {
-	if (a.length !== b.length) {
-		return false;
-	}
-	let mismatch = 0;
-	for (let i = 0; i < a.length; i++) {
-		mismatch |= a.charCodeAt(i) ^ b.charCodeAt(i);
-	}
-	return mismatch === 0;
-}
 
 export function readReviewLoginSecrets(
 	env: Cloudflare.Env,

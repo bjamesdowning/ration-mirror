@@ -13,6 +13,15 @@ struct RootView: View {
     }
 
     var body: some View {
+        if let requirement = env.updateRequirement {
+            UpdateRequiredView(requirement: requirement)
+        } else {
+            authGate
+        }
+    }
+
+    @ViewBuilder
+    private var authGate: some View {
         switch env.auth.phase {
         case .loading:
             LoadingView(label: "Calibrating…", showBrandMark: true)
@@ -132,10 +141,7 @@ struct MainTabView: View {
                 onOpenCargo: { selectedTab = .cargo },
                 onOpenGalley: { selectedTab = .galley },
                 onOpenManifest: { selectedTab = .manifest },
-                onOpenNutritionGoals: {
-                    guard env.session.clientFlags.isNutritionGoalsEnabled else { return }
-                    showingNutritionGoals = true
-                }
+                onOpenNutritionGoals: { showingNutritionGoals = true }
             )
                 .id(orgGeneration)
                 .tabItem { Label(String(localized: "Hub"), systemImage: "square.grid.2x2") }
@@ -170,10 +176,7 @@ struct MainTabView: View {
                 isTabActive: activatedTabs.contains(.manifest),
                 onOpenSettings: { showingSettings = true },
                 onOpenGroupSettings: { showingGroupSettings = true },
-                onOpenNutritionGoals: {
-                    guard env.session.clientFlags.isNutritionGoalsEnabled else { return }
-                    showingNutritionGoals = true
-                },
+                onOpenNutritionGoals: { showingNutritionGoals = true },
                 onPlanWeekComplete: { count in
                     selectedTab = .manifest
                     manifestSuccessMessage = "Added \(count) meals to Manifest"
@@ -257,6 +260,8 @@ struct MainTabView: View {
             set: { if !$0 { askConsent.decline() } }
         )) {
             AIConsentGateView(
+                errorMessage: askConsent.errorMessage,
+                isAccepting: askConsent.isAccepting,
                 onAccept: { Task { await askConsent.accept(api: env.api, session: env.session) } },
                 onDecline: { askConsent.decline() }
             )
@@ -525,17 +530,5 @@ struct OfflineBanner: View {
             .padding(.vertical, 8)
             .background(Theme.warning.opacity(0.2))
             .accessibilityAddTraits(.isHeader)
-    }
-}
-
-/// Profile / settings affordance shared across tabs.
-struct ProfileToolbarButton: View {
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Image(systemName: "person.crop.circle")
-        }
-        .accessibilityLabel("Account and settings")
     }
 }

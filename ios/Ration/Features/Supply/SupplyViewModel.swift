@@ -8,15 +8,13 @@ final class SupplyViewModel {
     private(set) var list: SupplyList?
     private(set) var catalog: SupplyCatalogResponse?
     var selectedListId: String?
-    var multiListsEnabled = false
 
     var isLiveList: Bool {
-        guard multiListsEnabled else { return true }
-        return list?.id == catalog?.live?.id || selectedListId == nil || selectedListId == catalog?.live?.id
+        list?.id == catalog?.live?.id || selectedListId == nil || selectedListId == catalog?.live?.id
     }
 
     private var usesScopedItemRoutes: Bool {
-        multiListsEnabled && !isLiveList
+        !isLiveList
     }
 
     var activeListState: String {
@@ -119,7 +117,6 @@ final class SupplyViewModel {
         online: Bool,
         organizationId: String
     ) async {
-        UserDefaults.standard.removeObject(forKey: "supply.selected.\(organizationId)")
         selectedListId = nil
         await load(
             api: api,
@@ -151,13 +148,7 @@ final class SupplyViewModel {
             if let list {
                 await snapshots.save(SupplyResponse(list: list), domain: SnapshotDomain.supply, organizationId: organizationId)
             }
-            if multiListsEnabled {
-                await loadCatalog(
-                    api: api,
-                    snapshots: snapshots,
-                    organizationId: organizationId
-                )
-            }
+            await loadCatalog(api: api)
             if let refreshOutcomes {
                 SnapshotRefreshPolicy.recordRefreshSuccess(
                     outcomes: refreshOutcomes,
@@ -183,9 +174,7 @@ final class SupplyViewModel {
         await loadCargoLinks(api: api, snapshots: snapshots, organizationId: organizationId, online: online)
         if online {
             await loadSnoozes(api: api)
-            if multiListsEnabled {
-                await SupplyOutbox.replay(api: api)
-            }
+            await SupplyOutbox.replay(api: api)
         }
     }
 
@@ -215,46 +204,15 @@ final class SupplyViewModel {
         }
     }
 
-    func loadCatalog(api: RationAPI, snapshots: SnapshotStore, organizationId: String) async {
+    func loadCatalog(api: RationAPI) async {
         do {
             let response = try await api.supplyCatalog()
             catalog = response
-            await snapshots.save(response, domain: SnapshotDomain.supplyCatalog, organizationId: organizationId)
-            // Supply stays on Live. `supply.selected.` is a leftover from the
-            // in-place switcher; restoring it checked off and quick-added onto
-            // a saved list.
-            UserDefaults.standard.removeObject(forKey: "supply.selected.\(organizationId)")
             if selectedListId != response.live?.id {
                 selectedListId = nil
             }
         } catch {
             // Catalog is additive; Live snapshot remains usable.
-        }
-    }
-
-    func selectList(
-        _ summary: SupplyCatalogSummary,
-        api: RationAPI,
-        snapshots: SnapshotStore,
-        organizationId: String
-    ) async {
-        selectedListId = summary.id
-        UserDefaults.standard.set(summary.id, forKey: "supply.selected.\(organizationId)")
-        if summary.id == catalog?.live?.id {
-            do {
-                list = try await api.supply().list
-            } catch {
-                errorMessage = error.localizedDescription
-            }
-            return
-        }
-        do {
-            let named = try await api.supplyList(id: summary.id)
-            list = named.list
-            await snapshots.save(named, domain: SnapshotDomain.supplyList(summary.id), organizationId: organizationId)
-        } catch {
-            errorMessage = error.localizedDescription
-            selectedListId = catalog?.live?.id
         }
     }
 
@@ -277,86 +235,6 @@ final class SupplyViewModel {
         }
     }
 
-    @discardableResult
-    func createSavedList(
-        name: String,
-        itemText: String,
-        api: RationAPI,
-        snapshots: SnapshotStore,
-        organizationId: String
-    ) async -> Bool {
-        do {
-            let created = try await api.createSupplyList(name: name)
-            guard let createdList = created.list else { return false }
-            let summary = SupplyCatalogSummary(
-                id: createdList.id,
-                name: createdList.name,
-                kind: "saved",
-                state: "saved",
-                createdFrom: "manual",
-                itemCount: 0,
-                purchasedCount: 0,
-                revision: nil,
-                capabilities: nil
-            )
-            if !itemText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                _ = try await api.addSupplyItems(listId: createdList.id, text: itemText)
-            }
-            await loadCatalog(api: api, snapshots: snapshots, organizationId: organizationId)
-            errorMessage = nil
-            dockMessage = "Saved \(summary.name). Pull it into Live when you shop."
-            return true
-        } catch {
-            errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
-            return false
-        }
-    }
-
-    @discardableResult
-    func renameCurrentList(to name: String, api: RationAPI, snapshots: SnapshotStore, organizationId: String) async -> Bool {
-        guard let listId = list?.id, !isLiveList else { return false }
-        do {
-            _ = try await api.renameSupplyList(id: listId, name: name)
-            await reloadCurrentList(api: api, snapshots: snapshots, organizationId: organizationId)
-            await loadCatalog(api: api, snapshots: snapshots, organizationId: organizationId)
-            errorMessage = nil
-            return true
-        } catch {
-            errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
-            return false
-        }
-    }
-
-    func deleteCurrentList(api: RationAPI, snapshots: SnapshotStore, organizationId: String) async {
-        guard let listId = list?.id, !isLiveList else { return }
-        do {
-            _ = try await api.deleteSupplyList(id: listId)
-            selectedListId = catalog?.live?.id
-            UserDefaults.standard.set(selectedListId, forKey: "supply.selected.\(organizationId)")
-            list = try await api.supply().list
-            await loadCatalog(api: api, snapshots: snapshots, organizationId: organizationId)
-            errorMessage = nil
-            dockMessage = "List deleted"
-        } catch {
-            errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
-        }
-    }
-
-    func addItemsToLive(
-        itemIds: [String]?,
-        api: RationAPI
-    ) async {
-        guard let listId = list?.id, !isLiveList else { return }
-        do {
-            _ = try await api.copySupplyListToLive(id: listId, itemIds: itemIds)
-            errorMessage = nil
-            dockMessage = "Added to Live Supply. This list is unchanged."
-            Haptics.success()
-        } catch {
-            errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
-        }
-    }
-
     private func reloadCurrentList(api: RationAPI, snapshots: SnapshotStore, organizationId: String) async {
         guard let listId = list?.id else { return }
         if isLiveList {
@@ -368,7 +246,6 @@ final class SupplyViewModel {
         }
         if let named = try? await api.supplyList(id: listId) {
             list = named.list
-            await snapshots.save(named, domain: SnapshotDomain.supplyList(listId), organizationId: organizationId)
         }
     }
 
@@ -526,56 +403,6 @@ final class SupplyViewModel {
             errorMessage = SnapshotRefreshPolicy.userFacingRefreshDetail(error)
         }
     }
-
-    @discardableResult
-    func addItem(
-        _ request: CreateSupplyItemRequest,
-        api: RationAPI,
-        snapshots: SnapshotStore,
-        online: Bool,
-        organizationId: String
-    ) async -> Bool {
-        guard online else {
-            errorMessage = "Adding items requires a network connection."
-            if let current = list {
-                SupplyOutbox.enqueue(
-                    SupplyOutboxOperation(
-                        operationId: UUID().uuidString,
-                        type: "add_item",
-                        itemId: nil,
-                        payload: .init(name: request.name, quantity: request.quantity, unit: request.unit)
-                    ),
-                    listId: current.id,
-                    baseRevision: 0
-                )
-            }
-            return false
-        }
-        do {
-            let response = try await (usesScopedItemRoutes
-                ? api.addSupplyItem(listId: list?.id ?? "", request)
-                : api.addSupplyItem(request))
-            if var current = list {
-                current = SupplyList(
-                    id: current.id,
-                    name: current.name,
-                    items: current.items + [response.item]
-                )
-                list = current
-                await snapshots.save(SupplyResponse(list: current), domain: SnapshotDomain.supply, organizationId: organizationId)
-            } else {
-                await load(api: api, snapshots: snapshots, online: online, organizationId: organizationId)
-            }
-            errorMessage = nil
-            return true
-        } catch {
-            errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
-            return false
-        }
-    }
-
-    /// Saved lists never dock. SupplyViewModel.dock returns before any complete call when the list is not Live.
-    static let docksSavedLists = false
 
     func dock(
         api: RationAPI,
@@ -777,7 +604,6 @@ final class SupplyViewModel {
     }
 
     func pollCatalogIfVisible(api: RationAPI) async {
-        guard multiListsEnabled else { return }
         do {
             let response = try await api.supplyCatalog()
             let previous = catalogRevision(for: list?.id)

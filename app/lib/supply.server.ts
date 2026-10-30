@@ -569,7 +569,7 @@ export interface SupplyItemsFetchOptions {
  * Retrieves the "Supply" list for an organization.
  * This is the main entry point for the UI.
  *
- * Pass `options.limit`/`options.offset` to bound the item-row fetch (see H-4);
+ * Pass `options.limit`/`options.offset` to bound the item-row fetch;
  * omit to fetch all items (needed by callers that compute totals/merges over
  * the complete list, e.g. supply-sync and the web grocery view).
  */
@@ -679,7 +679,7 @@ export async function getSupplyListById(
 
 /**
  * Lightweight COUNT-style aggregate for a supply list's item totals — used by
- * the hub widget (H-3) so per-request counts don't require fetching every row.
+ * the hub widget so per-request counts don't require fetching every row.
  * Only valid when no cargo-tag filter is applied (callers filtering by tag
  * need the full row set to match against item names; see hub.server.ts).
  */

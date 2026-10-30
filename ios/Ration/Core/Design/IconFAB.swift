@@ -78,30 +78,3 @@ struct IconFAB<MenuContent: View>: View {
         }
     }
 }
-
-/// Detail screens use the same icon FAB menu pattern as list tabs.
-typealias DetailActionFAB = IconFAB
-
-/// Single-action icon FAB (no menu).
-struct IconFABButton: View {
-    let systemImage: String
-    let accessibilityLabel: String
-    var isAI = false
-    var disabled = false
-    let action: () -> Void
-
-    var body: some View {
-        HStack {
-            Spacer()
-            IconFABButtonCore(
-                systemImage: systemImage,
-                accessibilityLabel: accessibilityLabel,
-                isAI: isAI,
-                disabled: disabled,
-                action: action
-            )
-            .padding(.trailing, CopilotDockLayout.fabTrailingPadding)
-            .padding(.bottom, 8)
-        }
-    }
-}

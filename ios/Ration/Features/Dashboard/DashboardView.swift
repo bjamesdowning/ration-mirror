@@ -47,8 +47,6 @@ struct DashboardView: View {
                             hubLayout: data.hubLayout,
                             availableMealTags: data.availableMealTags,
                             availableCargoTags: data.availableCargoTags ?? [],
-                            nutritionWidgetsEnabled: env.session.clientFlags.isNutritionManifestEnabled
-                                || env.session.clientFlags.isNutritionGoalsEnabled,
                             onSave: { widgets in
                                 try await model.saveLayout(widgets, api: env.api)
                                 await reload()
@@ -193,10 +191,7 @@ struct DashboardView: View {
                         }
                     }
 
-                    ForEach(model.resolvedLayout(
-                        nutritionWidgetsEnabled: env.session.clientFlags.isNutritionManifestEnabled
-                            || env.session.clientFlags.isNutritionGoalsEnabled
-                    )) { widget in
+                    ForEach(model.resolvedLayout()) { widget in
                         widgetView(widget, data: data)
                     }
                 }
@@ -339,24 +334,6 @@ struct DashboardView: View {
                 }
                 .accessibilityLabel("Dismiss")
             }
-        }
-    }
-}
-
-struct StatCard: View {
-    let title: String
-    let value: String
-    let icon: String
-    let tint: Color
-
-    var body: some View {
-        GlassCard {
-            VStack(alignment: .leading, spacing: 8) {
-                Image(systemName: icon).foregroundStyle(tint)
-                Text(value).font(Typography.display()).foregroundStyle(tint)
-                Text(title).rationCaption()
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 }

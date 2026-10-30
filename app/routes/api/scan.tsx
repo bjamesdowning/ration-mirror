@@ -2,7 +2,7 @@ import { data } from "react-router";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { handleApiError } from "~/lib/error-handler";
 import { requireWebAIConsentIfEnabled } from "~/lib/feature-enablement-gate.server";
-import { buildFlagContext } from "~/lib/feature-flags/flags.server";
+import { buildWebFlagContext } from "~/lib/feature-flags/flags.server";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import { mapScanSubmitError, submitVisualScan } from "~/lib/scan-submit.server";
 import type { Route } from "./+types/scan";
@@ -14,7 +14,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 	} = await requireActiveGroup(context, request);
 	const userId = user.id;
 	const env = context.cloudflare.env;
-	const flagContext = buildFlagContext(request, env, { user });
+	const flagContext = buildWebFlagContext(request, env, { user });
 
 	await requireWebAIConsentIfEnabled(env, userId, flagContext);
 

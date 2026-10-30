@@ -26,7 +26,7 @@ struct EatWidgetProvider: AppIntentTimelineProvider {
     func snapshot(for configuration: EatWidgetConfiguration, in context: Context) async -> RationWidgetEntry {
         RationWidgetEntry(
             date: Date(),
-            cache: .placeholder,
+            cache: WidgetSnapshotLoader.snapshotCache(isPreview: context.isPreview),
             appearance: configuration.appearance,
             eatTagSlug: configuration.tag?.id,
             eatTagName: configuration.tag?.name

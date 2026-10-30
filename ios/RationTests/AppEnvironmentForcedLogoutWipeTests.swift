@@ -2,12 +2,10 @@ import UIKit
 import XCTest
 @testable import Ration
 
-/// Direct regression coverage for H-2's cross-account leakage scenario — a
-/// forced 401 logout (`AuthManager.signOutLocal()`) must wipe
-/// snapshots/session/image caches exactly like the explicit "Sign out"
-/// action already does (`SettingsView.swift:144-146`), so a different user
-/// signing in on the same shared device can't read the previous user's
-/// cached data.
+/// A forced 401 logout (`AuthManager.signOutLocal()`) must wipe
+/// snapshots, session, and image caches exactly like explicit "Sign out",
+/// so a different user signing in on the same device can't read the
+/// previous user's cached data.
 final class AppEnvironmentForcedLogoutWipeTests: XCTestCase {
     @MainActor
     func testForcedLogoutClearsSnapshotsForActiveOrg() async {

@@ -1,6 +1,7 @@
 import { data } from "react-router";
 import { handleApiError } from "~/lib/error-handler";
 import { requireMobileUserAuth } from "~/lib/mobile/auth.server";
+import { mobileConsentMetadata } from "~/lib/mobile/consent-metadata";
 import {
 	eraseNutritionData,
 	getNutritionConsentStatus,
@@ -20,19 +21,6 @@ async function consentStatuses(db: D1Database, userId: string) {
 			getNutritionConsentStatus(db, userId, purpose),
 		),
 	);
-}
-
-function requestMetadata(request: Request) {
-	return {
-		clientVersion:
-			request.headers.get("X-Ration-Client-Version")?.slice(0, 50) ?? null,
-		locale:
-			request.headers
-				.get("Accept-Language")
-				?.split(",")[0]
-				?.trim()
-				.slice(0, 35) || null,
-	};
 }
 
 export async function loader({ request, context }: Route.LoaderArgs) {
@@ -81,7 +69,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 				affirmed: parsed.affirmed,
 				requestId: parsed.requestId,
 				clientSurface: "ios_privacy_settings",
-				...requestMetadata(request),
+				...mobileConsentMetadata(request),
 			});
 		} else if (parsed.action === "withdraw") {
 			await withdrawNutritionConsent(db, {

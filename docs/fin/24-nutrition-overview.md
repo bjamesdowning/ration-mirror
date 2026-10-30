@@ -1,6 +1,6 @@
 # Nutrition overview
 
-Ration can attach **energy and macro nutrients** to Cargo items and Galley meals, then use those snapshots when you plan and eat. Nutrition is rolled out behind feature flags—if you do not see panels or goals yet, the feature is not enabled for your account.
+Ration can attach **energy and macro nutrients** to Cargo items and Galley meals, then use those snapshots when you plan and eat. On iPhone (Ration 1.5 and later) nutrition is always available. On the web it is rolling out gradually—if you do not see panels or goals yet, it is not enabled for your account.
 
 **Not medical advice.** Totals and goals are planning aids only.
 
@@ -26,7 +26,7 @@ Composition snapshots on Cargo and Galley meals are **kitchen** data. Your goals
 - **Cargo** — Detail and edit show a nutrition panel when the engine is on.
 - **Galley** — Meal cards, detail, and edit can show per-serving energy/macros.
 - **Scan review** — Proposed nutrients appear before you add items to Cargo; edit there first.
-- **Manifest** — Day totals, Eat / plate-up intake logging, and a month calendar when Manifest nutrition is on. See *Macro tracking, goals, and intake*.
+- **Manifest** — Day totals, Eat / plate-up intake logging, a month calendar, and (iPhone) the **Macros** page for week, month, and custom averages when Manifest nutrition is on. See *Macro tracking, goals, and intake*.
 - **Hub** — Flight Recorder shows shared kitchen logistics (not personal kcal).
 - **Settings** — Personal daily goals when goals are enabled. See *Editing nutrition* for how to correct values.
 

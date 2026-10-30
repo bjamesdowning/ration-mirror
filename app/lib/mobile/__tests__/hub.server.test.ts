@@ -109,6 +109,12 @@ vi.mock("~/lib/supply.server", async (importOriginal) => {
 	};
 });
 
+function hubRequest() {
+	return new Request("https://ration.mayutic.com/api/mobile/v1/hub", {
+		headers: { "X-Ration-Client": "ios/1.5.11" },
+	});
+}
+
 describe("getMobileHubData supply counts", () => {
 	beforeEach(() => {
 		getSupplyList.mockReset();
@@ -166,6 +172,7 @@ describe("getMobileHubData supply counts", () => {
 			{ DB: {} } as never,
 			"org_1",
 			"user_1",
+			hubRequest(),
 		);
 
 		expect(getSupplyList).toHaveBeenCalledWith({}, "org_1", { limit: 20 });
@@ -189,6 +196,7 @@ describe("getMobileHubData supply counts", () => {
 			{ DB: {} } as never,
 			"org_1",
 			"user_1",
+			hubRequest(),
 		);
 
 		expect(result.latestSupplyList).toBeNull();
@@ -217,6 +225,7 @@ describe("getMobileHubData supply counts", () => {
 			{ DB: {} } as never,
 			"org_1",
 			"user_1",
+			hubRequest(),
 		);
 
 		expect(result.expirationAlertDays).toBe(7);
@@ -252,6 +261,7 @@ describe("getMobileHubData supply counts", () => {
 			{ DB: {} } as never,
 			"org_1",
 			"user_1",
+			hubRequest(),
 		);
 
 		expect(result.mealMatches).toEqual([]);
@@ -283,6 +293,7 @@ describe("getMobileHubData supply counts", () => {
 			{ DB: {} } as never,
 			"org_1",
 			"user_1",
+			hubRequest(),
 		);
 
 		expect(result.latestSupplyList).toBeNull();
@@ -311,6 +322,7 @@ describe("getMobileHubData supply counts", () => {
 			{ DB: {} } as never,
 			"org_1",
 			"user_1",
+			hubRequest(),
 		);
 
 		expect(result.availableCargoTags).toEqual([]);
@@ -367,6 +379,7 @@ describe("getMobileHubData supply counts", () => {
 			{ DB: {} } as never,
 			"org_1",
 			"user_1",
+			hubRequest(),
 		);
 
 		expect(getKitchenStats).toHaveBeenCalled();
@@ -399,7 +412,7 @@ describe("getMobileHubData supply counts", () => {
 
 		const { getMobileHubData } = await import("~/lib/mobile/hub.server");
 		await expect(
-			getMobileHubData({ DB: {} } as never, "org_1", "user_1"),
+			getMobileHubData({ DB: {} } as never, "org_1", "user_1", hubRequest()),
 		).rejects.toThrow("cargo tag index failed");
 	});
 });

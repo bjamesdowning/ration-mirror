@@ -441,12 +441,12 @@ describe("NutritionResolveRequestSchema", () => {
 		expect(parsed.ingestSource).toBe("scan_review");
 	});
 
-	it("still accepts deprecated allowAiEstimate without enabling ingestSource", () => {
+	it("strips an unknown allowAiEstimate without enabling ingestSource", () => {
 		const parsed = NutritionResolveRequestSchema.parse({
 			names: ["mystery snack"],
 			allowAiEstimate: true,
 		});
-		expect(parsed.allowAiEstimate).toBe(true);
+		expect(parsed).not.toHaveProperty("allowAiEstimate");
 		expect(parsed.ingestSource).toBeUndefined();
 	});
 

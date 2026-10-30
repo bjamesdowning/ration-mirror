@@ -28,10 +28,6 @@ final class BillingProductCatalogTests: XCTestCase {
 
     func testUnknownFallsBack() {
         XCTAssertNil(BillingProductCatalog.info(for: "unknown_sku"))
-        XCTAssertEqual(
-            BillingProductCatalog.displayName(for: "unknown_sku", fallback: "Fallback"),
-            "Fallback"
-        )
     }
 
     func testSortOrderPutsAnnualBeforeMonthlyBeforeCredits() {

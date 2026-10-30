@@ -7,8 +7,9 @@ struct AIFeatureInlineIntro: View {
     let creditCost: Int
     var costLabel: String = "per use"
     var nextSteps: String?
-    /// Optional nutrition / feature hint (shown when nutrition-engine is on).
     var hint: String? = nil
+
+    static let nutritionHint = "Nutrition (when available): USDA match first; AI estimates are labelled—edit before saving."
     @Environment(AppEnvironment.self) private var env
 
     var body: some View {
@@ -78,64 +79,6 @@ struct AIFeaturePrimaryButton: View {
         }
         .buttonStyle(AIButtonStyle())
         .disabled(isDisabled)
-        .sheet(isPresented: $showingPaywall) {
-            PaywallView(context: .credits())
-        }
-    }
-}
-
-/// Credits gate sheet — scrollable layout for standalone confirmations.
-struct AIFeatureIntroView: View {
-    let title: String
-    let detail: String
-    let creditCost: Int
-    var costLabel: String = "per use"
-    var confirmLabel: String = "Continue"
-    var nextSteps: String?
-    let onContinue: () -> Void
-    @Environment(\.dismiss) private var dismiss
-    @Environment(AppEnvironment.self) private var env
-    @State private var showingPaywall = false
-
-    private var hasEnoughCredits: Bool {
-        env.session.credits >= creditCost
-    }
-
-    var body: some View {
-        ScrollView {
-            VStack(spacing: 20) {
-                AIFeatureInlineIntro(
-                    title: title,
-                    detail: detail,
-                    creditCost: creditCost,
-                    costLabel: costLabel,
-                    nextSteps: nextSteps
-                )
-            }
-            .padding(24)
-        }
-        .safeAreaInset(edge: .bottom) {
-            VStack(spacing: 12) {
-                if hasEnoughCredits {
-                    Button(confirmLabel) {
-                        Haptics.light()
-                        onContinue()
-                    }
-                    .buttonStyle(PrimaryButtonStyle())
-                } else {
-                    Button("Get credits") { showingPaywall = true }
-                        .buttonStyle(PrimaryButtonStyle())
-                }
-                Button("Cancel") { dismiss() }
-                    .buttonStyle(SecondaryButtonStyle())
-            }
-            .padding(.horizontal, 24)
-            .padding(.vertical, 12)
-            .background(Theme.ceramic)
-        }
-        .background(Theme.ceramic)
-        .presentationDetents([.large])
-        .presentationDragIndicator(.visible)
         .sheet(isPresented: $showingPaywall) {
             PaywallView(context: .credits())
         }

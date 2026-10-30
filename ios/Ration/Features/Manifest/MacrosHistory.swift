@@ -76,44 +76,8 @@ enum MacrosHistoryMath {
     }
 }
 
-private struct MacrosHistoryRouteModifier: ViewModifier {
-    let enabled: Bool
-    @Binding var isPresented: Bool
-    let onOpenGoals: () -> Void
-
-    func body(content: Content) -> some View {
-        if enabled {
-            content.navigationDestination(isPresented: $isPresented) {
-                MacrosHistoryView(onOpenGoals: onOpenGoals)
-            }
-            .onChange(of: enabled) { _, on in
-                if !on { isPresented = false }
-            }
-        } else {
-            content.onAppear { isPresented = false }
-        }
-    }
-}
-
-extension View {
-    func macrosHistoryRoute(
-        enabled: Bool,
-        isPresented: Binding<Bool>,
-        onOpenGoals: @escaping () -> Void
-    ) -> some View {
-        modifier(
-            MacrosHistoryRouteModifier(
-                enabled: enabled,
-                isPresented: isPresented,
-                onOpenGoals: onOpenGoals
-            )
-        )
-    }
-}
-
 struct MacrosHistoryView: View {
     @Environment(AppEnvironment.self) private var env
-    @Environment(\.dismiss) private var dismiss
     var onOpenGoals: () -> Void = {}
 
     @State private var preset: Preset = .week
@@ -181,9 +145,7 @@ struct MacrosHistoryView: View {
                 averagesSection(page)
                 comparisonSection(page)
                 daysSection(page)
-                if env.session.clientFlags.isNutritionIntakeNotesEnabled {
-                    notesSection(page)
-                }
+                notesSection(page)
             }
         }
         .scrollContentBackground(.hidden)
@@ -207,11 +169,6 @@ struct MacrosHistoryView: View {
             }
         }
         .task(id: loadKey) { await reload() }
-        .onAppear {
-            if !env.session.clientFlags.isNutritionMacrosHistoryEnabled {
-                dismiss()
-            }
-        }
     }
 
     private var rangeSection: some View {
@@ -291,9 +248,7 @@ struct MacrosHistoryView: View {
             )
             .rationCaption()
             .foregroundStyle(Theme.muted)
-            if env.session.clientFlags.isNutritionGoalsEnabled {
-                Button("Nutrition goals", action: onOpenGoals)
-            }
+            Button("Nutrition goals", action: onOpenGoals)
         } header: {
             Text("Previous period")
         }
@@ -420,10 +375,6 @@ struct MacrosHistoryView: View {
     }
 
     private func reload() async {
-        guard env.session.clientFlags.isNutritionMacrosHistoryEnabled else {
-            dismiss()
-            return
-        }
         let span = MacrosHistoryMath.spanDays(from: range.from, to: range.to)
         guard span > 0, span <= MacrosHistoryMath.maxSpanDays else {
             errorMessage = "Choose a range of \(MacrosHistoryMath.maxSpanDays) days or fewer."

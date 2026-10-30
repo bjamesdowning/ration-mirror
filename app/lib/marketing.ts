@@ -1,6 +1,5 @@
-/** Public App Store product page. Apple slug stays kitchen-hub until ASC rename. */
-export const APP_STORE_URL =
-	"https://apps.apple.com/ie/app/ration-kitchen-hub/id6785010110";
+/** Storefront-neutral App Store product page; Apple redirects to the local storefront. */
+export const APP_STORE_URL = "https://apps.apple.com/app/id6785010110";
 
 /** Public Ration help centre. */
 export const HELP_DOCS_URL = "/help";

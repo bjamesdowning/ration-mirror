@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import UIKit
 import WidgetKit
 
 /// Process-level “no account” copy so a recreated `AuthManager` (iPad Sign in
@@ -66,7 +67,7 @@ final class AuthManager {
     /// sequence (`SnapshotStore`, `BillingManager`, `SessionStore`, the
     /// authenticated-image cache) that explicit sign-out already runs, so a
     /// forced 401 logout doesn't leave a signed-out user's cached data
-    /// readable to whoever signs in next on a shared device (H-2).
+    /// readable to whoever signs in next on a shared device.
     var onSignedOut: (() async -> Void)?
 
     private var accessToken: String?
@@ -87,7 +88,7 @@ final class AuthManager {
     private var appleGivenName: String?
     private var appleFamilyName: String?
 
-    private static let refreshKey = "refresh_token"
+    private nonisolated static let refreshKey = "refresh_token"
     private static let pkceVerifierKey = "pkce_verifier"
     private let session: URLSession
 
@@ -123,8 +124,11 @@ final class AuthManager {
         do {
             _ = try await refreshAccessToken()
             phase = .signedIn
-        } catch {
+        } catch where APIClient.shouldForceSignOut(afterRefreshError: error) {
             await signOutLocal()
+        } catch {
+            // Offline or server busy at launch: keep the session; the next request refreshes.
+            phase = .signedIn
         }
     }
 
@@ -155,6 +159,7 @@ final class AuthManager {
         idToken: String,
         nonce: String? = nil,
         accessToken: String? = nil,
+        authorizationCode: String? = nil,
         givenName: String? = nil,
         familyName: String? = nil,
         intent: String,
@@ -174,6 +179,9 @@ final class AuthManager {
         }
         if let accessToken {
             body["accessToken"] = accessToken
+        }
+        if let authorizationCode {
+            body["authorizationCode"] = authorizationCode
         }
         if provider == "apple" {
             if let givenName, !givenName.isEmpty { appleGivenName = givenName }
@@ -220,16 +228,6 @@ final class AuthManager {
         let pair = try await postTokenDictionary(body: body, endpoint: "auth/review-login")
         try apply(pair)
         phase = .signedIn
-    }
-
-    /// Fetches unsigned client-visible flags for signed-out UI (e.g. review login reveal).
-    func fetchClientFlags() async throws -> ClientFlags {
-        var req = URLRequest(url: AppConfig.apiBaseURL.appending(path: "client-flags"))
-        req.httpMethod = "GET"
-        let (data, response) = try await session.data(for: req)
-        try Self.ensureOK(data: data, response: response)
-        let decoded = try JSON.decoder.decode(ClientFlagsResponse.self, from: data)
-        return decoded.clientFlags
     }
 
     // MARK: Magic link + code exchange
@@ -341,6 +339,7 @@ final class AuthManager {
     /// rebinds the org claim and revokes prior refresh families server-side).
     func adopt(_ pair: TokenPair) {
         clearAuthError()
+        resetWidgetSession()
         do {
             try apply(pair)
             phase = .signedIn
@@ -382,11 +381,16 @@ final class AuthManager {
             let pair = try await AppGroupFileLock.perform("auth-refresh.lock") {
                 let current = Keychain.get(Self.refreshKey) ?? fallback
                 guard let current else { throw APIError.notAuthenticated }
-                return try await Self.postTokenDetached(
+                let pair = try await Self.postTokenDetached(
                     refreshToken: current,
                     baseURL: baseURL,
                     session: session
                 )
+                // Persist before releasing the lock so the widget never reuses the rotated token.
+                guard Keychain.set(pair.refreshToken, for: Self.refreshKey) else {
+                    throw APIError.transport("Could not save session securely.")
+                }
+                return pair
             }
             try await MainActor.run { [weak self] in
                 guard let self else { throw APIError.notAuthenticated }
@@ -395,6 +399,9 @@ final class AuthManager {
             return pair.accessToken
         }
         refreshTask = task
+        // Holding an app-group file lock while suspended gets the app killed (0xdead10cc).
+        let backgroundTask = UIApplication.shared.beginBackgroundTask(withName: "auth-refresh")
+        defer { UIApplication.shared.endBackgroundTask(backgroundTask) }
         do {
             let accessToken = try await task.value
             refreshTask = nil
@@ -422,11 +429,8 @@ final class AuthManager {
         accessExpiry = nil
         refreshToken = nil
         Keychain.delete(Self.refreshKey)
-        Keychain.delete("widget_access_token")
-        Keychain.delete("widget_access_expiry")
-        HomeWidgetCacheStore.clear()
-        WidgetCenter.shared.reloadAllTimelines()
-        // M-12: an abandoned magic-link request otherwise leaves this orphaned in Keychain indefinitely.
+        resetWidgetSession()
+        // An abandoned magic-link request otherwise leaves this in Keychain indefinitely.
         Keychain.delete(Self.pkceVerifierKey)
         appleGivenName = nil
         appleFamilyName = nil
@@ -440,6 +444,14 @@ final class AuthManager {
 
     // MARK: Helpers
 
+    /// The widget caches its own access token and snapshot for the current group.
+    private func resetWidgetSession() {
+        Keychain.delete("widget_access_token")
+        Keychain.delete("widget_access_expiry")
+        HomeWidgetCacheStore.clear()
+        WidgetCenter.shared.reloadAllTimelines()
+    }
+
     private func apply(_ pair: TokenPair) throws {
         guard Keychain.set(pair.refreshToken, for: Self.refreshKey) else {
             throw APIError.transport("Could not save session securely.")
@@ -450,10 +462,6 @@ final class AuthManager {
         pendingAuthNotice = nil
         AuthAccountNotFoundStore.clear()
         AuthAppleFullNameStore.clear()
-    }
-
-    private func postToken(body: [String: String]) async throws -> TokenPair {
-        try await postTokenDictionary(body: body, endpoint: "auth/token")
     }
 
     private static func postTokenDetached(

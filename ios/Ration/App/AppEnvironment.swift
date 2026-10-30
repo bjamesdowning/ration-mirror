@@ -16,7 +16,7 @@ final class AppEnvironment {
         case galleyGenerate
         case galleyImport(url: String?, autoStart: Bool, userText: String? = nil)
         case manifestPlanWeek
-        /// Open Manifest Add-to-plan with meal + date prefilled (nutrition-cook-log-split).
+        /// Open Manifest Add-to-plan with meal + date prefilled.
         case manifestAddEntry(mealId: String, date: String)
         case manifestToday
         case supply
@@ -45,6 +45,7 @@ final class AppEnvironment {
     let lifecycle: AppLifecycleCoordinator
     let refreshOutcomes: SnapshotRefreshOutcomeStore
     private(set) var cargoDataRevision = 0
+    private(set) var updateRequirement: AppUpdateRequirement?
 
     init() {
         let auth = AuthManager()
@@ -97,7 +98,11 @@ final class AppEnvironment {
             }
         }
 
-        // H-2: a forced 401 logout must match explicit sign-out's full wipe
+        client.updateRequiredHandler = { [weak self] requirement in
+            self?.updateRequirement = requirement
+        }
+
+        // A forced 401 logout must match explicit sign-out's full wipe.
         auth.onSignedOut = { [snapshots, nutrition, nutritionConsent, billing, session, theme, unitDisplayMode, launch, onboarding, deepLinkRouter, refreshOutcomes, nextActionDismiss] in
             nutrition.invalidate()
             nutritionConsent.invalidate()
@@ -113,21 +118,16 @@ final class AppEnvironment {
             nextActionDismiss.clearAll()
             AuthImageLoader.shared.clearAll()
             SharedImportHandoff.clear()
+            SupplyOutbox.clear()
         }
     }
 
     /// Configures private nutrition caches for the signed-in user + active org.
-    /// When `nutritionCrossOrgDiary` is on, summary cache is user-global across kitchens.
     func configureNutritionScope() {
         guard let userId = session.session?.user.id,
               let organizationId = session.activeOrganizationId
         else { return }
-        let crossOrg = session.clientFlags.isNutritionCrossOrgDiaryEnabled
-        nutrition.configure(
-            userId: userId,
-            organizationId: organizationId,
-            crossOrgDiary: crossOrg
-        )
+        nutrition.configure(userId: userId)
         nutritionConsent.configure(userId: userId, organizationId: organizationId)
     }
 

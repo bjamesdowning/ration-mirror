@@ -40,14 +40,12 @@ extension View {
     func inventorySoftHardTrailingSwipe(
         softLabel: String,
         softSystemImage: String,
-        showSoft: Bool = true,
         onSoft: @escaping () -> Void,
         onDelete: @escaping () -> Void
     ) -> some View {
         inventorySoftHardTrailingSwipe(
             softLabel: softLabel,
             softIcon: { Image(systemName: softSystemImage) },
-            showSoft: showSoft,
             onSoft: onSoft,
             onDelete: onDelete
         )
@@ -57,21 +55,18 @@ extension View {
     func inventorySoftHardTrailingSwipe<SoftIcon: View>(
         softLabel: String,
         softIcon: () -> SoftIcon,
-        showSoft: Bool = true,
         onSoft: @escaping () -> Void,
         onDelete: @escaping () -> Void
     ) -> some View {
-        swipeActions(edge: .trailing, allowsFullSwipe: showSoft) {
-            if showSoft {
-                Button(action: onSoft) {
-                    Label {
-                        Text(softLabel)
-                    } icon: {
-                        softIcon()
-                    }
+        swipeActions(edge: .trailing, allowsFullSwipe: true) {
+            Button(action: onSoft) {
+                Label {
+                    Text(softLabel)
+                } icon: {
+                    softIcon()
                 }
-                .tint(Theme.warning)
             }
+            .tint(Theme.warning)
             Button(role: .destructive, action: onDelete) {
                 Label("Delete", systemImage: "trash")
             }
@@ -80,16 +75,14 @@ extension View {
     }
 
     /// Cargo: Eat (yellow, full-swipe) + Delete (red). Uses SF Symbol so tint matches Cook.
-    /// Always shows Eat when enabled (incl. qty 0).
+    /// Eat shows at qty 0 too.
     func cargoTrailingSwipeActions(
-        showEat: Bool = true,
         onEat: @escaping () -> Void,
         onDelete: @escaping () -> Void
     ) -> some View {
         inventorySoftHardTrailingSwipe(
             softLabel: "Eat",
             softSystemImage: "carrot.fill",
-            showSoft: showEat,
             onSoft: onEat,
             onDelete: onDelete
         )

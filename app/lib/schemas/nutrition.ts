@@ -289,10 +289,6 @@ export type NutritionSummary = z.infer<typeof NutritionSummarySchema>;
 export const NutritionResolveRequestSchema = z.object({
 	names: z.array(z.string().min(1).max(200)).min(1).max(50),
 	/**
-	 * @deprecated Ignored server-side. Use `ingestSource: "scan_review"`.
-	 */
-	allowAiEstimate: z.boolean().optional(),
-	/**
 	 * Server-gated AI ingest path. AI estimate only when this is `scan_review`
 	 * and `nutrition-ai-estimate` is on.
 	 */

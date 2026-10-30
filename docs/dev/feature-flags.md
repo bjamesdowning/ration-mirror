@@ -37,9 +37,16 @@ Dashboard (Flagship) → propagated config → env.FLAGS binding → flags.serve
 
 ### Fallback order
 
-1. `FEATURE_FLAG_OVERRIDES` secret (emergency kill, JSON e.g. `{"my-flag":false}`)
-2. `env.FLAGS.getBooleanValue(key, false, context)`
-3. Registry `defaultEnabled` (always `false` for new flags)
+1. `FEATURE_FLAG_OVERRIDES` secret (emergency kill, JSON e.g. `{"my-flag":false}`). Applies to every platform, including shipped iOS.
+2. Registry `iosAlwaysOn: true` and the context is `clientPlatform: "ios"` with `clientVersion` ≥ `IOS_FEATURE_FLOOR` (`1.5.0`, in `flags.server.ts`) → **on** without asking Flagship.
+3. `env.FLAGS.getBooleanValue(key, false, context)`
+4. Registry `defaultEnabled` (always `false` for new flags)
+
+### Shipped on iOS (`iosAlwaysOn`)
+
+iOS 1.5.x ships every flagged iOS feature enabled. Entries marked `iosAlwaysOn` are on for iOS ≥ `IOS_FEATURE_FLOOR`; Flagship still decides web, MCP, and iOS builds below the floor. Copilot tools inherit the Ask client's identity (`originating-client.server.ts`), so Ask from iOS ≥ 1.5.0 gets the same answer as the iOS app. iOS builds below `IOS_MIN_SUPPORTED_VERSION` (`wrangler.jsonc`) get **426** `upgrade_required` from `workers/app.ts` on non-exempt mobile routes (see README → *Minimum iOS version*). Only `app-review-login`, `apple-web-login`, and `nutrition-async-recompute` are not `iosAlwaysOn`; `registry.test.ts` pins that list.
+
+When a new iOS feature needs a flag, leave `iosAlwaysOn` off until the build that ships it is the floor, or gate it on a higher client version in the route.
 
 ## Adding a flag to a feature
 
@@ -126,9 +133,11 @@ Permanent boolean kill switches for billed AI pipelines. Registry `defaultEnable
 | `ai-generate-meal` | `aiGenerateMeal` | `submitMealGenerate` |
 | `ai-plan-week` | `aiPlanWeek` | `submitPlanWeek` |
 
+All eight are `iosAlwaysOn`: on for iOS ≥ 1.5.0, Flagship-controlled elsewhere. The iOS kill switch is `FEATURE_FLAG_OVERRIDES`, which also kills web and MCP.
+
 **Operator matrix:** Parent `ai-import-url` plus the matching lane flag must be on for that submit path. `ai-scan-receipt` off kills Cargo and Dock AI spend; `ai-dock-from-receipt` off leaves Cargo scan available. Asserts throw **403** + `FEATURE_DISABLED` before credit debit. Mobile bootstrap: `GET /api/mobile/v1/session` returns `clientFlags`. Emergency bulk kill: `FEATURE_FLAG_OVERRIDES` JSON on the `ration` Worker, e.g. `{"ai-scan-receipt":false,"ai-import-url":false,...}`.
 
-## Nutrition flags (F0 spine — registry only)
+## Nutrition flags
 
 | Flag key | Client key | Purpose |
 |----------|------------|---------|
@@ -140,35 +149,22 @@ Permanent boolean kill switches for billed AI pipelines. Registry `defaultEnable
 | `nutrition-async-recompute` | _(not clientVisible)_ | Queue stub for async nutrition recompute |
 | `nutrition-intake-notes` | `nutritionIntakeNotes` | Optional private Eat notes (≤280) on intake rows |
 | `nutrition-cross-org-diary` | `nutritionCrossOrgDiary` | Personal intake summary/history aggregates across kitchens (user-global diary) |
-| `nutrition-macros-history` | `nutritionMacrosHistory` | iOS Manifest Macros page (range averages, previous period, notes). Default **off**. Requires effective `nutrition-manifest`. Notes text also requires `nutrition-intake-notes`. |
 
 ## Supply list library
 
 | Flag key | Client key | Purpose |
 |----------|------------|---------|
-| `supply-multi-lists` | `supplyMultiLists` | Saved lists that pull into Live Supply. Default **off**. Only Live can be checked off or docked, whether or not the flag is on. Quick-add on Live works with the flag off. |
-| `ios-home-widgets` | `iosHomeWidgets` | iOS Home Screen widgets (Supply, Eat, Today) and `GET /api/mobile/v1/widgets/home`. Default **off**. Eat one-tap still requires `cargo-quick-eat`. Enable for iOS only when `clientVersion` ≥ `1.5.3`. |
+| `supply-multi-lists` | `supplyMultiLists` | Saved lists that pull into Live Supply. Default **off**; `iosAlwaysOn`. Only Live can be checked off or docked, whether or not the flag is on. Quick-add on Live works with the flag off. |
 
-Production rollout stays Flagship-default **off**. Enable web/internal first. Enable iOS only after binary ≥ **1.5.0** (`clientPlatform` `ios` **and** `clientVersion` ≥ `1.5.0`). Then MCP (`clientPlatform` `mcp`). Killing the flag hides every non-Live surface (HTTP 403 `FEATURE_DISABLED` on catalog routes; 404 on legacy `:id`/share for Saved) while Live remains fully operational and saved rows stay intact.
+Web and MCP stay Flagship-controlled. Killing the flag hides every non-Live surface (HTTP 403 `FEATURE_DISABLED` on catalog routes; 404 on legacy `:id`/share for Saved) while Live remains fully operational and saved rows stay intact.
 
 All default **off**. Create matching Flagship flags before enabling. Seed local nutrition D1 with `bun run db:nutrition:seed:local`.
 
 Hub/SSR and web APIs evaluate Flagship with `buildWebFlagContext` (server-owned `clientPlatform: "web"` + `APP_VERSION`). Mobile uses `buildMobileFlagContext` + validated `X-Ration-Client`. External MCP uses `buildAgentFlagContext` with `clientPlatform` `mcp` and web `APP_VERSION` — never invent an iOS marketing version for MCP. First-party Copilot Ask inherits the originating client's `web` or `ios` identity (iOS marketing version from `X-Ration-Client` when the connection is Bearer-authenticated). Product flags therefore match Hub / iOS without a separate `copilot` platform cohort. Connect-time `ration-copilot` still evaluates from the HTTP request.
 
-### Production dogfood (nutrition)
+### Nutrition rollout
 
-For operator / dogfood rollout in **production**, keep registry `defaultEnabled: false` and Flagship default variation **off**. Target by **platform** (and iOS version) — a `userId` allowlist is **not** required. Do **not** use `FEATURE_FLAG_OVERRIDES` to turn nutrition flags **on** in production—that secret is for emergency **kill** (`false`) or local/dev overrides, not production enablement.
-
-**Rollout phases**
-
-1. **Dark ship** — Deploy with registry defaults `false`. Create Flagship flags for all nutrition keys with default variation **off**. Apply main D1 migrations through `0044_*`; seed remote `NUTRITION_DB` if not already. App Store users see zero nutrition behavior.
-2. **Operator dogfood** — For each nutrition flag, Flagship default stays off; enable with platform rules as in [nutrition-rollout.md](nutrition-rollout.md):
-   - **iOS:** `clientPlatform` equals `ios` **and** `clientVersion` ≥ `1.4.x`
-   - **Web:** `clientPlatform` equals `web` on
-   - **MCP:** `clientPlatform` equals `mcp` (platform on; optional web `APP_VERSION` gate)
-   - **Copilot Ask:** no extra platform rule — tools inherit the Ask client's `ios` or `web` identity above
-3. **iOS binary** — `ClientFlags` includes nutrition keys (fail-closed `== true`). Submit App Review on **iOS ≥ 1.4.x**; nutrition may be visible to reviewers on that binary when platform/version rules are on. Compound `clientVersion` / `clientPlatform` from `X-Ration-Client` on **mobile** APIs so intake side effects skip old iOS. Web Hub UI reads nutrition keys from root `clientFlags` (evaluated with `buildWebFlagContext`).
-4. **Broaden** — Flip default variation on, or expand percent rollout if you still use percent targeting. Emergency: Flagship disable or `FEATURE_FLAG_OVERRIDES` kill (`false` only).
+iOS ≥ 1.5.0 gets every nutrition flag except `nutrition-async-recompute` through `iosAlwaysOn`; no Flagship rule is needed for iOS. For web and MCP, keep registry `defaultEnabled: false` and Flagship default variation **off**, and enable by platform (`clientPlatform` equals `web` / `mcp`). Do **not** use `FEATURE_FLAG_OVERRIDES` to turn nutrition flags **on** in production; that secret is for emergency **kill** (`false`) or local/dev overrides. Copilot Ask needs no extra rule: tools inherit the Ask client's `ios` or `web` identity. History of the 1.4.x platform/version rollout: [nutrition-rollout.md](nutrition-rollout.md).
 
 Consent / Art. 9 notes: [nutrition-dpia-notes.md](nutrition-dpia-notes.md). After help article changes, sync Copilot AI Search.
 
@@ -185,7 +181,7 @@ App Store / TestFlight review email+password login on iOS. Registry:
 },
 ```
 
-**Operator:** Create matching boolean flag in Flagship (disabled). Seed the review account with the local-only script `bun scripts/seed-account/seed-app-review-demo.ts --remote` (under gitignored `scripts/seed-account/`) and set `APP_REVIEW_DEMO_EMAIL`, `APP_REVIEW_DEMO_PASSWORD`, `APP_REVIEW_DEMO_USER_ID`. Enable the flag only during review windows; disable afterward. Signed-out Sign In reads flags via `GET /api/mobile/v1/client-flags`. Server enforces on `POST /api/mobile/v1/auth/review-login`. Checklist: [`plans/app-review-notes.md`](../plans/app-review-notes.md).
+**Operator:** Create matching boolean flag in Flagship (disabled). Seed the review account with the local-only script `bun scripts/seed-account/seed-app-review-demo.ts --remote` (under gitignored `scripts/seed-account/`) and set `APP_REVIEW_DEMO_EMAIL`, `APP_REVIEW_DEMO_PASSWORD`, `APP_REVIEW_DEMO_USER_ID`. Enable the flag only during review windows; disable afterward. iOS shows the Password field when the email matches the review address; the server enforces the flag on `POST /api/mobile/v1/auth/review-login`. Checklist: [`plans/app-review-notes.md`](../plans/app-review-notes.md).
 
 ## References
 

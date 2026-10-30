@@ -52,7 +52,7 @@ final class AuthImageLoader {
         memoryCache.removeObject(forKey: url as NSURL)
     }
 
-    /// Drops every cached authenticated image — called on forced logout (H-2)
+    /// Drops every cached authenticated image on forced logout
     /// so another user signing in on the same device can't see a stale
     /// cached org logo/avatar rendered from the previous account's session.
     func clearAll() {

@@ -7,7 +7,6 @@ import {
 } from "~/lib/billing.constants";
 import { BILLING_ERROR_CODES } from "~/lib/billing.errors";
 import {
-	clearRevenueCatWebhookProcessed,
 	revenueCatFulfillmentKey,
 	stripeFulfillmentKey,
 } from "~/lib/billing-idempotency.server";
@@ -366,7 +365,6 @@ export type RevenueCatWebhookResult = {
 export async function processRevenueCatWebhookEvent(
 	env: Env,
 	rawEvent: unknown,
-	kv?: KVNamespace,
 ): Promise<RevenueCatWebhookResult> {
 	const parsed = RevenueCatWebhookEventSchema.safeParse(rawEvent);
 	if (!parsed.success) {
@@ -435,75 +433,68 @@ export async function processRevenueCatWebhookEvent(
 
 	const revokeTypes = new Set(["EXPIRATION"]);
 
-	try {
-		if (grantTypes.has(event.type) && hasCrewEntitlement) {
-			if (!organizationId) {
-				log.error("RevenueCat crew grant missing organization", {
-					userId: redactId(userId),
-				});
-				return { handled: true, fulfilled: false };
-			}
-
-			const expiresMs = event.expiration_at_ms;
-			const periodEnd =
-				typeof expiresMs === "number" && expiresMs > 0
-					? new Date(expiresMs)
-					: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-
-			await grantCrewMemberTier(env, {
-				userId,
-				organizationId,
-				periodEnd,
-			});
-
-			return { handled: true, fulfilled: true };
-		}
-
-		if (revokeTypes.has(event.type) && hasCrewEntitlement) {
-			await revokeCrewMemberTier(env, { userId, organizationId });
-			return { handled: true, fulfilled: true };
-		}
-
-		if (
-			event.type === "NON_RENEWING_PURCHASE" ||
-			(event.type === "INITIAL_PURCHASE" && !hasCrewEntitlement)
-		) {
-			const credits = productId ? RC_PRODUCT_CREDITS[productId] : undefined;
-			if (credits && organizationId) {
-				await addCredits(
-					env,
-					organizationId,
-					userId,
-					credits,
-					"RevenueCat Credit Pack",
-					{ idempotencyKey: fulfillmentKey },
-				);
-				emitCreditPurchase(productId ?? "unknown", credits);
-				return { handled: true, fulfilled: true };
-			}
-
-			const reason = !productId
-				? "missing_product"
-				: !credits
-					? "unknown_product"
-					: "no_organization";
-			log.warn("RevenueCat credit pack not fulfilled", {
-				type: event.type,
-				eventId: redactId(event.id),
-				appUserId: redactId(userId),
-				productId: productId ?? null,
-				reason,
+	if (grantTypes.has(event.type) && hasCrewEntitlement) {
+		if (!organizationId) {
+			log.error("RevenueCat crew grant missing organization", {
+				userId: redactId(userId),
 			});
 			return { handled: true, fulfilled: false };
 		}
 
-		return { handled: true, fulfilled: false };
-	} catch (error) {
-		if (kv) {
-			await clearRevenueCatWebhookProcessed(kv, event.id);
-		}
-		throw error;
+		const expiresMs = event.expiration_at_ms;
+		const periodEnd =
+			typeof expiresMs === "number" && expiresMs > 0
+				? new Date(expiresMs)
+				: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+
+		await grantCrewMemberTier(env, {
+			userId,
+			organizationId,
+			periodEnd,
+		});
+
+		return { handled: true, fulfilled: true };
 	}
+
+	if (revokeTypes.has(event.type) && hasCrewEntitlement) {
+		await revokeCrewMemberTier(env, { userId, organizationId });
+		return { handled: true, fulfilled: true };
+	}
+
+	if (
+		event.type === "NON_RENEWING_PURCHASE" ||
+		(event.type === "INITIAL_PURCHASE" && !hasCrewEntitlement)
+	) {
+		const credits = productId ? RC_PRODUCT_CREDITS[productId] : undefined;
+		if (credits && organizationId) {
+			await addCredits(
+				env,
+				organizationId,
+				userId,
+				credits,
+				"RevenueCat Credit Pack",
+				{ idempotencyKey: fulfillmentKey },
+			);
+			emitCreditPurchase(productId ?? "unknown", credits);
+			return { handled: true, fulfilled: true };
+		}
+
+		const reason = !productId
+			? "missing_product"
+			: !credits
+				? "unknown_product"
+				: "no_organization";
+		log.warn("RevenueCat credit pack not fulfilled", {
+			type: event.type,
+			eventId: redactId(event.id),
+			appUserId: redactId(userId),
+			productId: productId ?? null,
+			reason,
+		});
+		return { handled: true, fulfilled: false };
+	}
+
+	return { handled: true, fulfilled: false };
 }
 
 function toIsoTimestamp(

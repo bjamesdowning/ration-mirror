@@ -168,29 +168,6 @@ export function buildSystemFlagContext(
 }
 
 /**
- * @deprecated Prefer {@link buildWebFlagContext} or {@link buildMobileFlagContext}.
- * Legacy helper that still honors `X-Ration-Client` platform for non-migrated call sites.
- */
-export function buildFlagContext(
-	request: Request,
-	env: { RATION_ENV?: string },
-	session?: { user?: SessionUser | null } | null,
-	options?: BuildFlagContextOptions,
-): FlagshipEvaluationContext {
-	const context = baseContext(request, env, session, options);
-	const client = parseRationClientHeader(
-		request.headers.get("X-Ration-Client"),
-	);
-	if (client.clientPlatform) {
-		context.clientPlatform = client.clientPlatform;
-	}
-	if (client.clientVersion) {
-		context.clientVersion = client.clientVersion;
-	}
-	return context;
-}
-
-/**
  * Flagship context for MCP / Copilot tool runs.
  *
  * MCP stays `mcp` + web `APP_VERSION` (never invents an iOS marketing version).

@@ -19,7 +19,7 @@ final class OnboardingCoordinatorTests: XCTestCase {
         let coordinator = OnboardingCoordinator()
         coordinator.startIfNeeded(completedAt: nil)
 
-        coordinator.advanceFromWelcome(featureEnablementEnabled: true)
+        coordinator.advanceFromWelcome()
         XCTAssertEqual(coordinator.phase, .featureEnablement)
 
         coordinator.advanceFromFeatureEnablement(aiEnabled: true)
@@ -27,17 +27,10 @@ final class OnboardingCoordinatorTests: XCTestCase {
         XCTAssertFalse(coordinator.shouldUseStaticBriefing)
     }
 
-    func testAdvanceWelcomeSkipsFeaturesWhenFlagOff() {
-        let coordinator = OnboardingCoordinator()
-        coordinator.startIfNeeded(completedAt: nil)
-        coordinator.advanceFromWelcome(featureEnablementEnabled: false)
-        XCTAssertEqual(coordinator.phase, .askBriefing)
-    }
-
     func testFeatureEnablementWithAIOffUsesStaticBriefing() {
         let coordinator = OnboardingCoordinator()
         coordinator.startIfNeeded(completedAt: nil)
-        coordinator.advanceFromWelcome(featureEnablementEnabled: true)
+        coordinator.advanceFromWelcome()
         coordinator.advanceFromFeatureEnablement(aiEnabled: false)
 
         XCTAssertEqual(coordinator.phase, .askBriefing)

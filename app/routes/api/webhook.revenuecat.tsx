@@ -1,5 +1,8 @@
 import { processRevenueCatWebhookEvent } from "~/lib/billing.server";
-import { checkRevenueCatWebhookProcessed } from "~/lib/billing-idempotency.server";
+import {
+	checkRevenueCatWebhookProcessed,
+	clearRevenueCatWebhookProcessed,
+} from "~/lib/billing-idempotency.server";
 import { log, redactId } from "~/lib/logging.server";
 import {
 	isRevenueCatFulfillmentEnabled,
@@ -45,7 +48,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 			});
 		}
 
-		const result = await processRevenueCatWebhookEvent(env, body, kv);
+		const result = await processRevenueCatWebhookEvent(env, body);
 
 		if (!result.handled) {
 			return new Response("Invalid payload", { status: 400 });
@@ -60,6 +63,15 @@ export async function action({ request, context }: Route.ActionArgs) {
 		log.error("RevenueCat webhook processing failed", error, {
 			eventId: eventId ? redactId(eventId) : undefined,
 		});
+		if (kv && eventId) {
+			const failedEventId = eventId;
+			await clearRevenueCatWebhookProcessed(kv, failedEventId).catch(
+				(clearError) =>
+					log.error("RevenueCat webhook idempotency clear failed", clearError, {
+						eventId: redactId(failedEventId),
+					}),
+			);
+		}
 		return new Response("Webhook processing failed", { status: 500 });
 	}
 }

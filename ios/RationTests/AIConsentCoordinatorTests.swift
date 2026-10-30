@@ -1,8 +1,7 @@
 import XCTest
 @testable import Ration
 
-/// Covers H-8 — the shared "proceed" gate used by all AI entry points
-/// (`ScanView`, `GenerateMealSheet`, `ImportRecipeSheet`, `PlanWeekSheet`, `SupplyView`).
+/// Covers the shared "proceed" gate used by every AI entry point.
 final class AIConsentCoordinatorTests: XCTestCase {
     @MainActor
     func testPresentIfNeededRunsImmediatelyWhenConsentAlreadyGranted() {

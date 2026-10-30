@@ -36,6 +36,9 @@ struct RationApp: App {
                     handleAuthHandoff(url)
                 }
                 .onChange(of: scenePhase) { _, phase in
+                    if phase == .background {
+                        WidgetCenter.shared.reloadAllTimelines()
+                    }
                     // Share Extension may fail to open the host (host-app policy).
                     // App Group payload is still consumed when the user returns to Ration.
                     guard phase == .active else { return }

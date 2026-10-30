@@ -36,7 +36,6 @@ final class NutritionStore {
 
     private let snapshots: SnapshotStore
     private var userId: String?
-    private var organizationId: String?
     private var generation = 0
     private var inFlight: [String: Task<NutritionSummary?, Never>] = [:]
     /// In-memory range cache (also mirrored to disk under `nutrition-summary`).
@@ -47,20 +46,19 @@ final class NutritionStore {
         self.snapshots = snapshots
     }
 
-    func configure(userId: String, organizationId: String, crossOrgDiary: Bool = false) {
-        // Cross-org diary shares one personal cache across kitchen switches.
-        let scopeOrganizationId = crossOrgDiary ? "_cross_org_diary_" : organizationId
-        if self.userId != userId || self.organizationId != scopeOrganizationId {
+    /// The diary is personal and spans kitchens, so one cache serves every kitchen switch.
+    private static let diaryScopeKey = "_cross_org_diary_"
+
+    func configure(userId: String) {
+        if self.userId != userId {
             bumpGeneration()
             self.userId = userId
-            self.organizationId = scopeOrganizationId
         }
     }
 
     func invalidate() {
         bumpGeneration()
         userId = nil
-        organizationId = nil
     }
 
     var summary: NutritionSummary? { loadState.summary }
@@ -288,8 +286,8 @@ final class NutritionStore {
     }
 
     private var privateScope: SnapshotScope? {
-        guard let userId, let organizationId else { return nil }
-        return .userOrganization(userId: userId, organizationId: organizationId)
+        guard let userId else { return nil }
+        return .userOrganization(userId: userId, organizationId: Self.diaryScopeKey)
     }
 
     private static func rangeKey(from: String, to: String) -> String {

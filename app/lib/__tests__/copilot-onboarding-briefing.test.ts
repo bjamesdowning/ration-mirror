@@ -28,7 +28,7 @@ import {
 } from "../copilot/onboarding-briefing.server";
 
 vi.mock("../feature-flags/flags.server", () => ({
-	buildFlagContext: vi.fn(() => ({})),
+	buildMobileFlagContext: vi.fn(() => ({})),
 	isFeatureEnabled: vi.fn(async () => true),
 }));
 

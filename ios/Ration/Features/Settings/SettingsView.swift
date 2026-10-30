@@ -121,10 +121,8 @@ struct SettingsView: View {
                 }
             }
 
-            if env.session.clientFlags.isNutritionGoalsEnabled {
-                Section("Nutrition") {
-                    Button("Nutrition Goals") { showingNutritionGoals = true }
-                }
+            Section("Nutrition") {
+                Button("Nutrition Goals") { showingNutritionGoals = true }
             }
 
             if let settings = model.settings {

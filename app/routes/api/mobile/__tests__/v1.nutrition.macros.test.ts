@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { FEATURE_DISABLED_CODE } from "~/lib/feature-flags/assert-enabled.server";
 import { createMockEnv, createMockFlagship } from "~/test/helpers/mock-env";
 
 const requireMobileActiveGroup = vi.fn();
@@ -54,7 +53,7 @@ const summary = {
 	goal: null,
 };
 
-function makeContext(flagOn: boolean) {
+function makeContext(flagOn = true) {
 	const env = {
 		...createMockEnv(),
 		FLAGS: createMockFlagship({
@@ -83,25 +82,30 @@ describe("GET /api/mobile/v1/nutrition/macros", () => {
 		checkRateLimit.mockResolvedValue({ allowed: true });
 	});
 
-	it("returns 403 FEATURE_DISABLED when the flag is off", async () => {
-		try {
-			await loader({
-				request: makeRequest(),
-				context: makeContext(false),
-				params: {},
-			} as never);
-			expect.unreachable("expected loader to throw");
-		} catch (error) {
-			expect(error).toMatchObject({
-				type: "DataWithResponseInit",
-				data: { code: FEATURE_DISABLED_CODE },
-				init: { status: 403 },
-			});
-		}
-		expect(getMacrosHistory).not.toHaveBeenCalled();
+	it("passes the iOS client context to the service gates", async () => {
+		getMacrosHistory.mockResolvedValue({
+			current: summary,
+			previous: summary,
+			notes: [],
+		});
+		await loader({
+			request: makeRequest(),
+			context: makeContext(false),
+			params: {},
+		} as never);
+		expect(getMacrosHistory).toHaveBeenCalledWith(
+			expect.anything(),
+			expect.objectContaining({ userId: "user-1", surface: "mobile" }),
+			expect.objectContaining({
+				clientPlatform: "ios",
+				clientVersion: "1.5.10",
+			}),
+			"2026-10-25",
+			"2026-10-31",
+		);
 	});
 
-	it("returns both periods when the flag is on", async () => {
+	it("returns both periods", async () => {
 		getMacrosHistory.mockResolvedValue({
 			current: summary,
 			previous: { ...summary, from: "2026-10-18", to: "2026-10-24" },

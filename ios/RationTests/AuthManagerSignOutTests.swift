@@ -1,10 +1,8 @@
 import XCTest
 @testable import Ration
 
-/// Regression coverage for H-2 (+ bundled M-12) — see
-/// `AuthManager.signOutLocal()`. Uses the real Keychain wrapper and a real
-/// `AuthManager` instance, per this codebase's existing test convention of
-/// real instances over mocks.
+/// Covers `AuthManager.signOutLocal()` with the real Keychain wrapper and a
+/// real `AuthManager` instance.
 final class AuthManagerSignOutTests: XCTestCase {
     private let pkceVerifierKey = "pkce_verifier"
 

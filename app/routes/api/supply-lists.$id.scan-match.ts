@@ -3,7 +3,6 @@ import { requireActiveGroup } from "~/lib/auth.server";
 import { handleApiError } from "~/lib/error-handler";
 import { assertFeatureEnabled } from "~/lib/feature-flags/assert-enabled.server";
 import { buildWebFlagContext } from "~/lib/feature-flags/context.server";
-import { buildFlagContext } from "~/lib/feature-flags/flags.server";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import { SupplyScanMatchQuerySchema } from "~/lib/schemas/supply-scan";
 import { resolveSupplyListTarget } from "~/lib/supply-list-access.server";
@@ -36,7 +35,7 @@ export async function loader({ request, context, params }: Route.LoaderArgs) {
 	await assertFeatureEnabled(
 		env,
 		"ai-dock-from-receipt",
-		buildFlagContext(request, env, { user }),
+		buildWebFlagContext(request, env, { user }),
 	);
 
 	const rateLimitResult = await checkRateLimit(

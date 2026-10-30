@@ -31,12 +31,6 @@ final class ManifestViewModel {
     /// Rocker / Today busy state — separate from cold `isLoading` so refresh cannot clear mid-nav.
     var isWeekNavigationBusy: Bool { isNavigatingWeek || isLoading }
 
-    enum ConsumeOutcome: Sendable {
-        case success(undoToken: String?)
-        case needsConfirmation(missing: [MissingIngredientDetail])
-        case failed
-    }
-
     enum CookOutcome: Sendable {
         case success(undoToken: String?)
         case needsConfirmation(missing: [MissingIngredientDetail])
@@ -54,7 +48,7 @@ final class ManifestViewModel {
         case failed
     }
 
-    /// Day-keyed nutrient totals for the visible range (nutrition-goals / nutrition-manifest).
+    /// Day-keyed nutrient totals for the visible range.
     private(set) var nutritionSummary: NutritionSummary?
     /// True when `nutritionSummary` is shown from offline/private cache.
     private(set) var nutritionSummaryOffline = false
@@ -147,8 +141,7 @@ final class ManifestViewModel {
                 api: api,
                 online: online,
                 nutrition: nutrition,
-                userId: userId,
-                organizationId: organizationId
+                userId: userId
             )
             return
         }
@@ -179,8 +172,7 @@ final class ManifestViewModel {
                 api: api,
                 online: online,
                 nutrition: nutrition,
-                userId: userId,
-                organizationId: organizationId
+                userId: userId
             )
         } catch {
             guard rangeStart == requestedStart else { return }
@@ -324,8 +316,7 @@ final class ManifestViewModel {
                         api: api,
                         online: online,
                         nutrition: nutrition,
-                        userId: userId,
-                        organizationId: organizationId
+                        userId: userId
                     )
                 }
                 // A superseded in-flight save can finish after a newer week was cached —
@@ -355,8 +346,7 @@ final class ManifestViewModel {
                     api: api,
                     online: online,
                     nutrition: nutrition,
-                    userId: userId,
-                    organizationId: organizationId
+                    userId: userId
                 )
             } else {
                 offlineBannerMessage = "Offline — no cached manifest data for this week"
@@ -402,45 +392,7 @@ final class ManifestViewModel {
         }
     }
 
-    func consume(
-        _ entry: ManifestEntry,
-        confirmInsufficient: Bool = false,
-        api: RationAPI,
-        snapshots: SnapshotStore,
-        online: Bool,
-        organizationId: String,
-        userId: String
-    ) async -> ConsumeOutcome {
-        do {
-            let result = try await api.consumeManifestEntries(
-                [entry.id],
-                confirmInsufficient: confirmInsufficient ? true : nil
-            )
-            if result.requiresConfirmation == true,
-               let missing = result.missingIngredients,
-               !missing.isEmpty,
-               !confirmInsufficient
-            {
-                return .needsConfirmation(missing: missing)
-            }
-            Haptics.success()
-            markEntryConsumedLocally(entryId: entry.id)
-            let undoToken = result.undoToken
-            await reloadManifestSilently(
-                api: api,
-                snapshots: snapshots,
-                online: online,
-                organizationId: organizationId,
-                userId: userId
-            )
-            return .success(undoToken: undoToken)
-        } catch {
-            errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
-            return .failed
-        }
-    }
-
-    /// Split Cook — org-shared Cargo/preparation mutation. Never writes personal nutrition.
+    /// Cook — org-shared Cargo/preparation mutation. Never writes personal nutrition.
     func cook(
         _ entry: ManifestEntry,
         confirmInsufficient: Bool = false,
@@ -545,15 +497,14 @@ final class ManifestViewModel {
     }
 
     /// Loads day-keyed nutrient totals for the currently visible range via `NutritionStore`.
-    /// Offline shows private cached summary when available (never a legacy org-only cache).
+    /// Offline shows the private cached summary when available.
     func loadNutritionSummary(
         api: RationAPI,
         online: Bool,
         nutrition: NutritionStore,
-        userId: String,
-        organizationId: String
+        userId: String
     ) async {
-        nutrition.configure(userId: userId, organizationId: organizationId)
+        nutrition.configure(userId: userId)
         let endDate = ManifestDateHelpers.addDays(rangeStart, days: max(calendarSpan - 1, 0))
         let summary = await nutrition.loadSummary(
             from: rangeStart,
@@ -607,12 +558,6 @@ final class ManifestViewModel {
         )
     }
 
-    private func markEntryConsumedLocally(entryId: String) {
-        updateEntry(entryId) { entry in
-            entry.consumedAt = Date()
-        }
-    }
-
     /// Optimistic local patch after a successful Cook — dual-writes `cookedAt` +
     /// legacy `consumedAt` to mirror the server (`cookManifestEntries`).
     func markEntryCookedLocally(entryId: String) {
@@ -662,7 +607,7 @@ final class ManifestViewModel {
             applySupplyDayInclusion(from: data)
             await snapshots.save(data, domain: SnapshotDomain.manifest, scope: scope)
         } catch {
-            // Consume succeeded — do not surface reload failures as errors.
+            // Mutation succeeded — do not surface reload failures as errors.
         }
     }
 

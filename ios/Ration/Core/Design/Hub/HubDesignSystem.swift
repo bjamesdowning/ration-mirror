@@ -61,22 +61,6 @@ enum HubDateFormat {
     }
 }
 
-struct HubDateChip: View {
-    let isoDate: String
-    var isToday: Bool = false
-    var isSelected: Bool = false
-
-    var body: some View {
-        Text(HubDateFormat.smartLabel(isoDate: isoDate))
-            .font(Typography.caption())
-            .foregroundStyle(isSelected || isToday ? Theme.onHyperGreen : Theme.carbon)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(isSelected || isToday ? Theme.hyperGreen : Theme.platinum)
-            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-    }
-}
-
 struct HubSlotBadge: View {
     let slotType: String
 

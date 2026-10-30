@@ -3,6 +3,7 @@ import { z } from "zod";
 import { AIConsentRequiredError } from "./ai-consent.server";
 import { CapacityExceededError } from "./capacity.server";
 import { FeatureEnablementAffirmationError } from "./feature-enablement.server";
+import { InvalidRationClientHeaderError } from "./feature-flags/context.server";
 import { CreditForfeitUnacknowledgedError } from "./group-delete-credits";
 import { GroupMembershipError } from "./group-membership.server";
 import { log } from "./logging.server";
@@ -259,6 +260,13 @@ export function handleApiError(error: unknown) {
 	// Re-throw RR data() responses so the framework handles them
 	if (isDataWithResponseInit(error)) {
 		throw error;
+	}
+
+	if (error instanceof InvalidRationClientHeaderError) {
+		return data(
+			{ error: error.message, code: "invalid_client_header" as const },
+			{ status: 400 },
+		);
 	}
 
 	if (error instanceof CreditForfeitUnacknowledgedError) {

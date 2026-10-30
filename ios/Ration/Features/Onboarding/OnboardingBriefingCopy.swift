@@ -38,7 +38,7 @@ Use today's date from context to calculate the expiry date. Add the item with ad
     static let staticReplayMarkdown = """
     Ration is your **orbital supply chain** for the kitchen — a single system that connects what you stock, what you cook, what you plan, and what you need to buy.
 
-    **Cargo** is your pantry. **Galley** holds recipes mapped to those ingredients. **Manifest** is your weekly meal plan. **Supply** turns that plan into a shopping list.
+    **Cargo** is your pantry. **Galley** holds recipes mapped to those ingredients. **Manifest** is your weekly meal plan. **Supply** turns that plan into your **Live Supply** shopping list, and saved lists under **Lists** keep the ones you reuse.
 
     **Fastest start:** open **Cargo** and add a few pantry items. Once Cargo reflects what you have, Galley and Manifest become much more useful.
 

@@ -290,12 +290,10 @@ struct WeekNavigator: View {
     var weekStartPref: String = "sunday"
     var entryDates: Set<String> = []
     var isLoading: Bool = false
-    /// Optional day-keyed nutrient totals (nutrition-goals / nutrition-manifest). Empty hides the line.
+    /// Optional day-keyed nutrient totals. Empty hides the line.
     var nutritionByDate: [String: NutritionDayTotals] = [:]
-    /// Active goal from nutrition summary — drives progress chrome when goals are enabled.
+    /// Active goal from nutrition summary — drives progress chrome.
     var nutritionGoal: NutritionSummary.Goal?
-    /// When true, show goal progress / empty-goals affordance (nutrition-goals flag).
-    var showNutritionGoals: Bool = false
     /// Tapping the nutrient line opens Nutrition Goals — `nil` renders it as static text.
     var onTapNutrientLine: (() -> Void)?
     /// Tapping the range label opens the jump calendar — `nil` keeps the label non-interactive.
@@ -342,12 +340,8 @@ struct WeekNavigator: View {
     }
 
     private var shouldShowNutrientStrip: Bool {
-        if showNutritionGoals {
-            if let goal = nutritionGoal, goal.hasAnyManifestTarget { return true }
-            // Empty-goals affordance when flags on.
-            return onTapNutrientLine != nil
-        }
-        return (selectedDayNutrition?.entryCount ?? 0) > 0
+        if let goal = nutritionGoal, goal.hasAnyManifestTarget { return true }
+        return onTapNutrientLine != nil
     }
 
     var body: some View {
@@ -430,21 +424,17 @@ struct WeekNavigator: View {
 
     @ViewBuilder
     private func dayNutrientStrip(_ totals: NutritionDayTotals) -> some View {
-        if showNutritionGoals {
-            if let goal = nutritionGoal, goal.hasAnyManifestTarget {
-                goalProgressStrip(day: totals, goal: goal)
-            } else if let onTapNutrientLine {
-                Button(action: onTapNutrientLine) {
-                    Text("No goals · Set targets")
-                        .font(Typography.dataCaption())
-                        .foregroundStyle(Theme.muted)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .buttonStyle(.borderless)
-                .accessibilityHint("Opens Nutrition Goals")
+        if let goal = nutritionGoal, goal.hasAnyManifestTarget {
+            goalProgressStrip(day: totals, goal: goal)
+        } else if let onTapNutrientLine {
+            Button(action: onTapNutrientLine) {
+                Text("No goals · Set targets")
+                    .font(Typography.dataCaption())
+                    .foregroundStyle(Theme.muted)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
-        } else {
-            absoluteNutrientLine(totals)
+            .buttonStyle(.borderless)
+            .accessibilityHint("Opens Nutrition Goals")
         }
     }
 
@@ -498,32 +488,6 @@ struct WeekNavigator: View {
                 .accessibilityHint("Opens Nutrition Goals")
         } else {
             content()
-        }
-    }
-
-    @ViewBuilder
-    private func absoluteNutrientLine(_ totals: NutritionDayTotals) -> some View {
-        let content = HStack(spacing: 10) {
-            Label("\(Int(totals.energyKcal.rounded())) kcal", systemImage: "bolt.fill")
-            Text("P \(Int(totals.proteinG.rounded()))g")
-            Text("C \(Int(totals.carbsG.rounded()))g")
-            Text("F \(Int(totals.fatG.rounded()))g")
-        }
-        .font(Typography.dataCaption())
-        .foregroundStyle(Theme.muted)
-
-        let label = "\(Int(totals.energyKcal.rounded())) calories, \(Int(totals.proteinG.rounded())) grams protein, \(Int(totals.carbsG.rounded())) grams carbs, \(Int(totals.fatG.rounded())) grams fat logged today"
-
-        if let onTapNutrientLine {
-            Button(action: onTapNutrientLine) { content }
-                .buttonStyle(.borderless)
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel(label)
-                .accessibilityHint("Opens Nutrition Goals")
-        } else {
-            content
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel(label)
         }
     }
 

@@ -9,6 +9,7 @@ import {
 	purgeExpiredKitchenEvents,
 } from "../app/lib/kitchen-events.server";
 import { log, redactJobRequestId } from "../app/lib/logging.server";
+import { mobileUpgradeRequiredResponse } from "../app/lib/mobile/minimum-version.server";
 import { repairDueNutritionRecomputeJobs } from "../app/lib/nutrition/recompute-consumer.server";
 import { fetchLogContext, runWithOpsEnv } from "../app/lib/ops-context.server";
 import { sendReengagementEmails } from "../app/lib/reengagement-cron.server";
@@ -69,6 +70,12 @@ export default {
 				) {
 					return new Response(null, { status: 404 });
 				}
+
+				const upgradeRequired = mobileUpgradeRequiredResponse(
+					request,
+					env.IOS_MIN_SUPPORTED_VERSION,
+				);
+				if (upgradeRequired) return upgradeRequired;
 
 				const context = {
 					request,

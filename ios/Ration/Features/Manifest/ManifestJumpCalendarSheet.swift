@@ -7,7 +7,6 @@ struct ManifestJumpCalendarSheet: View {
 
     let initialDay: String
     var weekStartPref: String = "sunday"
-    var showConsumedMarkers: Bool = false
     var loadMarkers: (String, String) async throws -> (planned: [String], consumed: [String])
     var onSelect: (String) -> Void
 
@@ -26,13 +25,11 @@ struct ManifestJumpCalendarSheet: View {
     init(
         initialDay: String,
         weekStartPref: String = "sunday",
-        showConsumedMarkers: Bool = false,
         loadMarkers: @escaping (String, String) async throws -> (planned: [String], consumed: [String]),
         onSelect: @escaping (String) -> Void
     ) {
         self.initialDay = initialDay
         self.weekStartPref = weekStartPref
-        self.showConsumedMarkers = showConsumedMarkers
         self.loadMarkers = loadMarkers
         self.onSelect = onSelect
         let parsed = ManifestDateHelpers.parseYearMonth(initialDay)
@@ -163,11 +160,7 @@ struct ManifestJumpCalendarSheet: View {
     }
 
     private var legend: some View {
-        Text(
-            showConsumedMarkers
-                ? "Green dots mark planned meals · gray marks logged intake"
-                : "Green dots mark planned meals"
-        )
+        Text("Green dots mark planned meals · gray marks logged intake")
         .font(Typography.mono(10))
         .foregroundStyle(Theme.muted)
         .multilineTextAlignment(.center)
@@ -181,7 +174,7 @@ struct ManifestJumpCalendarSheet: View {
         let isToday = date == today
         let isSelected = date == selectedDay
         let hasPlan = plannedDates.contains(date)
-        let hasIntake = showConsumedMarkers && consumedDates.contains(date)
+        let hasIntake = consumedDates.contains(date)
         let dayNumber = Int(date.suffix(2)) ?? 0
 
         Button {

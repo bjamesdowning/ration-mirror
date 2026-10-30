@@ -1,6 +1,5 @@
 import { data } from "react-router";
 import { handleApiError } from "~/lib/error-handler";
-import { assertFeatureEnabled } from "~/lib/feature-flags/assert-enabled.server";
 import { buildMobileFlagContext } from "~/lib/feature-flags/flags.server";
 import { requireMobileActiveGroup } from "~/lib/mobile/auth.server";
 import { serializeNutritionSummary } from "~/lib/nutrition/dto.server";
@@ -11,7 +10,7 @@ import type { Route } from "./+types/v1.nutrition.macros";
 
 /**
  * GET /api/mobile/v1/nutrition/macros?from=&to=
- * Gated by `nutrition-macros-history` (and `nutrition-manifest` inside the service).
+ * Gated by `nutrition-engine` and `nutrition-manifest` inside the service.
  */
 export async function loader({ request, context }: Route.LoaderArgs) {
 	try {
@@ -23,7 +22,6 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		const flagContext = buildMobileFlagContext(request, env, {
 			user: { id: userId },
 		});
-		await assertFeatureEnabled(env, "nutrition-macros-history", flagContext);
 
 		const rateLimitResult = await checkRateLimit(
 			env.RATION_KV,

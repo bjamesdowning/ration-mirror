@@ -10,9 +10,12 @@ enum WidgetKeychain {
     @discardableResult
     static func set(_ value: String, for key: String) -> Bool {
         let query = base(key)
-        SecItemDelete(query as CFDictionary)
+        let data = Data(value.utf8)
+        if SecItemUpdate(query as CFDictionary, [kSecValueData as String: data] as CFDictionary) == errSecSuccess {
+            return true
+        }
         var add = query
-        add[kSecValueData as String] = Data(value.utf8)
+        add[kSecValueData as String] = data
         add[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
         return SecItemAdd(add as CFDictionary, nil) == errSecSuccess
     }

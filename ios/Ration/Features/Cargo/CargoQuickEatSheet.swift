@@ -18,7 +18,6 @@ struct CargoQuickEatSheet: View {
 
     private var stockEmpty: Bool { item.quantity <= 0 }
     private var remaining: Double { max(0, item.quantity - quantity) }
-    private var notesEnabled: Bool { env.session.clientFlags.isNutritionIntakeNotesEnabled }
 
     var body: some View {
         NavigationStack {
@@ -61,12 +60,10 @@ struct CargoQuickEatSheet: View {
                         : "Estimates scale with amount. Saving logs nutrients to your private intake when available. Not medical advice. Goals and totals are planning aids only.")
                         .rationCaption()
                 }
-                if notesEnabled {
-                    Section {
-                        IntakeNotesField(notes: $notes)
-                    } header: {
-                        Text("Notes")
-                    }
+                Section {
+                    IntakeNotesField(notes: $notes)
+                } header: {
+                    Text("Notes")
                 }
                 if let errorMessage {
                     Section {
@@ -199,7 +196,7 @@ struct CargoQuickEatSheet: View {
         isSaving = true
         errorMessage = nil
         defer { isSaving = false }
-        let notePayload = notesEnabled ? IntakeNotesField.payload(from: notes) : nil
+        let notePayload = IntakeNotesField.payload(from: notes)
         if needsMassLink {
             do {
                 try await persistUnitMassIfNeeded()

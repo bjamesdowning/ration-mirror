@@ -10,7 +10,7 @@ export const MobileCreateSupplyItemSchema = SupplyItemSchema;
 export const MobileUpdateSupplyItemSchema = SupplyItemUpdateSchema;
 
 /**
- * Query params for `GET /supply` (see H-4) — bounds the item-row fetch.
+ * Query params for `GET /supply`; bounds the item-row fetch.
  * Default limit of 200 matches the `d1-query-safety.mdc` guidance for
  * cargo-adjacent-volume endpoints.
  */

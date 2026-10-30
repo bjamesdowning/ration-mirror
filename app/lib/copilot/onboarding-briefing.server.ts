@@ -1,6 +1,6 @@
 import { sha256Hex } from "../crypto.server";
 import {
-	buildFlagContext,
+	buildMobileFlagContext,
 	isFeatureEnabled,
 } from "../feature-flags/flags.server";
 import type { UserSettings } from "../types";
@@ -44,11 +44,6 @@ function promptHash(prompt: string): Promise<string> {
 		promptHashCache.set(normalized, pending);
 	}
 	return pending;
-}
-
-/** @deprecated Prefer resolveOnboardingBriefingTurn — kept for bootstrap-hash callers. */
-export function getOnboardingBriefingPromptHash(): Promise<string> {
-	return promptHash(ONBOARDING_BRIEFING_BOOTSTRAP_PROMPT);
 }
 
 export async function resolveOnboardingBriefingTurn(
@@ -186,13 +181,12 @@ export async function isWithinOnboardingBriefingAccountAge(
 	return now - createdMs <= ONBOARDING_BRIEFING_ACCOUNT_MAX_AGE_MS;
 }
 
-export async function isOnboardingBriefingFeatureEnabled(
+async function isOnboardingBriefingFeatureEnabled(
 	env: Env,
-	request: Request | undefined,
+	request: Request,
 	userId: string,
 ): Promise<boolean> {
-	if (!request) return false;
-	const flagContext = buildFlagContext(request, env, {
+	const flagContext = buildMobileFlagContext(request, env, {
 		user: { id: userId },
 	});
 	return isFeatureEnabled(env, "copilot-onboarding-free", flagContext);
@@ -210,7 +204,7 @@ export async function isEligibleForOnboardingBriefing(
 ): Promise<boolean> {
 	const { env, userId, tier, request } = input;
 	if (tier === "crew_member") return false;
-	if (!isIosCopilotClient(request)) return false;
+	if (!request || !isIosCopilotClient(request)) return false;
 	if (!(await isOnboardingBriefingFeatureEnabled(env, request, userId))) {
 		return false;
 	}

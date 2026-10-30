@@ -12,9 +12,8 @@ struct FeatureEnablementView: View {
         case settings
     }
 
-    @State private var aiFeatures = true
-    @State private var macroTracking = true
-    @State private var loaded = false
+    @State private var aiFeatures = false
+    @State private var macroTracking = false
     @State private var isSaving = false
     @State private var errorMessage: String?
     @State private var showStatements = false
@@ -42,7 +41,7 @@ struct FeatureEnablementView: View {
                         .font(.title2.bold())
                         .foregroundStyle(Theme.carbon)
                     Text(
-                        "Choose what Ration can do for you. Everything useful is on by default — turn something off only if you do not want it."
+                        "Turn on the features you want. Both are optional, and you can change them anytime in Account → Feature enablement."
                     )
                     .font(.subheadline)
                     .foregroundStyle(Theme.muted)
@@ -63,7 +62,7 @@ struct FeatureEnablementView: View {
             Button {
                 Task { await agreeAndContinue() }
             } label: {
-                Text(isSaving ? "Saving…" : "Agree & Continue")
+                Text(isSaving ? "Saving…" : (aiFeatures || macroTracking ? "Agree & Continue" : "Continue"))
             }
             .buttonStyle(PrimaryButtonStyle())
             .disabled(isSaving)
@@ -122,9 +121,7 @@ struct FeatureEnablementView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("AI Features")
                         .font(.body.weight(.semibold))
-                    Text(
-                        "Scan, generate meals, Ask Ration, and auto-use credits when your Crew allowance runs out."
-                    )
+                    Text(AIConsentCopy.disclosure)
                     .font(.caption)
                     .foregroundStyle(Theme.muted)
                 }
@@ -171,7 +168,7 @@ struct FeatureEnablementView: View {
 
     private var privacyFooter: some View {
         Text(
-            "You can change this anytime in Settings. See the Privacy Policy for details."
+            "Turning a feature on records your consent. See the Privacy Policy for details."
         )
         .font(.caption2)
         .foregroundStyle(Theme.muted)
@@ -180,19 +177,11 @@ struct FeatureEnablementView: View {
     private func loadStatus() async {
         do {
             let status = try await env.api.featureEnablement()
-            // First-time onboarding: keep defaults ON until Agree.
-            if variant == .onboarding, !loaded {
-                aiFeatures = true
-                macroTracking = true
-            } else {
-                aiFeatures = status.aiFeatures
-                macroTracking = status.macroTracking
-            }
+            aiFeatures = status.aiFeatures
+            macroTracking = status.macroTracking
             statements = status.consents
-            loaded = true
         } catch {
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
-            loaded = true
         }
     }
 

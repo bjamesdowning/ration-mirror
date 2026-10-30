@@ -57,8 +57,6 @@ export async function action({ request, context }: Route.ActionArgs) {
 			...new Set(parsed.data.names.map((n) => n.trim())),
 		].filter(Boolean);
 
-		// Deprecated body allowAiEstimate is ignored; only ingestSource gates AI.
-		void parsed.data.allowAiEstimate;
 		const allowAiEstimate = allowAiEstimateForResolveIngestSource(
 			parsed.data.ingestSource,
 		);

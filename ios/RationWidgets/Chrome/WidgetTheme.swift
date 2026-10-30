@@ -9,7 +9,6 @@ struct WidgetPalette {
     var platinum: Color
     var hyperGreen: Color
     var warning: Color
-    var fullColor: Bool
 
     static let hyperGreen = Color(hex: 0x00E088)
     static let warning = Color(hex: 0xF59E0B)
@@ -20,16 +19,14 @@ struct WidgetPalette {
         rendering: WidgetRenderingMode
     ) -> WidgetPalette {
         let scheme = appearance.resolved(system: system)
-        let fullColor = rendering == .fullColor
-        if !fullColor {
+        if rendering != .fullColor {
             return WidgetPalette(
                 ceramic: .clear,
                 carbon: .primary,
                 muted: .secondary,
                 platinum: Color.primary.opacity(0.15),
                 hyperGreen: .primary,
-                warning: .primary,
-                fullColor: false
+                warning: .primary
             )
         }
         let dark = scheme == .dark
@@ -39,8 +36,7 @@ struct WidgetPalette {
             muted: Color(hex: dark ? 0x9CA3AF : 0x6B7280),
             platinum: Color(hex: dark ? 0x1A1A1A : 0xE6E6E6),
             hyperGreen: hyperGreen,
-            warning: warning,
-            fullColor: true
+            warning: warning
         )
     }
 }

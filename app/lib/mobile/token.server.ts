@@ -325,16 +325,3 @@ export async function assertMobileOrgMembership(
 		throw new Error("forbidden_org");
 	}
 }
-
-export async function getActiveMobileRefreshCount(
-	env: Cloudflare.Env,
-	userId: string,
-): Promise<number> {
-	const db = drizzle(env.DB, { schema });
-	const rows = await db.query.mobileRefreshToken.findMany({
-		where: eq(schema.mobileRefreshToken.userId, userId),
-		columns: { id: true, revokedAt: true, expiresAt: true },
-	});
-	const now = new Date();
-	return rows.filter((r) => !r.revokedAt && r.expiresAt >= now).length;
-}

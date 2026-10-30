@@ -53,14 +53,6 @@ extension RationAPI {
         )
     }
 
-    func addSupplyItem(_ body: CreateSupplyItemRequest) async throws -> CreateSupplyItemResponse {
-        try await client.post("supply/items", body: body)
-    }
-
-    func addSupplyItem(listId: String, _ body: CreateSupplyItemRequest) async throws -> CreateSupplyItemResponse {
-        try await client.post("supply/lists/\(listId)/items", body: body)
-    }
-
     func deleteSupplyItem(_ id: String) async throws {
         let _: EmptyResponse = try await client.delete("supply/items/\(id)")
     }
@@ -107,10 +99,6 @@ extension RationAPI {
             "supply/lists/\(listId)/bulk-add",
             body: SupplyBulkAddRequest(text: text)
         )
-    }
-
-    func renameSupplyList(id: String, name: String) async throws -> SupplyResponse {
-        try await client.put("supply/lists/\(id)", body: SupplyRenameRequest(name: name))
     }
 
     func deleteSupplyList(id: String) async throws -> SupplyDeleteResponse {
@@ -206,14 +194,6 @@ extension RationAPI {
 
     func archiveSupplyList(id: String) async throws -> SupplyResponse {
         try await client.post("supply/lists/\(id)/archive", body: EmptyBody())
-    }
-
-    func resetPurchasedSupplyList(id: String) async throws -> SupplyResponse {
-        try await client.post("supply/lists/\(id)/reset-purchased", body: EmptyBody())
-    }
-
-    func completeNamedSupplyList(id: String) async throws -> SupplyCompleteResponse {
-        try await client.post("supply/lists/\(id)/complete", body: EmptyBody())
     }
 
     func saveSupplyListFromReceipt(_ body: SupplyFromReceiptRequest) async throws -> SupplyResponse {

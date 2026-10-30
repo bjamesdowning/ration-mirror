@@ -41,21 +41,6 @@ struct TelemetryTypeBadge: View {
     }
 }
 
-struct TelemetryQtyPill: View {
-    let quantity: String
-    let unit: String
-
-    var body: some View {
-        Text("\(quantity) \(unit)")
-            .font(Typography.dataCaption())
-            .foregroundStyle(Theme.carbon)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(Theme.platinum)
-            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-    }
-}
-
 // MARK: - Cargo row
 
 extension CargoItem {
@@ -263,17 +248,13 @@ struct MealRowView: View {
 struct ManifestEntryRow: View {
     @Environment(AppEnvironment.self) private var env
     let entry: ManifestEntry
-    /// Fail-closed default — legacy single-tap Consume until flags say otherwise.
-    var flags: ManifestEntryActionPolicy.Flags = .disabled
-    let onConsume: () -> Void
-    var onCook: () -> Void = {}
+    let onCook: () -> Void
     var onLogServing: () -> Void = {}
     var onEditServing: () -> Void = {}
     @ScaledMetric(relativeTo: .body) private var consumeIconPoints: CGFloat = 28
 
     private var action: ManifestEntryAction {
         ManifestEntryActionPolicy.primaryAction(
-            flags: flags,
             isCooked: entry.isCooked,
             hasPersonalIntake: entry.personalIntake != nil
         )
@@ -319,10 +300,15 @@ struct ManifestEntryRow: View {
     @ViewBuilder
     private var actionControl: some View {
         switch action {
-        case .legacyConsume:
-            prepareButton(action: onConsume)
         case .cook:
-            prepareButton(action: onCook)
+            Button(action: onCook) {
+                Image(systemName: "fork.knife.circle.fill")
+                    .font(Typography.mono(consumeIconPoints))
+                    .foregroundStyle(Theme.hyperGreen)
+                    .frame(minWidth: 44, minHeight: 44)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(ManifestEntryActionPolicy.accessibilityLabel(for: action))
         case .logServing:
             Button(action: onLogServing) {
                 Image(systemName: "plus.circle.fill")
@@ -349,43 +335,6 @@ struct ManifestEntryRow: View {
             .buttonStyle(.plain)
             .accessibilityLabel(ManifestEntryActionPolicy.accessibilityLabel(for: action))
             .accessibilityIdentifier("manifest.eat.\(entry.id)")
-        case .none:
-            Image(systemName: "checkmark.seal.fill")
-                .foregroundStyle(Theme.hyperGreen)
-                .accessibilityLabel(ManifestEntryActionPolicy.accessibilityLabel(for: action))
         }
-    }
-
-    private func prepareButton(action performAction: @escaping () -> Void) -> some View {
-        Button(action: performAction) {
-            Image(systemName: "fork.knife.circle.fill")
-                .font(Typography.mono(consumeIconPoints))
-                .foregroundStyle(Theme.hyperGreen)
-                .frame(minWidth: 44, minHeight: 44)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(ManifestEntryActionPolicy.accessibilityLabel(for: action))
-    }
-}
-
-private extension ManifestEntry {
-    func manifestStubMeal() -> Meal {
-        Meal(
-            id: mealId,
-            organizationId: "",
-            name: mealName,
-            domain: "food",
-            type: mealType,
-            description: nil,
-            directions: nil,
-            equipment: [],
-            servings: mealServings,
-            prepTime: mealPrepTime,
-            cookTime: mealCookTime,
-            createdAt: Date(),
-            updatedAt: Date(),
-            tags: [],
-            ingredients: []
-        )
     }
 }

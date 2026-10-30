@@ -29,29 +29,27 @@ struct CargoDetailView: View {
                         if !item.tags.isEmpty {
                             tagsSection(item.tags)
                         }
-                        if env.session.clientFlags.isNutritionEngineEnabled {
-                            NutritionDetailSection(
-                                title: item.nutrition?.nutritionSectionTitle ?? "Nutrition",
-                                nutrients: item.nutrition?.displayNutrients,
-                                provenance: item.nutrition?.provenanceLabel ?? "Blank",
-                                matchedDescription: item.nutrition?.description,
-                                emptyMessage: "No nutrition data yet. Tap refresh to look up USDA values, or edit macros on this item.",
-                                refreshMessage: model.nutritionRefreshMessage,
-                                isRefreshing: model.isRefreshingNutrition,
-                                onRefresh: env.network.isOnline
-                                    ? {
-                                        if item.nutrition?.source == "user_override" {
-                                            showingRefreshNutritionConfirm = true
-                                        } else {
-                                            Task {
-                                                await model.refreshNutrition(api: env.api)
-                                                env.notifyCargoDataChanged()
-                                            }
+                        NutritionDetailSection(
+                            title: item.nutrition?.nutritionSectionTitle ?? "Nutrition",
+                            nutrients: item.nutrition?.displayNutrients,
+                            provenance: item.nutrition?.provenanceLabel ?? "Blank",
+                            matchedDescription: item.nutrition?.description,
+                            emptyMessage: "No nutrition data yet. Tap refresh to look up USDA values, or edit macros on this item.",
+                            refreshMessage: model.nutritionRefreshMessage,
+                            isRefreshing: model.isRefreshingNutrition,
+                            onRefresh: env.network.isOnline
+                                ? {
+                                    if item.nutrition?.source == "user_override" {
+                                        showingRefreshNutritionConfirm = true
+                                    } else {
+                                        Task {
+                                            await model.refreshNutrition(api: env.api)
+                                            env.notifyCargoDataChanged()
                                         }
                                     }
-                                    : nil
-                            )
-                        }
+                                }
+                                : nil
+                        )
                         connectedMealsSection(cargoItem: item)
                     }
                     .padding(16)
@@ -68,18 +66,16 @@ struct CargoDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .tabDockAction(tag: .cargo, layer: .detail, isActive: currentMainTab == .cargo) {
             IconFABMenuCore(systemImage: "ellipsis.circle.fill", accessibilityLabel: "Cargo actions") {
-                if env.session.clientFlags.isCargoQuickEatEnabled {
-                    Button { showingQuickEat = true } label: {
-                        Label {
-                            Text("Eat")
-                        } icon: {
-                            Image(systemName: "carrot")
-                                .symbolRenderingMode(.monochrome)
-                        }
+                Button { showingQuickEat = true } label: {
+                    Label {
+                        Text("Eat")
+                    } icon: {
+                        Image(systemName: "carrot")
+                            .symbolRenderingMode(.monochrome)
                     }
-                    .tint(Theme.warning)
-                    .disabled(model.item == nil || model.isQuickEating || !env.network.isOnline)
                 }
+                .tint(Theme.warning)
+                .disabled(model.item == nil || model.isQuickEating || !env.network.isOnline)
                 Button {
                     Task { await handlePromote() }
                 } label: {

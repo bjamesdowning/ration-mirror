@@ -26,15 +26,12 @@ enum Keychain {
             kSecAttrService as String: service,
             kSecAttrAccount as String: key,
         ]
-        let deleteStatus = SecItemDelete(query as CFDictionary)
-        #if DEBUG
-        if deleteStatus != errSecSuccess,
-           deleteStatus != errSecItemNotFound,
-           deleteStatus != missingEntitlement
-        {
-            assertionFailure("Keychain delete failed: \(deleteStatus)")
-        }
-        #endif
+        // Update in place so the shared item is never briefly missing for the widget.
+        let updateStatus = SecItemUpdate(
+            query as CFDictionary,
+            [kSecValueData as String: data] as CFDictionary
+        )
+        if updateStatus == errSecSuccess { return true }
 
         var add = query
         add[kSecValueData as String] = data

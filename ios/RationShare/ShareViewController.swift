@@ -2,11 +2,8 @@ import UIKit
 import UniformTypeIdentifiers
 
 /// Lightweight share extension: capture a URL (or URL-in-text), persist via App Group
-/// with auto-start intent, then open Ration Import.
-///
-/// Host launch uses Chrome/Readest-style `openURL:options:completionHandler:` on the
-/// responder chain with a nil completion. Passing a Swift closure through an unsafe
-/// IMP cast mis-reports success and can dismiss without bringing the host forward.
+/// with auto-start intent, then open Ration Import. The app also consumes the App Group
+/// payload when it next becomes active, so a failed host launch loses nothing.
 final class ShareViewController: UIViewController {
     private static let appGroupId = "group.com.mayutic.ration"
     private static let pendingURLKey = "pendingImportURL"
@@ -102,12 +99,10 @@ final class ShareViewController: UIViewController {
 
     private func handleShare() async {
         guard let extracted = await extractSharedPayload() else {
-            await MainActor.run {
-                statusLabel?.text =
-                    "No link found in this share. Copy the recipe URL and paste it in Ration → Import."
-                openButton?.isHidden = true
-                doneButton?.isHidden = false
-            }
+            statusLabel?.text =
+                "No link found in this share. Copy the recipe URL and paste it in Ration → Import."
+            openButton?.isHidden = true
+            doneButton?.isHidden = false
             return
         }
 
@@ -117,28 +112,24 @@ final class ShareViewController: UIViewController {
             extracted.url.absoluteString.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)
             ?? extracted.url.absoluteString
         guard let openURL = URL(string: "ration://galley/import?url=\(encoded)&auto=1") else {
-            await MainActor.run {
-                statusLabel?.text = "Could not prepare Import link."
-                doneButton?.isHidden = false
-            }
+            statusLabel?.text = "Could not prepare Import link."
+            doneButton?.isHidden = false
             return
         }
 
         pendingOpenURL = openURL
         let opened = openHostApp(openURL)
         if opened {
-            // Give the system a beat to activate the host before tearing down.
+            // Completing immediately can cancel the host activation in flight.
             try? await Task.sleep(nanoseconds: 250_000_000)
             finish()
             return
         }
 
-        await MainActor.run {
-            statusLabel?.text =
-                "Link saved. Open Ration to import — or tap below if it didn’t switch automatically."
-            openButton?.isHidden = false
-            doneButton?.isHidden = false
-        }
+        statusLabel?.text =
+            "Link saved. Open Ration to import — or tap below if it didn’t switch automatically."
+        openButton?.isHidden = false
+        doneButton?.isHidden = false
     }
 
     @objc private func retryOpenHost() {
@@ -165,7 +156,6 @@ final class ShareViewController: UIViewController {
         } else {
             defaults.removeObject(forKey: Self.pendingUserTextKey)
         }
-        defaults.synchronize()
     }
 
     private func extractSharedPayload() async -> (url: URL, userText: String?)? {
@@ -189,23 +179,7 @@ final class ShareViewController: UIViewController {
                 {
                     foundURL = httpsOrNil(url)
                 }
-                if foundURL == nil,
-                   provider.hasItemConformingToTypeIdentifier("public.url"),
-                   let url = await loadURL(from: provider, type: "public.url")
-                {
-                    foundURL = httpsOrNil(url)
-                }
-                if provider.hasItemConformingToTypeIdentifier(UTType.plainText.identifier),
-                   let text = await loadString(
-                       from: provider,
-                       type: UTType.plainText.identifier
-                   )
-                {
-                    texts.append(text)
-                    if foundURL == nil {
-                        foundURL = firstHTTPSURL(in: text)
-                    }
-                }
+                // public.plain-text conforms to public.text, so one load covers both.
                 if provider.hasItemConformingToTypeIdentifier(UTType.text.identifier),
                    let text = await loadString(from: provider, type: UTType.text.identifier)
                 {
@@ -308,8 +282,8 @@ final class ShareViewController: UIViewController {
         return httpsOrNil(url)
     }
 
-    /// Opens the host via the modern UIApplication API on the responder chain.
-    /// Matches Chrome `extension_open_url.mm` / Readest: nil options + nil completion.
+    /// Share extensions have no public API to open their containing app, so walk the
+    /// responder chain to the host's `openURL:options:completionHandler:`.
     @discardableResult
     private func openHostApp(_ url: URL) -> Bool {
         let selector = NSSelectorFromString("openURL:options:completionHandler:")
@@ -323,8 +297,8 @@ final class ShareViewController: UIViewController {
                 typealias OpenURLFn = @convention(c) (
                     AnyObject,
                     Selector,
-                    URL,
-                    NSDictionary?,
+                    NSURL,
+                    NSDictionary,
                     AnyObject?
                 ) -> Void
                 let target = current as AnyObject
@@ -335,7 +309,7 @@ final class ShareViewController: UIViewController {
                 }
                 let imp = method_getImplementation(method)
                 let open = unsafeBitCast(imp, to: OpenURLFn.self)
-                open(target, selector, url, nil, nil)
+                open(target, selector, url as NSURL, NSDictionary(), nil)
                 return true
             }
             responder = current.next

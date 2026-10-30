@@ -6,7 +6,7 @@ When nutrition goals and Manifest nutrition are enabled for your account, Ration
 
 ## Personal goals
 
-Open **Hub → Settings → Preferences** (nutrition goals section when the flag is on). Set **only the nutrients you care about** — energy (kcal) and/or any macros (protein, carbs, fat, fiber). Empty fields stay unset and are **not** shown on Manifest. At least one nutrient is required to save. Saving requires **Macro Tracking** enabled under Feature enablement. Clear removes the active goal.
+On the web, open **Hub → Settings → Preferences** (nutrition goals section, when nutrition is enabled for your account). On iPhone, tap your profile picture → **Account** → **Nutrition Goals** and tap **Save**. Set **only the nutrients you care about** — energy (kcal) and/or any macros (protein, carbs, fat, fiber). Empty fields stay unset and are **not** shown on Manifest. At least one nutrient is required to save. Saving requires **Macro Tracking** enabled under Feature enablement. Clear removes the active goal.
 
 Goals are **personal to the signed-in user** (not shared with kitchen members). Each person in the same group can set different targets.
 
@@ -64,6 +64,19 @@ Flags off: Galley Cook does not touch Manifest; Add to Manifest is not shown.
 
 Intake rows older than roughly **396 days (~13 months)** are purged on the same schedule as other kitchen-event cleanup. Account purge removes goals and intake with your data.
 
+## Macros page (iPhone)
+
+On **Manifest**, tap the chart icon at the top-left to open **Macros**. **Range** offers **Week** (follows your **Week starts** setting), **Month** (this calendar month), or **Custom** (**Choose dates** → **Start** / **End**, up to 93 days).
+
+- **Daily average** — Calories (kcal), **P**, **C**, **F**, and **Fiber** when known, shown against your goals when set. Averages count only the days you logged; the caption reads *N of M days logged*. **Include today** is on by default; turn it off so a partial day does not pull the average down.
+- **Previous period** — The change from the same number of days immediately before (for example, last week vs this week). Needs intake in both periods. **Nutrition goals** opens your goals.
+- **Days** — Each day's kcal and macros, newest first.
+- **Notes** — Your private intake notes in the range.
+
+Macros reads the same private intake log as Manifest; housemates never see it. *Not medical advice. Goals and totals are planning aids only.*
+
+On iPhone, the **Today** Home Screen widget (large size) also shows remaining calories, protein, carbs, and fat when you have goals and Macro Tracking is on, and the **Eat** widget logs one piece from Cargo as a private serving. See *Home Screen widgets (iPhone)*.
+
 ## Flight Recorder
 
 The Hub **Flight Recorder** widget shows recent kitchen activity (cooks, docks, expiries). Shared events show preparation logistics only — **personal kcal and plate-up servings are not shown** to other household members. Your private intake history lives on nutrition summary/day views.
@@ -83,4 +96,5 @@ When **nutrition-cook-log-split** is on, `consume_manifest_entries` is refused (
 
 - *Nutrition overview* — USDA vs estimate vs blank.
 - *Manifest (meal plan)* — Consume / Cook / Log my serving and calendar controls.
-- *Hub dashboard and settings* — Goals UI and widgets.
+- *Hub dashboard and settings* — Goals UI and Hub widgets.
+- *Home Screen widgets (iPhone)* — Today and Eat widgets.

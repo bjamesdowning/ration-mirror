@@ -34,14 +34,6 @@ struct GalleyView: View {
         env.session.activeOrganizationId
     }
 
-    private var cookLogSplitEnabled: Bool {
-        env.session.clientFlags.isNutritionCookLogSplitEnabled
-    }
-
-    private var offerEatEnabled: Bool {
-        cookLogSplitEnabled && env.session.clientFlags.isNutritionManifestEnabled
-    }
-
     private var loadTaskKey: String {
         let tags = model.filters.selectedTags.sorted().joined(separator: ",")
         return [
@@ -576,10 +568,8 @@ struct GalleyView: View {
     }
 
     private func handleCook(mealId: String, servings: Int? = nil, confirmInsufficient: Bool = false) async {
-        let bridgeDate = cookLogSplitEnabled ? ManifestDateHelpers.todayISO() : nil
-        let bridgeHour = cookLogSplitEnabled
-            ? Calendar.current.component(.hour, from: Date())
-            : nil
+        let bridgeDate = ManifestDateHelpers.todayISO()
+        let bridgeHour = Calendar.current.component(.hour, from: Date())
         switch await model.runCook(
             mealId,
             servings: servings,
@@ -610,7 +600,7 @@ struct GalleyView: View {
             cookSuccessMessage = message
             cookUndoToken = undoToken
             showCookUndo = undoToken != nil
-            if offerEatEnabled, offerPersonalLog, let bridgedEntry {
+            if offerPersonalLog, let bridgedEntry {
                 pendingEatEntry = bridgedEntry.asManifestEntry()
             }
         case .needsConfirmation(let missing):

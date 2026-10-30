@@ -1,8 +1,6 @@
 import { describe, expect, it } from "vitest";
-import {
-	readReviewLoginSecrets,
-	timingSafeEqualString,
-} from "~/lib/mobile/review-auth.server";
+import { readReviewLoginSecrets } from "~/lib/mobile/review-auth.server";
+import { timingSafeEqualString } from "~/lib/timing-safe-equal";
 import { createMockEnv } from "~/test/helpers/mock-env";
 
 describe("timingSafeEqualString", () => {

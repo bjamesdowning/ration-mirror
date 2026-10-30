@@ -114,7 +114,6 @@ final class TabBarAndGroupButtonTests: XCTestCase {
     func testGroupButtonKeepsHyperGreenDiamond() throws {
         let env = AppEnvironment()
         env.session.installSessionForTesting(try makeSignedInSession())
-        XCTAssertFalse(env.session.clientFlags.isSupplyMultiListsEnabled)
         XCTAssertFalse(env.session.clientFlags.isRationCopilotEnabled)
         XCTAssertNotNil(env.session.activeOrg)
 

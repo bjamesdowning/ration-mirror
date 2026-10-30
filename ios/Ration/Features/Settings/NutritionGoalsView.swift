@@ -94,7 +94,7 @@ final class NutritionGoalsViewModel {
             return false
         }
         guard hasActiveGoalsConsent else {
-            errorMessage = "Macro Tracking is off — enable it in Settings to set goals."
+            errorMessage = "Macro Tracking is off — turn it on in Account → Feature enablement to set goals."
             return false
         }
         isSaving = true
@@ -217,7 +217,7 @@ struct NutritionGoalsView: View {
 
             if !macroTrackingEnabled {
                 Section {
-                    Text("Macro Tracking is off — enable it in Settings to set goals and log meals.")
+                    Text("Macro Tracking is off — turn it on in Account → Feature enablement to set goals and log meals.")
                         .font(Typography.caption())
                         .foregroundStyle(Theme.muted)
                     Button("Open Feature enablement") {

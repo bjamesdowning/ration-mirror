@@ -73,16 +73,11 @@ struct CargoFormView: View {
     }
 
     private var nutritionPayload: NutritionSnapshot? {
-        let engineEnabled = env.session.clientFlags.isNutritionEngineEnabled
         switch mode {
         case .create:
-            return CargoNutritionPayload.forCreate(current: nutrition, engineEnabled: engineEnabled)
+            return nutrition
         case .edit:
-            return CargoNutritionPayload.forEdit(
-                current: nutrition,
-                nutritionEdited: nutritionEdited,
-                engineEnabled: engineEnabled
-            )
+            return CargoNutritionPayload.forEdit(current: nutrition, nutritionEdited: nutritionEdited)
         }
     }
 
@@ -119,9 +114,7 @@ struct CargoFormView: View {
                     }
                 }
 
-                if env.session.clientFlags.isNutritionEngineEnabled {
-                    NutritionEditorSection(nutrition: $nutrition, nutritionEdited: $nutritionEdited)
-                }
+                NutritionEditorSection(nutrition: $nutrition, nutritionEdited: $nutritionEdited)
 
                 if let errorMessage {
                     Section { ErrorBanner(message: errorMessage) }

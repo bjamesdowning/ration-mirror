@@ -91,13 +91,9 @@ final class HubViewModel {
         }
     }
 
-    func resolvedLayout(nutritionWidgetsEnabled: Bool = false) -> [HubWidgetLayout] {
+    func resolvedLayout() -> [HubWidgetLayout] {
         guard case let .loaded(data) = state else { return [] }
-        return HubLayoutEngine.resolveLayout(
-            profile: data.hubProfile,
-            layout: data.hubLayout,
-            nutritionWidgetsEnabled: nutritionWidgetsEnabled
-        )
+        return HubLayoutEngine.resolveLayout(profile: data.hubProfile, layout: data.hubLayout)
     }
 
     func nextAction(for data: HubResponse) -> (key: String, title: String, detail: String, icon: String)? {

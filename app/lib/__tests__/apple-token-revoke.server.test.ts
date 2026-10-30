@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+	exchangeAppleAuthorizationCode,
 	pickAppleRevokeCredential,
 	postAppleTokenRevoke,
 } from "~/lib/apple-token-revoke.server";
@@ -59,5 +60,40 @@ describe("postAppleTokenRevoke", () => {
 		});
 		expect(String(init?.body)).toContain("client_id=com.mayutic.ration");
 		expect(String(init?.body)).toContain("token_type_hint=refresh_token");
+	});
+});
+
+describe("exchangeAppleAuthorizationCode", () => {
+	it("posts the code and returns Apple's refresh token", async () => {
+		const fetchImpl = vi.fn(
+			async (_url: string | URL | Request, _init?: RequestInit) =>
+				Response.json({ refresh_token: "r-tok", access_token: "a" }),
+		);
+		const token = await exchangeAppleAuthorizationCode({
+			clientId: "com.mayutic.ration",
+			clientSecret: "secret",
+			code: "c-123",
+			fetchImpl: fetchImpl as unknown as typeof fetch,
+		});
+		expect(token).toBe("r-tok");
+		const call = fetchImpl.mock.calls[0];
+		expect(call?.[0]).toBe("https://appleid.apple.com/auth/token");
+		const body = String(call?.[1]?.body);
+		expect(body).toContain("grant_type=authorization_code");
+		expect(body).toContain("code=c-123");
+		expect(body).toContain("client_id=com.mayutic.ration");
+	});
+
+	it("returns null when Apple rejects the code", async () => {
+		const fetchImpl = vi.fn(async () =>
+			Response.json({ error: "invalid_grant" }, { status: 400 }),
+		);
+		const token = await exchangeAppleAuthorizationCode({
+			clientId: "com.mayutic.ration",
+			clientSecret: "secret",
+			code: "used",
+			fetchImpl: fetchImpl as unknown as typeof fetch,
+		});
+		expect(token).toBeNull();
 	});
 });

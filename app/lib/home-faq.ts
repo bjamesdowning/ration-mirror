@@ -74,7 +74,7 @@ export function buildHomeFaqEntries(opts: {
 		{
 			question: "Is there a Ration iOS app?",
 			answer:
-				"Yes. Ration for iOS is available on the App Store as Ration: Meal & Macro Planner. It brings Cargo, Galley, Manifest, Supply, Daily Fuel, household sync, and Ration Copilot to iPhone — the same kitchen as the web app. Get it from the App Store via Get the app on the home page.",
+				"Yes. Ration for iOS is available on the App Store as Ration: Meal & Macro Planner. It brings Cargo, Galley, Manifest, Supply with saved lists, Daily Fuel and the Macros history page, household sync, and Ration Copilot to iPhone — the same kitchen as the web app — plus Supply, Eat, and Today Home Screen widgets. It needs iOS 26 or later. Get it from the App Store via Get the app on the home page.",
 		},
 	];
 }

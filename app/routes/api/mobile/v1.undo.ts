@@ -8,7 +8,6 @@ import {
 } from "~/lib/nutrition/service.server";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import { UndoActionSchema } from "~/lib/schemas/mobile/undo";
-import { deleteUndoToken, loadUndoToken } from "~/lib/undo-token.server";
 import type { Route } from "./+types/v1.undo";
 
 export async function action({ request, context }: Route.ActionArgs) {
@@ -61,32 +60,13 @@ export async function action({ request, context }: Route.ActionArgs) {
 			return { success: true, kind: "manifest_intake", ...result };
 		} catch (error) {
 			if (
-				!(error instanceof NutritionUndoUnavailableError) ||
-				!error.fallbackAllowed
+				error instanceof NutritionUndoUnavailableError &&
+				error.fallbackAllowed
 			) {
-				throw error;
+				throw data({ error: "Undo expired or unavailable" }, { status: 410 });
 			}
+			throw error;
 		}
-
-		// Backward-compatible path for short-lived pre-migration cook/consume tokens.
-		const record = await loadUndoToken(
-			context.cloudflare.env.RATION_KV,
-			token,
-			userId,
-			organizationId,
-		);
-
-		if (!record) {
-			throw data({ error: "Undo expired or unavailable" }, { status: 410 });
-		}
-
-		const { applyUndoRecord } = await import("~/lib/cook-reversal.server");
-		await applyUndoRecord(context.cloudflare.env.DB, organizationId, record, {
-			kv: context.cloudflare.env.RATION_KV,
-		});
-		await deleteUndoToken(context.cloudflare.env.RATION_KV, token);
-
-		return { success: true, kind: record.kind };
 	} catch (e) {
 		return handleApiError(e);
 	}

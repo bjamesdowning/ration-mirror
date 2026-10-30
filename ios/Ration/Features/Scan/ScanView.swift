@@ -22,10 +22,10 @@ struct ScanView: View {
                     idleContent
                 case .uploading:
                     AIProcessingView(feature: .scanCargo, creditCost: env.session.session?.aiCosts?.scan ?? 1)
-                case let .processing(requestId):
-                    processingContent(requestId)
-                case let .completed(requestId):
-                    completedContent(requestId: requestId)
+                case .processing:
+                    processingContent
+                case .completed:
+                    completedContent
                 case .confirming:
                     AIProcessingView(feature: .scanCargo, creditCost: nil)
                 case let .confirmed(added, updated):
@@ -48,6 +48,8 @@ struct ScanView: View {
                 set: { if !$0 { consent.decline() } }
             )) {
                 AIConsentGateView(
+                    errorMessage: consent.errorMessage,
+                    isAccepting: consent.isAccepting,
                     onAccept: { Task { await consent.accept(api: env.api, session: env.session) } },
                     onDecline: { consent.decline() }
                 )
@@ -61,12 +63,7 @@ struct ScanView: View {
             }
             .sheet(item: $editingItem) { item in
                 ScanItemEditSheet(item: item) { updated in
-                    model.saveEdit(
-                        updated,
-                        api: env.api,
-                        nutritionEngine: env.session.clientFlags.isNutritionEngineEnabled,
-                        nutritionAiEstimate: env.session.clientFlags.isNutritionAiEstimateEnabled
-                    )
+                    model.saveEdit(updated, api: env.api)
                 }
             }
             .fullScreenCover(isPresented: $showingCamera) {
@@ -102,9 +99,7 @@ struct ScanView: View {
                     creditCost: scanCreditCost,
                     costLabel: "per scan",
                     nextSteps: "Review detected items and edit names, quantities, or units before confirming to Cargo.",
-                    hint: env.session.clientFlags.isNutritionEngineEnabled
-                        ? "Nutrition (when available): USDA match first; AI estimates are labelled—edit before saving."
-                        : nil
+                    hint: AIFeatureInlineIntro.nutritionHint
                 )
                 AIFeaturePrimaryButton(label: "Open camera", creditCost: scanCreditCost) {
                     proceedAfterIntro()
@@ -120,12 +115,12 @@ struct ScanView: View {
         }
     }
 
-    private func processingContent(_ requestId: String) -> some View {
+    private var processingContent: some View {
         GlassCard {
             VStack(spacing: 12) {
                 ProgressView().tint(Theme.hyperGreen)
                 Text("Extracting items").rationHeadline()
-                Text("Request \(requestId) is processing. This usually takes a few seconds.")
+                Text("This usually takes a few seconds.")
                     .rationCaption()
                     .multilineTextAlignment(.center)
             }
@@ -133,23 +128,21 @@ struct ScanView: View {
         .padding(24)
     }
 
-    private func completedContent(requestId: String) -> some View {
+    private var completedContent: some View {
         ScrollView {
             VStack(spacing: 16) {
                 GlassCard {
                     VStack(spacing: 8) {
                         Text("Ready to review").rationHeadline()
-                        Text("\(model.reviewItems.count) item\(model.reviewItems.count == 1 ? "" : "s") from scan \(requestId.prefix(8))…")
+                        Text("\(model.reviewItems.count) item\(model.reviewItems.count == 1 ? "" : "s") found")
                             .rationCaption()
                         Text("Tap edit to adjust name, quantity, tags, domain, expiry, or nutrition")
                             .rationCaption()
                             .foregroundStyle(Theme.muted)
-                        if env.session.clientFlags.isNutritionEngineEnabled {
-                            if model.isResolvingNutrition {
-                                NutritionLookupStatusLabel(kind: .loading)
-                            } else if model.nutritionLookupFailed {
-                                NutritionLookupStatusLabel(kind: .failed(dock: false))
-                            }
+                        if model.isResolvingNutrition {
+                            NutritionLookupStatusLabel(kind: .loading)
+                        } else if model.nutritionLookupFailed {
+                            NutritionLookupStatusLabel(kind: .failed(dock: false))
                         }
                     }
                 }
@@ -163,18 +156,14 @@ struct ScanView: View {
                     ForEach(model.reviewItems) { item in
                         ScanReviewItemRow(
                             item: item,
-                            isResolvingNutrition: env.session.clientFlags.isNutritionEngineEnabled
-                                && model.isResolvingNutrition,
+                            isResolvingNutrition: model.isResolvingNutrition,
                             onToggleSelection: { model.toggleSelection(item.id) },
                             onStartEdit: { editingItem = item }
                         )
                     }
                     Button("Add selected to Cargo") {
                         Task {
-                            await model.confirmToCargo(
-                                api: env.api,
-                                nutritionAiEstimate: env.session.clientFlags.isNutritionAiEstimateEnabled
-                            )
+                            await model.confirmToCargo(api: env.api)
                         }
                     }
                     .buttonStyle(PrimaryButtonStyle())

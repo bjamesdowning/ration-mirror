@@ -8,24 +8,12 @@ import {
 	setFeatureEnablement,
 } from "~/lib/feature-enablement.server";
 import { requireMobileActiveGroup } from "~/lib/mobile/auth.server";
+import { mobileConsentMetadata } from "~/lib/mobile/consent-metadata";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import { FeatureEnablementActionSchema } from "~/lib/schemas/feature-enablement";
 import type { Route } from "./+types/v1.privacy.features";
 
 const PRIVATE_HEADERS = { "Cache-Control": "private, no-store" };
-
-function requestMetadata(request: Request) {
-	return {
-		clientVersion:
-			request.headers.get("X-Ration-Client-Version")?.slice(0, 50) ?? null,
-		locale:
-			request.headers
-				.get("Accept-Language")
-				?.split(",")[0]
-				?.trim()
-				.slice(0, 35) || null,
-	};
-}
 
 export async function loader({ request, context }: Route.LoaderArgs) {
 	try {
@@ -72,7 +60,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 		const meta = {
 			source: "mobile" as const,
 			clientSurface: "ios_feature_enablement",
-			...requestMetadata(request),
+			...mobileConsentMetadata(request),
 		};
 
 		let status: Awaited<ReturnType<typeof getFeatureEnablementStatus>>;

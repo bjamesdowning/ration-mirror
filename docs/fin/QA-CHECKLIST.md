@@ -5,7 +5,7 @@ Run after releases that change onboarding, billing, MCP, Copilot, kitchen flows,
 ## Before QA
 
 1. Confirm [`DIRECTORY.md`](./DIRECTORY.md) lists every customer article and matches [`app/lib/help/articles.ts`](../../app/lib/help/articles.ts).
-2. Spot-check free-tier numbers against `TIER_LIMITS` in code (expect **35** inventory / **15** meals / **3** supply lists unless Pricing says otherwise).
+2. Spot-check free-tier numbers against `TIER_LIMITS` in code (expect **35** inventory / **15** meals / **3** supply lists (Live Supply included) unless Pricing says otherwise).
 3. Spot-check credit costs against [`20-credits-explained.md`](./20-credits-explained.md) and Pricing.
 4. Upload corpus and reindex (`docs/fin`, `content/blog`, `docs/dev`, `docs/legal`, root `README.md`).
 
@@ -29,12 +29,17 @@ Ask each in Ask Ration (with `search_docs`) and optionally open the matching `/h
 | 11 | Where do nutrients come from? USDA vs estimate? | `24`, `26` |
 | 12 | How do nutrition goals and Eat / plate-up work (servings vs g/oz)? | `25`, `15` |
 | 12b | Two kitchens same day → one personal total; housemate cannot see logs; delete shared kitchen keeps diary | `25`, `05`, `02` |
+| 13 | What's the difference between Live Supply and a saved list? | `16` (only Live Supply checks off and docks; saved lists on iPhone; web shows Live Supply only) |
+| 14 | How do I see my average macros for last month? | `25`, `15` (Manifest → chart icon → Macros → Month; Previous period) |
+| 15 | My widget says Open Ration to sign in | `27`, `60` |
+| 16 | The iPhone app says Update Ration | `60` (update from the App Store; iOS 26 required, otherwise use the web) |
 
 ## `/help` surface
 
 - [ ] `/help` renders DIRECTORY and links resolve to `/help/:slug`
 - [ ] Settings → Help → User guide opens `/help` (web)
-- [ ] iOS Settings → User guide opens `https://ration.mayutic.com/help`
+- [ ] iOS Account → Help & Feedback → User guide opens `https://ration.mayutic.com/help`
+- [ ] `/help/27-ios-home-screen-widgets` renders
 - [ ] Maintainer files (`README`, `INDEX`, `QA-CHECKLIST`, `70-*`) return 404 at `/help/:slug`
 
 ## Pass criteria

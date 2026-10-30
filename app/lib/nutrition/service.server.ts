@@ -1959,7 +1959,6 @@ export async function getMacrosHistory(
 	to: string,
 ) {
 	requireScope(principal, "nutrition:read");
-	await assertFeatureEnabled(env, "nutrition-macros-history", flags);
 	await assertFeatureEnabled(env, "nutrition-engine", flags);
 	await assertFeatureEnabled(env, "nutrition-manifest", flags);
 	const previousRange = previousEqualCalendarRange(from, to);

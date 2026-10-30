@@ -53,21 +53,9 @@ final class OnboardingCoordinator {
         }
     }
 
-    /// When Feature enablement Flagship is off, skip consent collection after Welcome.
-    func skipFeatureEnablementIfDisabled(flagEnabled: Bool) {
-        guard isActive, phase == .welcome || phase == .featureEnablement else { return }
-        if !flagEnabled, phase == .featureEnablement {
-            phase = .askBriefing
-        }
-    }
-
-    func advanceFromWelcome(featureEnablementEnabled: Bool) {
+    func advanceFromWelcome() {
         guard isActive, phase == .welcome else { return }
-        if featureEnablementEnabled {
-            phase = .featureEnablement
-        } else {
-            phase = .askBriefing
-        }
+        phase = .featureEnablement
     }
 
     func restart(staticReplay: Bool = true) {

@@ -2,7 +2,7 @@ import { data } from "react-router";
 import { handleApiError } from "~/lib/error-handler";
 import { FEATURE_DISABLED_CODE } from "~/lib/feature-flags/assert-enabled.server";
 import {
-	buildFlagContext,
+	buildMobileFlagContext,
 	isFeatureEnabled,
 } from "~/lib/feature-flags/flags.server";
 import {
@@ -36,7 +36,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 		);
 	}
 
-	const flagContext = buildFlagContext(request, env);
+	const flagContext = buildMobileFlagContext(request, env);
 	if (!(await isFeatureEnabled(env, "app-review-login", flagContext))) {
 		throw data(
 			{

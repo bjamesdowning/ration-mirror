@@ -52,32 +52,28 @@ extension RationAPI {
         )
     }
 
-    func eraseNutritionData(_ dataset: String) async throws -> NutritionPrivacyResponse {
-        try await client.post(
-            "privacy/nutrition",
-            body: NutritionDataEraseRequest(
-                dataset: dataset,
-                requestId: UUID().uuidString
-            )
-        )
-    }
-
     func featureEnablement() async throws -> FeatureEnablementStatusResponse {
         try await client.get("privacy/features")
     }
 
     func setFeatureEnablement(
         aiFeatures: Bool,
-        macroTracking: Bool,
-        affirmed: Bool = true
+        macroTracking: Bool
     ) async throws -> FeatureEnablementStatusResponse {
-        _ = affirmed
-        return try await client.post(
+        try await client.post(
             "privacy/features",
             body: FeatureEnablementSetRequest(
                 aiFeatures: aiFeatures,
                 macroTracking: macroTracking
             )
+        )
+    }
+
+    /// Records AI consent (and Copilot auto-deduct) without touching Macro Tracking.
+    func enableAIFeatures() async throws -> FeatureEnablementStatusResponse {
+        try await client.post(
+            "privacy/features",
+            body: FeatureEnablementEnableRequest(feature: "ai", requestId: UUID().uuidString)
         )
     }
 
@@ -91,8 +87,6 @@ extension RationAPI {
         )
     }
 
-    // Nutrition summary — gated by `nutrition-goals` OR `nutrition-manifest`.
-    /// Macros history — gated by `nutrition-macros-history` (fail-closed server-side).
     func nutritionMacros(from: String, to: String) async throws -> MacrosHistoryResponse {
         try await client.get(
             "nutrition/macros",

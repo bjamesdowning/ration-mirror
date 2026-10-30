@@ -13,6 +13,8 @@ enum AppGroup {
 }
 
 /// Cross-process lock for token rotation and widget mutations.
+struct AppGroupLockTimeout: Error {}
+
 enum AppGroupFileLock {
     static func perform<T>(
         _ name: String,
@@ -36,7 +38,7 @@ enum AppGroupFileLock {
             }
             try await Task.sleep(nanoseconds: 40_000_000)
         }
-        return try await work()
+        throw AppGroupLockTimeout()
     }
 }
 

@@ -7,7 +7,6 @@
 
 import {
 	checkAndMarkProcessed,
-	checkProcessed,
 	deleteIdempotencyRecord,
 } from "~/lib/idempotency.server";
 
@@ -18,7 +17,6 @@ export const BILLING_FULFILLMENT_TTL_SECONDS = 7 * 24 * 60 * 60;
 export const BILLING_LAST_ACTIVE_ORG_TTL_SECONDS = 90 * 24 * 60 * 60;
 
 const RC_WEBHOOK_PREFIX = "billing:rc:webhook";
-const FULFILL_PREFIX = "billing:fulfill";
 const LAST_ACTIVE_ORG_PREFIX = "billing:lastActiveOrg";
 
 export function lastActiveBillingOrgKey(userId: string): string {
@@ -71,26 +69,4 @@ export async function clearRevenueCatWebhookProcessed(
 	eventId: string,
 ): Promise<void> {
 	await deleteIdempotencyRecord(kv, eventId, RC_WEBHOOK_PREFIX);
-}
-
-export async function isFulfillmentProcessed(
-	kv: KVNamespace,
-	fulfillmentKey: string,
-): Promise<boolean> {
-	const record = await checkProcessed(kv, fulfillmentKey, FULFILL_PREFIX);
-	return record !== null;
-}
-
-export async function markFulfillmentProcessed(
-	kv: KVNamespace,
-	fulfillmentKey: string,
-	metadata?: Record<string, unknown>,
-): Promise<void> {
-	await checkAndMarkProcessed(
-		kv,
-		fulfillmentKey,
-		FULFILL_PREFIX,
-		BILLING_FULFILLMENT_TTL_SECONDS,
-		metadata,
-	);
 }

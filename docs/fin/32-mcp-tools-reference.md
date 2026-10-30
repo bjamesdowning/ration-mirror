@@ -92,13 +92,20 @@ Gated by nutrition feature flags. Not medical advice. Cargo/meal read and write 
 
 | Tool | Scope | Purpose |
 |------|-------|---------|
-| `get_supply_list` | `mcp:read` | Active shopping list. |
+| `get_supply_list` | `mcp:read` | Live Supply (optional `listId` for a saved list when saved lists are enabled). |
 | `add_supply_item` | `mcp:supply:write` | Add a line. |
 | `update_supply_item` | `mcp:supply:write` | Patch a line. |
 | `remove_supply_item` | `mcp:supply:write` | Remove a line. |
 | `mark_supply_purchased_bulk` | `mcp:supply:write` | Mark one or many lines purchased (max 50). |
 | `sync_supply_from_selected_meals` | `mcp:supply:write` | Rebuild supply from plan + selections. |
-| `complete_supply_list` | `mcp:supply:write` | Dock purchased → cargo. |
+| `complete_supply_list` | `mcp:supply:write` | Dock purchased Live Supply items → Cargo. Saved lists cannot be docked. |
+| `list_supply_lists` | `mcp:read` | Live, Saved, Template, and Archived lists (when saved lists are enabled for your account). |
+| `create_supply_list` | `mcp:supply:write` | Create a Saved or Template list (when saved lists are enabled). |
+| `duplicate_supply_list` | `mcp:supply:write` | Duplicate a list into an independent copy (when saved lists are enabled). |
+| `archive_supply_list` | `mcp:supply:write` | Archive a Saved list (when saved lists are enabled). |
+| `transfer_supply_items` | `mcp:supply:write` | Copy or move items between lists (when saved lists are enabled). |
+| `manage_supply_staples` | `mcp:supply:write` | List, upsert, or delete kitchen staples (when saved lists are enabled). |
+| `save_receipt_as_supply_list` | `mcp:supply:write` | Save reviewed receipt lines as a Saved list, without a second AI credit (when saved lists are enabled). |
 
 ## Account & preferences
 

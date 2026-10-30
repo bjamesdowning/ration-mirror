@@ -15,14 +15,15 @@ Use this table for Copilot AI Search source configuration and **golden-question*
 | [12-galley-recipes.md](./12-galley-recipes.md) | Galley (recipes & provisions) | Support | How do I add a new meal? What is a provision? How do I cook a meal? |
 | [13-add-meals-url-import.md](./13-add-meals-url-import.md) | Import a recipe (URL, social, or photo) | Support | Can I import from a website? TikTok / Instagram / YouTube? Photo? What is a holder or skeleton? How much does import cost (3 credits)? |
 | [14-ai-meal-generation.md](./14-ai-meal-generation.md) | AI meal generation | Support | How do I generate recipes from my pantry? How many credits? |
-| [15-manifest-meal-plan.md](./15-manifest-meal-plan.md) | Manifest (meal plan) | Support | How do I plan meals for the week? What is consume? Can I share Manifest? |
-| [16-supply-shopping-list.md](./16-supply-shopping-list.md) | Supply (shopping list) | Support | How do I update my shopping list? What is snooze? What is dock? |
+| [15-manifest-meal-plan.md](./15-manifest-meal-plan.md) | Manifest (meal plan) | Support | How do I plan meals for the week? What is consume? Can I share Manifest? Where do I see my weekly macro average? |
+| [16-supply-shopping-list.md](./16-supply-shopping-list.md) | Supply (shopping list) | Support | How do I update my shopping list? What is snooze? What is dock? What is Live Supply vs a saved list? How do I pull a saved list into Supply? Are saved lists on the web? |
 | [17-matching-cookable-meals.md](./17-matching-cookable-meals.md) | Matching cookable meals | Support | What does “meals ready” mean? Strict vs partial match? |
 | [18-hub-dashboard-and-settings.md](./18-hub-dashboard-and-settings.md) | Hub dashboard and settings | Support | Where is pricing? Connected Agents? API keys? How do I delete my account? |
 | [19-kitchen-loop.md](./19-kitchen-loop.md) | The kitchen loop | Both | How do Cargo, Galley, Manifest, and Supply fit together? |
 | [24-nutrition-overview.md](./24-nutrition-overview.md) | Nutrition overview | Both | Where do nutrients come from? USDA vs AI estimate? What is verified? |
 | [25-nutrition-goals-and-tracking.md](./25-nutrition-goals-and-tracking.md) | Macro tracking, goals, and intake | Support | How do I set calorie goals? What is plate-up / Eat? Servings vs weighed g/oz? How long is intake kept? |
 | [26-editing-nutrition.md](./26-editing-nutrition.md) | Editing nutrition | Support | Can I edit nutrition on scan review? How do I fix Cargo macros? |
+| [27-ios-home-screen-widgets.md](./27-ios-home-screen-widgets.md) | Home Screen widgets (iPhone) | Support | How do I add a Ration widget? Why does it say Open Ration to sign in? Does checking an item on the widget dock it? |
 | [20-credits-explained.md](./20-credits-explained.md) | AI credits explained | Both | What uses credits? Do MCP calls use credits? Who shares the balance? |
 | [21-buying-credits-and-stripe.md](./21-buying-credits-and-stripe.md) | Buying credits and checkout | Support | Checkout failed; credits missing? Billing portal? How do I cancel? |
 | [22-subscription-tiers.md](./22-subscription-tiers.md) | Free vs Crew Member | Both | Why can’t I invite someone? Free tier limits? Who sets tier for a group? |
@@ -38,7 +39,7 @@ Use this table for Copilot AI Search source configuration and **golden-question*
 | [50-architecture-at-a-glance.md](./50-architecture-at-a-glance.md) | Architecture at a glance | Both | What cloud does Ration use? D1, R2, what are they in plain English? |
 | [51-reliability-and-async-jobs.md](./51-reliability-and-async-jobs.md) | Async jobs and reliability | Support | Why is my scan still processing? Will I lose credits if it fails? |
 | [52-limits-and-rate-limits.md](./52-limits-and-rate-limits.md) | Limits and rate limits | Support | How many scans per minute? MCP throttling? |
-| [60-troubleshooting-common.md](./60-troubleshooting-common.md) | Common troubleshooting | Support | Not enough credits; wrong group; can’t share. |
+| [60-troubleshooting-common.md](./60-troubleshooting-common.md) | Common troubleshooting | Support | Not enough credits; wrong group; can’t share; the app says Update Ration. |
 | [61-billing-issues.md](./61-billing-issues.md) | Billing troubleshooting | Support | Paid but no credits yet; subscription status. |
 | [70-copilot-chat-capability-roadmap.md](./70-copilot-chat-capability-roadmap.md) | Copilot chat: capability rollout | Internal | What should Ask Ration learn next? |
 

@@ -1,6 +1,7 @@
 import { RC_ENTITLEMENT_CREW_MEMBER } from "~/lib/billing.constants";
 import { recordLastActiveBillingOrg } from "~/lib/billing-idempotency.server";
 import { log, redactId } from "~/lib/logging.server";
+import { timingSafeEqualString } from "~/lib/timing-safe-equal";
 
 const RC_API_BASE = "https://api.revenuecat.com/v1";
 
@@ -56,7 +57,7 @@ export function verifyRevenueCatWebhookAuth(
 	const header = request.headers.get("Authorization");
 	if (!header?.startsWith("Bearer ")) return false;
 	const token = header.slice("Bearer ".length).trim();
-	return token.length > 0 && token === secret;
+	return token.length > 0 && timingSafeEqualString(token, secret);
 }
 
 /**

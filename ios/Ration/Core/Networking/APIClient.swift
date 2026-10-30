@@ -10,6 +10,7 @@ final class APIClient {
     private let session: URLSession
     /// Called when the server returns `forbidden_org` — JWT org is no longer valid.
     var orgAccessLostHandler: (@MainActor () async -> Void)?
+    var updateRequiredHandler: (@MainActor (AppUpdateRequirement) -> Void)?
 
     init(auth: AuthManager, session: URLSession? = nil) {
         self.auth = auth
@@ -30,15 +31,15 @@ final class APIClient {
     }
 
     func post<T: Decodable>(_ path: String, body: Encodable) async throws -> T {
-        try await send(path: path, method: "POST", query: [], body: encode(body))
+        try await send(path: path, method: "POST", query: [], body: try encode(body))
     }
 
     func patch<T: Decodable>(_ path: String, body: Encodable) async throws -> T {
-        try await send(path: path, method: "PATCH", query: [], body: encode(body))
+        try await send(path: path, method: "PATCH", query: [], body: try encode(body))
     }
 
     func put<T: Decodable>(_ path: String, body: Encodable) async throws -> T {
-        try await send(path: path, method: "PUT", query: [], body: encode(body))
+        try await send(path: path, method: "PUT", query: [], body: try encode(body))
     }
 
     @discardableResult
@@ -91,8 +92,8 @@ final class APIClient {
 
     // MARK: Core
 
-    private func encode(_ value: Encodable) -> Data? {
-        try? JSON.encoder.encode(AnyEncodable(value))
+    private func encode(_ value: Encodable) throws -> Data {
+        try JSON.encoder.encode(AnyEncodable(value))
     }
 
     private func send<T: Decodable>(
@@ -177,6 +178,9 @@ final class APIClient {
             if http.statusCode == 401 {
                 await auth.signOutLocal()
                 throw APIError.unauthorized
+            }
+            if let requirement = AppUpdateRequirement(status: http.statusCode, body: errBody) {
+                updateRequiredHandler?(requirement)
             }
             if http.statusCode == 403,
                errBody?.code == "forbidden_org",

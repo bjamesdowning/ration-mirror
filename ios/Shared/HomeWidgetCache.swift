@@ -247,7 +247,6 @@ enum HomeWidgetCopy {
     static func calmLine(for state: String) -> String {
         switch state {
         case "signedOut": return "Open Ration to sign in"
-        case "disabled": return "Widgets are turned off"
         default: return "Open Ration"
         }
     }

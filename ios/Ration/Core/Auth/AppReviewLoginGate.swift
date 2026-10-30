@@ -4,9 +4,8 @@ import Foundation
 enum AppReviewLoginGate {
     static let reviewEmail = "app-review@mayutic.com"
 
-    /// Password field is shown only when Flagship `appReviewLogin` is on and the email matches.
-    static func shouldShowPassword(flagEnabled: Bool, email: String) -> Bool {
-        guard flagEnabled else { return false }
+    /// The server still rejects review logins unless Flagship `app-review-login` is on.
+    static func shouldShowPassword(email: String) -> Bool {
         let normalized = email
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .lowercased()

@@ -16,14 +16,6 @@ enum TierLimits {
     /// Soft warning threshold matching web `CapacityIndicator` (≥80%).
     static let softWarningPercent = 80
 
-    static func maxInventoryItems(isCrewMember: Bool) -> Int {
-        isCrewMember ? unlimited : freeMaxInventoryItems
-    }
-
-    static func maxMeals(isCrewMember: Bool) -> Int {
-        isCrewMember ? unlimited : freeMaxMeals
-    }
-
     static func maxOwnedGroups(isCrewMember: Bool) -> Int {
         isCrewMember ? crewMaxOwnedGroups : freeMaxOwnedGroups
     }

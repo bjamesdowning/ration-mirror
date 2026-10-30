@@ -62,9 +62,7 @@ struct ScanItemEditSheet: View {
                     }
                 }
 
-                if env.session.clientFlags.isNutritionEngineEnabled {
-                    NutritionEditorSection(nutrition: $nutrition, nutritionEdited: $nutritionEdited)
-                }
+                NutritionEditorSection(nutrition: $nutrition, nutritionEdited: $nutritionEdited)
 
                 if let validationError {
                     Section {

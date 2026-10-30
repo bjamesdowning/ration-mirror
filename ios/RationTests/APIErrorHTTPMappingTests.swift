@@ -14,7 +14,8 @@ final class APIErrorHTTPMappingTests: XCTestCase {
                 current: nil,
                 tier: nil,
                 existingMealId: nil,
-                existingMealName: nil
+                existingMealName: nil,
+                appStoreUrl: nil
             )
         )
         XCTAssertTrue(error.isAccountNotFound)
@@ -35,7 +36,8 @@ final class APIErrorHTTPMappingTests: XCTestCase {
                 current: nil,
                 tier: nil,
                 existingMealId: nil,
-                existingMealName: nil
+                existingMealName: nil,
+                appStoreUrl: nil
             )
         )
         XCTAssertTrue(error.isAccountNotFound)
@@ -65,5 +67,33 @@ final class APIErrorHTTPMappingTests: XCTestCase {
 
         let bare503 = APIError.server(status: 503, message: "Unavailable", code: nil)
         XCTAssertFalse(bare503.isServerBusy)
+    }
+
+    func testUpgradeRequiredReadsServerMessageAndStoreLink() throws {
+        let json = Data("""
+        {"error":"Update to keep going.","code":"upgrade_required","minimumVersion":"1.5.11","appStoreUrl":"https://apps.apple.com/app/id6785010110"}
+        """.utf8)
+        let body = try JSON.decoder.decode(APIErrorBody.self, from: json)
+        let requirement = try XCTUnwrap(AppUpdateRequirement(status: 426, body: body))
+        XCTAssertEqual(requirement.message, "Update to keep going.")
+        XCTAssertEqual(requirement.appStoreURL.absoluteString, "https://apps.apple.com/app/id6785010110")
+    }
+
+    func testUpgradeRequiredNeedsBoth426AndCode() throws {
+        let coded = try JSON.decoder.decode(
+            APIErrorBody.self,
+            from: Data(#"{"error":"Old","code":"upgrade_required"}"#.utf8)
+        )
+        let uncoded = try JSON.decoder.decode(
+            APIErrorBody.self,
+            from: Data(#"{"error":"Old"}"#.utf8)
+        )
+        XCTAssertNil(AppUpdateRequirement(status: 403, body: coded))
+        XCTAssertNil(AppUpdateRequirement(status: 426, body: uncoded))
+        XCTAssertNil(AppUpdateRequirement(status: 426, body: nil))
+        XCTAssertEqual(
+            AppUpdateRequirement(status: 426, body: coded)?.appStoreURL,
+            AppUpdateRequirement.appStoreFallbackURL
+        )
     }
 }

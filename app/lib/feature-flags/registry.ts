@@ -5,6 +5,11 @@ export type FlagRegistryEntry = {
 	clientVisible?: boolean;
 	/** camelCase key for React loaders; defaults to flag key with hyphens removed. */
 	clientKey?: string;
+	/**
+	 * Shipped on iOS: on for iOS clients at or above `IOS_FEATURE_FLOOR` without
+	 * asking Flagship. Flagship still decides web, MCP, and older iOS builds.
+	 */
+	iosAlwaysOn?: boolean;
 };
 
 /** Add entries when gating a feature. Keys must match Flagship dashboard (kebab-case). */
@@ -20,17 +25,20 @@ export const FLAG_REGISTRY: Record<string, FlagRegistryEntry> = {
 		description: "Native Ration Copilot chat on web and iOS",
 		clientVisible: true,
 		clientKey: "rationCopilot",
+		iosAlwaysOn: true,
 	},
 	"copilot-onboarding-free": {
 		defaultEnabled: false,
 		description:
 			"One-time iOS Ask Ration welcome briefing (intro + starter kitchen seed) for new users",
+		iosAlwaysOn: true,
 	},
 	"ai-import-url": {
 		defaultEnabled: false,
 		description: "AI recipe import parent switch (web / social / photo lanes)",
 		clientVisible: true,
 		clientKey: "aiImportUrl",
+		iosAlwaysOn: true,
 	},
 	"ai-import-web": {
 		defaultEnabled: false,
@@ -38,6 +46,7 @@ export const FLAG_REGISTRY: Record<string, FlagRegistryEntry> = {
 			"Website recipe import (plain fetch + Supadata scrape + client assist)",
 		clientVisible: true,
 		clientKey: "aiImportWeb",
+		iosAlwaysOn: true,
 	},
 	"ai-import-social": {
 		defaultEnabled: false,
@@ -45,36 +54,42 @@ export const FLAG_REGISTRY: Record<string, FlagRegistryEntry> = {
 			"Social URL import (TikTok / Instagram / YouTube via metadata, captions, and spoken-audio ASR)",
 		clientVisible: true,
 		clientKey: "aiImportSocial",
+		iosAlwaysOn: true,
 	},
 	"ai-import-photo": {
 		defaultEnabled: false,
 		description: "Screenshot / photo recipe import (Gemini vision)",
 		clientVisible: true,
 		clientKey: "aiImportPhoto",
+		iosAlwaysOn: true,
 	},
 	"ai-scan-receipt": {
 		defaultEnabled: false,
 		description: "AI receipt / pantry vision scan (Cargo + Dock spend)",
 		clientVisible: true,
 		clientKey: "aiScanReceipt",
+		iosAlwaysOn: true,
 	},
 	"ai-dock-from-receipt": {
 		defaultEnabled: false,
 		description: "Supply dock-from-receipt entry (match/complete)",
 		clientVisible: true,
 		clientKey: "aiDockFromReceipt",
+		iosAlwaysOn: true,
 	},
 	"ai-generate-meal": {
 		defaultEnabled: false,
 		description: "AI meal generation",
 		clientVisible: true,
 		clientKey: "aiGenerateMeal",
+		iosAlwaysOn: true,
 	},
 	"ai-plan-week": {
 		defaultEnabled: false,
 		description: "AI weekly meal planner",
 		clientVisible: true,
 		clientKey: "aiPlanWeek",
+		iosAlwaysOn: true,
 	},
 	"app-review-login": {
 		defaultEnabled: false,
@@ -88,6 +103,7 @@ export const FLAG_REGISTRY: Record<string, FlagRegistryEntry> = {
 			"USDA nutrition resolve, recipe/cargo snapshots, and Galley panel",
 		clientVisible: true,
 		clientKey: "nutritionEngine",
+		iosAlwaysOn: true,
 	},
 	"nutrition-ai-estimate": {
 		defaultEnabled: false,
@@ -95,18 +111,21 @@ export const FLAG_REGISTRY: Record<string, FlagRegistryEntry> = {
 			"AI nutrient estimates on AI ingest paths when USDA resolve misses",
 		clientVisible: true,
 		clientKey: "nutritionAiEstimate",
+		iosAlwaysOn: true,
 	},
 	"nutrition-manifest": {
 		defaultEnabled: false,
 		description: "Manifest daily nutrition totals and intake logging",
 		clientVisible: true,
 		clientKey: "nutritionManifest",
+		iosAlwaysOn: true,
 	},
 	"nutrition-goals": {
 		defaultEnabled: false,
 		description: "Personal nutrition goals and vs-goal views",
 		clientVisible: true,
 		clientKey: "nutritionGoals",
+		iosAlwaysOn: true,
 	},
 	"nutrition-cook-log-split": {
 		defaultEnabled: false,
@@ -114,6 +133,7 @@ export const FLAG_REGISTRY: Record<string, FlagRegistryEntry> = {
 			"Separate Manifest Cook (shared) from Log my serving (private intake)",
 		clientVisible: true,
 		clientKey: "nutritionCookLogSplit",
+		iosAlwaysOn: true,
 	},
 	"cargo-quick-eat": {
 		defaultEnabled: false,
@@ -121,6 +141,7 @@ export const FLAG_REGISTRY: Record<string, FlagRegistryEntry> = {
 			"Cargo Quick Eat: snack on Manifest with best-effort pantry deduct + optional intake",
 		clientVisible: true,
 		clientKey: "cargoQuickEat",
+		iosAlwaysOn: true,
 	},
 	"nutrition-intake-notes": {
 		defaultEnabled: false,
@@ -128,6 +149,7 @@ export const FLAG_REGISTRY: Record<string, FlagRegistryEntry> = {
 			"Optional private notes (≤280 chars) on Manifest Eat / Quick Eat intake logs",
 		clientVisible: true,
 		clientKey: "nutritionIntakeNotes",
+		iosAlwaysOn: true,
 	},
 	"nutrition-cross-org-diary": {
 		defaultEnabled: false,
@@ -135,13 +157,7 @@ export const FLAG_REGISTRY: Record<string, FlagRegistryEntry> = {
 			"Personal intake summary/history aggregates across all kitchens for the signed-in user",
 		clientVisible: true,
 		clientKey: "nutritionCrossOrgDiary",
-	},
-	"nutrition-macros-history": {
-		defaultEnabled: false,
-		description:
-			"iOS Manifest Macros page: range averages, previous period, and intake notes",
-		clientVisible: true,
-		clientKey: "nutritionMacrosHistory",
+		iosAlwaysOn: true,
 	},
 	"nutrition-async-recompute": {
 		defaultEnabled: false,
@@ -154,19 +170,14 @@ export const FLAG_REGISTRY: Record<string, FlagRegistryEntry> = {
 			"Feature enablement onboarding (AI + Macro Tracking) and web AI consent parity gate",
 		clientVisible: true,
 		clientKey: "featureEnablementConsent",
+		iosAlwaysOn: true,
 	},
 	"supply-multi-lists": {
 		defaultEnabled: false,
 		description: "Saved lists that pull into Live Supply",
 		clientVisible: true,
 		clientKey: "supplyMultiLists",
-	},
-	"ios-home-widgets": {
-		defaultEnabled: false,
-		description:
-			"iOS Home Screen widgets for Supply, Eat, and Today. Snapshot only; checks and Quick Eat stay on their existing routes.",
-		clientVisible: true,
-		clientKey: "iosHomeWidgets",
+		iosAlwaysOn: true,
 	},
 };
 

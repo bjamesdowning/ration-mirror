@@ -6,7 +6,6 @@ import { getHubMealMatchWidgets } from "~/lib/hub-match.server";
 import { getKitchenEvents, getKitchenStats } from "~/lib/kitchen-events.server";
 import { log } from "~/lib/logging.server";
 import { getDistinctMealTags, getManifestPreview } from "~/lib/manifest.server";
-import { MEAL_MATCH_CANDIDATE_CAP } from "~/lib/matching.server";
 import { resolveNutritionCapabilities } from "~/lib/nutrition/feature-policy.server";
 import { loadHubNutritionData } from "~/lib/nutrition/hub-data.server";
 import { isNutritionHubWidgetsEnabled } from "~/lib/nutrition/hub-widgets";
@@ -23,11 +22,6 @@ import {
 import { getCargoTagIndex, getOrganizationTagSlugs } from "~/lib/tags.server";
 import type { HubProfile } from "~/lib/types";
 
-/**
- * @deprecated Use `MEAL_MATCH_CANDIDATE_CAP` — kept as an alias so older
- * imports keep compiling during the P1-A rollout.
- */
-export const MOBILE_PRE_LIMIT = MEAL_MATCH_CANDIDATE_CAP;
 const MOBILE_MAX_WIDGET_LIMIT = 20;
 const MOBILE_MANIFEST_ENTRY_CAP = 50;
 export const MOBILE_SUPPLY_ITEMS_SLICE = 20;
@@ -167,7 +161,7 @@ export async function getMobileHubData(
 	env: Cloudflare.Env,
 	organizationId: string,
 	userId: string,
-	request?: Request,
+	request: Request,
 ) {
 	const db = env.DB;
 	const settings = await getUserSettings(db, userId);
@@ -192,13 +186,9 @@ export async function getMobileHubData(
 		findWidget("flight-recorder")?.visible !== false &&
 		resolvedWidgets.some((w) => w.id === "flight-recorder" && w.visible);
 
-	const flagContext = request
-		? buildMobileFlagContext(request, env, { user: { id: userId } })
-		: buildMobileFlagContext(
-				new Request("https://ration.local/api/mobile/v1/hub"),
-				env,
-				{ user: { id: userId } },
-			);
+	const flagContext = buildMobileFlagContext(request, env, {
+		user: { id: userId },
+	});
 	const caps = await resolveNutritionCapabilities(env, flagContext);
 	const nutritionWidgetsEnabled = isNutritionHubWidgetsEnabled({
 		nutritionManifest: caps.manifest,

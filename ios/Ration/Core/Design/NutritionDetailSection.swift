@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Read-only nutrition summary for Cargo / Galley detail (gated by `nutritionEngine`).
+/// Read-only nutrition summary for Cargo / Galley detail.
 struct NutritionDetailSection: View {
     let title: String
     let nutrients: NutrientValues?

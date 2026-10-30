@@ -11,6 +11,7 @@ struct APIErrorBody: Codable, Sendable {
     let tier: String?
     let existingMealId: String?
     let existingMealName: String?
+    let appStoreUrl: String?
 }
 
 enum APIError: Error, LocalizedError, Sendable {

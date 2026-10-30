@@ -565,7 +565,7 @@ export function buildMobileOpenApiDocument(baseUrl: string) {
 				get: {
 					summary: "Macros history for the Manifest page",
 					description:
-						"Requires nutrition-macros-history, nutrition-engine, and nutrition-manifest, plus active intake consent. Query: from, to (YYYY-MM-DD, inclusive, max 93 days). Returns the current summary, the previous equal-length summary, and note rows only when nutrition-intake-notes and nutrition-cook-log-split are on.",
+						"Requires nutrition-engine and nutrition-manifest, plus active intake consent. Query: from, to (YYYY-MM-DD, inclusive, max 93 days). Returns the current summary, the previous equal-length summary, and note rows only when nutrition-intake-notes and nutrition-cook-log-split are on.",
 					security: [{ bearerAuth: [] }],
 					parameters: [
 						{
@@ -810,7 +810,7 @@ export function buildMobileOpenApiDocument(baseUrl: string) {
 			"/api/mobile/v1/widgets/home": {
 				get: {
 					summary:
-						"Home Screen widget snapshot (Live supply, Eat foods, today). Flag ios-home-widgets. date is the device-local YYYY-MM-DD. Optional tag limits Eat to one food-domain cargo tag slug.",
+						"Home Screen widget snapshot (Live supply, Eat foods, today). date is the device-local YYYY-MM-DD. Optional tag limits Eat to one food-domain cargo tag slug.",
 					security: [{ bearerAuth: [] }],
 					responses: {
 						"200": { description: "Widget snapshot" },

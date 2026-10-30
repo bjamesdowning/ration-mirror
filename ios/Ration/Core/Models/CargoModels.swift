@@ -27,7 +27,7 @@ struct CargoItem: Codable, Sendable, Identifiable, Hashable {
     let expiresAt: Date?
     let createdAt: Date
     let updatedAt: Date
-    /// Additive — present when nutrition-engine has resolved/overridden cargo nutrition.
+    /// Present once nutrition has been resolved or overridden for this item.
     var nutrition: NutritionSnapshot? = nil
 
     init(from decoder: Decoder) throws {
@@ -196,7 +196,7 @@ struct UpdateCargoRequest: Encodable, Sendable {
     var tags: [String]?
     /// Defaults to `.omit` so quantity-only updates do not clear expiry.
     var expiresAt: OptionalDateUpdate = .omit
-    /// When non-nil, persists a user nutrition override (nutrition-engine).
+    /// When non-nil, persists a user nutrition override.
     var nutrition: NutritionSnapshot? = nil
 
     enum CodingKeys: String, CodingKey {

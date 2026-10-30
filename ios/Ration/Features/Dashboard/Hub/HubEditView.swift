@@ -6,7 +6,6 @@ struct HubEditView: View {
     let hubLayout: HubLayoutPayload?
     let availableMealTags: [String]
     let availableCargoTags: [String]
-    var nutritionWidgetsEnabled: Bool = false
     let onSave: ([HubWidgetLayout]) async throws -> Void
     let onSaveProfile: (HubProfile) async throws -> Void
 
@@ -23,7 +22,6 @@ struct HubEditView: View {
         hubLayout: HubLayoutPayload?,
         availableMealTags: [String],
         availableCargoTags: [String],
-        nutritionWidgetsEnabled: Bool = false,
         onSave: @escaping ([HubWidgetLayout]) async throws -> Void,
         onSaveProfile: @escaping (HubProfile) async throws -> Void
     ) {
@@ -31,7 +29,6 @@ struct HubEditView: View {
         self.hubLayout = hubLayout
         self.availableMealTags = availableMealTags
         self.availableCargoTags = availableCargoTags
-        self.nutritionWidgetsEnabled = nutritionWidgetsEnabled
         self.onSave = onSave
         self.onSaveProfile = onSaveProfile
         _selectedProfile = State(initialValue: hubProfile ?? "full")
@@ -88,11 +85,7 @@ struct HubEditView: View {
             }
         }
         .onAppear {
-            widgets = HubLayoutEngine.initEditableWidgets(
-                profile: hubProfile,
-                layout: hubLayout,
-                nutritionWidgetsEnabled: nutritionWidgetsEnabled
-            )
+            widgets = HubLayoutEngine.initEditableWidgets(profile: hubProfile, layout: hubLayout)
             selectedProfile = hubProfile ?? "full"
         }
     }
@@ -155,11 +148,7 @@ struct HubEditView: View {
     }
 
     private func applyPreset(_ profile: HubProfile) {
-        widgets = HubLayoutEngine.initEditableWidgets(
-            profile: profile,
-            layout: nil,
-            nutritionWidgetsEnabled: nutritionWidgetsEnabled
-        )
+        widgets = HubLayoutEngine.initEditableWidgets(profile: profile, layout: nil)
         isSaving = true
         Task {
             defer { isSaving = false }

@@ -86,10 +86,8 @@ struct SupplyView: View {
                             }
                             .buttonStyle(SecondaryButtonStyle())
                             .disabled(model.isSyncing)
-                            if model.multiListsEnabled {
-                                Button("Pull from list") { showingPullFrom = true }
-                                    .buttonStyle(SecondaryButtonStyle())
-                            }
+                            Button("Pull from list") { showingPullFrom = true }
+                                .buttonStyle(SecondaryButtonStyle())
                         }
                         .padding(24)
                     }
@@ -106,15 +104,13 @@ struct SupplyView: View {
                     onOpenGroupSettings: onOpenGroupSettings,
                     onOpenSettings: onOpenSettings
                 )
-                if model.multiListsEnabled {
-                    ToolbarItem(placement: .topBarLeading) {
-                        Button {
-                            showingLists = true
-                        } label: {
-                            Image(systemName: "list.bullet.rectangle")
-                        }
-                        .accessibilityLabel("Lists")
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        showingLists = true
+                    } label: {
+                        Image(systemName: "list.bullet.rectangle")
                     }
+                    .accessibilityLabel("Lists")
                 }
             }
             .navigationDestination(isPresented: $showingLists) {
@@ -326,6 +322,8 @@ struct SupplyView: View {
                 set: { if !$0 { scanConsent.decline() } }
             )) {
                 AIConsentGateView(
+                    errorMessage: scanConsent.errorMessage,
+                    isAccepting: scanConsent.isAccepting,
                     onAccept: { Task { await scanConsent.accept(api: env.api, session: env.session) } },
                     onDecline: { scanConsent.decline() }
                 )
@@ -380,17 +378,15 @@ struct SupplyView: View {
                     Label("Add to Supply", systemImage: "plus")
                 }
                 .disabled(!model.canEditCurrentList)
-                if model.multiListsEnabled {
-                    Button {
-                        showingLists = true
-                    } label: {
-                        Label("Lists", systemImage: "list.bullet")
-                    }
-                    Button {
-                        showingPullFrom = true
-                    } label: {
-                        Label("Pull from list", systemImage: "arrow.down.doc")
-                    }
+                Button {
+                    showingLists = true
+                } label: {
+                    Label("Lists", systemImage: "list.bullet")
+                }
+                Button {
+                    showingPullFrom = true
+                } label: {
+                    Label("Pull from list", systemImage: "arrow.down.doc")
                 }
                 if env.session.clientFlags.isAiDockFromReceiptEnabled {
                     Button {
@@ -414,7 +410,6 @@ struct SupplyView: View {
         .task(id: loadTaskKey) {
             guard isTabActive, let organizationId else { return }
             model.refreshOutcomes = env.refreshOutcomes
-            model.multiListsEnabled = env.session.clientFlags.isSupplyMultiListsEnabled
             await env.loadSnapshot(organizationId: organizationId, domain: SnapshotDomain.supply) {
                 await model.load(
                     api: env.api,
@@ -434,7 +429,7 @@ struct SupplyView: View {
                     organizationId: organizationId
                 )
             }
-            while !Task.isCancelled && isTabActive && model.multiListsEnabled {
+            while !Task.isCancelled && isTabActive {
                 try? await Task.sleep(nanoseconds: 12_000_000_000)
                 guard !Task.isCancelled, isTabActive else { break }
                 await model.pollCatalogIfVisible(api: env.api)
@@ -446,7 +441,6 @@ struct SupplyView: View {
     private func openSupplyComposerIfNeeded() {
         guard env.deepLinkRouter.supplyComposePending, let organizationId else { return }
         Task {
-            model.multiListsEnabled = env.session.clientFlags.isSupplyMultiListsEnabled
             await model.focusLiveList(
                 api: env.api,
                 snapshots: env.snapshots,

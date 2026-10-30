@@ -1,3 +1,4 @@
+import { isVersionAtLeast } from "~/lib/client-version";
 import type { FlagshipEvaluationContext } from "./context.server";
 import { FLAG_REGISTRY, type FlagKey, getClientFlagKey } from "./registry";
 
@@ -31,18 +32,26 @@ function getEnvOverride(env: Env, flag: string): boolean | undefined {
 	return overrides[flag];
 }
 
+/** First iOS release that ships every `iosAlwaysOn` feature. */
+export const IOS_FEATURE_FLOOR = "1.5.0";
+
+function isShippedIosClient(context: FlagshipEvaluationContext): boolean {
+	const version = context.clientVersion;
+	return (
+		context.clientPlatform === "ios" &&
+		typeof version === "string" &&
+		isVersionAtLeast(version, IOS_FEATURE_FLOOR)
+	);
+}
+
 async function evaluateFlagBinding(
-	env: Env,
+	flags: Flagship,
 	flag: string,
 	defaultEnabled: boolean,
 	context: FlagshipEvaluationContext,
 ): Promise<boolean> {
-	if (!env.FLAGS) {
-		return defaultEnabled;
-	}
-
 	try {
-		return await env.FLAGS.getBooleanValue(flag, defaultEnabled, context);
+		return await flags.getBooleanValue(flag, defaultEnabled, context);
 	} catch {
 		// Local Vite dev / Miniflare may expose FLAGS but require remote execution.
 		return defaultEnabled;
@@ -54,7 +63,8 @@ export async function isFeatureEnabled(
 	flag: string,
 	context: FlagshipEvaluationContext,
 ): Promise<boolean> {
-	if (!(flag in FLAG_REGISTRY)) {
+	const entry = FLAG_REGISTRY[flag];
+	if (!entry) {
 		return false;
 	}
 
@@ -63,16 +73,15 @@ export async function isFeatureEnabled(
 		return override;
 	}
 
-	const entry = FLAG_REGISTRY[flag];
-	if (!entry) {
-		return false;
+	if (entry.iosAlwaysOn && isShippedIosClient(context)) {
+		return true;
 	}
 
 	if (!env.FLAGS) {
 		return entry.defaultEnabled;
 	}
 
-	return evaluateFlagBinding(env, flag, entry.defaultEnabled, context);
+	return evaluateFlagBinding(env.FLAGS, flag, entry.defaultEnabled, context);
 }
 
 /**
@@ -108,11 +117,6 @@ export function applyClientFlagDependencies(
 		result.nutritionCrossOrgDiary =
 			result.nutritionCrossOrgDiary === true && (manifest || goals);
 	}
-	if ("nutritionMacrosHistory" in result) {
-		result.nutritionMacrosHistory =
-			manifest && result.nutritionMacrosHistory === true;
-	}
-
 	return result;
 }
 
@@ -143,7 +147,6 @@ export type {
 } from "./context.server";
 export {
 	buildAgentFlagContext,
-	buildFlagContext,
 	buildMobileFlagContext,
 	buildSystemFlagContext,
 	buildWebFlagContext,

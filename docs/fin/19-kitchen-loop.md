@@ -7,7 +7,7 @@ Ration’s kitchen is four household surfaces that feed each other: **Cargo → 
 1. **Cargo** — What you already have (pantry inventory). Quantities, units, domains, tags, and expiry live here. See *Cargo (pantry inventory)*.
 2. **Galley** — What you can cook (recipes and provisions). Ingredients should map to Cargo for accurate cook and shopping math. Mark meals **active** when you want them on the shopping list. See *Galley (recipes and provisions)*.
 3. **Manifest** — When you plan to eat (meal plan calendar). Place Galley meals into breakfast, lunch, dinner, or snack slots. Include or exclude plan days from Supply. See *Manifest (meal plan)*.
-4. **Supply** — What to buy. Sync builds the list from active Galley meals, Manifest days inside the org **planning horizon**, and Cargo restock toggles — minus what Cargo already covers. Shop, mark purchased, then **dock** into Cargo (or replenish via receipt scan). See *Supply (shopping list)*.
+4. **Supply** — What to buy. Sync builds the list from active Galley meals, Manifest days inside the org **planning horizon**, and Cargo restock toggles — minus what Cargo already covers. Shop, mark purchased, then **dock** into Cargo (or replenish via receipt scan). Only **Live Supply** is shopped and docked; on iPhone, saved lists add their items into Live Supply. See *Supply (shopping list)*.
 
 Supply is **plan minus Cargo**. Remaining protein or calories do **not** rewrite the list. AI Plan Week drafts from your Galley and preferences; it does not optimize for macro targets.
 

@@ -17,7 +17,7 @@ Typical categories include:
 - **Organization data**: pantry items (including optional nutrition snapshots), recipes, meal plans, supply lists, credit balance, ledger entries.
 - **Nutrition (when enabled)**: personal daily goals and logged intake from Manifest Eat / plate-up after **Macro Tracking** is enabled in Feature enablement; self-hosted USDA reference lookups (no third-party USDA API call for composition). Intake history is retained about **13 months (~396 days)** then purged; goals and intake are erased with account purge or Feature enablement erase actions.
 - **Shared kitchen delete** does **not** erase your personal intake history; kitchen labels may fall back to saved snapshots. Account purge and retention still erase intake.
-- **AI features**: receipt images may be stored temporarily for processing; embeddings may be stored in a vector index scoped to your organization.
+- **AI features**: Scan, meal generation, recipe import, Plan week, and Ask Ration send the photos, text, links, and kitchen details you use with them to Google Gemini (via Cloudflare AI Gateway). Recipe imports also send the link to Supadata to read the page. Receipt images may be stored temporarily for processing; embeddings may be stored in a vector index scoped to your organization. AI features stay off until you allow them.
 - **Billing**: Stripe customer and subscription metadata as needed to fulfill purchases.
 
 Exact categories and legal bases are described in the **privacy policy**.
@@ -27,6 +27,8 @@ Exact categories and legal bases are described in the **privacy policy**.
 When you **purge your account** from Settings (danger zone), or when an operator fulfils a verified erasure request from God Mode, Ration’s intent is to remove **your user record and associated personal data** from application databases and to clean up related artifacts (including vectors and objects tied to deletion flows). **Groups you solely own** may be deleted; shared groups may **transfer ownership** per in-app rules.
 
 Follow **on-screen warnings**—deletion is meant to be **irreversible**.
+
+On iPhone, tap your profile picture to open **Account**, then **Delete account** under **Danger zone**. If you have an active Crew membership, cancel it first: tap **Manage Subscription** for a membership bought through Apple, or cancel it where you bought it. Subscriptions bought through Apple keep billing until you cancel them, even after your account is deleted, and unused credits are forfeited. Type `delete` in **Type delete to confirm**, then tap **Delete my account**. Ration shows **Account deletion started** and signs you out; removal usually finishes within a few minutes.
 
 ## Data residency and subprocessors
 

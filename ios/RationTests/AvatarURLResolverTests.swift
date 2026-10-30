@@ -17,6 +17,11 @@ final class AvatarURLResolverTests: XCTestCase {
         XCTAssertTrue(AvatarURLResolver.requiresAuthentication(url!))
     }
 
+    func testOrgAvatarPathOnAnotherHostDoesNotGetBearer() {
+        let url = URL(string: "https://lh3.googleusercontent.com/api/organization/avatar/org_xyz")!
+        XCTAssertFalse(AvatarURLResolver.requiresAuthentication(url))
+    }
+
     func testResolvesGoogleOAuthURL() {
         let raw = "https://lh3.googleusercontent.com/a/abc123"
         let url = AvatarURLResolver.resolve(raw)

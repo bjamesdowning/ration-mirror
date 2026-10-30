@@ -24,20 +24,24 @@ Set your **Apple Developer Team ID** in `project.yml` (`DEVELOPMENT_TEAM`) befor
 building to a device, then re-run `xcodegen generate`.
 
 **Versioning:** User-facing app version is `MARKETING_VERSION` in `project.yml`
-(currently **1.5.10**). `CURRENT_PROJECT_VERSION` is the monotonic build number for
+(currently **1.5.11**). `CURRENT_PROJECT_VERSION` is the monotonic build number for
 TestFlight / App Store uploads. Follow the same patch/minor rules as the web app
 (`1.X.1`–`1.X.49`, then `1.(X+1).0`); see `.cursor/rules/ration-master.mdc`.
 After editing `project.yml`, run `bun run ios:generate`.
 
 ## Home Screen widgets
 
-The `RationWidgets` extension ships three widgets behind Flagship `ios-home-widgets` (default off):
+The `RationWidgets` extension ships three widgets, unflagged in 1.5.x:
 
-- **Supply** — unchecked Live items. A check marks the row purchased and leaves it on the list until you dock in the app. “+” opens the Live jot sheet.
-- **Eat** — one tap takes a single count (slice, can, pack, unit). Edit Widget can limit the list to one cargo tag. Grams, millilitres, and dozen open Quick Eat. One-tap also needs `cargo-quick-eat`.
-- **Today** — today’s meals, each marked with its slot. Remaining calories, and macros on the large size, appear only with nutrition consent.
+- **Supply** — small (count + first item), medium (2 rows), large (5 rows), and Lock Screen circular / rectangular / inline (read-only). A tap marks the row purchased (**Bought**) and leaves it on the list until you dock in the app. On medium and large, “+” (**Add items**) opens the Live jot sheet.
+- **Eat** — small glance, medium (2 rows), large (4 rows). One tap takes a single count (slice, can, pack, unit) and shows **Eaten**. Edit Widget can limit the list to one **Cargo tag**. Grams, millilitres, and dozen show **Choose amount** and open Quick Eat.
+- **Today** — small (next meal, **Nothing planned**, or **All cooked**), medium and large (up to 4 meals with slot and **Cooked**). Remaining **Calories**, and **Protein** / **Carbs** / **Fat** on large, appear only with a goal and nutrition consent.
 
-Add them from the Home Screen widget gallery after installing a build that includes the extension. With the flag off, each widget says it is turned off and shows no kitchen data. The widget process reads the refresh token from the shared keychain access group and never deletes it. Sign out in the app clears the snapshot.
+Add them from the Home Screen widget gallery. Signed out, each widget shows **Open Ration to sign in** and no kitchen data. Timelines refresh hourly, when the app moves to the background, and after a widget tap. The widget process reads the refresh token from the shared keychain access group and never deletes it. Sign out, or signing in as a different account, clears the widget tokens and snapshot.
+
+## Minimum supported version
+
+The server returns **426** `upgrade_required` to any iOS build below the `IOS_MIN_SUPPORTED_VERSION` wrangler var (see the root README, *Minimum iOS version*). `APIClient` turns that into `AppUpdateRequirement`, and `RootView` replaces the app with `UpdateRequiredView`: **Update Ration**, the server message, and **Open the App Store**. To test, point a debug build at a dev Worker with `IOS_MIN_SUPPORTED_VERSION` above `MARKETING_VERSION`.
 
 
 ### First-class repo commands
@@ -188,11 +192,11 @@ Ration/
     ├── Auth/       # Magic-link + Apple/Google social sign-in
     ├── Dashboard/  # Hub widget grid (GET /hub), customize layout
     ├── Cargo/      # Paginated list + filters + FAB
-    ├── Supply/     # Shopping list with filters + dock FAB
+    ├── Supply/     # Live Supply, Lists library, saved lists, Pull from sheet, dock
     ├── Scan/       # Camera capture → resize → POST /scan
     ├── Galley/     # Meals CRUD, AI generate/import, match mode; Share → Import URL + optional caption
     │               # RationShare: App Group + auto-start Import (iOS 1.4.5+)
-    ├── Manifest/   # Edge week rocker + toolbar Today, plan-week AI, Cook/Eat (flag-gated)
+    ├── Manifest/   # Edge week rocker + toolbar Today, plan-week AI, Cook/Eat, Macros page (MacrosHistory.swift)
     ├── Settings/   # Account settings (profile, tier, appearance, privacy, sign out)
     │               # GroupSettingsView — org switch, members, invite, credits transfer
     │               # TagsSettingsView — edit name/category/color, merge, delete (with confirm)
@@ -268,8 +272,8 @@ handler also opens the picker when access is lost remotely.
 | `/manifest`, `/manifest/consume` | GET/POST | Meal plan (legacy Eat/consume) |
 | `/manifest/cook` | POST | Shared Cook → Prepared (`nutrition-cook-log-split`) |
 | `/manifest/entries/:entryId/intake` | POST/DELETE | Atomic private Eat log / clear (operation key; versioned privacy consent) |
-| `/nutrition/summary`, `/nutrition/goals` | GET/… | Nutrition summary + goals (flag-gated; goals GET accepts `asOf`) |
-| `/nutrition/macros` | GET | Macros history (`nutrition-macros-history`; from/to, previous period, notes) |
+| `/nutrition/summary`, `/nutrition/goals` | GET/… | Nutrition summary + goals (goals GET accepts `asOf`) |
+| `/nutrition/macros` | GET | Macros history (from/to, previous period, notes) |
 | `/scan`, `/scan/:requestId` | POST/GET | Visual scan AI |
 | `/settings` | GET/PATCH | User preferences |
 | `/orgs` | GET | List groups for org picker / recovery |
@@ -313,19 +317,18 @@ and toolbar **Today** (only when away from today’s window). When `nutrition-go
 the day strip shows kcal progress (`ThinProgressBar` + `consumed / target`) instead of
 absolute macros only; fiber appears on the strip only when day totals include known fiber.
 
-**Nutrition Cook/Eat split (iOS 1.3.25, flag-gated):** When `nutrition-cook-log-split` is on,
-Manifest **Cook** deducts Cargo and marks *Prepared* (no personal nutrition). **Log my serving**
+**Nutrition Cook/Eat split:** Manifest **Cook** deducts Cargo and marks *Prepared* (no personal nutrition). **Log my serving**
 opens `ManifestPlateUpSheet` for private intake; first use requires an **explicit** intake-consent
 affirmation after displaying the versioned privacy statement, followed by a separate privacy-API
 grant — not an inline Eat field and not implied by Cook or goals. Galley **Cook meal** bridges
 onto today’s Manifest and may offer the same Eat sheet; **Add to Manifest** deep-links to
 Add-to-plan with meal + day prefilled (`ration://manifest/add?mealId=&date=`). Day view shows
 an Intake log derived from personal intake on entries. Settings → Nutrition goals remain a
-separate explicit consent path (in-form Save; grant must leave goals consent **active** before upsert). Flags off → legacy Consume/Eat only; Galley Cook stays cargo-only.
+separate explicit consent path (in-form Save; grant must leave goals consent **active** before upsert).
 
-**Cross-org personal diary (iOS 1.4.15, flag `nutritionCrossOrgDiary`):** NutritionStore cache is user-global across kitchen switches when the flag is on. Manifest `dayIntakeRows` powers the day intake log (kitchen name chips); per-entry `personalIntake` markers stay active-kitchen scoped.
+**Cross-org personal diary:** NutritionStore cache is user-global across kitchen switches. Manifest `dayIntakeRows` powers the day intake log (kitchen name chips); per-entry `personalIntake` markers stay active-kitchen scoped.
 
-**Eat macros + optional notes (iOS 1.4.9 / quantity 1.4.29):** Shared `IntakeMacroPreview` on Manifest Eat and Cargo Quick Eat. Eat amount is a decimal field plus system `Stepper` (0.01–100 servings; g/oz when recipe mass is known) — no fraction chips. Optional private notes (≤280) when `nutritionIntakeNotes` / `nutrition-intake-notes` is on. Hub/Manifest decode hardened for string aggregates and ISO `personalIntake.occurredAt`. Galley Cook → Eat reads live Macro Tracking consent from `NutritionConsentStore`.
+**Eat macros + optional notes (iOS 1.4.9 / quantity 1.4.29):** Shared `IntakeMacroPreview` on Manifest Eat and Cargo Quick Eat. Eat amount is a decimal field plus system `Stepper` (0.01–100 servings; g/oz when recipe mass is known) — no fraction chips. Optional private notes (≤280). Hub/Manifest decode hardened for string aggregates and ISO `personalIntake.occurredAt`. Galley Cook → Eat reads live Macro Tracking consent from `NutritionConsentStore`.
 
 **Nutrition goals + cargo override (iOS):** Nutrition Goals uses in-form Save (enabled when ≥1 target and Macro Tracking is on). Soft-gates to Feature enablement when Macro Tracking is off. Cargo/Scan nutrition
 editors only send `user_override` when macros are explicitly edited — qty/unit-only saves
@@ -374,7 +377,7 @@ read-only list/detail chips are unchanged.
 
 **Copilot reliability pass (iOS 1.1.12 build 8):** Restores Copilot send/stream lifecycle parity with web — non-response agent frames are ignored, event observation is ready before connect, and the composer clears after send while the keyboard stays open. Sticky activity shows during connect/thinking until assistant tokens arrive. Scroll tracking refreshes when tabs activate so dock collapse works on Cargo/Galley/Manifest/Supply. Composer height remeasures after UIKit layout instead of at width ≈ 1pt.
 
-**Onboarding (iOS 1.2.37, web v1.6.40):** Ask-first welcome briefing with a **single-item milk seed** (expiry + dairy tag). New human accounts also get a starter **Hot Chocolate** Galley recipe at signup. Live path (flag on): Fast intro (`search_docs`) → settle → Suggested bubble with seed prompt → tap to run seed. **60s** turn timeout + retry (same conversation for grant); soft-success if `add_cargo_item` already succeeded when the watchdog fires; empty/failed intro surfaces retry; late frames don’t wipe timeout errors. Get Started force-cancels hung turns. Fallback path (flag off / ineligible): static welcome + **See in Cargo** / **Get Started** chips — never a dead-end. Settings → Tutorial replays static copy only via `restartOnboarding` PATCH.
+**Onboarding (iOS 1.2.37, web v1.6.40):** Ask-first welcome briefing with a **single-item milk seed** (expiry + dairy tag). New human accounts also get a starter **Hot Chocolate** Galley recipe at signup. Live path (eligible new account): Fast intro (`search_docs`) → settle → Suggested bubble with seed prompt → tap to run seed. **60s** turn timeout + retry (same conversation for grant); soft-success if `add_cargo_item` already succeeded when the watchdog fires; empty/failed intro surfaces retry; late frames don’t wipe timeout errors. Get Started force-cancels hung turns. Fallback path (ineligible, or `copilot-onboarding-free` switched off via `FEATURE_FLAG_OVERRIDES`): static welcome + **See in Cargo** / **Get Started** chips — never a dead-end. Settings → Tutorial replays static copy only via `restartOnboarding` PATCH.
 
 **Quiet revalidate (iOS 1.1.16 build 12):** Cold open and foreground resume no longer flash warning banners while background refresh runs. Cached content appears instantly; stale disclosure is muted ("Last updated …") and suppressed during refresh and a 15s foreground grace window. `SnapshotLoadCoordinator` coalesces overlapping `.task` and pull-to-refresh loads; `AuthManager` token rotation uses a detached task so SwiftUI cancellation cannot abort shared refresh. `CancellationError` is never surfaced to users. Network reachability debounces brief offline flaps; returning online triggers a debounced active-tab refresh.
 
@@ -384,15 +387,9 @@ read-only list/detail chips are unchanged.
 
 **Dietary restriction indicators (iOS 1.2.32):** Settings → Dietary restrictions saves `user.settings.allergens` and updates `LaunchCoordinator` live. Galley meal rows show a compact warning glyph when ingredient names match selected allergens (same keyword map as web `app/lib/allergens.ts`); meal detail shows a full “Contains allergens” banner with labels. Matching is client-side via `AllergenDetector` — no extra API fields.
 
-**Copilot dock tab bar clearance (iOS 1.1.32 build 18):** `CopilotBottomDock` adds explicit `tabBarClearance` padding inside `TabView.safeAreaInset` so the composer sits above the tab bar (SwiftUI inset alone was overlapping icons). Removed the 28pt `bottomFade` strip that drew a visible band through tab labels. Dock composer uses compact single-line `TextField` until the draft contains a newline.
-
 **Copilot keyboard native UX (iOS 1.1.30 build 16):** Shared SwiftUI `TextField(axis: .vertical)` composer with `@FocusState` in tab dock and Ask sheet — keyboard and composer move as one unit without UITextView bridge hacks. Submit from tab dock dismisses keyboard, opens full Ask, and shows the user prompt plus Copilot thinking/tool activity in the transcript. Chevron-only keyboard dismiss (no Done toolbar). Fixed scroll margins with visual-only dock collapse; scroll-phase tracking defers dock toggle until flings settle. Hub widget reorder moves to edit mode only so home scroll stays fluid.
 
-**Copilot keyboard native UX (iOS 1.1.27 build 14):** Copilot dock uses `TabView.safeAreaInset` so SwiftUI lifts the composer above the keyboard (no manual overlay padding). UITextView locks ancestor `UIScrollView` scrolling while editing to prevent TabView fly-to-top. Keyboard dismiss uses standard iOS affordances: chevron-down on the composer, keyboard toolbar Done, and `inputAccessoryView` Done bar. Ask Ration opens via `fullScreenCover` (not `.sheet`) so swipe-down dismisses the keyboard without closing chat. Scroll margins no longer double-count keyboard height when the dock is inset-managed.
-
-**Copilot keyboard positioning and dismiss (iOS 1.1.19 build 12):** Inline dock overlays ignore SwiftUI's automatic keyboard safe area so manual `keyboardInset` padding is the single source of truth — the composer stays directly above the keyboard instead of flying to the top. Shared `CopilotKeyboardDismissPolicy` and a UIKit pan bridge on the composer capsule provide interactive swipe-down dismiss on both the dock and Ask sheet; dock padding interpolates with drag progress. Ask transcript always uses `scrollDismissesKeyboard(.interactively)`. Standard dismiss paths: swipe down on the composer, scroll the content behind it, or tap outside the dock.
-
-**iOS UX fixes (1.1.40, web v1.5.81):** Supply dock FAB is always visible (`+` menu): empty list offers Add item + Refresh; populated list offers Dock from Receipt (direct to source picker), Dock from List, and Add item. Manual supply add uses `SupplyAddItemSheet` (`POST /supply/items`). Cargo detail FAB adds Add to Supply / Remove from Supply with quantity sheet. Domain filters on Cargo/Galley trigger server reload; Supply applies domain + search client-side on the full list. Cargo and Galley search debounces remote queries (≥2 chars) — Cargo via `/search`, Galley via meals `q` param. Scan review opens a full edit sheet (name, qty, unit, domain, tags, expiry) before batch add to Cargo.
+**Supply menus (iOS 1.5.x):** The bottom-right `+` menu on Supply (**Supply actions**) offers **Add to Supply**, **Lists**, **Pull from list**, **Dock from Receipt**, and **Dock bought items to Cargo**. The Lists library menu (**Lists actions**) offers **New saved list…** and **Save Live Supply as a list…**; a saved list's menu (**List actions**) offers **Add to list**, **Add missing to Live**, **Duplicate this list** / **Restore this list**, **Archive this list**, and **Delete this list**. There are no toolbar list menus. Quick add (`SupplyQuickAddSheet`, `POST .../bulk-add`) takes a comma or newline jot. Cargo detail adds **Add to Supply** / **Remove from Supply** with a quantity sheet. Domain filters on Cargo/Galley trigger server reload; Supply applies domain + search client-side on the full list. Cargo and Galley search debounces remote queries (≥2 chars) — Cargo via `/search`, Galley via meals `q` param. Scan review opens a full edit sheet (name, qty, unit, domain, tags, expiry) before batch add to Cargo.
 
 **Search polish (1.1.41, web v1.5.82):** Galley match mode passes `q` to `/meals/match` (server-side name filter) instead of client-only search. Cargo/Galley `ListCountHeader` shows a mini spinner while debounced remote search runs. Supply list shows a “No matches” empty state when filters/search hide all items but the list still has entries.
 
@@ -405,7 +402,10 @@ read-only list/detail chips are unchanged.
 - Galley/Cargo scroll down: bar collapses to chat chip; FAB animates down to bottom-right row.
 - List rows scroll visibly behind the glass dock — no large blank band above the controls.
 - Ask sheet: send a tool turn (e.g. “add butter to cargo”) — tool card appears, no red decode error banner after completion.
-- Hub edit mode: scan FAB hidden; Supply empty list: `+` FAB shows Add item and Refresh.
+- Hub edit mode: scan FAB hidden. Supply empty list: inline **Add to Supply**, **Refresh list**, and **Pull from list**.
+- Lists library and a saved list: the bottom-right `+` menu works with the dock expanded and collapsed.
+- Manifest → chart icon → **Macros**: Week / Month / Custom, **Include today**, **Previous period**, **Notes**.
+- Widgets: add Supply / Eat / Today; signed out shows **Open Ration to sign in**; a Supply tap shows **Bought** and does not dock.
 - Cargo item detail: `⋯` includes Add to Supply; pop back restores list FAB.
 - Cargo tab: open item detail, switch to Galley tab — Galley `+` FAB must remain visible.
 - Galley meal detail: same `⋯` dock behavior; scroll last card clears dock; dock collapse on scroll still works.

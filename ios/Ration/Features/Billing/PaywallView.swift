@@ -1,6 +1,5 @@
 import SwiftUI
 import StoreKit
-import UIKit
 
 /// Crew Member + credit packs paywall (RevenueCat offering-driven).
 struct PaywallView: View {
@@ -8,6 +7,7 @@ struct PaywallView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
     @State private var model = BillingViewModel()
+    @State private var showingManageSubscriptions = false
 
     var context: PaywallContext = .settings()
 
@@ -51,6 +51,7 @@ struct PaywallView: View {
             }
         }
         .task { await model.load(api: env.api, billing: env.billing) }
+        .manageSubscriptionsSheet(isPresented: $showingManageSubscriptions)
     }
 
     private var header: some View {
@@ -182,11 +183,11 @@ struct PaywallView: View {
                     Spacer()
                     Text("\(status.credits)").rationBody()
                 }
-                if let store = status.management.store {
+                if isAppStoreManaged(status) {
                     HStack {
                         Text("Managed via").rationCaption()
                         Spacer()
-                        Text(store.capitalized).rationBody()
+                        Text("App Store").rationBody()
                     }
                 }
             }
@@ -254,7 +255,7 @@ struct PaywallView: View {
         VStack(spacing: 12) {
             if shouldShowManageSubscription(status) {
                 Button(String(localized: "Manage subscription")) {
-                    Task { await openManageSubscriptions() }
+                    showingManageSubscriptions = true
                 }
                 .buttonStyle(SecondaryButtonStyle())
             }
@@ -271,9 +272,15 @@ struct PaywallView: View {
             .buttonStyle(SecondaryButtonStyle())
             .disabled(model.isRestoring || model.purchasingPackageID != nil)
 
-            Text(revenueCatStatusText)
-                .rationCaption()
-                .multilineTextAlignment(.center)
+            if env.billing.packages.isEmpty {
+                if status?.billingUnavailable != true {
+                    purchasesUnavailable
+                }
+            } else {
+                Text("Purchases are processed by the App Store. Your Crew Member status unlocks once Apple confirms the transaction.")
+                    .rationCaption()
+                    .multilineTextAlignment(.center)
+            }
 
             subscriptionDisclosure
         }
@@ -285,7 +292,7 @@ struct PaywallView: View {
                 .rationCaption()
                 .multilineTextAlignment(.center)
             HStack(spacing: 12) {
-                Button("Terms") {
+                Button("Terms of Use") {
                     openURL(AppConfig.termsURL)
                 }
                 Button("Privacy") {
@@ -314,11 +321,11 @@ struct PaywallView: View {
                                 .multilineTextAlignment(.center)
                         }
                     } else if let ends = formattedExpiry(status.entitlements.crew_member.expiresAt) {
-                        Text("Your Crew membership ends on \(ends). Manage renewal on the web at ration.mayutic.com → Settings.")
+                        Text("Your Crew membership ends on \(ends).")
                             .rationCaption()
                             .multilineTextAlignment(.center)
                     } else {
-                        Text("Your Crew membership is set to end after the current period. Manage renewal on the web at ration.mayutic.com → Settings.")
+                        Text("Your Crew membership is set to end after the current period.")
                             .rationCaption()
                             .multilineTextAlignment(.center)
                     }
@@ -329,7 +336,7 @@ struct PaywallView: View {
                             .rationCaption()
                             .multilineTextAlignment(.center)
                     } else {
-                        Text("Your subscription is managed on the web. Open ration.mayutic.com → Settings in a browser to change or cancel. New iOS purchases use the App Store.")
+                        Text("Your Crew membership is active on your Ration account.")
                             .rationCaption()
                             .multilineTextAlignment(.center)
                     }
@@ -340,9 +347,7 @@ struct PaywallView: View {
 
     private var subscriptionSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            if env.billing.subscriptionPackages.isEmpty {
-                Text("Subscriptions load from RevenueCat offerings.").rationCaption()
-            } else {
+            if !env.billing.subscriptionPackages.isEmpty {
                 sectionHeader(
                     "Crew Member",
                     caption: "Auto-renewable subscriptions. Unlimited capacity and household features. Billed through the App Store — cancel anytime in Manage subscription."
@@ -408,9 +413,9 @@ struct PaywallView: View {
         case "active_app_store_subscription":
             return "You already have an active subscription via the App Store."
         case "active_stripe_subscription":
-            return "You already have an existing web subscription. Manage it on ration.mayutic.com in a browser."
+            return "Your Ration account already has a Crew membership."
         default:
-            return reason ?? "Subscription purchase is not available right now."
+            return "Subscription purchase isn't available right now."
         }
     }
 
@@ -425,32 +430,17 @@ struct PaywallView: View {
         return store == "app_store" || store == "mac_app_store"
     }
 
-    @MainActor
-    private func openManageSubscriptions() async {
-        if let windowScene = UIApplication.shared.connectedScenes
-            .compactMap({ $0 as? UIWindowScene })
-            .first
-        {
-            try? await AppStore.showManageSubscriptions(in: windowScene)
-        }
-    }
-
-    private var revenueCatStatusText: String {
-        if env.billing.packages.isEmpty {
-            if let offeringsMessage = env.billing.offeringsMessage {
-                return offeringsMessage
+    private var purchasesUnavailable: some View {
+        VStack(spacing: 8) {
+            Text("Purchases are unavailable right now. Try again.")
+                .rationCaption()
+                .multilineTextAlignment(.center)
+            Button(model.isLoading ? "Loading…" : String(localized: "Try again")) {
+                Task { await model.load(api: env.api, billing: env.billing) }
             }
-            switch env.billing.sdkState {
-            case .configured:
-                return "No offerings are available yet. Configure an offering with the Crew Member package in RevenueCat to enable purchases."
-            case .loggedIn:
-                return "No offerings are available yet. Configure an offering with the Crew Member package in RevenueCat to enable purchases."
-            case let .loginRequired(message):
-                return message
-            case let .notConfigured(message):
-                return message
-            }
+            .font(Typography.caption())
+            .foregroundStyle(Theme.hyperGreen)
+            .disabled(model.isLoading)
         }
-        return "Purchases are processed by the App Store. Your Crew Member status unlocks once Apple confirms the transaction."
     }
 }

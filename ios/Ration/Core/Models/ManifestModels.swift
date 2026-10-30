@@ -26,17 +26,16 @@ struct ManifestEntry: Codable, Sendable, Identifiable {
     let mealType: String
     let mealPrepTime: Int?
     let mealCookTime: Int?
-    /// `meal.nutrition.perServing.energyKcal` when a nutrition snapshot exists (nutrition-manifest).
+    /// `meal.nutrition.perServing.energyKcal` when a nutrition snapshot exists.
     var mealEnergyKcalPerServing: Double? = nil
     var mealProteinGPerServing: Double? = nil
     var mealCarbsGPerServing: Double? = nil
     var mealFatGPerServing: Double? = nil
     /// Recipe ingredient mass per recipe serving (Eat gram/oz mode).
     var gramsPerServing: Double? = nil
-    /// Current-user-only personal intake — never another member's (nutrition-cook-log-split).
+    /// Current-user-only personal intake — never another member's.
     var personalIntake: ManifestPersonalIntake? = nil
 
-    var isConsumed: Bool { consumedAt != nil }
     /// Effective prepared state — checks `cookedAt` first, then legacy `consumedAt`.
     var isCooked: Bool { cookedAt != nil || consumedAt != nil }
 
@@ -171,9 +170,8 @@ struct ManifestResponse: Codable, Sendable {
     let entries: [ManifestEntry]
     /// Dates excluded from Supply sync (`false` = off supply). Omitted dates default to included.
     let supplyDayInclusion: [String: Bool]?
-    /// Only present when `nutrition-cook-log-split` + `nutrition-manifest` are both on.
     var intakeConsentGranted: Bool? = nil
-    /// Personal diary rows for the loaded date range (cross-org when Flagship allows).
+    /// Personal diary rows for the loaded date range, across every kitchen.
     var dayIntakeRows: [ManifestDayIntakeRow]? = nil
 }
 
@@ -189,24 +187,12 @@ struct ManifestEntryCreateResponse: Codable, Sendable {
     let entry: ManifestEntry
 }
 
-struct ManifestConsumeRequest: Encodable, Sendable {
-    let entryIds: [String]
-    var confirmInsufficient: Bool?
-}
-
 struct MissingIngredientDetail: Codable, Sendable, Identifiable {
     var id: String { name }
     let name: String
     let required: Double
     let available: Double
     let unit: String
-}
-
-struct ManifestConsumeResponse: Codable, Sendable {
-    let consumed: Int
-    let undoToken: String?
-    let requiresConfirmation: Bool?
-    let missingIngredients: [MissingIngredientDetail]?
 }
 
 struct ManifestSupplyDayToggleResponse: Codable, Sendable {
@@ -289,14 +275,14 @@ struct ManifestEntryDeleteResponse: Codable, Sendable {
 }
 
 /// GET `/api/mobile/v1/manifest/planned-dates?from=&to=`
-/// `consumedDates` only present when `nutrition-manifest` is enabled server-side.
+/// `consumedDates` marks days with logged intake.
 struct ManifestPlannedDatesResponse: Codable, Sendable {
     let dates: [String]
     var consumedDates: [String]? = nil
 }
 
 // MARK: - Cook (shared, org-scoped — Cargo + preparation only, never personal nutrition)
-// `POST /api/mobile/v1/manifest/cook` — gated by `nutrition-cook-log-split`.
+// `POST /api/mobile/v1/manifest/cook`
 
 struct CookEntriesRequest: Encodable, Sendable {
     let entryIds: [String]
@@ -315,8 +301,8 @@ struct CookEntriesResponse: Codable, Sendable {
 }
 
 // MARK: - Eat (private personal intake — never mutates Cargo or shared plan state)
-// `POST|DELETE /api/mobile/v1/manifest/entries/:entryId/intake` — gated by
-// `nutrition-cook-log-split` + `nutrition-manifest` + intake consent; entry must be cooked first.
+// `POST|DELETE /api/mobile/v1/manifest/entries/:entryId/intake` — needs intake consent;
+// entry must be cooked first.
 
 struct ManifestPersonalIntake: Codable, Sendable, Equatable {
     let id: String

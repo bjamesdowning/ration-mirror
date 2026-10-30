@@ -41,6 +41,8 @@ enum AppleSignInNonce {
 struct AppleSignInResult {
     let identityToken: String
     let rawNonce: String
+    /// One-time code the server exchanges for a refresh token it can revoke on account deletion.
+    let authorizationCode: String?
     let givenName: String?
     let familyName: String?
 }
@@ -88,6 +90,7 @@ extension AppleSignInCoordinator: ASAuthorizationControllerDelegate {
         finish(.success(AppleSignInResult(
             identityToken: identityToken,
             rawNonce: rawNonce,
+            authorizationCode: credential.authorizationCode.flatMap { String(data: $0, encoding: .utf8) },
             givenName: givenName,
             familyName: familyName
         )))
@@ -109,6 +112,12 @@ extension AppleSignInCoordinator: ASAuthorizationControllerDelegate {
 
 extension AppleSignInCoordinator: ASAuthorizationControllerPresentationContextProviding {
     func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
-        PresentationAnchorProvider.keyWindow() ?? ASPresentationAnchor()
+        if let window = PresentationAnchorProvider.keyWindow() {
+            return window
+        }
+        guard let scene = PresentationAnchorProvider.windowScene() else {
+            preconditionFailure("Sign in with Apple requires a connected window scene")
+        }
+        return ASPresentationAnchor(windowScene: scene)
     }
 }

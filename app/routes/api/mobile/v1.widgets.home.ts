@@ -1,6 +1,5 @@
 import { data } from "react-router";
 import { handleApiError } from "~/lib/error-handler";
-import { assertFeatureEnabled } from "~/lib/feature-flags/assert-enabled.server";
 import { buildMobileFlagContext } from "~/lib/feature-flags/context.server";
 import { loadHomeWidgetSnapshot } from "~/lib/home-widgets.server";
 import { requireMobileActiveGroup } from "~/lib/mobile/auth.server";
@@ -10,7 +9,7 @@ import type { Route } from "./+types/v1.widgets.home";
 
 /**
  * GET /api/mobile/v1/widgets/home?date=YYYY-MM-DD
- * Flag-gated glance for the iOS Home Screen widgets.
+ * Glance for the iOS Home Screen widgets.
  */
 export async function loader({ request, context }: Route.LoaderArgs) {
 	if (request.method !== "GET") {
@@ -26,7 +25,6 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		const flagContext = buildMobileFlagContext(request, env, {
 			user: { id: userId },
 		});
-		await assertFeatureEnabled(env, "ios-home-widgets", flagContext);
 
 		const rateLimitResult = await checkRateLimit(
 			env.RATION_KV,

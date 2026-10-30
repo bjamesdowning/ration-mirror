@@ -3,7 +3,6 @@ import { redirect } from "react-router";
 import { ensureActiveOrganization, getAuth } from "~/lib/auth.server";
 import { mobileAuthHandoffLinks } from "~/lib/mobile/auth-handoff";
 import { readMobilePendingHandoff } from "~/lib/mobile/pending-handoff.server";
-import { PKCE_CHALLENGE_REGEX } from "~/lib/mobile/pkce";
 import { storeMobileAuthCode } from "~/lib/mobile/token.server";
 
 /** Post-verify handoff for iOS magic-link clients — redirects into the app. */
@@ -32,16 +31,12 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 	const client = url.searchParams.get("client");
 	if (client === "ios") {
 		const pendingId = url.searchParams.get("pending");
-		const legacyChallenge = url.searchParams.get("code_challenge");
-		let codeChallenge: string | null = null;
-		if (pendingId) {
-			codeChallenge = await readMobilePendingHandoff(
-				context.cloudflare.env.RATION_KV,
-				pendingId,
-			);
-		} else if (legacyChallenge && PKCE_CHALLENGE_REGEX.test(legacyChallenge)) {
-			codeChallenge = legacyChallenge;
-		}
+		const codeChallenge = pendingId
+			? await readMobilePendingHandoff(
+					context.cloudflare.env.RATION_KV,
+					pendingId,
+				)
+			: null;
 		if (!codeChallenge) {
 			throw redirect("/auth/verify?error=invalid_request");
 		}

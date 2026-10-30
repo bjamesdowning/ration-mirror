@@ -1,7 +1,7 @@
 import XCTest
 @testable import Ration
 
-/// Covers H-8 — the shared "proceed" gate used by all AI entry points
+/// The shared "proceed" gate used by all AI entry points
 /// (`ScanView`, `GenerateMealSheet`, `ImportRecipeSheet`, `PlanWeekSheet`, `SupplyView`, Ask).
 final class AIConsentGateSymmetryTests: XCTestCase {
     @MainActor
@@ -86,5 +86,15 @@ final class AIConsentGateSymmetryTests: XCTestCase {
 
         XCTAssertFalse(ran)
         XCTAssertTrue(supplyCoordinator.isPresenting)
+    }
+
+    /// The server rejects `enable` without `affirmed: true`.
+    func testEnableRequestCarriesAffirmation() throws {
+        let data = try JSONEncoder().encode(FeatureEnablementEnableRequest(feature: "ai", requestId: "r-1"))
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertEqual(json["action"] as? String, "enable")
+        XCTAssertEqual(json["feature"] as? String, "ai")
+        XCTAssertEqual(json["affirmed"] as? Bool, true)
+        XCTAssertEqual(json["requestId"] as? String, "r-1")
     }
 }

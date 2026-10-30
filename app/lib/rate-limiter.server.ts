@@ -369,7 +369,7 @@ export const RATE_LIMITS: Record<string, RateLimitConfig> = {
 		maxRequests: 60, // Read-only mobile Galley browsing
 		keyPrefix: "rate:meal_list",
 	},
-	/** Mobile `/hub` — 10-way parallel fan-out per call (see H-3); same tier class as cargo_list/meal_list. */
+	/** Mobile `/hub` — 10-way parallel fan-out per call; same tier class as cargo_list/meal_list. */
 	hub_read: {
 		windowMs: 60_000, // 1 minute
 		maxRequests: 60,
@@ -396,7 +396,7 @@ export const RATE_LIMITS: Record<string, RateLimitConfig> = {
 		keyPrefix: "rate:billing_read",
 		failClosed: true,
 	},
-	/** Mobile `/supply` — read-only, same tier class as cargo_list (see H-4). */
+	/** Mobile `/supply` — read-only, same tier class as cargo_list. */
 	supply_read: {
 		windowMs: 60_000, // 1 minute
 		maxRequests: 60,

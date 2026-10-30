@@ -10,6 +10,8 @@
  * Edge-compatible: uses Web Crypto (`crypto.subtle`) and `btoa` only.
  */
 
+import { timingSafeEqualString } from "~/lib/timing-safe-equal";
+
 /** Allowed verifier/challenge length per RFC 7636 §4.1 (43–128 chars). */
 export const PKCE_MIN_LENGTH = 43;
 export const PKCE_MAX_LENGTH = 128;
@@ -54,17 +56,5 @@ export async function verifyPkceChallenge(
 		return false;
 	}
 	const computed = await computeS256Challenge(verifier);
-	return timingSafeEqual(computed, challenge);
-}
-
-/** Length-independent constant-time string compare. */
-function timingSafeEqual(a: string, b: string): boolean {
-	if (a.length !== b.length) {
-		return false;
-	}
-	let mismatch = 0;
-	for (let i = 0; i < a.length; i++) {
-		mismatch |= a.charCodeAt(i) ^ b.charCodeAt(i);
-	}
-	return mismatch === 0;
+	return timingSafeEqualString(computed, challenge);
 }

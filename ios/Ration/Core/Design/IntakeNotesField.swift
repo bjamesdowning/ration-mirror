@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Optional private Eat note (≤280). Shown only when `nutritionIntakeNotes` is on.
+/// Optional private Eat note (≤280).
 struct IntakeNotesField: View {
     @Binding var notes: String
     var maxLength: Int = 280

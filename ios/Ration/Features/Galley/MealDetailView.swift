@@ -25,14 +25,6 @@ struct MealDetailView: View {
     @State private var pendingEatEntry: ManifestEntry?
     @Environment(\.dismiss) private var dismiss
 
-    private var cookLogSplitEnabled: Bool {
-        env.session.clientFlags.isNutritionCookLogSplitEnabled
-    }
-
-    private var offerEatEnabled: Bool {
-        cookLogSplitEnabled && env.session.clientFlags.isNutritionManifestEnabled
-    }
-
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
@@ -56,15 +48,13 @@ struct MealDetailView: View {
                 )
                 header(displayMeal)
                 servingsStepper(baseServings: max(displayMeal.servings ?? 1, 1))
-                if env.session.clientFlags.isNutritionEngineEnabled {
-                    NutritionDetailSection(
-                        title: "Nutrition · Per recipe serving",
-                        nutrients: displayMeal.nutrition?.displayNutrients,
-                        provenance: "Meal",
-                        coverage: displayMeal.nutrition?.coverage,
-                        emptyMessage: "No nutrition profile yet. Ensure ingredients have nutrition, then save the meal to recompute."
-                    )
-                }
+                NutritionDetailSection(
+                    title: "Nutrition · Per recipe serving",
+                    nutrients: displayMeal.nutrition?.displayNutrients,
+                    provenance: "Meal",
+                    coverage: displayMeal.nutrition?.coverage,
+                    emptyMessage: "No nutrition profile yet. Ensure ingredients have nutrition, then save the meal to recompute."
+                )
                 if !displayMeal.ingredients.isEmpty {
                     ingredients(displayMeal)
                 }
@@ -110,17 +100,15 @@ struct MealDetailView: View {
                 Button { Task { await cook() } } label: {
                     Label("Cook meal", systemImage: "flame")
                 }
-                if cookLogSplitEnabled {
-                    Button {
-                        env.openDeepLink(
-                            .manifestAddEntry(
-                                mealId: mealId,
-                                date: ManifestDateHelpers.todayISO()
-                            )
+                Button {
+                    env.openDeepLink(
+                        .manifestAddEntry(
+                            mealId: mealId,
+                            date: ManifestDateHelpers.todayISO()
                         )
-                    } label: {
-                        Label("Add to Manifest", systemImage: "calendar.badge.plus")
-                    }
+                    )
+                } label: {
+                    Label("Add to Manifest", systemImage: "calendar.badge.plus")
                 }
                 Button { Task { await toggleSupply() } } label: {
                     Label(
@@ -377,10 +365,8 @@ struct MealDetailView: View {
     @MainActor
     private func cook(confirmInsufficient: Bool = false) async {
         do {
-            let bridgeDate = cookLogSplitEnabled ? ManifestDateHelpers.todayISO() : nil
-            let bridgeHour = cookLogSplitEnabled
-                ? Calendar.current.component(.hour, from: Date())
-                : nil
+            let bridgeDate = ManifestDateHelpers.todayISO()
+            let bridgeHour = Calendar.current.component(.hour, from: Date())
             let result = try await MutationRetry.once {
                 try await env.api.cookMeal(
                     id: mealId,
@@ -414,10 +400,7 @@ struct MealDetailView: View {
             showCookUndo = result.undoToken != nil
             env.notifyCargoDataChanged()
             await loadAvailability()
-            if offerEatEnabled,
-               result.offerPersonalLog == true,
-               let bridged = result.entry
-            {
+            if result.offerPersonalLog == true, let bridged = result.entry {
                 pendingEatEntry = bridged.asManifestEntry()
             }
         } catch {

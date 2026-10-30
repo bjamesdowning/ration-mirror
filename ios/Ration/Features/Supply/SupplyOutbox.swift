@@ -24,10 +24,24 @@ enum SupplyOutbox {
                 )
                 remaining.removeValue(forKey: listId)
             } catch {
-                // Keep the bucket for the next reconnect.
+                if isPermanentRejection(error) {
+                    remaining.removeValue(forKey: listId)
+                }
             }
         }
         save(remaining)
+    }
+
+    /// Queued edits belong to the signed-in account.
+    static func clear() {
+        UserDefaults.standard.removeObject(forKey: key)
+    }
+
+    /// The server will never accept these operations (list gone, no access, invalid);
+    /// everything else (offline, 401, 408, 429, 5xx) retries on the next reconnect.
+    private static func isPermanentRejection(_ error: Error) -> Bool {
+        guard let status = (error as? APIError)?.statusCode else { return false }
+        return (400..<500).contains(status) && ![401, 408, 429].contains(status)
     }
 
     private struct Bucket: Codable {

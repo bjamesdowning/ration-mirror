@@ -42,6 +42,19 @@ That recipe **URL was already imported** for this org. Open the existing meal or
 - Key must include the legacy **`mcp`** scope **or** at least one **`mcp:`** scope (for example `mcp:read`). Key must not be revoked.
 - If the client connects but a **specific tool** fails with “insufficient scope”, the key is missing the narrow scope that tool requires — add the matching `mcp:*` scope or use legacy `mcp`.
 
+## The iPhone app says “Update Ration” or “This version of Ration is no longer supported”
+
+Your copy of Ration is older than the oldest version the service still supports. Tap **Open the App Store** (or open the App Store yourself), update Ration, and open it again. Your kitchen data is safe on the server. Ration for iPhone needs iOS 26; if your iPhone can’t run iOS 26, use ration.mayutic.com in Safari.
+
+## Home Screen widget shows “Open Ration to sign in”, “Couldn't update”, or “Offline”
+
+- **Open Ration to sign in** — Sign in inside the Ration app, then open it once so the widget refreshes. Widgets use the app’s sign-in, and signing out clears them.
+- **Couldn't update** / **Offline** — Open Ration to refresh. See *Home Screen widgets (iPhone)*.
+
+## I can’t find saved lists on the web
+
+Saved lists, **Lists**, and **Pull from list** are in the iPhone app. The web Supply page shows **Live Supply** only. See *Supply (shopping list)*.
+
 ## Rate limited
 
 Slow down requests; see *Limits and rate limits*. MCP users should space **sync_supply_from_selected_meals** calls.

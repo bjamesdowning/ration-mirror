@@ -39,7 +39,6 @@ struct ManifestPlateUpSheet: View {
         _notes = State(initialValue: entry.personalIntake?.notes ?? "")
     }
 
-    private var notesEnabled: Bool { env.session.clientFlags.isNutritionIntakeNotesEnabled }
     private var hasIntakeConsent: Bool { env.nutritionConsent.hasActiveIntakeConsent }
     private var massUnit: IntakeLoggedUnit {
         IntakeAmount.massUnit(forDisplayMode: env.unitDisplayMode.mode)
@@ -90,7 +89,7 @@ struct ManifestPlateUpSheet: View {
 
                 if !hasIntakeConsent {
                     Section {
-                        Text("Macro Tracking is off — enable it in Settings to log meals.")
+                        Text("Macro Tracking is off — turn it on in Account → Feature enablement to log meals.")
                             .font(Typography.caption())
                             .foregroundStyle(Theme.muted)
                         Button("Open Feature enablement") {
@@ -139,12 +138,10 @@ struct ManifestPlateUpSheet: View {
                     }
                 }
 
-                if notesEnabled {
-                    Section {
-                        IntakeNotesField(notes: $notes)
-                    } header: {
-                        Text("Notes")
-                    }
+                Section {
+                    IntakeNotesField(notes: $notes)
+                } header: {
+                    Text("Notes")
                 }
 
                 if let errorMessage {
@@ -194,13 +191,13 @@ struct ManifestPlateUpSheet: View {
     @MainActor
     private func save() async {
         guard hasIntakeConsent else {
-            errorMessage = "Macro Tracking is off — enable it in Settings to log meals."
+            errorMessage = "Macro Tracking is off — turn it on in Account → Feature enablement to log meals."
             return
         }
         isSaving = true
         errorMessage = nil
         defer { isSaving = false }
-        let notePayload = notesEnabled ? IntakeNotesField.payload(from: notes) : nil
+        let notePayload = IntakeNotesField.payload(from: notes)
         if let failure = await onSave(servings, notePayload, amount, unit) {
             errorMessage = failure
         } else {

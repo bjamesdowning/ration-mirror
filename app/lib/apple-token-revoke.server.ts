@@ -5,6 +5,7 @@ import { generateAppleClientSecret } from "~/lib/apple-web-login.server";
 import { log, redactId } from "~/lib/logging.server";
 
 const APPLE_REVOKE_URL = "https://appleid.apple.com/auth/revoke";
+const APPLE_TOKEN_URL = "https://appleid.apple.com/auth/token";
 
 export type AppleRevokeTokenHint = "refresh_token" | "access_token";
 
@@ -150,5 +151,87 @@ export async function revokeAppleTokensForUser(
 				userId: redactId(userId),
 			});
 		}
+	}
+}
+
+/**
+ * POST appleid.apple.com/auth/token with a native authorization code.
+ * Returns the refresh token, or null when Apple does not issue one.
+ */
+export async function exchangeAppleAuthorizationCode(params: {
+	clientId: string;
+	clientSecret: string;
+	code: string;
+	fetchImpl?: typeof fetch;
+}): Promise<string | null> {
+	const fetchImpl = params.fetchImpl ?? fetch;
+	const response = await fetchImpl(APPLE_TOKEN_URL, {
+		method: "POST",
+		headers: { "Content-Type": "application/x-www-form-urlencoded" },
+		body: new URLSearchParams({
+			client_id: params.clientId,
+			client_secret: params.clientSecret,
+			code: params.code,
+			grant_type: "authorization_code",
+		}),
+	});
+	if (!response.ok) return null;
+	const payload = (await response.json()) as { refresh_token?: unknown };
+	return typeof payload.refresh_token === "string" &&
+		payload.refresh_token.length > 0
+		? payload.refresh_token
+		: null;
+}
+
+/**
+ * Native Sign in with Apple only yields an identity token, so exchange the
+ * one-time authorization code for a refresh token that account deletion can
+ * revoke (TN3194). Best-effort: sign-in never fails because of this.
+ */
+export async function storeAppleRefreshTokenFromAuthorizationCode(
+	env: Cloudflare.Env,
+	userId: string,
+	code: string,
+	options?: { fetchImpl?: typeof fetch },
+): Promise<void> {
+	const teamId = env.APPLE_TEAM_ID?.trim();
+	const keyId = env.APPLE_KEY_ID?.trim();
+	const privateKey = env.APPLE_PRIVATE_KEY;
+	const bundleId = env.APPLE_APP_BUNDLE_IDENTIFIER?.trim();
+	if (!teamId || !keyId || !privateKey?.trim() || !bundleId) return;
+
+	try {
+		const clientSecret = await generateAppleClientSecret(
+			bundleId,
+			teamId,
+			keyId,
+			privateKey,
+		);
+		const refreshToken = await exchangeAppleAuthorizationCode({
+			clientId: bundleId,
+			clientSecret,
+			code,
+			fetchImpl: options?.fetchImpl,
+		});
+		if (!refreshToken) {
+			log.info("[Auth] Apple authorization code exchange returned no token", {
+				userId: redactId(userId),
+			});
+			return;
+		}
+		const db = drizzle(env.DB, { schema });
+		await db
+			.update(schema.account)
+			.set({ refreshToken, updatedAt: new Date() })
+			.where(
+				and(
+					eq(schema.account.userId, userId),
+					eq(schema.account.providerId, "apple"),
+				),
+			);
+	} catch (error) {
+		log.error("[Auth] Apple authorization code exchange failed", error, {
+			userId: redactId(userId),
+		});
 	}
 }

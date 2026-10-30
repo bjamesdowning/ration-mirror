@@ -48,6 +48,8 @@ struct GenerateMealSheet: View {
                 set: { if !$0 { consent.decline() } }
             )) {
                 AIConsentGateView(
+                    errorMessage: consent.errorMessage,
+                    isAccepting: consent.isAccepting,
                     onAccept: { Task { await consent.accept(api: env.api, session: env.session) } },
                     onDecline: { consent.decline() }
                 )
@@ -77,9 +79,7 @@ struct GenerateMealSheet: View {
                     creditCost: creditCost,
                     costLabel: "per generation",
                     nextSteps: "Review all 3, pick the ones you like, then save them to Galley.",
-                    hint: env.session.clientFlags.isNutritionEngineEnabled
-                        ? "Nutrition (when available): USDA match first; AI estimates are labelled—edit before saving."
-                        : nil
+                    hint: AIFeatureInlineIntro.nutritionHint
                 )
                 TextField("Optional customization (e.g. vegetarian)", text: $model.customization, axis: .vertical)
                     .textFieldStyle(.roundedBorder)

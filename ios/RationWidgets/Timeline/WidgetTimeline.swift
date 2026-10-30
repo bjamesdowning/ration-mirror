@@ -10,7 +10,13 @@ struct RationWidgetEntry: TimelineEntry {
 }
 
 enum WidgetSnapshotLoader {
-    /// Returns the last good glance when the network fails. Flag-off and signed-out clear names and kcal.
+    /// Gallery previews show sample data; live snapshots show the last saved glance.
+    static func snapshotCache(isPreview: Bool) -> HomeWidgetCache {
+        guard !isPreview, let cached = HomeWidgetCacheStore.load() else { return .placeholder }
+        return cached
+    }
+
+    /// Returns the last good glance when the network fails. Signed-out clears names and kcal.
     static func load(force: Bool, tag: String?) async -> HomeWidgetCache {
         if !force, let cached = freshCache(tag: tag) {
             return cached
@@ -18,8 +24,6 @@ enum WidgetSnapshotLoader {
         do {
             let snapshot = try await WidgetAPI.snapshot(date: WidgetClock.localDateString(), tag: tag)
             return await merge(snapshot, tag: tag, statusLine: nil, state: "ready")
-        } catch WidgetAPIError.disabled {
-            return store(state: "disabled", snapshot: nil, statusLine: nil)
         } catch WidgetAPIError.signedOut {
             return store(state: "signedOut", snapshot: nil, statusLine: nil)
         } catch {
@@ -235,7 +239,7 @@ enum WidgetTimelines {
                 )
             )
         }
-        return Timeline(entries: entries, policy: .after(now.addingTimeInterval(30 * 60)))
+        return Timeline(entries: entries, policy: .after(now.addingTimeInterval(60 * 60)))
     }
 
     private static func settled(_ cache: HomeWidgetCache, at date: Date) -> HomeWidgetCache {

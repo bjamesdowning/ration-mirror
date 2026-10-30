@@ -6,8 +6,6 @@ enum SavedListTapAction: Equatable {
 }
 
 enum SavedListLogic {
-    static let supplyTabDocksSavedLists = false
-
     static func tap(liveState: String?) -> SavedListTapAction {
         switch liveState {
         case "on_live", "in_cart":

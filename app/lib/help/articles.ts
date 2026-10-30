@@ -109,13 +109,15 @@ export const HELP_ARTICLES: ReadonlyArray<HelpArticleMeta> = [
 	{
 		slug: "15-manifest-meal-plan",
 		title: "Manifest (meal plan)",
-		summary: "Schedule meals, consume entries, and share the week.",
+		summary:
+			"Schedule meals, consume entries, share the week, and (iPhone) Macros averages.",
 		section: "kitchen",
 	},
 	{
 		slug: "16-supply-shopping-list",
 		title: "Supply (shopping list)",
-		summary: "Sync, shop, snooze, share, and dock purchases into Cargo.",
+		summary:
+			"Live Supply, saved lists and Pull from (iPhone), snooze, share, and dock into Cargo.",
 		section: "kitchen",
 	},
 	{
@@ -128,14 +130,14 @@ export const HELP_ARTICLES: ReadonlyArray<HelpArticleMeta> = [
 		slug: "18-hub-dashboard-and-settings",
 		title: "Hub dashboard and settings",
 		summary:
-			"Widgets, Feature enablement, preferences, developer tools, and account purge.",
+			"Hub widgets, Feature enablement, preferences, developer tools, and account purge.",
 		section: "kitchen",
 	},
 	{
 		slug: "19-kitchen-loop",
 		title: "The kitchen loop",
 		summary:
-			"How Cargo, Galley, Manifest, Supply, and optional Daily Fuel work together.",
+			"How Cargo, Galley, Manifest, and Supply work together, plus optional Daily Fuel.",
 		section: "kitchen",
 	},
 	{
@@ -157,6 +159,12 @@ export const HELP_ARTICLES: ReadonlyArray<HelpArticleMeta> = [
 		title: "Editing nutrition",
 		summary:
 			"Edit on scan review or Cargo later; user overrides and verified labels.",
+		section: "kitchen",
+	},
+	{
+		slug: "27-ios-home-screen-widgets",
+		title: "Home Screen widgets (iPhone)",
+		summary: "Supply, Eat, and Today widgets; sign in in the app.",
 		section: "kitchen",
 	},
 	{
@@ -252,7 +260,8 @@ export const HELP_ARTICLES: ReadonlyArray<HelpArticleMeta> = [
 	{
 		slug: "60-troubleshooting-common",
 		title: "Common troubleshooting",
-		summary: "Credits, wrong group, scan stuck, share blocked.",
+		summary:
+			"Credits, wrong group, scan stuck, import holder, share blocked, update required, widgets.",
 		section: "troubleshooting",
 	},
 	{

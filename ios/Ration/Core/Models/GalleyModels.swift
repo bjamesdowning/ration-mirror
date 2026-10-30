@@ -78,7 +78,7 @@ struct Meal: Codable, Sendable, Identifiable {
     let updatedAt: Date
     let tags: [Tag]
     let ingredients: [MealIngredient]
-    /// Additive meal.nutrition aggregate when nutrition-engine has computed it.
+    /// meal.nutrition aggregate once the server has computed it.
     var nutrition: MealNutritionSnapshot? = nil
     /// Opaque custom fields (e.g. sourceUrl from recipe import).
     var customFields: [String: String]? = nil
@@ -205,7 +205,7 @@ struct MealMatchResponse: Codable, Sendable {
 struct CookMealRequest: Encodable, Sendable {
     var servings: Int?
     var confirmInsufficient: Bool?
-    /// Local YYYY-MM-DD — enables Manifest bridge when nutrition-cook-log-split is on.
+    /// Local YYYY-MM-DD — enables the Manifest bridge.
     var date: String?
     var slotType: String?
     var localHour: Int?

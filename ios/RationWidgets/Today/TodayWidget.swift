@@ -24,7 +24,13 @@ struct TodayWidgetProvider: AppIntentTimelineProvider {
     }
 
     func snapshot(for configuration: WidgetAppearanceIntent, in context: Context) async -> RationWidgetEntry {
-        RationWidgetEntry(date: Date(), cache: .placeholder, appearance: configuration.appearance, eatTagSlug: nil, eatTagName: nil)
+        RationWidgetEntry(
+            date: Date(),
+            cache: WidgetSnapshotLoader.snapshotCache(isPreview: context.isPreview),
+            appearance: configuration.appearance,
+            eatTagSlug: nil,
+            eatTagName: nil
+        )
     }
 
     func timeline(for configuration: WidgetAppearanceIntent, in context: Context) async -> Timeline<RationWidgetEntry> {
@@ -47,7 +53,7 @@ struct TodayWidgetView: View {
                     small(today)
                 } else {
                     mealList(today)
-                    if let energy = HomeWidgetCopy.energyLine(remainingKcal: today.remainingKcal), let goal = today.goalKcal {
+                    if HomeWidgetCopy.energyLine(remainingKcal: today.remainingKcal) != nil, let goal = today.goalKcal {
                         MacroBar(
                             label: "Calories",
                             remaining: today.remainingKcal ?? 0,

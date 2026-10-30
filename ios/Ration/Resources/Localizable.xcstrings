@@ -92,16 +92,6 @@
     "%@ ingredients" : {
 
     },
-    "%@ item%@ from scan %@…" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@ item%2$@ from scan %3$@…"
-          }
-        }
-      }
-    },
     "%@ kcal" : {
 
     },
@@ -293,9 +283,6 @@
     "Added to Galley" : {
 
     },
-    "AI Processing & Receipt Privacy" : {
-
-    },
     "AI-generated results are suggestions only. Always review before saving." : {
 
     },
@@ -458,9 +445,6 @@
     "Deep thinking may use more tokens and credits." : {
 
     },
-    "Deleting your account permanently removes your inventory, meals, supply lists, meal plans, scans, copilot conversations, API keys, and sessions. Financial ledger records may be anonymized where required by law." : {
-
-    },
     "Directions" : {
 
     },
@@ -494,9 +478,6 @@
     "End: %@" : {
 
     },
-    "Erase nutrition data" : {
-
-    },
     "Estimates scale with amount. Saving logs nutrients to your private intake when available." : {
 
     },
@@ -507,9 +488,6 @@
 
     },
     "Expires %@" : {
-
-    },
-    "Explicit consent" : {
 
     },
     "Extracting items" : {
@@ -602,16 +580,10 @@
     "Ingredients" : {
 
     },
-    "Intake history is kept for about 13 months (~396 days), then deleted automatically. Erasing here removes it sooner. Withdrawal does not erase data." : {
-
-    },
     "Intake log" : {
 
     },
     "JPEG, PNG, or WebP · max 2MB" : {
-
-    },
-    "JPEG, PNG, or WebP · max 5MB" : {
 
     },
     "Leave a field blank to skip it. Saving stores these goals to power your daily and weekly progress views." : {
@@ -811,9 +783,6 @@
     "Planning 1 day" : {
 
     },
-    "Portion" : {
-
-    },
     "Provenance" : {
 
     },
@@ -862,9 +831,6 @@
 
     },
     "Replay the welcome briefing to revisit how Ration works." : {
-
-    },
-    "Request %@ is processing. This usually takes a few seconds." : {
 
     },
     "Restore purchases" : {
@@ -927,17 +893,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Search galley"
-          }
-        }
-      }
-    },
-    "Search items" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Search items"
           }
         }
       }
@@ -1015,16 +970,10 @@
     "Start: %@" : {
 
     },
-    "Statement %@. Withdrawal and erasure are available in Privacy & AI settings." : {
-
-    },
     "Status" : {
 
     },
     "Subscriptions" : {
-
-    },
-    "Subscriptions load from RevenueCat offerings." : {
 
     },
     "Subscriptions renew automatically through your Apple ID until cancelled at least 24 hours before the end of the current period. Manage or cancel in App Store account settings after purchase. List prices match your App Store region; sales tax may apply at checkout." : {
@@ -1065,9 +1014,6 @@
     "They will lose access to this group's cargo immediately." : {
 
     },
-    "This cannot be undone. Withdrawing consent is a separate action." : {
-
-    },
     "This meal has no nutrition profile yet — open it in Galley after nutrition resolve, or skip logging calories." : {
 
     },
@@ -1097,9 +1043,6 @@
     "Try Scan or Ask to use credits on AI features." : {
 
     },
-    "Turn off to stop new AI processing. You will be asked to agree again before the next AI feature use." : {
-
-    },
     "Tutorial" : {
 
     },
@@ -1121,7 +1064,7 @@
     "Use Manage subscription below to change or cancel through Apple." : {
 
     },
-    "Use the same Apple ID on ration.mayutic.com." : {
+    "Use the same sign-in method on ration.mayutic.com." : {
 
     },
     "Uses %@ credit%@" : {
@@ -1165,9 +1108,6 @@
     "Why this happened" : {
 
     },
-    "Withdrawal blocks future processing. It does not erase existing nutrition data." : {
-
-    },
     "You don't have any groups yet." : {
 
     },
@@ -1197,25 +1137,13 @@
     "Your conversation stays below. Continue in a fresh chat and add what you still need help with." : {
 
     },
-    "Your Crew membership ends on %@. Manage renewal on the web at ration.mayutic.com → Settings." : {
-
-    },
     "Your Crew membership ends on %@. Use Manage subscription below to renew through Apple." : {
-
-    },
-    "Your Crew membership is set to end after the current period. Manage renewal on the web at ration.mayutic.com → Settings." : {
 
     },
     "Your Crew membership is set to end after the current period. Use Manage subscription below to renew through Apple." : {
 
     },
-    "Your logged servings are private. Withdrawal and erasure are available in Privacy & AI settings." : {
-
-    },
     "Your personal group can't be deleted. To remove all your data, delete your account instead." : {
-
-    },
-    "Your subscription is managed on the web. Open ration.mayutic.com → Settings in a browser to change or cancel. New iOS purchases use the App Store." : {
 
     }
   },

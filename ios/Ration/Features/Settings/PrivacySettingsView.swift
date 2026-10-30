@@ -31,42 +31,37 @@ struct PrivacySettingsView: View {
 }
 
 enum AIConsentCopy {
-    static let title = "AI Features are off"
-    static let body =
-        "Enable AI Features in Settings to scan, generate meals, plan your week, and Ask Ration. Credits may be used when your Crew allowance runs out. See the Privacy Policy for details."
+    /// 5.1.2(i): name the third-party AI provider and what is sent before asking.
+    static let disclosure =
+        "Scan, meal generation, recipe import, Plan week, and Ask Ration send the photos, text, links, and kitchen details you use with them to Google Gemini (via Cloudflare AI Gateway) to produce results. Recipe imports also send the link to Supadata to read the page. Credits are used automatically when your Crew allowance runs out."
 }
 
-/// Gate shown before AI feature use when consent has not been recorded — directs to Settings.
+/// Asks for AI consent the first time an AI feature is used.
 struct AIConsentGateView: View {
     @Environment(\.openURL) private var openURL
-    var title: String = AIConsentCopy.title
-    var message: String = AIConsentCopy.body
-    var settingsLabel: String = "Open Settings"
+    var errorMessage: String?
+    var isAccepting = false
     let onAccept: () -> Void
     let onDecline: () -> Void
-    var onOpenSettings: (() -> Void)?
 
     var body: some View {
         VStack(spacing: 20) {
             Image(systemName: "sparkles")
                 .font(Typography.heroIcon(44))
                 .foregroundStyle(Theme.hyperGreen)
-            Text(title).rationTitle()
-            Text(message)
+            Text("Allow AI features?").rationTitle()
+            Text(AIConsentCopy.disclosure)
                 .rationCaption()
                 .multilineTextAlignment(.center)
+            if let errorMessage {
+                ErrorBanner(message: errorMessage)
+            }
             VStack(spacing: 12) {
-                if let onOpenSettings {
-                    Button(settingsLabel, action: onOpenSettings)
-                        .buttonStyle(PrimaryButtonStyle())
-                    Button("Not now", action: onDecline)
-                        .buttonStyle(SecondaryButtonStyle())
-                } else {
-                    Button("Not now", action: onDecline)
-                        .buttonStyle(SecondaryButtonStyle())
-                    Button("I agree", action: onAccept)
-                        .buttonStyle(PrimaryButtonStyle())
-                }
+                Button("Not now", action: onDecline)
+                    .buttonStyle(SecondaryButtonStyle())
+                Button("Allow", action: onAccept)
+                    .buttonStyle(PrimaryButtonStyle(isLoading: isAccepting))
+                    .disabled(isAccepting)
             }
             Button("Privacy Policy") { openURL(AppConfig.privacyURL) }
                 .font(Typography.caption())

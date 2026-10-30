@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { assertRegistryDefaults, isValidFlagKey } from "../registry";
+import {
+	assertRegistryDefaults,
+	FLAG_REGISTRY,
+	isValidFlagKey,
+} from "../registry";
 
 describe("FLAG_REGISTRY validation", () => {
 	it("ships with valid defaults for every entry", () => {
@@ -11,5 +15,17 @@ describe("FLAG_REGISTRY validation", () => {
 		expect(isValidFlagKey("new-checkout")).toBe(true);
 		expect(isValidFlagKey("feature_v2")).toBe(false);
 		expect(isValidFlagKey("Bad-Key")).toBe(false);
+	});
+
+	it("ships every iOS-facing flag on for iOS 1.5 except web Apple login, review login, and async recompute", () => {
+		const notIos = Object.entries(FLAG_REGISTRY)
+			.filter(([, entry]) => !entry.iosAlwaysOn)
+			.map(([key]) => key)
+			.sort();
+		expect(notIos).toEqual([
+			"app-review-login",
+			"apple-web-login",
+			"nutrition-async-recompute",
+		]);
 	});
 });

@@ -58,10 +58,6 @@ enum BillingProductCatalog {
         catalog[productIdentifier]
     }
 
-    static func displayName(for productIdentifier: String, fallback: String) -> String {
-        catalog[productIdentifier]?.displayName ?? fallback
-    }
-
     static func sortOrder(for productIdentifier: String) -> Int {
         catalog[productIdentifier]?.sortOrder ?? 1000
     }

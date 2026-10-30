@@ -110,14 +110,12 @@ struct SupplyScanReviewView: View {
                     ErrorBanner(message: errorMessage).listRowBackground(Color.clear)
                 }
 
-                if env.session.clientFlags.isNutritionEngineEnabled {
-                    if model.isResolvingNutrition {
-                        NutritionLookupStatusLabel(kind: .loading)
-                            .listRowBackground(Color.clear)
-                    } else if model.nutritionLookupFailed {
-                        NutritionLookupStatusLabel(kind: .failed(dock: true))
-                            .listRowBackground(Color.clear)
-                    }
+                if model.isResolvingNutrition {
+                    NutritionLookupStatusLabel(kind: .loading)
+                        .listRowBackground(Color.clear)
+                } else if model.nutritionLookupFailed {
+                    NutritionLookupStatusLabel(kind: .failed(dock: true))
+                        .listRowBackground(Color.clear)
                 }
 
                 if model.rows.isEmpty {
@@ -170,13 +168,11 @@ struct SupplyScanReviewView: View {
                             .font(Typography.caption())
                             .foregroundStyle(Theme.muted)
                     }
-                    if env.session.clientFlags.isSupplyMultiListsEnabled {
-                        Button("Add to a list") {
-                            showingAddToList = true
-                        }
-                        .buttonStyle(SecondaryButtonStyle())
-                        .disabled(model.selectedCount == 0 || model.isSubmitting)
+                    Button("Add to a list") {
+                        showingAddToList = true
                     }
+                    .buttonStyle(SecondaryButtonStyle())
+                    .disabled(model.selectedCount == 0 || model.isSubmitting)
                     Button {
                         Task { await confirmDock() }
                     } label: {
@@ -240,12 +236,7 @@ struct SupplyScanReviewView: View {
             }
             .sheet(item: $model.editingItem) { item in
                 ScanItemEditSheet(item: item) { updated in
-                    model.saveEdit(
-                        updated,
-                        api: env.api,
-                        nutritionEngine: env.session.clientFlags.isNutritionEngineEnabled,
-                        nutritionAiEstimate: env.session.clientFlags.isNutritionAiEstimateEnabled
-                    )
+                    model.saveEdit(updated, api: env.api)
                 }
             }
             .sheet(item: $model.linkingContext, onDismiss: {
@@ -259,11 +250,7 @@ struct SupplyScanReviewView: View {
                 PaywallView(context: ctx)
             }
             .task {
-                await model.resolveNutritionIfNeeded(
-                    api: env.api,
-                    nutritionEngine: env.session.clientFlags.isNutritionEngineEnabled,
-                    nutritionAiEstimate: env.session.clientFlags.isNutritionAiEstimateEnabled
-                )
+                await model.resolveNutrition(api: env.api)
             }
         }
     }
@@ -296,14 +283,11 @@ struct SupplyScanReviewView: View {
                 .rationCaption()
                 .foregroundStyle(Theme.muted)
 
-                if env.session.clientFlags.isNutritionEngineEnabled,
-                   let kcal = row.estimatedEnergyKcal {
+                if let kcal = row.estimatedEnergyKcal {
                     Text("\(Int(kcal.rounded())) kcal · \(row.nutrition?.provenanceLabel ?? "Nutrition")")
                         .rationCaption()
                         .foregroundStyle(Theme.muted)
-                } else if env.session.clientFlags.isNutritionEngineEnabled,
-                          model.isResolvingNutrition,
-                          row.nutrition == nil {
+                } else if model.isResolvingNutrition, row.nutrition == nil {
                     RoundedRectangle(cornerRadius: 3)
                         .fill(Theme.platinum.opacity(0.55))
                         .frame(width: 72, height: 10)

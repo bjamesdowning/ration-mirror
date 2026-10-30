@@ -110,33 +110,6 @@ struct SyncIndicatorIcon: View {
     }
 }
 
-struct SyncIndicatorToolbar: ToolbarContent {
-    let domain: String
-    let organizationId: String
-    var isRefreshing: Bool = false
-    @Environment(AppEnvironment.self) private var env
-
-    var body: some ToolbarContent {
-        let state = env.snapshots.syncState(
-            domain: domain,
-            organizationId: organizationId,
-            online: env.network.isOnline
-        )
-        ToolbarItem(placement: .topBarTrailing) {
-            HStack(spacing: 8) {
-                if isRefreshing {
-                    ProgressView()
-                        .controlSize(.small)
-                        .accessibilityLabel("Refreshing")
-                }
-                if state.shouldShowIndicator {
-                    SyncIndicatorIcon(state: state)
-                }
-            }
-        }
-    }
-}
-
 struct StaleDataBanner: View {
     let syncedAt: Date
 

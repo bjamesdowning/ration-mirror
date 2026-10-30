@@ -1,6 +1,5 @@
 import SwiftUI
 import StoreKit
-import UIKit
 
 struct AccountDeletionView: View {
     @Environment(AppEnvironment.self) private var env
@@ -15,6 +14,8 @@ struct AccountDeletionView: View {
     @State private var errorMessage: String?
     @State private var ownedSoloGroups: [String] = []
     @State private var preview: AccountDeletionPreviewResponse?
+    @State private var showingManageSubscriptions = false
+    @State private var deletionStartedMessage: String?
 
     private var isConfirmed: Bool {
         confirmation.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "delete"
@@ -67,9 +68,19 @@ struct AccountDeletionView: View {
                         .font(Typography.caption())
                         .foregroundStyle(canDelete ? Theme.muted : Theme.warning)
 
+                    Text("Subscriptions bought through Apple keep billing until you cancel them, even after your account is deleted. Unused credits are forfeited.")
+                        .font(Typography.caption())
+                        .foregroundStyle(Theme.muted)
+
                     if !canDelete {
-                        Button("Manage Subscription") {
-                            Task { await openManageSubscriptions() }
+                        if isAppStoreManaged {
+                            Button("Manage Subscription") {
+                                showingManageSubscriptions = true
+                            }
+                        } else {
+                            Text("Cancel this membership where you bought it, then return here to delete your account.")
+                                .font(Typography.caption())
+                                .foregroundStyle(Theme.muted)
                         }
                     }
                 } header: {
@@ -113,6 +124,18 @@ struct AccountDeletionView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task { await loadPreview() }
         .refreshable { await loadPreview() }
+        .manageSubscriptionsSheet(isPresented: $showingManageSubscriptions)
+        .alert(
+            "Account deletion started",
+            isPresented: Binding(
+                get: { deletionStartedMessage != nil },
+                set: { if !$0 { deletionStartedMessage = nil } }
+            )
+        ) {
+            Button("OK") { Task { await finishDeletion() } }
+        } message: {
+            Text(deletionStartedMessage ?? "")
+        }
     }
 
     @MainActor
@@ -132,18 +155,16 @@ struct AccountDeletionView: View {
         }
     }
 
+    private var isAppStoreManaged: Bool {
+        let provider = preview?.billingProvider?.lowercased()
+        return provider == "app_store" || provider == "mac_app_store"
+    }
+
     @MainActor
-    private func openManageSubscriptions() async {
-        if let urlString = preview?.managementUrl, let url = URL(string: urlString) {
-            await UIApplication.shared.open(url)
-            return
-        }
-        if let windowScene = UIApplication.shared.connectedScenes
-            .compactMap({ $0 as? UIWindowScene })
-            .first
-        {
-            try? await AppStore.showManageSubscriptions(in: windowScene)
-        }
+    private func finishDeletion() async {
+        await env.auth.signOutLocal()
+        onAccountDeleted?()
+        dismiss()
     }
 
     @MainActor
@@ -153,10 +174,9 @@ struct AccountDeletionView: View {
         errorMessage = nil
         defer { isDeleting = false }
         do {
-            _ = try await env.api.deleteAccount()
-            await env.auth.signOutLocal()
-            onAccountDeleted?()
-            dismiss()
+            let response = try await env.api.deleteAccount()
+            deletionStartedMessage = response.message
+                ?? String(localized: "Your account is being deleted. This usually finishes within a few minutes.")
         } catch {
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
             if let apiError = error as? APIError, apiError.code == "active_subscription" {

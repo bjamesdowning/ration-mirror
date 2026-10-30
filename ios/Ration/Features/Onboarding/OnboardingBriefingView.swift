@@ -125,6 +125,8 @@ struct OnboardingBriefingView: View {
             }
         )) {
             AIConsentGateView(
+                errorMessage: consent.errorMessage,
+                isAccepting: consent.isAccepting,
                 onAccept: { Task { await consent.accept(api: env.api, session: env.session) } },
                 onDecline: { declineConsentGate() }
             )

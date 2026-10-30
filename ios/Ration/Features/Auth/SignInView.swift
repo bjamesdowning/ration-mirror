@@ -3,6 +3,7 @@ import SwiftUI
 
 private struct AppleSignInButton: UIViewRepresentable {
     let buttonType: ASAuthorizationAppleIDButton.ButtonType
+    let style: ASAuthorizationAppleIDButton.Style
     let isEnabled: Bool
     let onTap: () -> Void
 
@@ -11,7 +12,7 @@ private struct AppleSignInButton: UIViewRepresentable {
     }
 
     func makeUIView(context: Context) -> ASAuthorizationAppleIDButton {
-        let button = ASAuthorizationAppleIDButton(type: buttonType, style: .black)
+        let button = ASAuthorizationAppleIDButton(type: buttonType, style: style)
         button.cornerRadius = 12
         button.addTarget(
             context.coordinator,
@@ -74,11 +75,11 @@ private struct AuthModePicker: View {
 
 struct SignInView: View {
     @Environment(AppEnvironment.self) private var env
+    @Environment(\.colorScheme) private var colorScheme
 
     @State private var mode: AuthFlowMode = .signIn
     @State private var email = ""
     @State private var password = ""
-    @State private var appReviewLoginEnabled = false
     @State private var isSending = false
     @State private var linkSent = false
     @State private var errorMessage: String?
@@ -95,10 +96,7 @@ struct SignInView: View {
 
     private var showReviewPassword: Bool {
         mode == .signIn &&
-            AppReviewLoginGate.shouldShowPassword(
-                flagEnabled: appReviewLoginEnabled,
-                email: email
-            )
+            AppReviewLoginGate.shouldShowPassword(email: email)
     }
 
     var body: some View {
@@ -125,18 +123,11 @@ struct SignInView: View {
             }
             .scrollDismissesKeyboard(.interactively)
         }
-        .task {
-            applyPendingAuthNotice()
-            await loadClientFlags()
-        }
         .onAppear {
             applyPendingAuthNotice()
         }
         .onChange(of: email) { _, newValue in
-            if !AppReviewLoginGate.shouldShowPassword(
-                flagEnabled: appReviewLoginEnabled,
-                email: newValue
-            ) {
+            if !AppReviewLoginGate.shouldShowPassword(email: newValue) {
                 password = ""
             }
         }
@@ -235,6 +226,7 @@ struct SignInView: View {
         VStack(spacing: 12) {
             AppleSignInButton(
                 buttonType: mode == .signUp ? .signUp : .signIn,
+                style: colorScheme == .dark ? .white : .black,
                 isEnabled: canProceed && socialLoading == nil && !isSending
             ) {
                 Task { await signInWithApple() }
@@ -248,8 +240,8 @@ struct SignInView: View {
                         .allowsHitTesting(false)
                 }
             }
-            // ASAuthorizationAppleIDButton's type is fixed at init; recreate on mode change.
-            .id(mode)
+            // ASAuthorizationAppleIDButton's type and style are fixed at init.
+            .id("\(mode)-\(colorScheme)")
 
             Button {
                 Task { await signInWithGoogle() }
@@ -304,7 +296,7 @@ struct SignInView: View {
     }
 
     private var signInFooterHint: some View {
-        Text("Use the same Apple ID on ration.mayutic.com.")
+        Text("Use the same sign-in method on ration.mayutic.com.")
             .font(Typography.caption())
             .foregroundStyle(Theme.muted)
             .multilineTextAlignment(.center)
@@ -399,15 +391,6 @@ struct SignInView: View {
         password = ""
     }
 
-    private func loadClientFlags() async {
-        do {
-            let flags = try await env.auth.fetchClientFlags()
-            appReviewLoginEnabled = flags.isAppReviewLoginEnabled
-        } catch {
-            appReviewLoginEnabled = false
-        }
-    }
-
     private var authIntent: String {
         mode == .signUp ? "signUp" : "signIn"
     }
@@ -463,6 +446,7 @@ struct SignInView: View {
         idToken: String,
         nonce: String? = nil,
         accessToken: String? = nil,
+        authorizationCode: String? = nil,
         givenName: String? = nil,
         familyName: String? = nil,
         retryOnBusy: Bool
@@ -473,6 +457,7 @@ struct SignInView: View {
                 idToken: idToken,
                 nonce: nonce,
                 accessToken: accessToken,
+                authorizationCode: authorizationCode,
                 givenName: givenName,
                 familyName: familyName,
                 intent: authIntent,
@@ -485,6 +470,7 @@ struct SignInView: View {
                 idToken: idToken,
                 nonce: nonce,
                 accessToken: accessToken,
+                authorizationCode: authorizationCode,
                 givenName: givenName,
                 familyName: familyName,
                 retryOnBusy: false
@@ -505,6 +491,7 @@ struct SignInView: View {
                 provider: "apple",
                 idToken: result.identityToken,
                 nonce: result.rawNonce,
+                authorizationCode: result.authorizationCode,
                 givenName: result.givenName ?? appleGivenName,
                 familyName: result.familyName ?? appleFamilyName,
                 retryOnBusy: SocialAuthClientPolicy.shouldRetryBusyOnce(intent: authIntent)

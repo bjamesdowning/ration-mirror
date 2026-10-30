@@ -41,7 +41,9 @@
 		"STRIPE_PRICE_CREW_MEMBER_MONTHLY_usd": "price_1T7CWSFXiYOz9MqX3BF5QpXq",
 		"STRIPE_PRICE_CREW_MEMBER_MONTHLY_eur": "price_1T7CWTFXiYOz9MqXC656bUrY",
 		"STRIPE_PROMO_WELCOME65": "promo_1T7nAjFXiYOz9MqXAH5mtles",
-		"RATION_ENV": "production"
+		"RATION_ENV": "production",
+		/** Older iOS builds get HTTP 426 `upgrade_required` on data routes. Raise only after the new build is Ready for Sale. */
+		"IOS_MIN_SUPPORTED_VERSION": "1.4.31"
 	},
 	/**
 	 * Cloudflare Flagship — replace app_id after creating the `ration` app in

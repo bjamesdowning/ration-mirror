@@ -20,25 +20,30 @@ Do **not** rely on Sign in with Apple / Google alone for App Review. Use the Fla
 4. **Notes for Review** (paste):
 
 ```text
-Sign-in: On Sign In, enter User Name (app-review@mayutic.com) in Email —
-a Password field then appears. Enter the Password from Review Information
-and tap Continue. Do not use Sign in with Apple / Google.
+Sign-in: On Sign In, type the User Name (app-review@mayutic.com) in Email.
+A Password field then appears. Enter the Password from Review Information
+and tap Sign in. Do not use Sign in with Apple / Google.
 No 2FA. Account is pre-seeded (Cargo, Galley, Manifest, Supply).
-Macros (planning aids, not medical advice): Hub Daily Fuel / Fuel Trends;
-Settings → Preferences → Nutrition Goals; Manifest → Eat (Log my serving);
-optional Macro Tracking under Feature enablement. Nutrition Flagship is on
-for iOS 1.4.x.
-AI features (scan, generate, import, plan week, Ask, onboarding) may show a
-one-time consent gate naming Google Gemini and Cloudflare Workers AI.
-Account deletion: Settings → Account → type delete to confirm.
-Subscriptions: Manage / cancel via paywall Manage subscription (Apple).
+Account: profile button (top right of each tab) opens the Account sheet.
+Account deletion: Account → Delete account → type delete → Delete my account.
+Subscriptions and credits (Apple IAP): Account → Upgrade to Crew Member.
+Restore purchases and Manage subscription are on that screen.
 Cancelled Crew stays Active until the period ends; delete unlocks after cancel.
+AI features (scan, meal generation, recipe import, Plan week, Ask Ration)
+first ask "Allow AI features?", naming Google Gemini (via Cloudflare AI
+Gateway) and Supadata. Change it any time: Account → Feature enablement.
+Macros (planning aids, not medical advice): Account → Nutrition Goals;
+Manifest → Log my serving; Manifest chart button (top left) → Macros.
+Macro Tracking is opt-in under Feature enablement.
+Supply: Live Supply is the shopping list. Saved lists are under the
+bottom-right Supply actions menu → Lists.
+Home Screen widgets (Supply, Eat, Today) need no extra permissions.
 Backend: https://ration.mayutic.com — live, no VPN.
 ```
 
 5. Reply in the Resolution Center that credentials are filled and the account is ready.
 
-**UX:** Password appears only when Flagship `appReviewLogin` is on **and** the email field equals `app-review@mayutic.com`. Endpoint: `POST /api/mobile/v1/auth/review-login`. Unsigned flags: `GET /api/mobile/v1/client-flags`.
+**UX:** The Password field appears when the email field equals `app-review@mayutic.com`. `POST /api/mobile/v1/auth/review-login` still rejects the login unless Flagship `app-review-login` is on, so keep it on for the whole review window.
 
 ### Universal Links operator checklist
 
@@ -52,7 +57,7 @@ Backend: https://ration.mayutic.com — live, no VPN.
 
 - **Subscriptions:** Crew Member via RevenueCat / App Store (`crew_monthly` = monthly subscription, `crew_annual_1yr` = annual subscription; legacy id `crew_annual` still mapped in the iOS catalog).
 - **Consumables:** Credit packs (`credits_s`, `credits_m`, `credits_l`, `credits_xl`) via RevenueCat consumable products.
-- **Restore:** Always available on the paywall (Settings → Manage billing / Crew Member), including for active Crew.
+- **Restore:** Always available on the paywall (Account → **Upgrade to Crew Member** or **Manage billing**), including for active Crew.
 - **Manage / cancel (App Store):** Paywall **Manage subscription** opens Apple’s `showManageSubscriptions` sheet. Do not cancel Apple billing from Ration’s servers.
 - **Cancel-at-period-end:** After Apple cancel, Crew remains Active until the period end date. Ration reconciles cancel-at-period-end from RevenueCat REST (and webhooks) so account deletion unlocks once the sub is set to end.
 - **Web Stripe:** Existing Stripe subscriptions are honored as account entitlements but new purchases on iOS use Apple IAP only. Paywall may show manage-on-web copy for an existing Stripe sub (not a purchase CTA). Help must not link to web billing.
@@ -64,14 +69,14 @@ Before each App Review window, confirm `app-review@mayutic.com` (`d773eefb-e112-
 
 ## Account Deletion
 
-- Path: **Settings → Account → Delete account**
-- Requires typing `delete` (lowercase) to confirm.
-- Permanently removes inventory, meals, supply, manifest, scans, and sessions.
-- Blocked while Crew auto-renews; allowed after cancel-at-period-end (with warning) or when Free.
+- Path: profile button → **Account** → **Delete account** → type `delete` → **Delete my account**.
+- On success the app shows **Account deletion started** and signs out; sign-in stays blocked until removal finishes.
+- Permanently removes inventory, meals, supply lists, meal plans, scans, Copilot conversations, API keys, sessions, and OAuth grants.
+- Blocked while an Apple subscription auto-renews (the screen offers **Manage Subscription**); allowed after cancel-at-period-end (with warning) or when Free.
 
 ## AI / Privacy
 
-- Consent gate names **Google Gemini (via Cloudflare AI Gateway)** and **Cloudflare Workers AI**, and covers scan, Generate meals, Import recipe, Plan week, Ask Ration, and onboarding. Accept once; withdraw anytime in Settings → Privacy & AI (re-prompts before next AI use).
+- **Allow AI features?** names **Google Gemini (via Cloudflare AI Gateway)** and **Supadata** (recipe imports), and covers scan, meal generation, recipe import, Plan week, and Ask Ration. Accept once; withdraw any time in Account → **Feature enablement** (re-prompts before the next AI use).
 - Server enforces consent on scan / generate / import / plan-week (403 `ai_consent_required`). Mobile Ask/Copilot WebSocket also returns 403 `ai_consent_required` when consent is missing.
 - Privacy policy: https://ration.mayutic.com/legal/privacy
 - Terms: https://ration.mayutic.com/legal/terms
@@ -81,9 +86,13 @@ Before each App Review window, confirm `app-review@mayutic.com` (`d773eefb-e112-
 
 Declare **Health**: linked to the user, used for App Functionality, **not** used for tracking. Do **not** declare Fitness. Align ASC with the binary PrivacyInfo Health entry. Detail (allergens vs goals/intake) belongs in the privacy policy, not ASC subtypes.
 
-### Nutrition (version-gated)
+### Shipped on iOS 1.5.x
 
-Nutrition goals / Manifest Eat / Hub fuel widgets are Flagship-gated with default **off**, and on iOS are version-gated to **`≥ 1.4.x`**. Reviewers on that binary may see nutrition UI when platform/version Flagship rules are enabled — no separate `userId` allowlist is required. Older App Store builds remain off.
+Every flagged iOS feature (AI, Ask Ration, nutrition, Macros, saved lists, widgets) is on for iOS ≥ 1.5.0 without Flagship rules (`iosAlwaysOn` in `app/lib/feature-flags/registry.ts`). Only `app-review-login` still needs a Flagship toggle for review. Emergency kill switch: `FEATURE_FLAG_OVERRIDES` (applies to every platform).
+
+### Update required (minimum iOS version)
+
+The Worker returns `426 upgrade_required` to iOS builds below `IOS_MIN_SUPPORTED_VERSION` (`wrangler.jsonc`). iOS 1.5.11+ shows a full-screen **Update Ration** screen with **Open the App Store**. Session, settings, account (deletion), and auth routes stay open so an old build can still sign out and delete the account. Keep the floor at the current App Store build during review; raise it only after the new build is Ready for Sale.
 
 ## Support
 
@@ -97,16 +106,18 @@ Nutrition goals / Manifest Eat / Hub fuel widgets are Flagship-gated with defaul
 | `NSCameraUsageDescription` | Receipt scanning |
 | `NSPhotoLibraryUsageDescription` | Receipt/pantry photos, Supply imports, profile/group images |
 
+Home Screen widgets read an App Group snapshot written by the app; they need no permission prompt.
+
 ## Device
 
-- **iPhone only** (portrait). No iPad-optimized layout in v1.
+- **iPhone only** (portrait), iOS 26 or later. No iPad-optimized layout.
 
 ## Before each App Review / TestFlight review window
 
 1. [ ] Re-seed or confirm demo user is **Free**: `bun scripts/seed-account/seed-app-review-demo.ts --remote` (user `d773eefb-e112-4b75-abe2-066584cd3c1d`)
-2. [ ] Flagship `app-review-login` **enabled**
+2. [ ] Flagship `app-review-login` **enabled**; `IOS_MIN_SUPPORTED_VERSION` is not above the build under review
 3. [ ] ASC Review Information password matches `APP_REVIEW_DEMO_PASSWORD`
-4. [ ] On device: Sign In with demo email → password → Settings → billing shows **Inactive** Crew and **1 month** / **1 year** packages + Restore + Terms/Privacy
+4. [ ] On device: Sign In with demo email → password → Account → **Upgrade to Crew Member** shows the packages + **Restore purchases** + Terms of Use / Privacy
 5. [ ] Sandbox: offerings load; one purchase + Restore; cancel → paywall shows Active until date / Delete Account unlocks
 6. [ ] ASC App Privacy: Health declared (Linked, App Functionality, not tracking; not Fitness); Description EULA/Terms/Privacy footer present; Support + Privacy URLs live
 7. [ ] RevenueCat: App Store Server Notifications enabled (reduces cancel webhook lag)

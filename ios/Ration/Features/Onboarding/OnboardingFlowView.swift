@@ -9,9 +9,7 @@ struct OnboardingFlowView: View {
             switch env.onboarding.phase {
             case .welcome:
                 OnboardingWelcomeView {
-                    env.onboarding.advanceFromWelcome(
-                        featureEnablementEnabled: env.session.clientFlags.isFeatureEnablementConsentEnabled
-                    )
+                    env.onboarding.advanceFromWelcome()
                 }
             case .featureEnablement:
                 FeatureEnablementView(variant: .onboarding) { aiEnabled, _ in

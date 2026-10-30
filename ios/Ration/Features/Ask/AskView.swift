@@ -91,6 +91,8 @@ struct AskView: View {
             set: { if !$0 { consent.decline() } }
         )) {
             AIConsentGateView(
+                errorMessage: consent.errorMessage,
+                isAccepting: consent.isAccepting,
                 onAccept: { Task { await consent.accept(api: env.api, session: env.session) } },
                 onDecline: { consent.decline() }
             )

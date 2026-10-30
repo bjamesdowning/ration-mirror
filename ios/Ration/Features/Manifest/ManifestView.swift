@@ -18,8 +18,7 @@ struct ManifestView: View {
     @State private var showingMacros = false
     @State private var paywallContext: PaywallContext?
     @State private var pendingUndo: ManifestUndoToast?
-    /// Shared by legacy Consume and split Cook — both deduct Cargo and need the same
-    /// "insufficient stock, cook/consume anyway?" confirmation flow.
+    /// Cook deducts Cargo and may need the "insufficient stock, cook anyway?" confirmation.
     @State private var pendingPrepareEntry: ManifestEntry?
     @State private var prepareConfirmationMessage: String?
     @State private var showPrepareConfirmation = false
@@ -124,10 +123,6 @@ struct ManifestView: View {
             }
             .onChange(of: env.deepLinkRouter.manifestAddEntryPending, initial: true) { _, pending in
                 guard let pending else { return }
-                guard env.session.clientFlags.isNutritionCookLogSplitEnabled else {
-                    env.deepLinkRouter.acknowledgeManifestAddEntry()
-                    return
-                }
                 model.selectedDay = pending.date
                 addEntryPrefillMealId = pending.mealId
                 showingAddEntry = true
@@ -197,15 +192,13 @@ struct ManifestView: View {
                     onOpenGroupSettings: onOpenGroupSettings,
                     onOpenSettings: onOpenSettings
                 )
-                if env.session.clientFlags.isNutritionMacrosHistoryEnabled {
-                    ToolbarItem(placement: .topBarLeading) {
-                        Button {
-                            showingMacros = true
-                        } label: {
-                            Image(systemName: "chart.bar.fill")
-                        }
-                        .accessibilityLabel("Macros")
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        showingMacros = true
+                    } label: {
+                        Image(systemName: "chart.bar.fill")
                     }
+                    .accessibilityLabel("Macros")
                 }
             }
             .dataSyncBanner(
@@ -249,11 +242,9 @@ struct ManifestView: View {
                 PaywallView(context: ctx)
             }
             .background(Theme.ceramic)
-            .macrosHistoryRoute(
-                enabled: env.session.clientFlags.isNutritionMacrosHistoryEnabled,
-                isPresented: $showingMacros,
-                onOpenGoals: onOpenNutritionGoals
-            )
+            .navigationDestination(isPresented: $showingMacros) {
+                MacrosHistoryView(onOpenGoals: onOpenNutritionGoals)
+            }
             .sheet(isPresented: $showingAddEntry) {
                 AddManifestEntrySheet(
                     defaultDate: model.selectedDay,
@@ -290,7 +281,6 @@ struct ManifestView: View {
                 ManifestJumpCalendarSheet(
                     initialDay: model.selectedDay,
                     weekStartPref: model.weekStartPref,
-                    showConsumedMarkers: env.session.clientFlags.isNutritionManifestEnabled,
                     loadMarkers: { from, to in
                         let response = try await env.api.manifestPlannedDates(from: from, to: to)
                         return (response.dates, response.consumedDates ?? [])
@@ -374,13 +364,6 @@ struct ManifestView: View {
         }
     }
 
-    private var entryActionFlags: ManifestEntryActionPolicy.Flags {
-        ManifestEntryActionPolicy.Flags(
-            isCookLogSplitEnabled: env.session.clientFlags.isNutritionCookLogSplitEnabled,
-            isNutritionManifestEnabled: env.session.clientFlags.isNutritionManifestEnabled
-        )
-    }
-
     private var nutritionByDate: [String: NutritionDayTotals] {
         guard let days = model.nutritionSummary?.days else { return [:] }
         return Dictionary(days.map { ($0.date, $0) }, uniquingKeysWith: { first, _ in first })
@@ -404,11 +387,8 @@ struct ManifestView: View {
                 isLoading: model.isWeekNavigationBusy,
                 nutritionByDate: nutritionByDate,
                 nutritionGoal: model.nutritionSummary?.goal,
-                showNutritionGoals: env.session.clientFlags.isNutritionGoalsEnabled,
-                onTapNutrientLine: env.session.clientFlags.isNutritionGoalsEnabled ? onOpenNutritionGoals : nil,
-                onOpenCalendar: env.session.clientFlags.isNutritionManifestEnabled
-                    ? { showingJumpCalendar = true }
-                    : nil
+                onTapNutrientLine: onOpenNutritionGoals,
+                onOpenCalendar: { showingJumpCalendar = true }
             ) { start in
                 guard let userId else { return }
                 model.requestNavigateWeek(
@@ -469,10 +449,6 @@ struct ManifestView: View {
                     ForEach(dayEntries) { entry in
                         ManifestEntryRow(
                             entry: entry,
-                            flags: entryActionFlags,
-                            onConsume: {
-                                Task { await handlePrepare(entry) }
-                            },
                             onCook: {
                                 Task { await handlePrepare(entry) }
                             },
@@ -502,78 +478,74 @@ struct ManifestView: View {
             }
 
             // Personal diary (incl. cross-kitchen rows) — independent of planned meals today.
-            if entryActionFlags.isCookLogSplitEnabled,
-               entryActionFlags.isNutritionManifestEnabled
-            {
-                let intakeRows: [(id: String, name: String, organizationName: String?, intake: ManifestPersonalIntake)] = {
-                    let diary = (manifest.dayIntakeRows ?? []).filter { $0.manifestDate == model.selectedDay }
-                    if !diary.isEmpty {
-                        return diary.map { row in
-                            (
-                                row.id,
-                                row.mealName ?? "Meal",
-                                row.organizationName,
-                                ManifestPersonalIntake(
-                                    id: row.id,
-                                    servings: row.servings,
-                                    energyKcal: row.energyKcal,
-                                    proteinG: row.proteinG,
-                                    carbsG: row.carbsG,
-                                    fatG: row.fatG,
-                                    occurredAt: Date(),
-                                    notes: row.notes
-                                )
+            let intakeRows: [(id: String, name: String, organizationName: String?, intake: ManifestPersonalIntake)] = {
+                let diary = (manifest.dayIntakeRows ?? []).filter { $0.manifestDate == model.selectedDay }
+                if !diary.isEmpty {
+                    return diary.map { row in
+                        (
+                            row.id,
+                            row.mealName ?? "Meal",
+                            row.organizationName,
+                            ManifestPersonalIntake(
+                                id: row.id,
+                                servings: row.servings,
+                                energyKcal: row.energyKcal,
+                                proteinG: row.proteinG,
+                                carbsG: row.carbsG,
+                                fatG: row.fatG,
+                                occurredAt: Date(),
+                                notes: row.notes
                             )
-                        }
+                        )
                     }
-                    return dayEntries.compactMap { entry -> (id: String, name: String, organizationName: String?, intake: ManifestPersonalIntake)? in
-                        guard let intake = entry.personalIntake else { return nil }
-                        return (entry.id, entry.mealName, nil, intake)
-                    }
-                }()
-                if !intakeRows.isEmpty {
-                    Section {
-                        ForEach(intakeRows, id: \.id) { row in
-                            VStack(alignment: .leading, spacing: 4) {
-                                HStack(alignment: .firstTextBaseline, spacing: 6) {
-                                    Text(row.name)
-                                        .rationBody()
-                                        .foregroundStyle(Theme.carbon)
-                                    if let kitchen = row.organizationName, !kitchen.isEmpty {
-                                        Text("· \(kitchen)")
-                                            .rationCaption()
-                                            .foregroundStyle(Theme.muted)
-                                    }
-                                }
-                                Text(
-                                    String(
-                                        format: "%.1f serving%@ · %.0f kcal · P %.0fg · C %.0fg · F %.0fg",
-                                        row.intake.servings,
-                                        row.intake.servings == 1 ? "" : "s",
-                                        row.intake.energyKcal,
-                                        row.intake.proteinG,
-                                        row.intake.carbsG,
-                                        row.intake.fatG
-                                    )
-                                )
-                                .rationCaption()
-                                .foregroundStyle(Theme.muted)
-                                if let note = row.intake.notes?.trimmingCharacters(in: .whitespacesAndNewlines),
-                                   !note.isEmpty {
-                                    Text(note)
+                }
+                return dayEntries.compactMap { entry -> (id: String, name: String, organizationName: String?, intake: ManifestPersonalIntake)? in
+                    guard let intake = entry.personalIntake else { return nil }
+                    return (entry.id, entry.mealName, nil, intake)
+                }
+            }()
+            if !intakeRows.isEmpty {
+                Section {
+                    ForEach(intakeRows, id: \.id) { row in
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                                Text(row.name)
+                                    .rationBody()
+                                    .foregroundStyle(Theme.carbon)
+                                if let kitchen = row.organizationName, !kitchen.isEmpty {
+                                    Text("· \(kitchen)")
                                         .rationCaption()
                                         .foregroundStyle(Theme.muted)
-                                        .lineLimit(2)
                                 }
                             }
-                            .listRowBackground(Theme.surface)
-                        }
-                    } header: {
-                        Text("Intake log")
+                            Text(
+                                String(
+                                    format: "%.1f serving%@ · %.0f kcal · P %.0fg · C %.0fg · F %.0fg",
+                                    row.intake.servings,
+                                    row.intake.servings == 1 ? "" : "s",
+                                    row.intake.energyKcal,
+                                    row.intake.proteinG,
+                                    row.intake.carbsG,
+                                    row.intake.fatG
+                                )
+                            )
                             .rationCaption()
-                            .textCase(.uppercase)
                             .foregroundStyle(Theme.muted)
+                            if let note = row.intake.notes?.trimmingCharacters(in: .whitespacesAndNewlines),
+                               !note.isEmpty {
+                                Text(note)
+                                    .rationCaption()
+                                    .foregroundStyle(Theme.muted)
+                                    .lineLimit(2)
+                            }
+                        }
+                        .listRowBackground(Theme.surface)
                     }
+                } header: {
+                    Text("Intake log")
+                        .rationCaption()
+                        .textCase(.uppercase)
+                        .foregroundStyle(Theme.muted)
                 }
             }
         }
@@ -584,46 +556,26 @@ struct ManifestView: View {
         .copilotScrollTracked(tab: .manifest, isActive: isTabActive)
     }
 
-    /// Deducts Cargo — routes to split Cook or legacy Consume based on `nutrition-cook-log-split`.
+    /// Cook — deducts Cargo and marks the entry prepared.
     private func handlePrepare(_ entry: ManifestEntry) async {
         guard let organizationId, let userId else { return }
-        if entryActionFlags.isCookLogSplitEnabled {
-            switch await model.cook(
-                entry,
-                api: env.api,
-                snapshots: env.snapshots,
-                online: env.network.isOnline,
-                organizationId: organizationId,
-                userId: userId
-            ) {
-            case .success(let token):
-                setUndo(token: token, message: "Meal cooked")
-                offerEatAfterCook(entry)
-            case .needsConfirmation(let missing):
-                pendingPrepareEntry = entry
-                prepareConfirmationMessage = missingIngredientsMessage(missing)
-                showPrepareConfirmation = true
-            case .failed:
-                break
-            }
-        } else {
-            switch await model.consume(
-                entry,
-                api: env.api,
-                snapshots: env.snapshots,
-                online: env.network.isOnline,
-                organizationId: organizationId,
-                userId: userId
-            ) {
-            case .success(let token):
-                setUndo(token: token, message: "Meal consumed")
-            case .needsConfirmation(let missing):
-                pendingPrepareEntry = entry
-                prepareConfirmationMessage = missingIngredientsMessage(missing)
-                showPrepareConfirmation = true
-            case .failed:
-                break
-            }
+        switch await model.cook(
+            entry,
+            api: env.api,
+            snapshots: env.snapshots,
+            online: env.network.isOnline,
+            organizationId: organizationId,
+            userId: userId
+        ) {
+        case .success(let token):
+            setUndo(token: token, message: "Meal cooked")
+            offerEatAfterCook(entry)
+        case .needsConfirmation(let missing):
+            pendingPrepareEntry = entry
+            prepareConfirmationMessage = missingIngredientsMessage(missing)
+            showPrepareConfirmation = true
+        case .failed:
+            break
         }
     }
 
@@ -632,20 +584,7 @@ struct ManifestView: View {
         pendingPrepareEntry = nil
         prepareConfirmationMessage = nil
         showPrepareConfirmation = false
-        if entryActionFlags.isCookLogSplitEnabled {
-            if case .success(let token) = await model.cook(
-                entry,
-                confirmInsufficient: true,
-                api: env.api,
-                snapshots: env.snapshots,
-                online: env.network.isOnline,
-                organizationId: organizationId,
-                userId: userId
-            ) {
-                setUndo(token: token, message: "Meal cooked")
-                offerEatAfterCook(entry)
-            }
-        } else if case .success(let token) = await model.consume(
+        if case .success(let token) = await model.cook(
             entry,
             confirmInsufficient: true,
             api: env.api,
@@ -654,15 +593,13 @@ struct ManifestView: View {
             organizationId: organizationId,
             userId: userId
         ) {
-            setUndo(token: token, message: "Meal consumed")
+            setUndo(token: token, message: "Meal cooked")
+            offerEatAfterCook(entry)
         }
     }
 
     /// Mirror web: after a successful Cook, offer optional personal Eat plate-up.
     private func offerEatAfterCook(_ entry: ManifestEntry) {
-        guard ManifestEntryActionPolicy.canEverLogServing(flags: entryActionFlags) else {
-            return
-        }
         // Prefer the refreshed entry (now prepared) when available.
         let refreshed = model.manifest?.entries.first(where: { $0.id == entry.id }) ?? entry
         pendingEatEntry = refreshed
@@ -770,7 +707,7 @@ struct ManifestView: View {
     }
 }
 
-/// Shared undo-toast payload for Consume, Cook, and Eat mutations.
+/// Shared undo-toast payload for Cook and Eat mutations.
 struct ManifestUndoToast: Equatable {
     let token: String
     let message: String

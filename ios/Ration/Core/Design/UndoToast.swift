@@ -57,32 +57,3 @@ struct UndoToast: View {
         }
     }
 }
-
-@MainActor
-@Observable
-final class UndoBuffer<Item> {
-    private(set) var pendingItem: Item?
-    private(set) var isShowing = false
-    var onUndo: (() async -> Void)?
-    var onExpire: (() async -> Void)?
-
-    func record(_ item: Item) {
-        pendingItem = item
-        isShowing = true
-    }
-
-    func undo() async {
-        await onUndo?()
-        clear()
-    }
-
-    func expire() async {
-        await onExpire?()
-        clear()
-    }
-
-    func clear() {
-        pendingItem = nil
-        isShowing = false
-    }
-}

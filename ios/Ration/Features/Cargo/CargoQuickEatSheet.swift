@@ -9,6 +9,9 @@ struct CargoQuickEatSheet: View {
     var onFinished: (CargoQuickEatResponse) -> Void = { _ in }
 
     @State private var quantity: Double = 1
+    @State private var gramsPerUnit: Double = CountUnitMass.referenceGrams
+    @State private var massUnit: String = "g"
+    @State private var didPrepare = false
     @State private var notes: String = ""
     @State private var isSaving = false
     @State private var errorMessage: String?
@@ -27,6 +30,9 @@ struct CargoQuickEatSheet: View {
                         range: 0.01...1_000,
                         step: step
                     )
+                    if needsMassLink {
+                        massLinkControls
+                    }
                     if stockEmpty {
                         Text("Pantry empty — snack will still appear on Manifest")
                             .rationCaption()
@@ -50,7 +56,9 @@ struct CargoQuickEatSheet: View {
                         unavailableMessage: "Nutrition unavailable for this item."
                     )
                 } footer: {
-                    Text("Estimates scale with amount. Saving logs nutrients to your private intake when available. Not medical advice. Goals and totals are planning aids only.")
+                    Text(needsMassLink
+                        ? "Each \(item.unit) uses the weight you set. Macros follow USDA per 100 g for that weight. Not medical advice."
+                        : "Estimates scale with amount. Saving logs nutrients to your private intake when available. Not medical advice. Goals and totals are planning aids only.")
                         .rationCaption()
                 }
                 if notesEnabled {
@@ -94,9 +102,55 @@ struct CargoQuickEatSheet: View {
             .rationFormKeyboardToolbar()
         }
         .presentationDetents([.medium, .large])
-        .onAppear {
-            quantity = defaultAmount
+        .onAppear { prepareIfNeeded() }
+    }
+
+    private var needsMassLink: Bool {
+        CountUnitMass.needsMassLink(nutrition: item.nutrition, unit: item.unit)
+    }
+
+    private var massAmount: Binding<Double> {
+        Binding(
+            get: { CountUnitMass.display(grams: gramsPerUnit, unit: massUnit) },
+            set: { gramsPerUnit = CountUnitMass.grams(from: $0, unit: massUnit) }
+        )
+    }
+
+    private var massRange: ClosedRange<Double> {
+        let lower = CountUnitMass.display(grams: 1, unit: massUnit)
+        let upper = CountUnitMass.display(grams: 5_000, unit: massUnit)
+        return lower...max(lower, upper)
+    }
+
+    @ViewBuilder
+    private var massLinkControls: some View {
+        Text("Each \(item.unit) weighs")
+            .rationCaption()
+            .foregroundStyle(Theme.muted)
+        QuantityStepperField(
+            value: massAmount,
+            unit: massUnit,
+            title: "Weight",
+            range: massRange,
+            step: QuantityEntry.step(for: massUnit)
+        )
+        Picker("Measure", selection: $massUnit) {
+            ForEach(CountUnitMass.massUnits, id: \.self) { unit in
+                Text(unit).tag(unit)
+            }
         }
+        .pickerStyle(.segmented)
+        .accessibilityLabel("Weight unit")
+        Text(eatenMassSummary)
+            .rationCaption()
+            .foregroundStyle(Theme.muted)
+    }
+
+    private var eatenMassSummary: String {
+        let each = QuantityEntry.format(CountUnitMass.display(grams: gramsPerUnit, unit: massUnit))
+        let totalGrams = quantity * gramsPerUnit
+        let total = QuantityEntry.format(CountUnitMass.display(grams: totalGrams, unit: massUnit))
+        return "1 \(item.unit) = \(each) \(massUnit). Eating \(QuantityEntry.format(quantity)) \(item.unit) uses \(total) \(massUnit)."
     }
 
     private var macroEstimate: (
@@ -105,12 +159,28 @@ struct CargoQuickEatSheet: View {
         carbsG: Double?,
         fatG: Double?
     ) {
-        CargoEatMacroEstimate.scaled(
+        if needsMassLink {
+            return CargoEatMacroEstimate.scaled(
+                nutrition: item.nutrition,
+                totalGrams: quantity * gramsPerUnit
+            )
+        }
+        return CargoEatMacroEstimate.scaled(
             nutrition: item.nutrition,
             quantity: quantity,
             unit: item.unit,
             packageQuantity: item.quantity
         )
+    }
+
+    private func prepareIfNeeded() {
+        guard !didPrepare else { return }
+        didPrepare = true
+        quantity = defaultAmount
+        if let suggested = CountUnitMass.suggestedGramsPerUnit(nutrition: item.nutrition) {
+            gramsPerUnit = suggested
+        }
+        massUnit = env.unitDisplayMode.mode == .imperial ? "oz" : "g"
     }
 
     private var defaultAmount: Double {
@@ -130,6 +200,14 @@ struct CargoQuickEatSheet: View {
         errorMessage = nil
         defer { isSaving = false }
         let notePayload = notesEnabled ? IntakeNotesField.payload(from: notes) : nil
+        if needsMassLink {
+            do {
+                try await persistUnitMassIfNeeded()
+            } catch {
+                errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+                return
+            }
+        }
         if let result = await onConfirm(quantity, notePayload) {
             if result.intakeLogged {
                 onFinished(result)
@@ -141,6 +219,13 @@ struct CargoQuickEatSheet: View {
         } else {
             errorMessage = "Couldn't log this snack. Try again."
         }
+    }
+
+    private func persistUnitMassIfNeeded() async throws {
+        guard CountUnitMass.shouldPersist(nutrition: item.nutrition, gramsPerUnit: gramsPerUnit),
+              let payload = CountUnitMass.snapshot(item.nutrition, gramsPerUnit: gramsPerUnit)
+        else { return }
+        _ = try await env.api.updateCargo(id: item.id, UpdateCargoRequest(nutrition: payload))
     }
 
     private static func intakeSkipMessage(_ reason: String?) -> String {

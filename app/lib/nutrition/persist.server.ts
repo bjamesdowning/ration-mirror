@@ -333,7 +333,26 @@ export async function recomputeAndStoreMealNutrition(
 						resolvedUnit &&
 						isDiscreteCountFamily(getUnitFamily(resolvedUnit))
 					) {
-						if (fdcId != null) {
+						// A confirmed Eat weight is stored as user_override perServing
+						// against per-100 g density. That mass wins over an FDC cup.
+						if (
+							override.nutrition.source === "user_override" &&
+							override.nutrition.perServing
+						) {
+							const confirmed = estimateGramsFromPerServingDensity(
+								nutrientsPer100g,
+								override.nutrition.perServing,
+								ing.quantity,
+							);
+							if (
+								confirmed != null &&
+								Number.isFinite(confirmed) &&
+								confirmed > 0
+							) {
+								grams = confirmed;
+							}
+						}
+						if ((grams == null || grams <= 0) && fdcId != null) {
 							const portion = await lookupFdcPortion(env, fdcId, resolvedUnit);
 							if (
 								portion.gramsPerUnit != null &&

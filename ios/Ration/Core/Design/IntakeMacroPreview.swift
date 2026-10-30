@@ -107,4 +107,22 @@ enum CargoEatMacroEstimate {
         // Density-only count/can/pack: no authentic per-unit mass.
         return (nil, nil, nil, nil)
     }
+
+    /// Per-100 g density times an explicit eaten mass. Used when a count unit
+    /// has been given a gram weight (1 unit = N g).
+    static func scaled(
+        nutrition: NutritionSnapshot?,
+        totalGrams: Double
+    ) -> (energyKcal: Double?, proteinG: Double?, carbsG: Double?, fatG: Double?) {
+        guard totalGrams > 0, let per100g = nutrition?.per100g, per100g.hasAnyMacro else {
+            return (nil, nil, nil, nil)
+        }
+        let factor = totalGrams / 100
+        return (
+            per100g.energyKcal.map { $0 * factor },
+            per100g.proteinG.map { $0 * factor },
+            per100g.carbG.map { $0 * factor },
+            per100g.fatG.map { $0 * factor }
+        )
+    }
 }

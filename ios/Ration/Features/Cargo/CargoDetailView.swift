@@ -156,6 +156,7 @@ struct CargoDetailView: View {
                     await model.quickEat(quantity: quantity, notes: notes, api: env.api)
                 } onFinished: { _ in
                     env.notifyCargoDataChanged()
+                    Task { await model.load(id: itemId, api: env.api) }
                 }
             }
         }

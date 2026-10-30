@@ -96,6 +96,8 @@ struct ClientFlags: Codable, Sendable, Equatable {
     var nutritionIntakeNotes: Bool?
     /// Personal diary aggregates across kitchens (additive).
     var nutritionCrossOrgDiary: Bool?
+    /// Manifest Macros history page (additive; missing/false = no button, no route).
+    var nutritionMacrosHistory: Bool?
     /// Feature enablement onboarding + web AI consent parity (additive).
     var featureEnablementConsent: Bool?
     /// Supply list library (additive; missing/false = Live singleton).
@@ -127,6 +129,7 @@ struct ClientFlags: Codable, Sendable, Equatable {
     }
     var isNutritionIntakeNotesEnabled: Bool { nutritionIntakeNotes == true }
     var isNutritionCrossOrgDiaryEnabled: Bool { nutritionCrossOrgDiary == true }
+    var isNutritionMacrosHistoryEnabled: Bool { nutritionMacrosHistory == true }
     var isFeatureEnablementConsentEnabled: Bool { featureEnablementConsent == true }
     var isSupplyMultiListsEnabled: Bool { supplyMultiLists == true }
     var isIosHomeWidgetsEnabled: Bool { iosHomeWidgets == true }

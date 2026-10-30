@@ -20,7 +20,9 @@ final class TabDockActionHandle {
 /// action and leave the list FAB on top after a cross-tab deep link.
 enum TabDockLayer: Int, Comparable, Sendable {
     case root = 0
-    case detail = 1
+    /// Lists library. Above Live Supply, below an open saved list.
+    case lists = 1
+    case detail = 2
 
     static func < (lhs: TabDockLayer, rhs: TabDockLayer) -> Bool {
         lhs.rawValue < rhs.rawValue

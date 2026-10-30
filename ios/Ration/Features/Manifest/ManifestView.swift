@@ -15,6 +15,7 @@ struct ManifestView: View {
     @State private var showingPlanWeek = false
     @State private var showingOptions = false
     @State private var showingJumpCalendar = false
+    @State private var showingMacros = false
     @State private var paywallContext: PaywallContext?
     @State private var pendingUndo: ManifestUndoToast?
     /// Shared by legacy Consume and split Cook — both deduct Cargo and need the same
@@ -196,6 +197,16 @@ struct ManifestView: View {
                     onOpenGroupSettings: onOpenGroupSettings,
                     onOpenSettings: onOpenSettings
                 )
+                if env.session.clientFlags.isNutritionMacrosHistoryEnabled {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button {
+                            showingMacros = true
+                        } label: {
+                            Image(systemName: "chart.bar.fill")
+                        }
+                        .accessibilityLabel("Macros")
+                    }
+                }
             }
             .dataSyncBanner(
                 domain: SnapshotDomain.manifest,
@@ -238,6 +249,11 @@ struct ManifestView: View {
                 PaywallView(context: ctx)
             }
             .background(Theme.ceramic)
+            .macrosHistoryRoute(
+                enabled: env.session.clientFlags.isNutritionMacrosHistoryEnabled,
+                isPresented: $showingMacros,
+                onOpenGoals: onOpenNutritionGoals
+            )
             .sheet(isPresented: $showingAddEntry) {
                 AddManifestEntrySheet(
                     defaultDate: model.selectedDay,

@@ -95,6 +95,27 @@ describe("getClientSafeFlags", () => {
 			nutritionIntakeNotes: true,
 			nutritionCrossOrgDiary: true,
 		});
+
+		expect(
+			applyClientFlagDependencies({
+				nutritionEngine: false,
+				nutritionManifest: true,
+				nutritionMacrosHistory: true,
+			}),
+		).toMatchObject({
+			nutritionManifest: false,
+			nutritionMacrosHistory: false,
+		});
+		expect(
+			applyClientFlagDependencies({
+				nutritionEngine: true,
+				nutritionManifest: true,
+				nutritionMacrosHistory: true,
+			}),
+		).toMatchObject({
+			nutritionManifest: true,
+			nutritionMacrosHistory: true,
+		});
 	});
 });
 

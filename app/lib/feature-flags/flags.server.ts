@@ -108,6 +108,10 @@ export function applyClientFlagDependencies(
 		result.nutritionCrossOrgDiary =
 			result.nutritionCrossOrgDiary === true && (manifest || goals);
 	}
+	if ("nutritionMacrosHistory" in result) {
+		result.nutritionMacrosHistory =
+			manifest && result.nutritionMacrosHistory === true;
+	}
 
 	return result;
 }

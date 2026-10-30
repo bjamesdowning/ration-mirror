@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SupplyListsLibraryView: View {
     @Environment(AppEnvironment.self) private var env
+    @Environment(\.currentMainTab) private var currentMainTab
     @Environment(\.dismiss) private var dismiss
     @State private var catalog: SupplyCatalogResponse?
     @State private var showingNewList = false
@@ -92,21 +93,24 @@ struct SupplyListsLibraryView: View {
         .scrollContentBackground(.hidden)
         .background(Theme.ceramic)
         .navigationTitle("Lists")
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Menu {
-                    Button("New List…") {
-                        saveLive = false
-                        showingNewList = true
-                    }
-                    Button("Save Live as List…") {
-                        saveLive = true
-                        showingNewList = true
-                    }
+        .tabDockAction(tag: .supply, layer: .lists, isActive: currentMainTab == .supply) {
+            IconFABMenuCore(
+                systemImage: "plus.circle.fill",
+                accessibilityLabel: "Lists actions",
+                disabled: !env.network.isOnline
+            ) {
+                Button {
+                    saveLive = false
+                    showingNewList = true
                 } label: {
-                    Image(systemName: "plus")
+                    Label("New saved list…", systemImage: "plus.rectangle.on.rectangle")
                 }
-                .accessibilityLabel("New list")
+                Button {
+                    saveLive = true
+                    showingNewList = true
+                } label: {
+                    Label("Save Live Supply as a list…", systemImage: "square.and.arrow.down")
+                }
             }
         }
         .sheet(isPresented: $showingNewList) {
@@ -192,7 +196,7 @@ struct SavedListView: View {
             IconFABMenuCore(
                 systemImage: "plus.circle.fill",
                 accessibilityLabel: "List actions",
-                disabled: isArchived || !env.network.isOnline
+                disabled: !env.network.isOnline
             ) {
                 Button {
                     showingAddItem = true
@@ -206,6 +210,26 @@ struct SavedListView: View {
                     Label("Add missing to Live", systemImage: "arrow.down.doc")
                 }
                 .disabled(model.items.isEmpty || !env.network.isOnline)
+                Button {
+                    Task { await duplicate() }
+                } label: {
+                    Label(
+                        isArchived ? "Restore this list" : "Duplicate this list",
+                        systemImage: isArchived ? "arrow.uturn.backward" : "doc.on.doc"
+                    )
+                }
+                if listState == "saved" {
+                    Button {
+                        Task { await archive() }
+                    } label: {
+                        Label("Archive this list", systemImage: "archivebox")
+                    }
+                }
+                Button(role: .destructive) {
+                    Task { await deleteList() }
+                } label: {
+                    Label("Delete this list", systemImage: "trash")
+                }
             }
         }
         .onAppear { env.tabDock.bumpContentEpoch() }
@@ -228,26 +252,6 @@ struct SavedListView: View {
                     if !model.isSelecting { model.selectedIds = [] }
                 }
                 .disabled(isArchived)
-            }
-            ToolbarItem(placement: .primaryAction) {
-                Menu {
-                    Button("Add to list") { showingAddItem = true }
-                        .disabled(isArchived)
-                    Button("Add missing to Live") {
-                        Task { await model.addMissing(api: env.api) }
-                    }
-                    .disabled(model.items.isEmpty)
-                    Button(isArchived ? "Restore as saved" : "Duplicate") {
-                        Task { await duplicate() }
-                    }
-                    if listState == "saved" {
-                        Button("Archive") { Task { await archive() } }
-                    }
-                    Button("Delete", role: .destructive) { Task { await deleteList() } }
-                } label: {
-                    Image(systemName: "ellipsis.circle")
-                }
-                .accessibilityLabel("List actions")
             }
         }
         .safeAreaInset(edge: .bottom) {

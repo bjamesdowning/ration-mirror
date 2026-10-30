@@ -301,6 +301,23 @@ struct NutritionSummary: Codable, Sendable, Equatable {
     let goal: Goal?
 }
 
+struct MacrosHistoryNote: Codable, Sendable, Identifiable, Equatable {
+    let id: String
+    let date: String
+    let mealName: String?
+    let notes: String
+    let energyKcal: Double
+    let proteinG: Double
+    let carbsG: Double
+    let fatG: Double
+}
+
+struct MacrosHistoryResponse: Codable, Sendable, Equatable {
+    let current: NutritionSummary
+    let previous: NutritionSummary
+    let notes: [MacrosHistoryNote]
+}
+
 // MARK: - Cargo / Meal nutrition snapshots
 // Additive JSON on cargo/meal detail — ignored by older clients; gated by `nutritionEngine` in UI.
 

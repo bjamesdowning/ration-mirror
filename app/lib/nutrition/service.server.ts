@@ -1,5 +1,6 @@
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
+import { data } from "react-router";
 import * as schema from "~/db/schema";
 import { assertFeatureEnabled } from "~/lib/feature-flags/assert-enabled.server";
 import type { FlagshipEvaluationContext } from "~/lib/feature-flags/context.server";
@@ -23,6 +24,7 @@ import {
 	type IntakeLoggedUnit,
 	resolveIntakeAmount,
 } from "~/lib/nutrition/intake-amount";
+import { previousEqualCalendarRange } from "~/lib/nutrition/macros-range";
 import {
 	getActiveNutritionGoal,
 	getActivePersonalIntakesForEntries,
@@ -1934,6 +1936,69 @@ export async function getHistory(
 	return history;
 }
 
+export type MacrosHistoryNote = {
+	id: string;
+	date: string;
+	mealName: string | null;
+	notes: string;
+	energyKcal: number;
+	proteinG: number;
+	carbsG: number;
+	fatG: number;
+};
+
+/**
+ * Manifest Macros page. Same intake rollup as the summary route, plus the
+ * previous equal-length span. Note text only when `nutrition-intake-notes` is on.
+ */
+export async function getMacrosHistory(
+	env: Env,
+	principal: NutritionPrincipal,
+	flags: NutritionFlagContext,
+	from: string,
+	to: string,
+) {
+	requireScope(principal, "nutrition:read");
+	await assertFeatureEnabled(env, "nutrition-macros-history", flags);
+	await assertFeatureEnabled(env, "nutrition-engine", flags);
+	await assertFeatureEnabled(env, "nutrition-manifest", flags);
+	const previousRange = previousEqualCalendarRange(from, to);
+	if (!previousRange) {
+		throw data({ error: "Invalid query" }, { status: 400 });
+	}
+	const [current, previous] = await Promise.all([
+		getSummary(env, principal, flags, from, to),
+		getSummary(env, principal, flags, previousRange.from, previousRange.to),
+	]);
+	const [notesEnabled, cookLogSplit] = await Promise.all([
+		isFeatureEnabled(env, "nutrition-intake-notes", flags),
+		isFeatureEnabled(env, "nutrition-cook-log-split", flags),
+	]);
+	let notes: MacrosHistoryNote[] = [];
+	if (notesEnabled && cookLogSplit) {
+		const history = await getHistory(env, principal, flags, from, to, {
+			limit: 500,
+		});
+		notes = history.items.flatMap((row) => {
+			const text = row.notes?.trim() ?? "";
+			if (!text) return [];
+			return [
+				{
+					id: row.id,
+					date: row.manifestDate,
+					mealName: row.mealName,
+					notes: text,
+					energyKcal: coerceFiniteNumber(row.energyKcal),
+					proteinG: coerceFiniteNumber(row.proteinG),
+					carbsG: coerceFiniteNumber(row.carbsG),
+					fatG: coerceFiniteNumber(row.fatG),
+				},
+			];
+		});
+	}
+	return { current, previous, notes };
+}
+
 export async function attachPersonalIntakeToEntries(
 	env: Env,
 	principal: NutritionPrincipal,
@@ -2237,6 +2302,7 @@ export const NutritionService = {
 	undoIntake,
 	getSummary,
 	getHistory,
+	getMacrosHistory,
 	attachPersonalIntakeToEntries,
 };
 

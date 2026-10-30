@@ -67,7 +67,7 @@ struct SupplyView: View {
                                 title: "No supply delta yet",
                                 message: "Add items manually, select meals in Galley, mark Cargo for restock, or plan meals in Manifest."
                             )
-                            Button("Add items") {
+                            Button("Add to Supply") {
                                 showingQuickAdd = true
                             }
                             .buttonStyle(PrimaryButtonStyle())
@@ -377,7 +377,7 @@ struct SupplyView: View {
                 Button {
                     showingQuickAdd = true
                 } label: {
-                    Label("Add items", systemImage: "plus")
+                    Label("Add to Supply", systemImage: "plus")
                 }
                 .disabled(!model.canEditCurrentList)
                 if model.multiListsEnabled {

@@ -15,6 +15,19 @@ final class TabDockContextTests: XCTestCase {
         XCTAssertTrue(tabDock.hasAction(for: .hub, layer: .root))
     }
 
+    func testListsLayerSitsBetweenRootAndDetail() {
+        let tabDock = TabDockContext()
+        tabDock.setLayerAction(for: .supply, layer: .root) { Text("Live") }
+        tabDock.setLayerAction(for: .supply, layer: .lists) { Text("Library") }
+        XCTAssertTrue(tabDock.hasAction(for: .supply, layer: .lists))
+
+        tabDock.setLayerAction(for: .supply, layer: .detail) { Text("Saved") }
+        tabDock.clearLayerAction(for: .supply, layer: .detail)
+        XCTAssertTrue(tabDock.hasAction(for: .supply, layer: .lists))
+        XCTAssertTrue(tabDock.hasAction(for: .supply, layer: .root))
+        XCTAssertFalse(tabDock.hasAction(for: .supply, layer: .detail))
+    }
+
     func testDetailLayerTakesPriorityOverRoot() {
         let tabDock = TabDockContext()
         tabDock.setLayerAction(for: .cargo, layer: .root) { Text("Add") }

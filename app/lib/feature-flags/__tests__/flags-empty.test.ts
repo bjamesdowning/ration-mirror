@@ -26,6 +26,7 @@ describe("getClientSafeFlags", () => {
 			cargoQuickEat: false,
 			nutritionIntakeNotes: false,
 			nutritionCrossOrgDiary: false,
+			nutritionMacrosHistory: false,
 			featureEnablementConsent: false,
 			supplyMultiLists: false,
 			iosHomeWidgets: false,

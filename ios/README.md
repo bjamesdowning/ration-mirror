@@ -24,7 +24,7 @@ Set your **Apple Developer Team ID** in `project.yml` (`DEVELOPMENT_TEAM`) befor
 building to a device, then re-run `xcodegen generate`.
 
 **Versioning:** User-facing app version is `MARKETING_VERSION` in `project.yml`
-(currently **1.5.9**). `CURRENT_PROJECT_VERSION` is the monotonic build number for
+(currently **1.5.10**). `CURRENT_PROJECT_VERSION` is the monotonic build number for
 TestFlight / App Store uploads. Follow the same patch/minor rules as the web app
 (`1.X.1`–`1.X.49`, then `1.(X+1).0`); see `.cursor/rules/ration-master.mdc`.
 After editing `project.yml`, run `bun run ios:generate`.
@@ -269,6 +269,7 @@ handler also opens the picker when access is lost remotely.
 | `/manifest/cook` | POST | Shared Cook → Prepared (`nutrition-cook-log-split`) |
 | `/manifest/entries/:entryId/intake` | POST/DELETE | Atomic private Eat log / clear (operation key; versioned privacy consent) |
 | `/nutrition/summary`, `/nutrition/goals` | GET/… | Nutrition summary + goals (flag-gated; goals GET accepts `asOf`) |
+| `/nutrition/macros` | GET | Macros history (`nutrition-macros-history`; from/to, previous period, notes) |
 | `/scan`, `/scan/:requestId` | POST/GET | Visual scan AI |
 | `/settings` | GET/PATCH | User preferences |
 | `/orgs` | GET | List groups for org picker / recovery |

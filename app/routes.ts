@@ -595,6 +595,10 @@ export default [
 		"routes/api/mobile/v1.nutrition.summary.ts",
 	),
 	route(
+		"api/mobile/v1/nutrition/macros",
+		"routes/api/mobile/v1.nutrition.macros.ts",
+	),
+	route(
 		"api/mobile/v1/nutrition/goals",
 		"routes/api/mobile/v1.nutrition.goals.ts",
 	),

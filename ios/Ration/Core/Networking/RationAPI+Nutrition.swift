@@ -92,6 +92,17 @@ extension RationAPI {
     }
 
     // Nutrition summary — gated by `nutrition-goals` OR `nutrition-manifest`.
+    /// Macros history — gated by `nutrition-macros-history` (fail-closed server-side).
+    func nutritionMacros(from: String, to: String) async throws -> MacrosHistoryResponse {
+        try await client.get(
+            "nutrition/macros",
+            query: [
+                URLQueryItem(name: "from", value: from),
+                URLQueryItem(name: "to", value: to),
+            ]
+        )
+    }
+
     func nutritionSummary(from: String, to: String) async throws -> NutritionSummary {
         try await client.get(
             "nutrition/summary",

@@ -561,6 +561,35 @@ export function buildMobileOpenApiDocument(baseUrl: string) {
 					},
 				},
 			},
+			"/api/mobile/v1/nutrition/macros": {
+				get: {
+					summary: "Macros history for the Manifest page",
+					description:
+						"Requires nutrition-macros-history, nutrition-engine, and nutrition-manifest, plus active intake consent. Query: from, to (YYYY-MM-DD, inclusive, max 93 days). Returns the current summary, the previous equal-length summary, and note rows only when nutrition-intake-notes and nutrition-cook-log-split are on.",
+					security: [{ bearerAuth: [] }],
+					parameters: [
+						{
+							name: "from",
+							in: "query",
+							required: true,
+							schema: { type: "string", format: "date" },
+						},
+						{
+							name: "to",
+							in: "query",
+							required: true,
+							schema: { type: "string", format: "date" },
+						},
+					],
+					responses: {
+						"200": {
+							description:
+								"{ current, previous, notes[] }. Each summary matches the nutrition summary shape.",
+						},
+						"403": { description: "FEATURE_DISABLED" },
+					},
+				},
+			},
 			"/api/mobile/v1/nutrition/summary": {
 				get: {
 					summary: "Nutrition day totals and active goal",

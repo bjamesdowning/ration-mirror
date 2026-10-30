@@ -140,6 +140,7 @@ Permanent boolean kill switches for billed AI pipelines. Registry `defaultEnable
 | `nutrition-async-recompute` | _(not clientVisible)_ | Queue stub for async nutrition recompute |
 | `nutrition-intake-notes` | `nutritionIntakeNotes` | Optional private Eat notes (≤280) on intake rows |
 | `nutrition-cross-org-diary` | `nutritionCrossOrgDiary` | Personal intake summary/history aggregates across kitchens (user-global diary) |
+| `nutrition-macros-history` | `nutritionMacrosHistory` | iOS Manifest Macros page (range averages, previous period, notes). Default **off**. Requires effective `nutrition-manifest`. Notes text also requires `nutrition-intake-notes`. |
 
 ## Supply list library
 

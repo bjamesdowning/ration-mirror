@@ -136,6 +136,13 @@ export const FLAG_REGISTRY: Record<string, FlagRegistryEntry> = {
 		clientVisible: true,
 		clientKey: "nutritionCrossOrgDiary",
 	},
+	"nutrition-macros-history": {
+		defaultEnabled: false,
+		description:
+			"iOS Manifest Macros page: range averages, previous period, and intake notes",
+		clientVisible: true,
+		clientKey: "nutritionMacrosHistory",
+	},
 	"nutrition-async-recompute": {
 		defaultEnabled: false,
 		description:

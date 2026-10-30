@@ -20,22 +20,14 @@ struct IntakeAmountEditor: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 12) {
-                TextField("Amount", value: amountBinding, format: .number)
-                    .keyboardType(.decimalPad)
-                    .multilineTextAlignment(.trailing)
-                    .font(Typography.mono(22))
-                    .disabled(!enabled)
-                    .accessibilityLabel("Amount eaten")
-                    .accessibilityIdentifier("manifest.eat.amount")
-                Text(unitLabel)
-                    .rationCaption()
-                    .foregroundStyle(Theme.muted)
-                Stepper("Adjust amount eaten", onIncrement: { applyStep(1) }, onDecrement: { applyStep(-1) })
-                    .labelsHidden()
-                    .disabled(!enabled)
-                    .fixedSize()
-            }
+            QuantityStepperField(
+                value: amountBinding,
+                unit: unitLabel,
+                range: 0.01...100_000,
+                step: IntakeAmount.step(for: unit),
+                accessibilityIdentifier: "manifest.eat.amount"
+            )
+            .disabled(!enabled)
             if massEnabled {
                 Picker("Unit", selection: unitBinding) {
                     Text("Servings").tag(IntakeLoggedUnit.serving)
@@ -74,18 +66,6 @@ struct IntakeAmountEditor: View {
                 }
             }
         )
-    }
-
-    private func applyStep(_ direction: Int) {
-        let resolved = IntakeAmount.clampedStep(
-            amount: amount,
-            unit: unit,
-            direction: direction,
-            gramsPerServing: gramsPerServing
-        )
-        amount = resolved.loggedAmount
-        unit = resolved.loggedUnit
-        servings = resolved.servings
     }
 
     private func apply(amount nextAmount: Double, unit nextUnit: IntakeLoggedUnit) {

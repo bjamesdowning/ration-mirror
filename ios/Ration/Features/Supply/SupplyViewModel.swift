@@ -222,7 +222,7 @@ final class SupplyViewModel {
             await snapshots.save(response, domain: SnapshotDomain.supplyCatalog, organizationId: organizationId)
             // Supply stays on Live. `supply.selected.` is a leftover from the
             // in-place switcher; restoring it checked off and quick-added onto
-            // a saved list. Pinning uses `supply.pinned.` and is not read here.
+            // a saved list.
             UserDefaults.standard.removeObject(forKey: "supply.selected.\(organizationId)")
             if selectedListId != response.live?.id {
                 selectedListId = nil

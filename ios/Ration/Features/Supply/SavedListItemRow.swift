@@ -22,6 +22,7 @@ struct SavedListItemRow: View {
     var onToggle: () -> Void
     var onAddMore: () -> Void
     var onRemove: (() -> Void)?
+    var onRemoveFromList: (() -> Void)? = nil
 
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
@@ -67,6 +68,9 @@ struct SavedListItemRow: View {
             }
             if let onRemove {
                 Button("Remove from Live", systemImage: "minus.circle", action: onRemove)
+            }
+            if let onRemoveFromList {
+                Button("Remove from list", systemImage: "trash", role: .destructive, action: onRemoveFromList)
             }
         }
         .swipeActions(edge: .leading, allowsFullSwipe: true) {

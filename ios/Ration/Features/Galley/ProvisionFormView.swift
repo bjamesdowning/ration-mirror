@@ -19,7 +19,7 @@ struct ProvisionFormView: View {
     @FocusState private var focusedField: Field?
 
     private enum Field: Hashable {
-        case name, quantity
+        case name
     }
 
     var body: some View {
@@ -32,12 +32,8 @@ struct ProvisionFormView: View {
                     TextField("Item name", text: $name)
                         .textInputAutocapitalization(.never)
                         .focused($focusedField, equals: .name)
-                    HStack {
-                        TextField("Quantity", text: $quantity)
-                            .keyboardType(.decimalPad)
-                            .focused($focusedField, equals: .quantity)
-                        UnitPicker(units: RationUnits.all, selection: $unit)
-                    }
+                    QuantityStringStepperField(text: $quantity, unit: unit)
+                    UnitPicker(units: RationUnits.all, selection: $unit)
                     if let quantityError {
                         Text(quantityError)
                             .font(Typography.caption())

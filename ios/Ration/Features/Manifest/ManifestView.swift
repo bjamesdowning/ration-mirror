@@ -505,7 +505,7 @@ struct ManifestView: View {
                                     carbsG: row.carbsG,
                                     fatG: row.fatG,
                                     occurredAt: Date(),
-                                    notes: nil
+                                    notes: row.notes
                                 )
                             )
                         }
@@ -542,6 +542,13 @@ struct ManifestView: View {
                                 )
                                 .rationCaption()
                                 .foregroundStyle(Theme.muted)
+                                if let note = row.intake.notes?.trimmingCharacters(in: .whitespacesAndNewlines),
+                                   !note.isEmpty {
+                                    Text(note)
+                                        .rationCaption()
+                                        .foregroundStyle(Theme.muted)
+                                        .lineLimit(2)
+                                }
                             }
                             .listRowBackground(Theme.surface)
                         }

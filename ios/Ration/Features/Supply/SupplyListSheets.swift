@@ -69,6 +69,10 @@ struct SupplyQuickAddSheet: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
                 }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Add") { Task { await submit() } }
+                        .disabled(isSaving || preview.isEmpty)
+                }
             }
         }
         .presentationDetents([.medium, .large])

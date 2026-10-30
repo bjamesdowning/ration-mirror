@@ -174,6 +174,7 @@ struct ManifestPlateUpSheet: View {
                         .accessibilityIdentifier("manifest.eat.save")
                 }
             }
+            .rationFormKeyboardToolbar()
             .sheet(isPresented: $showingFeatureEnablement) {
                 PrivacySettingsView()
             }

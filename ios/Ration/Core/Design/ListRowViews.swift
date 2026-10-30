@@ -298,6 +298,12 @@ struct ManifestEntryRow: View {
                         )
                         .font(Typography.dataCaption())
                         .foregroundStyle(Theme.hyperGreen)
+                        if let note = intake.notes?.trimmingCharacters(in: .whitespacesAndNewlines), !note.isEmpty {
+                            Text(note)
+                                .rationCaption()
+                                .foregroundStyle(Theme.muted)
+                                .lineLimit(2)
+                        }
                     }
                 }
             }

@@ -20,9 +20,7 @@ struct SupplyItemCheckOffSheet: View {
         NavigationStack {
             Form {
                 Section(item.name.capitalized) {
-                    Stepper(value: $quantity, in: 0...999, step: 0.5) {
-                        Text("Quantity: \(quantity.formatted())")
-                    }
+                    QuantityStepperField(value: $quantity, unit: unit, title: "Quantity", range: 0...999)
                     UnitPicker(units: RationUnits.all, selection: $unit)
                 }
                 Section {
@@ -44,6 +42,7 @@ struct SupplyItemCheckOffSheet: View {
                     Button("Cancel") { dismiss() }
                 }
             }
+            .rationFormKeyboardToolbar()
         }
         .presentationDetents([.medium])
     }
@@ -245,9 +244,12 @@ struct CargoRestockQuantitySheet: View {
         NavigationStack {
             Form {
                 Section(item.name.capitalized) {
-                    Stepper(value: $quantity, in: 1...999, step: 1) {
-                        Text("Quantity: \(quantity.formatted())")
-                    }
+                    QuantityStepperField(
+                        value: $quantity,
+                        unit: item.unit,
+                        title: "Quantity",
+                        range: 1...999
+                    )
                     Text("Unit: \(item.unit)")
                         .rationCaption()
                         .foregroundStyle(Theme.muted)
@@ -271,6 +273,7 @@ struct CargoRestockQuantitySheet: View {
                     Button("Cancel") { dismiss() }
                 }
             }
+            .rationFormKeyboardToolbar()
         }
         .presentationDetents([.medium])
     }

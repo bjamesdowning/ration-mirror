@@ -61,12 +61,13 @@ struct MealIngredientEditorView: View {
 
                 cargoLinkRow(ingredient: $ingredient)
 
-                HStack {
-                    TextField("Qty", value: $ingredient.quantity, format: .number)
-                        .keyboardType(.decimalPad)
-                        .frame(maxWidth: 80)
-                    UnitPicker(units: RationUnits.all, selection: $ingredient.unit)
-                }
+                QuantityStepperField(
+                    value: $ingredient.quantity,
+                    unit: ingredient.unit,
+                    title: "Quantity",
+                    range: 0.01...9_999
+                )
+                UnitPicker(units: RationUnits.all, selection: $ingredient.unit)
                 Toggle("Optional", isOn: $ingredient.isOptional)
             }
             .padding(.vertical, 4)

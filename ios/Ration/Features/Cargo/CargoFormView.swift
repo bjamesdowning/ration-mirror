@@ -31,7 +31,12 @@ struct CargoFormView: View {
     @FocusState private var focusedField: Field?
 
     private enum Field: Hashable {
-        case name, quantity
+        case name
+    }
+
+    private var isEditing: Bool {
+        if case .edit = mode { return true }
+        return false
     }
 
     init(mode: Mode, onSaved: @escaping () async -> Void = {}) {
@@ -87,12 +92,12 @@ struct CargoFormView: View {
                 Section("Item") {
                     TextField("Name", text: $name)
                         .focused($focusedField, equals: .name)
-                    HStack {
-                        TextField("Quantity", text: $quantity)
-                            .keyboardType(.decimalPad)
-                            .focused($focusedField, equals: .quantity)
-                        UnitPicker(units: RationUnits.cargoEdit, selection: $unit)
-                    }
+                    QuantityStringStepperField(
+                        text: $quantity,
+                        unit: unit,
+                        allowZero: isEditing
+                    )
+                    UnitPicker(units: RationUnits.cargoEdit, selection: $unit)
                     if let quantityError {
                         Text(quantityError)
                             .font(Typography.caption())

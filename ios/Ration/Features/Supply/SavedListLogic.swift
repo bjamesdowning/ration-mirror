@@ -27,10 +27,6 @@ enum SavedListLogic {
         }
     }
 
-    static func pinnedListKey(organizationId: String) -> String {
-        "supply.pinned.\(organizationId)"
-    }
-
     static func originLabel(_ createdFrom: String?) -> String {
         switch createdFrom {
         case "live_snapshot", "completed_trip":

@@ -161,6 +161,7 @@ struct ManifestDayIntakeRow: Codable, Sendable, Equatable, Identifiable {
     let fatG: Double
     let mealName: String?
     let organizationName: String?
+    let notes: String?
 }
 
 struct ManifestResponse: Codable, Sendable {

@@ -21,9 +21,12 @@ struct CargoQuickEatSheet: View {
         NavigationStack {
             Form {
                 Section(item.name.capitalized) {
-                    Stepper(value: $quantity, in: stepRange, step: step) {
-                        Text("Amount: \(quantity.formatted()) \(item.unit)")
-                    }
+                    QuantityStepperField(
+                        value: $quantity,
+                        unit: item.unit,
+                        range: 0.01...1_000,
+                        step: step
+                    )
                     if stockEmpty {
                         Text("Pantry empty — snack will still appear on Manifest")
                             .rationCaption()
@@ -83,7 +86,12 @@ struct CargoQuickEatSheet: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
                 }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Eat") { Task { await submit() } }
+                        .disabled(isSaving || quantity <= 0)
+                }
             }
+            .rationFormKeyboardToolbar()
         }
         .presentationDetents([.medium, .large])
         .onAppear {
@@ -116,11 +124,8 @@ struct CargoQuickEatSheet: View {
         return 1
     }
 
-    private var stepRange: ClosedRange<Double> {
-        step...1000
-    }
-
     private func submit() async {
+        guard !isSaving, quantity > 0 else { return }
         isSaving = true
         errorMessage = nil
         defer { isSaving = false }

@@ -20,7 +20,7 @@ struct SettingsView: View {
                     sessionErrorState
                 }
             }
-            .navigationTitle(String(localized: "Settings"))
+            .navigationTitle(String(localized: "Account"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -156,6 +156,14 @@ struct SettingsView: View {
             } footer: {
                 Text("Permanently delete your account and personal data. This cannot be undone.")
             }
+
+            Section {
+                Text(appVersionLabel)
+                    .font(Typography.caption())
+                    .foregroundStyle(Theme.muted)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .listRowBackground(Color.clear)
+            }
         }
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
@@ -167,5 +175,12 @@ struct SettingsView: View {
                 env.unitDisplayMode.syncFromServer(settings)
             }
         }
+    }
+
+    private var appVersionLabel: String {
+        let info = Bundle.main.infoDictionary
+        let short = info?["CFBundleShortVersionString"] as? String ?? "—"
+        let build = info?["CFBundleVersion"] as? String ?? "—"
+        return "Version \(short) (\(build))"
     }
 }

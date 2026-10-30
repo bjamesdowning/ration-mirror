@@ -13,7 +13,15 @@ struct RationFormKeyboardToolbar: ViewModifier {
             .toolbar {
                 ToolbarItemGroup(placement: .keyboard) {
                     Spacer()
-                    Button(action: onDismiss) {
+                    Button {
+                        onDismiss()
+                        UIApplication.shared.sendAction(
+                            #selector(UIResponder.resignFirstResponder),
+                            to: nil,
+                            from: nil,
+                            for: nil
+                        )
+                    } label: {
                         Image(systemName: "chevron.down")
                             .foregroundStyle(Theme.hyperGreen)
                     }

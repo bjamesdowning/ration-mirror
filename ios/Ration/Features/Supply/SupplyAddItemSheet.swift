@@ -4,6 +4,7 @@ struct SupplyAddItemSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     var defaultDomain: String = "food"
+    var submitLabel: String = "Add to Supply"
     @Binding var serverError: String?
     var onAdd: (CreateSupplyItemRequest) async -> Bool
 
@@ -22,10 +23,12 @@ struct SupplyAddItemSheet: View {
 
     init(
         defaultDomain: String = "food",
+        submitLabel: String = "Add to Supply",
         serverError: Binding<String?>,
         onAdd: @escaping (CreateSupplyItemRequest) async -> Bool
     ) {
         self.defaultDomain = defaultDomain
+        self.submitLabel = submitLabel
         _serverError = serverError
         self.onAdd = onAdd
         _domain = State(initialValue: defaultDomain)
@@ -46,8 +49,7 @@ struct SupplyAddItemSheet: View {
                     .foregroundStyle(Theme.hyperGreen)
 
                     if showDetails {
-                        TextField("Quantity", text: $quantity)
-                            .keyboardType(.decimalPad)
+                        QuantityStringStepperField(text: $quantity, unit: unit)
                         UnitPicker(units: RationUnits.all, selection: $unit)
                         Picker("Domain", selection: $domain) {
                             ForEach(CargoDomain.allCases, id: \.self) { d in
@@ -66,7 +68,7 @@ struct SupplyAddItemSheet: View {
                 }
 
                 Section {
-                    Button("Add to Supply") {
+                    Button(submitLabel) {
                         Task { await submit() }
                     }
                     .disabled(isSaving || name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
@@ -79,6 +81,7 @@ struct SupplyAddItemSheet: View {
                     Button("Cancel") { dismiss() }
                 }
             }
+            .rationFormKeyboardToolbar()
         }
         .presentationDetents([.medium, .large])
         .onAppear { focusedField = .name }

@@ -22,7 +22,7 @@ struct ScanItemEditSheet: View {
     @FocusState private var focusedField: Field?
 
     private enum Field: Hashable {
-        case name, quantity
+        case name
     }
 
     init(item: EditableScanResultItem, onSave: @escaping (EditableScanResultItem) -> String?) {
@@ -45,12 +45,8 @@ struct ScanItemEditSheet: View {
                     TextField("Name", text: $name)
                         .textInputAutocapitalization(.never)
                         .focused($focusedField, equals: .name)
-                    HStack {
-                        TextField("Quantity", text: $quantity)
-                            .keyboardType(.decimalPad)
-                            .focused($focusedField, equals: .quantity)
-                        UnitPicker(units: RationUnits.cargoEdit, selection: $unit)
-                    }
+                    QuantityStringStepperField(text: $quantity, unit: unit)
+                    UnitPicker(units: RationUnits.cargoEdit, selection: $unit)
                     Picker("Domain", selection: $domain) {
                         ForEach(CargoDomain.allCases, id: \.self) { d in
                             Text(d.label).tag(d.rawValue)

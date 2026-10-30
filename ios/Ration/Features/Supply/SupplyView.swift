@@ -235,7 +235,7 @@ struct SupplyView: View {
                 if let ctx { paywallContext = ctx }
             }
             .sheet(isPresented: $showingQuickAdd) {
-                SupplyQuickAddSheet(listName: model.isLiveList ? "Supply" : (model.list?.name.capitalized ?? "list")) { text in
+                SupplyQuickAddSheet(listName: model.isLiveList ? "Live Supply" : (model.list?.name.capitalized ?? "list")) { text in
                     guard let organizationId else { return false }
                     return await model.addQuickItems(
                         text: text,
@@ -249,7 +249,6 @@ struct SupplyView: View {
                 if let organizationId {
                     PullFromListSheet(
                         catalog: model.catalog,
-                        organizationId: organizationId,
                         liveItemCount: model.totalCount
                     ) {
                         await model.load(

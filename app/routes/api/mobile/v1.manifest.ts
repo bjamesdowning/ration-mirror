@@ -107,6 +107,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 					fatG: number;
 					mealName: string | null;
 					organizationName: string | null;
+					notes: string | null;
 			  }>
 			| undefined;
 		if (cookLogSplit && nutritionManifest) {
@@ -152,6 +153,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 					fatG: r.fatG,
 					mealName: r.mealName,
 					organizationName: r.organizationName,
+					notes: r.notes,
 				}));
 			}
 		}

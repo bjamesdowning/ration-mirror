@@ -717,8 +717,30 @@ final class AskViewModelTests: XCTestCase {
         XCTAssertEqual(socket.approvalResponses.count, 1)
         XCTAssertEqual(socket.approvalResponses.first?.id, "approval-1")
         XCTAssertEqual(socket.approvalResponses.first?.approved, false)
-        XCTAssertFalse(model.isTurnActive)
+        XCTAssertTrue(model.isTurnActive)
+        XCTAssertTrue(model.expectingApprovalContinuation)
         XCTAssertFalse(model.isAwaitingApproval)
+        XCTAssertEqual(model.state, .streaming)
+        XCTAssertEqual(model.turnPhase, .thinking)
+
+        model.messages = [
+            CopilotMessage(id: "user-1", role: "user", content: "remove milk", createdAt: nil)
+        ]
+        model.apply(
+            Self.event(
+                type: "chat_messages",
+                serverMessages: [
+                    CopilotServerMessage(id: "user-1", role: "user", content: "remove milk"),
+                    CopilotServerMessage(id: "asst-1", role: "assistant", content: "Left the milk in Cargo.")
+                ]
+            )
+        )
+        XCTAssertEqual(model.messages.last?.content, "Left the milk in Cargo.")
+        XCTAssertEqual(model.messages.last?.id, "asst-1")
+
+        model.apply(Self.event(type: "stream_resuming", messageId: "continuation-deny"))
+        model.apply(Self.event(type: "message_end", messageId: "continuation-deny"))
+        XCTAssertFalse(model.isTurnActive)
         XCTAssertEqual(model.state, .idle)
     }
 
@@ -768,6 +790,7 @@ final class AskViewModelTests: XCTestCase {
                 text: "Removed milk from Cargo."
             )
         )
+        model.apply(Self.event(type: "stream_resuming", messageId: "continuation-2"))
         model.apply(Self.event(type: "message_end", messageId: "continuation-2"))
 
         XCTAssertFalse(model.isTurnActive)
@@ -818,6 +841,82 @@ final class AskViewModelTests: XCTestCase {
         XCTAssertFalse(model.isStopping)
         XCTAssertEqual(model.state, .idle)
         XCTAssertEqual(model.messages.last?.content, "Keep this")
+    }
+
+    func testStopCancelsEveryActiveRequestId() async {
+        let socket = TestAskSocketClient()
+        let model = AskViewModel(socket: socket)
+        model.apply(Self.event(type: "text_delta", text: "Keep this"))
+        model.activeRequestId = "be5807c4"
+        model.apply(Self.event(type: "stream_resuming", messageId: "6ed6aa78"))
+
+        await model.stop()
+
+        XCTAssertEqual(socket.cancelledRequestIds, ["be5807c4", "6ed6aa78"])
+        XCTAssertTrue(model.isTurnActive)
+    }
+
+    func testReplayDoneFromPreviousContinuationDoesNotEndTheNextTurn() {
+        let model = AskViewModel()
+        model.apply(Self.event(type: "text_delta", text: "Next answer"))
+        model.activeRequestId = "next-turn"
+        model.continuationRequestId = nil
+
+        model.apply(Self.event(type: "message_end", messageId: "old-continuation"))
+
+        XCTAssertTrue(model.isTurnActive)
+        XCTAssertEqual(model.messages.last?.content, "Next answer")
+
+        model.apply(Self.event(type: "message_end", messageId: "next-turn"))
+
+        XCTAssertFalse(model.isTurnActive)
+        XCTAssertEqual(model.state, .idle)
+    }
+
+    func testMessageUpdatedDoesNotFinishTheTurnBeforeChatMessages() {
+        let model = AskViewModel()
+        model.isTurnActive = true
+        model.expectingApprovalContinuation = true
+        model.messages = [
+            CopilotMessage(id: "user-1", role: "user", content: "preedit cargo beans", createdAt: nil),
+            CopilotMessage(id: "local-preamble", role: "assistant", content: "Let me update that for you. ", createdAt: nil),
+        ]
+
+        model.apply(
+            Self.event(
+                type: "message_updated",
+                serverMessages: [
+                    CopilotServerMessage(
+                        id: "server-pause",
+                        role: "assistant",
+                        content: "Let me update that for you. "
+                    )
+                ]
+            )
+        )
+
+        XCTAssertFalse(model.seenPostApprovalActivity)
+        XCTAssertEqual(model.messages.last?.id, "local-preamble")
+        XCTAssertEqual(model.messages.last?.content, "Let me update that for you. ")
+
+        model.apply(
+            Self.event(
+                type: "chat_messages",
+                serverMessages: [
+                    CopilotServerMessage(id: "user-1", role: "user", content: "preedit cargo beans"),
+                    CopilotServerMessage(id: "server-pause", role: "assistant", content: "Let me update that for you. "),
+                    CopilotServerMessage(id: "server-summary", role: "assistant", content: "after tool for preedit cargo beans "),
+                ]
+            )
+        )
+
+        XCTAssertTrue(model.seenPostApprovalActivity)
+        XCTAssertEqual(model.messages.last?.id, "local-preamble")
+        XCTAssertEqual(
+            model.messages.last?.content,
+            "Let me update that for you. after tool for preedit cargo beans "
+        )
+        XCTAssertTrue(model.isTurnActive)
     }
 
     func testStopTimeoutDisconnectsBeforeCompletingTurn() async {
@@ -1009,7 +1108,7 @@ final class AskViewModelTests: XCTestCase {
 
         created[0].emit(Self.event(type: "text_delta", messageId: "a1", text: "Resumed answer"))
         try? await Task.sleep(nanoseconds: 20_000_000)
-        created[0].emit(Self.event(type: "message_end", messageId: "a1"))
+        created[0].emit(Self.event(type: "message_end", messageId: "request-1"))
         try? await Task.sleep(nanoseconds: 20_000_000)
 
         XCTAssertFalse(model.isTurnActive)
@@ -1082,7 +1181,10 @@ final class AskViewModelTests: XCTestCase {
         approvalId: String? = nil,
         toolName: String? = nil,
         title: String? = nil,
-        description: String? = nil
+        description: String? = nil,
+        serverMessages: [CopilotServerMessage]? = nil,
+        replay: Bool? = nil,
+        continuation: Bool? = nil
     ) -> CopilotStreamEvent {
         CopilotStreamEvent(
             type: type,
@@ -1098,7 +1200,10 @@ final class AskViewModelTests: XCTestCase {
             toolName: toolName,
             title: title,
             description: description,
-            blocked: nil
+            blocked: nil,
+            serverMessages: serverMessages,
+            replay: replay,
+            continuation: continuation
         )
     }
 }
@@ -1127,13 +1232,14 @@ private final class StreamingTestAskSocketClient: AskSocketClient {
         connectCount += 1
     }
 
-    func send(_ messages: [CopilotMessage], modelPreset: String) async throws {
+    func send(_ messages: [CopilotMessage], modelPreset: String) async throws -> String {
         sentMessages.append(messages)
+        return "request-1"
     }
 
     func approve(_ approvalId: String, approved: Bool) async throws {}
 
-    func cancelActiveRequest() async throws {}
+    func cancel(requestIds: [String]) async throws {}
 
     func newConversation() {
         conversationId = "new-test-conversation"
@@ -1151,6 +1257,7 @@ private final class TestAskSocketClient: AskSocketClient {
     var conversationId = "test-conversation"
     var approvalResponses: [(id: String, approved: Bool)] = []
     var cancelCount = 0
+    var cancelledRequestIds: [String] = []
     var didDisconnect = false
     private(set) var callOrder: [String] = []
 
@@ -1159,14 +1266,15 @@ private final class TestAskSocketClient: AskSocketClient {
     }
 
     func connect() async throws {}
-    func send(_ messages: [CopilotMessage], modelPreset: String) async throws {}
+    func send(_ messages: [CopilotMessage], modelPreset: String) async throws -> String { "request-1" }
 
     func approve(_ approvalId: String, approved: Bool) async throws {
         approvalResponses.append((approvalId, approved))
     }
 
-    func cancelActiveRequest() async throws {
+    func cancel(requestIds: [String]) async throws {
         cancelCount += 1
+        cancelledRequestIds.append(contentsOf: requestIds)
         callOrder.append("cancel")
     }
 

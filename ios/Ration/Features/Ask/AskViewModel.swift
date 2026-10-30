@@ -93,10 +93,14 @@ final class AskViewModel {
     var isTurnActive = false
     var isStopping = false
     var isAwaitingApproval = false
-    /// After Approve, ignore pause-stream message_end until continuation activity.
+    /// After Approve or Deny, ignore pause-stream message_end until continuation activity.
     var expectingApprovalContinuation = false
     var seenPostApprovalActivity = false
     var pauseApprovalRequestId: String?
+    /// Request id of the user turn currently on the socket.
+    var activeRequestId: String?
+    /// Request id from `cf_agent_stream_resuming` or a continuation done frame.
+    var continuationRequestId: String?
     var briefingComplete = false
     var introComplete = false
     /// True when the intro assistant reply had usable content (not empty / failed soft end).
@@ -123,6 +127,9 @@ final class AskViewModel {
     private var organizationId: String?
     private var snapshots: SnapshotStore?
     var lastActivityAt = Date()
+    /// Bubble text captured at `stream_resuming`, keyed by continuation request id.
+    var replayBaselineByRequestId: [String: String] = [:]
+    var replayTextByRequestId: [String: String] = [:]
     /// Bumped when the live socket is discarded so late events from an old
     /// observe loop cannot poison a later turn.
     var connectionGeneration = 0
@@ -360,8 +367,15 @@ final class AskViewModel {
             turnPhase = .thinking
             activeTool = nil
             completedTool = nil
+            // Drop the previous continuation id before the socket write, so a
+            // late Think 0.20 replay done cannot end this turn.
+            activeRequestId = nil
+            continuationRequestId = nil
+            replayBaselineByRequestId = [:]
+            replayTextByRequestId = [:]
             do {
-                try await socket.send(messages, modelPreset: modelPreset)
+                let requestId = try await socket.send(messages, modelPreset: modelPreset)
+                activeRequestId = requestId
             } catch {
                 if messages.last?.id == userMessage.id {
                     messages.removeLast()
@@ -395,21 +409,15 @@ final class AskViewModel {
         isAwaitingApproval = false
         do {
             try await socket.approve(approvalId, approved: approved)
-            if approved {
-                guard !isStopping else { return }
-                lastActivityAt = Date()
-                expectingApprovalContinuation = true
-                seenPostApprovalActivity = false
-                isTurnActive = true
-                state = .streaming
-                turnPhase = .thinking
-            } else {
-                expectingApprovalContinuation = false
-                seenPostApprovalActivity = false
-                pauseApprovalRequestId = nil
-                completeTurn(state: .idle)
-                scheduleImmediateSnapshotSave()
-            }
+            // Deny still auto-continues. Think writes a reply and charges it,
+            // so the turn stays active until that reply arrives.
+            guard !isStopping else { return }
+            lastActivityAt = Date()
+            expectingApprovalContinuation = true
+            seenPostApprovalActivity = false
+            isTurnActive = true
+            state = .streaming
+            turnPhase = .thinking
         } catch {
             expectingApprovalContinuation = false
             seenPostApprovalActivity = false
@@ -432,7 +440,7 @@ final class AskViewModel {
         }
 
         do {
-            try await socket.cancelActiveRequest()
+            try await socket.cancel(requestIds: runningRequestIds)
         } catch {
             completeTurn(state: .error(error.localizedDescription))
             return
@@ -556,7 +564,7 @@ final class AskViewModel {
             guard !Task.isCancelled else { return }
             guard self.tracksBriefingSession, self.isTurnActive else { return }
             do {
-                try await self.socket?.cancelActiveRequest()
+                try await self.socket?.cancel(requestIds: self.runningRequestIds)
             } catch {
                 // Best-effort cancel; still force-complete the turn below.
             }
@@ -584,6 +592,13 @@ final class AskViewModel {
         lastActivityAt = Date()
     }
 
+    var runningRequestIds: [String] {
+        CopilotTranscript.cancelRequestIds(
+            activeRequestId: activeRequestId,
+            continuationRequestId: continuationRequestId
+        )
+    }
+
     private func scheduleTurnWatchdog() {
         turnWatchdogTask?.cancel()
         turnWatchdogTask = Task { [weak self] in
@@ -597,7 +612,7 @@ final class AskViewModel {
                     UInt64(Date().timeIntervalSince(self.lastActivityAt) * 1_000_000_000)
                 if idleNs >= self.turnWatchdogNanoseconds {
                     do {
-                        try await self.socket?.cancelActiveRequest()
+                        try await self.socket?.cancel(requestIds: self.runningRequestIds)
                     } catch {
                         // Best-effort
                     }
@@ -624,6 +639,10 @@ final class AskViewModel {
         expectingApprovalContinuation = false
         seenPostApprovalActivity = false
         pauseApprovalRequestId = nil
+        activeRequestId = nil
+        continuationRequestId = nil
+        replayBaselineByRequestId = [:]
+        replayTextByRequestId = [:]
         turnPhase = .idle
         self.state = state
     }

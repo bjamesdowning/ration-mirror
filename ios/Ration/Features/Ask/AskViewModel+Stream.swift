@@ -33,11 +33,29 @@ extension AskViewModel {
         case "text_delta":
             beginTurnIfNeeded()
             markPostApprovalActivity()
-            appendAssistantDelta(event.text ?? "", messageId: event.messageId)
-            clearTransientError()
+            if event.replay == true {
+                let requestId = event.messageId ?? continuationRequestId ?? "replay"
+                let nextText = (replayTextByRequestId[requestId] ?? "") + (event.text ?? "")
+                replayTextByRequestId[requestId] = nextText
+                messages = CopilotTranscript.applyReplay(
+                    messages,
+                    replayedText: nextText,
+                    baseline: replayBaselineByRequestId[requestId] ?? ""
+                )
+            } else {
+                appendAssistantDelta(event.text ?? "", messageId: event.messageId)
+            }
+            clearStoppedRespondingError()
             state = .streaming
             turnPhase = .streaming
             persistSnapshotDebounced()
+        case "stream_resuming":
+            guard let id = event.messageId, !id.isEmpty else { return }
+            continuationRequestId = id
+            replayBaselineByRequestId[id] = CopilotTranscript.assistantBaseline(messages)
+            lastActivityAt = Date()
+        case "message_updated", "chat_messages":
+            applyServerTranscript(event)
         case "reasoning_start":
             beginTurnIfNeeded()
             markPostApprovalActivity()
@@ -51,6 +69,21 @@ extension AskViewModel {
         case "reasoning_end":
             appendReasoningDelta("", mode: .end, messageId: event.messageId)
         case "message_end":
+            if event.continuation == true, let id = event.messageId, !id.isEmpty {
+                continuationRequestId = id
+            }
+            let hasTrackedRequest = activeRequestId != nil
+                || continuationRequestId != nil
+                || pauseApprovalRequestId != nil
+            if hasTrackedRequest,
+               !CopilotTranscript.turnEndTargetsCurrentTurn(
+                activeRequestId: activeRequestId,
+                continuationRequestId: continuationRequestId,
+                pauseRequestId: pauseApprovalRequestId,
+                requestId: event.messageId
+               ) {
+                return
+            }
             if CopilotTurnReducer.shouldIgnoreMessageEnd(
                 isAwaitingApproval: isAwaitingApproval,
                 stateIsAwaitingApproval: {
@@ -247,6 +280,36 @@ extension AskViewModel {
             )
         default:
             break
+        }
+    }
+
+    private func applyServerTranscript(_ event: CopilotStreamEvent) {
+        guard let serverMessages = event.serverMessages else { return }
+        guard CopilotTranscript.shouldApplyServerTranscript(
+            turnActive: isTurnActive || isStopping,
+            expectingApprovalContinuation: expectingApprovalContinuation
+        ) else { return }
+        let hasAnswer = CopilotTranscript.eventHasAnswer(
+            eventType: event.type,
+            messages: serverMessages
+        )
+        let merged = CopilotTranscript.merge(messages, serverMessages: serverMessages)
+        if merged != messages {
+            messages = merged
+            persistSnapshotDebounced()
+        }
+        guard hasAnswer else { return }
+        markPostApprovalActivity()
+        if isTurnActive || expectingApprovalContinuation {
+            state = .streaming
+            turnPhase = .streaming
+        }
+        clearStoppedRespondingError()
+    }
+
+    private func clearStoppedRespondingError() {
+        if case .error(let message) = state, message.hasPrefix("Copilot stopped responding.") {
+            state = .streaming
         }
     }
 

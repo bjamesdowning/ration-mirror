@@ -6,9 +6,11 @@ protocol AskSocketClient: AnyObject {
 
     func events() -> AsyncStream<CopilotStreamEvent>
     func connect() async throws
-    func send(_ messages: [CopilotMessage], modelPreset: String) async throws
+    func send(_ messages: [CopilotMessage], modelPreset: String) async throws -> String
     func approve(_ approvalId: String, approved: Bool) async throws
-    func cancelActiveRequest() async throws
+    /// Cancel every in-flight request. The client also includes ids it has
+    /// already observed, so a continuation id is not missed.
+    func cancel(requestIds: [String]) async throws
     func newConversation()
     func disconnect()
 }
@@ -35,6 +37,7 @@ final class AskWebSocketClient: AskSocketClient {
     private let eventsContinuation: AsyncStream<CopilotStreamEvent>.Continuation
     private var task: URLSessionWebSocketTask?
     private var activeRequestId: String?
+    private var continuationRequestId: String?
     private var ignoresReceiveErrors = false
     private(set) var conversationId: String
 
@@ -74,7 +77,7 @@ final class AskWebSocketClient: AskSocketClient {
         Task { await receiveLoop() }
     }
 
-    func send(_ messages: [CopilotMessage], modelPreset: String = "fast") async throws {
+    func send(_ messages: [CopilotMessage], modelPreset: String = "fast") async throws -> String {
         guard let task else { throw ClientError.notConnected }
         // Think is server-authoritative: submitting a turn uses the AI SDK
         // "use chat request" envelope (a POST with the messages in the body),
@@ -106,6 +109,7 @@ final class AskWebSocketClient: AskSocketClient {
             throw ClientError.invalidMessage
         }
         activeRequestId = requestId
+        continuationRequestId = nil
         do {
             try await task.send(.string(json))
         } catch {
@@ -114,6 +118,7 @@ final class AskWebSocketClient: AskSocketClient {
             }
             throw error
         }
+        return requestId
     }
 
     func approve(_ approvalId: String, approved: Bool) async throws {
@@ -126,15 +131,28 @@ final class AskWebSocketClient: AskSocketClient {
         try await task.send(.string(json))
     }
 
-    func cancelActiveRequest() async throws {
+    func cancel(requestIds: [String]) async throws {
         guard let task else { throw ClientError.notConnected }
-        guard let activeRequestId else { return }
-        let payload = AgentChatRequestCancelPayload(id: activeRequestId)
-        let data = try JSON.encoder.encode(payload)
-        guard let json = String(data: data, encoding: .utf8) else {
-            throw ClientError.invalidMessage
+        let ids = CopilotTranscript.unionCancelRequestIds(
+            requested: requestIds,
+            activeRequestId: activeRequestId,
+            continuationRequestId: continuationRequestId
+        )
+        guard !ids.isEmpty else { return }
+        var firstError: Error?
+        for id in ids {
+            let payload = AgentChatRequestCancelPayload(id: id)
+            let data = try JSON.encoder.encode(payload)
+            guard let json = String(data: data, encoding: .utf8) else {
+                throw ClientError.invalidMessage
+            }
+            do {
+                try await task.send(.string(json))
+            } catch {
+                firstError = firstError ?? error
+            }
         }
-        try await task.send(.string(json))
+        if let firstError { throw firstError }
     }
 
     func newConversation() {
@@ -147,6 +165,7 @@ final class AskWebSocketClient: AskSocketClient {
         task?.cancel(with: .goingAway, reason: nil)
         task = nil
         activeRequestId = nil
+        continuationRequestId = nil
     }
 
     private func receiveLoop() async {
@@ -155,6 +174,12 @@ final class AskWebSocketClient: AskSocketClient {
             while self.task === task {
                 let message = try await task.receive()
                 let event = decode(message)
+                if event.type == "stream_resuming" {
+                    if let ack = CopilotTranscript.resumeAck(eventType: event.type, id: event.messageId) {
+                        continuationRequestId = ack.id
+                        await sendResumeAck(ack)
+                    }
+                }
                 if event.type != "noop" {
                     clearActiveRequestIfTerminal(event, message: message)
                     eventsContinuation.yield(event)
@@ -163,6 +188,7 @@ final class AskWebSocketClient: AskSocketClient {
         } catch {
             guard self.task === task else { return }
             activeRequestId = nil
+            continuationRequestId = nil
             self.task = nil
             // Intentional disconnect (background / new chat) must not buffer a
             // socket_closed error into the AsyncStream for a later observe().
@@ -205,9 +231,22 @@ final class AskWebSocketClient: AskSocketClient {
             return
         }
 
-        guard let envelope = try? JSON.decoder.decode(AgentResponseEnvelope.self, from: data),
-              envelope.id == activeRequestId else { return }
-        self.activeRequestId = nil
+        guard let envelope = try? JSON.decoder.decode(AgentResponseEnvelope.self, from: data) else {
+            return
+        }
+        if envelope.id == continuationRequestId {
+            continuationRequestId = nil
+        }
+        if envelope.id == activeRequestId {
+            self.activeRequestId = nil
+        }
+    }
+
+    private func sendResumeAck(_ ack: CopilotResumeAck) async {
+        guard let task else { return }
+        guard let data = try? JSON.encoder.encode(ack),
+              let json = String(data: data, encoding: .utf8) else { return }
+        try? await task.send(.string(json))
     }
 
     private func decode(_ message: URLSessionWebSocketTask.Message) -> CopilotStreamEvent {

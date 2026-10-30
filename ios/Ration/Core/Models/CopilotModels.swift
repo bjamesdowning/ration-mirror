@@ -101,6 +101,18 @@ struct CopilotMessage: Codable, Sendable, Identifiable, Equatable {
         self.reasoningState = reasoningState
     }
 
+    func with(id: String? = nil, content: String? = nil) -> CopilotMessage {
+        CopilotMessage(
+            id: id ?? self.id,
+            role: role,
+            content: content ?? self.content,
+            createdAt: createdAt,
+            toolCallId: toolCallId,
+            reasoning: reasoning,
+            reasoningState: reasoningState
+        )
+    }
+
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(String.self, forKey: .id)
@@ -157,6 +169,12 @@ struct CopilotStreamEvent: Codable, Sendable {
     let blocked: CopilotBlockedFeature?
     let usage: CopilotSessionUsage?
     let warning: CopilotSessionLimitWarning?
+    /// Server rows from `cf_agent_message_updated` / `cf_agent_chat_messages`.
+    let serverMessages: [CopilotServerMessage]?
+    /// Think 0.20 repeats a finished continuation with `replay: true`.
+    let replay: Bool?
+    /// Set on a continuation `done` so the client can record that request id.
+    let continuation: Bool?
 
     init(
         type: String,
@@ -174,7 +192,10 @@ struct CopilotStreamEvent: Codable, Sendable {
         description: String? = nil,
         blocked: CopilotBlockedFeature? = nil,
         usage: CopilotSessionUsage? = nil,
-        warning: CopilotSessionLimitWarning? = nil
+        warning: CopilotSessionLimitWarning? = nil,
+        serverMessages: [CopilotServerMessage]? = nil,
+        replay: Bool? = nil,
+        continuation: Bool? = nil
     ) {
         self.type = type
         self.message = message
@@ -192,5 +213,71 @@ struct CopilotStreamEvent: Codable, Sendable {
         self.blocked = blocked
         self.usage = usage
         self.warning = warning
+        self.serverMessages = serverMessages
+        self.replay = replay
+        self.continuation = continuation
+    }
+}
+
+/// Assistant row carried by Think's persisted transcript frames.
+/// `content` may be a parts array on the wire; only string content is kept.
+struct CopilotServerMessage: Codable, Equatable, Sendable {
+    var id: String?
+    var role: String?
+    var content: String?
+    var parts: [Part]?
+
+    struct Part: Codable, Equatable, Sendable {
+        var type: String?
+        var text: String?
+    }
+
+    init(
+        id: String? = nil,
+        role: String? = nil,
+        content: String? = nil,
+        parts: [Part]? = nil
+    ) {
+        self.id = id
+        self.role = role
+        self.content = content
+        self.parts = parts
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decodeIfPresent(String.self, forKey: .id)
+        role = try container.decodeIfPresent(String.self, forKey: .role)
+        if let text = try? container.decode(String.self, forKey: .content) {
+            content = text
+        } else {
+            content = nil
+        }
+        parts = try container.decodeIfPresent([Part].self, forKey: .parts)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(id, forKey: .id)
+        try container.encodeIfPresent(role, forKey: .role)
+        try container.encodeIfPresent(content, forKey: .content)
+        try container.encodeIfPresent(parts, forKey: .parts)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case role
+        case content
+        case parts
+    }
+}
+
+struct CopilotResumeAck: Codable, Equatable, Sendable {
+    let type: String
+    let id: String
+
+    static func make(id: String?) -> CopilotResumeAck? {
+        guard let id, !id.isEmpty else { return nil }
+        return CopilotResumeAck(type: "cf_agent_stream_resume_ack", id: id)
     }
 }

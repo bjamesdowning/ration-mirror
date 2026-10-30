@@ -195,3 +195,80 @@ final class AskWebSocketClientDecodingTests: XCTestCase {
         XCTAssertEqual(finishEvent.type, "message_end")
     }
 }
+
+final class CopilotResumeAndTranscriptDecodingTests: XCTestCase {
+    func testStreamResumingDecodesToResumeEvent() {
+        let json = """
+        {"type":"cf_agent_stream_resuming","id":"cont-1"}
+        """
+        let event = CopilotWebSocketDecoder.decode(data: Data(json.utf8))
+
+        XCTAssertEqual(event.type, "stream_resuming")
+        XCTAssertEqual(event.messageId, "cont-1")
+        XCTAssertEqual(
+            CopilotTranscript.resumeAck(eventType: event.type, id: event.messageId),
+            CopilotResumeAck(type: "cf_agent_stream_resume_ack", id: "cont-1")
+        )
+    }
+
+    func testStreamResumingWithoutIdIsNoopAndDoesNotAck() {
+        let json = """
+        {"type":"cf_agent_stream_resuming"}
+        """
+        let event = CopilotWebSocketDecoder.decode(data: Data(json.utf8))
+
+        XCTAssertEqual(event.type, "noop")
+        XCTAssertNil(CopilotTranscript.resumeAck(eventType: "cf_agent_stream_resuming", id: nil))
+        XCTAssertNil(CopilotTranscript.resumeAck(eventType: "cf_agent_use_chat_response", id: "req-1"))
+    }
+
+    func testChatMessagesCarryServerTranscript() {
+        let json = """
+        {"type":"cf_agent_chat_messages","id":"state-2","messages":[{"id":"user-1","role":"user","parts":[{"type":"text","text":"move the rice"}]},{"id":"asst-1","role":"assistant","parts":[{"type":"text","text":"Moved the rice."}]}]}
+        """
+        let event = CopilotWebSocketDecoder.decode(data: Data(json.utf8))
+
+        XCTAssertEqual(event.type, "chat_messages")
+        XCTAssertEqual(event.serverMessages?.count, 2)
+        XCTAssertEqual(event.serverMessages?.last?.id, "asst-1")
+    }
+
+    func testMessageUpdatedCarriesTheSingleServerMessage() {
+        let json = """
+        {"type":"cf_agent_message_updated","id":"upd-1","message":{"id":"asst-1","role":"assistant","content":"Let me update that for you. "}}
+        """
+        let event = CopilotWebSocketDecoder.decode(data: Data(json.utf8))
+
+        XCTAssertEqual(event.type, "message_updated")
+        XCTAssertEqual(event.serverMessages?.first?.content, "Let me update that for you. ")
+        XCTAssertFalse(
+            CopilotTranscript.eventHasAnswer(
+                eventType: event.type,
+                messages: event.serverMessages ?? []
+            )
+        )
+    }
+
+    func testReplayTextDeltaKeepsTheFrameId() {
+        let json = """
+        {"type":"cf_agent_use_chat_response","id":"cont-9","replay":true,"body":"{\\"type\\":\\"text-delta\\",\\"id\\":\\"chunk-1\\",\\"delta\\":\\"after \\"}"}
+        """
+        let event = CopilotWebSocketDecoder.decode(data: Data(json.utf8))
+
+        XCTAssertEqual(event.type, "text_delta")
+        XCTAssertEqual(event.replay, true)
+        XCTAssertEqual(event.messageId, "cont-9")
+        XCTAssertEqual(event.text, "after ")
+    }
+
+    func testReplayDoneStaysAMessageEndWithTheOldId() {
+        let json = """
+        {"type":"cf_agent_use_chat_response","id":"old-continuation","done":true,"replay":true,"body":""}
+        """
+        let event = CopilotWebSocketDecoder.decode(data: Data(json.utf8))
+
+        XCTAssertEqual(event.type, "message_end")
+        XCTAssertEqual(event.messageId, "old-continuation")
+        XCTAssertNil(event.continuation)
+    }
+}

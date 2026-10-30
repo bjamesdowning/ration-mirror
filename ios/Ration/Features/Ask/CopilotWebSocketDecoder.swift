@@ -1,7 +1,8 @@
 import Foundation
 
 /// Lenient WebSocket frame parsing for the Copilot agent protocol.
-/// Matches web `AskPanel` behaviour: skip `done` frames and ignore unknown chunks.
+/// Matches web `AskPanel`: ack `cf_agent_stream_resuming`, merge persisted
+/// transcripts, and surface replay/continuation flags on chat responses.
 enum CopilotWebSocketDecoder {
     static func decode(data: Data) -> CopilotStreamEvent {
         if let frame = try? JSON.decoder.decode(AgentFrameProbe.self, from: data),
@@ -40,7 +41,29 @@ enum CopilotWebSocketDecoder {
             return noop(frameId: nil)
         }
 
-        if frame.type != "cf_agent_use_chat_response" {
+        switch frame.type {
+        case "cf_agent_stream_resuming":
+            guard let id = frame.id, !id.isEmpty else { return noop(frameId: frame.id) }
+            return CopilotStreamEvent(type: "stream_resuming", messageId: id)
+        case "cf_agent_message_updated":
+            guard let message = frame.message else { return noop(frameId: frame.id) }
+            return CopilotStreamEvent(
+                type: "message_updated",
+                messageId: frame.id,
+                serverMessages: [message]
+            )
+        case "cf_agent_chat_messages":
+            guard let messages = frame.messages, !messages.isEmpty else {
+                return noop(frameId: frame.id)
+            }
+            return CopilotStreamEvent(
+                type: "chat_messages",
+                messageId: frame.id,
+                serverMessages: messages
+            )
+        case "cf_agent_use_chat_response":
+            break
+        default:
             return noop(frameId: frame.id)
         }
 
@@ -67,7 +90,7 @@ enum CopilotWebSocketDecoder {
         }
 
         if frame.done == true {
-            return messageEnd(frameId: frame.id)
+            return messageEnd(frameId: frame.id, continuation: frame.continuation == true)
         }
 
         guard let body = frame.body, !body.isEmpty, let bodyData = body.data(using: .utf8) else {
@@ -78,7 +101,12 @@ enum CopilotWebSocketDecoder {
             return noop(frameId: frame.id)
         }
 
-        return mapChunk(chunk, frameId: frame.id)
+        return mapChunk(
+            chunk,
+            frameId: frame.id,
+            replay: frame.replay == true,
+            continuation: frame.continuation == true
+        )
     }
 
     private static func parseChunkDictionary(_ data: Data) -> [String: Any]? {
@@ -107,7 +135,12 @@ enum CopilotWebSocketDecoder {
         return true
     }
 
-    private static func mapChunk(_ chunk: [String: Any], frameId: String?) -> CopilotStreamEvent {
+    private static func mapChunk(
+        _ chunk: [String: Any],
+        frameId: String?,
+        replay: Bool,
+        continuation: Bool
+    ) -> CopilotStreamEvent {
         guard let type = stringValue(chunk, "type") else {
             return noop(frameId: frameId)
         }
@@ -171,10 +204,11 @@ enum CopilotWebSocketDecoder {
                 blocked: nil
             )
         case "text-delta":
+            let messageId = replay ? (frameId ?? chunkId ?? "assistant") : (chunkId ?? frameId ?? "assistant")
             return CopilotStreamEvent(
                 type: "text_delta",
                 message: nil,
-                messageId: chunkId ?? frameId ?? "assistant",
+                messageId: messageId,
                 text: delta ?? text ?? "",
                 usageTokens: nil,
                 status: nil,
@@ -185,7 +219,8 @@ enum CopilotWebSocketDecoder {
                 toolName: nil,
                 title: nil,
                 description: nil,
-                blocked: nil
+                blocked: nil,
+                replay: replay ? true : nil
             )
         case "tool-input-start", "tool-input-available":
             let resolvedToolCallId = toolCallId ?? chunkId ?? UUID().uuidString
@@ -247,7 +282,7 @@ enum CopilotWebSocketDecoder {
             return CopilotStreamEvent(
                 type: "approval_request",
                 message: nil,
-                messageId: nil,
+                messageId: frameId,
                 text: nil,
                 usageTokens: nil,
                 status: nil,
@@ -296,7 +331,7 @@ enum CopilotWebSocketDecoder {
                 blocked: nil
             )
         case "finish":
-            return messageEnd(frameId: frameId)
+            return messageEnd(frameId: frameId, continuation: continuation)
         case "start", "text-start", "text-end", "start-step", "finish-step", "tool-input-delta":
             return noop(frameId: frameId)
         default:
@@ -323,7 +358,7 @@ enum CopilotWebSocketDecoder {
         )
     }
 
-    private static func messageEnd(frameId: String?) -> CopilotStreamEvent {
+    private static func messageEnd(frameId: String?, continuation: Bool) -> CopilotStreamEvent {
         CopilotStreamEvent(
             type: "message_end",
             message: nil,
@@ -338,7 +373,8 @@ enum CopilotWebSocketDecoder {
             toolName: nil,
             title: nil,
             description: nil,
-            blocked: nil
+            blocked: nil,
+            continuation: continuation ? true : nil
         )
     }
 }
@@ -353,6 +389,10 @@ private struct AgentResponseFrame: Decodable {
     let body: String?
     let done: Bool?
     let error: AgentFrameError?
+    let replay: Bool?
+    let continuation: Bool?
+    let message: CopilotServerMessage?
+    let messages: [CopilotServerMessage]?
 }
 
 private enum AgentFrameError: Decodable {

@@ -24,7 +24,7 @@ extension AskViewModel {
         streamTask?.cancel()
         streamTask = nil
         if cancelActive {
-            try? await previousSocket?.cancelActiveRequest()
+            try? await previousSocket?.cancel(requestIds: runningRequestIds)
         }
         previousSocket?.disconnect()
     }

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { shouldApplyCopilotServerTranscript } from "../copilot/stream-resume.client";
 import {
 	copilotCancelRequestIds,
+	copilotTurnEndTargetsCurrentTurn,
 	INITIAL_COPILOT_TURN_STATE,
 	isCopilotTurnActive,
 	reduceCopilotTurnState,
@@ -208,5 +209,22 @@ describe("Copilot turn lifecycle", () => {
 		expect(isCopilotTurnActive(denied)).toBe(true);
 		expect(shouldApplyCopilotServerTranscript(denied)).toBe(true);
 		expect(shouldIgnoreCopilotTurnEnd(denied, "request-1")).toBe(true);
+	});
+
+	it("ignores a Think 0.20 replay done from the previous continuation", () => {
+		const next = reduceCopilotTurnState(INITIAL_COPILOT_TURN_STATE, {
+			type: "started",
+			requestId: "next-turn",
+		});
+		expect(copilotTurnEndTargetsCurrentTurn(next, "old-continuation")).toBe(
+			false,
+		);
+		expect(copilotTurnEndTargetsCurrentTurn(next, "next-turn")).toBe(true);
+		expect(
+			copilotTurnEndTargetsCurrentTurn(
+				INITIAL_COPILOT_TURN_STATE,
+				"old-continuation",
+			),
+		).toBe(false);
 	});
 });

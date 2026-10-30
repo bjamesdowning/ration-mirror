@@ -50,6 +50,7 @@ import {
 	type CopilotTurnEvent,
 	type CopilotTurnState,
 	copilotCancelRequestIds,
+	copilotTurnEndTargetsCurrentTurn,
 	INITIAL_COPILOT_TURN_STATE,
 	isCopilotTurnActive,
 	reduceCopilotTurnState,
@@ -770,14 +771,18 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 						markPostApprovalActivity();
 						scheduleToolDoneLinger(action.toolName, action.succeeded);
 						break;
-					case "turn_end":
-						endTurn({
-							requestId:
-								typeof event.id === "string"
-									? event.id
-									: turnStateRef.current.activeRequestId,
-						});
+					case "turn_end": {
+						const requestId =
+							typeof event.id === "string"
+								? event.id
+								: turnStateRef.current.activeRequestId;
+						if (
+							copilotTurnEndTargetsCurrentTurn(turnStateRef.current, requestId)
+						) {
+							endTurn({ requestId });
+						}
 						break;
+					}
 					case "approval_requested":
 						setTurnPhase("idle");
 						if (!action.toolCallId) {

@@ -90,6 +90,23 @@ export function reduceCopilotTurnState(
 }
 
 /**
+ * Think 0.20 sends a second `done` with `replay: true` after the continuation
+ * has already finished. That frame still carries the old continuation id. A
+ * terminal only ends the turn the client is actually in.
+ */
+export function copilotTurnEndTargetsCurrentTurn(
+	state: CopilotTurnState,
+	requestId?: string | null,
+): boolean {
+	if (requestId == null) return true;
+	return (
+		requestId === state.activeRequestId ||
+		requestId === state.continuationRequestId ||
+		requestId === state.pauseRequestId
+	);
+}
+
+/**
  * Whether a stream terminal (finish/done / turn_end / message_end) should be
  * ignored so the Approve→autoContinue continuation can still deliver text.
  */

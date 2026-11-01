@@ -22,17 +22,24 @@ Competitor details below come from each company's own website and help pages. Fe
 
 ## Comparison table
 
-| | Ration | Paprika 3 | AnyList | Mealime | Plan to Eat | Eat This Much | Samsung Food |
+| App | Web recipe import | Meal plan calendar | List from plan | Multiple or shared lists | Stock tracking | Macros | AI features |
 |---|---|---|---|---|---|---|---|
-| Save recipes from the web | Yes, plus TikTok, Instagram, YouTube and photos | Yes, built-in browser | Yes (limited on free plan) | Curated recipes | Yes, clipper, share extension, photo | Generated plans | Yes |
-| Meal plan calendar | Yes (Manifest) | Week or month | Yes | Weekly plan | Yes | Yes, generated | Yes |
-| Shopping list from the plan | Yes, minus what's in stock | Yes, skips pantry items | Yes | Yes, auto-sorted | Yes, by date range | Yes | Yes |
-| Shared or multiple lists | Yes, multiple Supply Lists | Synced across devices | Yes, sharing is core | Not covered in our research | Staples list | Not covered in our research | Yes, shared lists |
-| Track what's in stock | Yes (Cargo), cooking deducts it | Pantry with expiry dates | Not covered in our research | Not covered in our research | Freezer for batch meals | Virtual pantry | Not covered in our research |
-| Macros and nutrition | Yes, from the Meals you cook, plus a macro analytics page on iOS | Not covered in our research | Not covered in our research | Not covered in our research | Nutrition facts and daily totals | Yes, planner-first | Not covered in our research |
-| AI help | Photo import for stock, AI-generated Meals, recipe import from video, Copilot chat | Not covered in our research | Not covered in our research | Not covered in our research | Not covered in our research | Generates plans to targets | Not covered in our research |
+| Ration | Yes¹ | Yes | Yes² | Yes | Yes³ | Yes⁴ | Yes⁵ |
+| Paprika 3 | Yes | Yes | Yes² | Synced | Yes | Not covered | Not covered |
+| AnyList | Yes⁶ | Yes | Yes | Yes | Not covered | Not covered | Not covered |
+| Mealime | Curated | Yes | Yes | Not covered | Not covered | Not covered | Not covered |
+| Plan to Eat | Yes | Yes | Yes | Staples list | Freezer only | Yes | Not covered |
+| Eat This Much | Generated | Yes | Yes | Not covered | Yes | Yes | Plans to targets |
+| Samsung Food | Yes | Yes | Yes | Yes | Not covered | Not covered | Not covered |
 
-"Not covered in our research" means we didn't find the feature on the company's own pages. It doesn't mean the app definitely lacks it.
+1. Ration also imports from TikTok, Instagram, YouTube and photos.
+2. Ration builds the list from the plan minus your stock. Paprika skips Ingredients already in its pantry.
+3. Cooking a Meal takes its Ingredients out of Cargo automatically.
+4. From the Meals you cook, with a macro analytics page on iOS.
+5. Photo import for stock, AI-generated Meals, recipe import from video, and Copilot chat.
+6. Website import is limited on AnyList's free plan.
+
+"Not covered" means we didn't find the feature on the company's own pages. It doesn't mean the app definitely lacks it.
 
 ## Where Ration's ideas come from
 

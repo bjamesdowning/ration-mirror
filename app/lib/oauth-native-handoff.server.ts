@@ -35,11 +35,54 @@ export function buildNativeCallbackHandoffPath(nativeUrl: string): string {
 	return `/oauth/return?to=${encodeNativeCallbackTarget(nativeUrl)}`;
 }
 
-/** Native schemes and http localhost callbacks need /oauth/return to bypass CSP form-action. */
+/**
+ * Cursor's hosted MCP OAuth callback. www.cursor.com 308s to the apex host,
+ * so both origins are listed. Path is exact. A non-empty `code` is required.
+ * Any other https URL stays out so /oauth/return is not an open redirect.
+ */
+const CURSOR_HOSTED_OAUTH_CALLBACKS = [
+	{
+		protocol: "https:",
+		hostname: "www.cursor.com",
+		pathname: "/agents/mcp/oauth/callback",
+	},
+	{
+		protocol: "https:",
+		hostname: "cursor.com",
+		pathname: "/agents/mcp/oauth/callback",
+	},
+] as const;
+
+export function isCursorHostedMcpCallbackUrl(url: string): boolean {
+	let parsed: URL;
+	try {
+		parsed = new URL(url);
+	} catch {
+		return false;
+	}
+	if (parsed.username !== "" || parsed.password !== "") {
+		return false;
+	}
+	const hostMatches = CURSOR_HOSTED_OAUTH_CALLBACKS.some(
+		(allowed) =>
+			parsed.protocol === allowed.protocol &&
+			parsed.hostname === allowed.hostname &&
+			parsed.port === "" &&
+			parsed.pathname === allowed.pathname,
+	);
+	if (!hostMatches) {
+		return false;
+	}
+	const code = parsed.searchParams.get("code");
+	return typeof code === "string" && code.trim().length > 0;
+}
+
+/** Native schemes, http localhost, and Cursor's hosted HTTPS callbacks need /oauth/return to bypass CSP form-action. */
 export function shouldUseClientCallbackHandoff(url: string): boolean {
 	return (
 		isNativeMcpClientRedirectUrl(url) ||
-		isLocalhostHttpMcpClientRedirectUrl(url)
+		isLocalhostHttpMcpClientRedirectUrl(url) ||
+		isCursorHostedMcpCallbackUrl(url)
 	);
 }
 

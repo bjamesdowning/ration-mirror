@@ -4,6 +4,8 @@ Full review → pattern/flag gate → plan → fix → verify → commit/push pi
 
 Use this instead of typing `/code-review` then “fix concerns/blockers/suggestions, remove dead code” then `/quick-commit`. Prefer `/quick-commit` only when the change is already reviewed and trivial.
 
+**iOS version gate:** If `ios/` ships, `MARKETING_VERSION` in `ios/project.yml` must be higher than `ios/LAST_APPROVED_VERSION` (run `sh ios/scripts/check-marketing-version.sh`). After every App Store approval, set `ios/LAST_APPROVED_VERSION` to the approved version and bump `MARKETING_VERSION`.
+
 **Hard gates:** Do not commit or push until every phase below passes. If blocked (secrets, ambiguous product decision, failing checks you cannot fix), stop and report — do not push a half-fixed branch.
 
 ### Verify command hygiene (required — exit-code integrity)

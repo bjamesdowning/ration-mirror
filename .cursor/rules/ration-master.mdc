@@ -112,7 +112,7 @@ For each new feature, **evaluate** whether an E2E test would benefit stability. 
 - `CURRENT_PROJECT_VERSION` in `ios/project.yml` (`CFBundleVersion`) — monotonic build number; increment on every TestFlight / App Store upload
 - Bump `MARKETING_VERSION` whenever `ios/` changes ship (Swift, `project.yml`, entitlements, in-app assets). Follow the same patch/minor cadence as web: `1.X.1` … `1.X.49`, then `1.(X+1).0`
 - After `project.yml` edits, run `bun run ios:generate` before build or archive
-- After every App Store approval, set `ios/APP_STORE_LAST_APPROVED` to the approved version and bump `MARKETING_VERSION` above it. Apple closes an approved version's train, and Xcode Cloud's `ci_post_clone.sh` runs `ios/scripts/check-marketing-version.sh`, which fails the build if the version isn't higher
+- After every App Store approval, set `ios/LAST_APPROVED_VERSION` to the approved version and bump `MARKETING_VERSION` above it. Apple closes an approved version's train, and Xcode Cloud's `ci_post_clone.sh` runs `ios/scripts/check-marketing-version.sh`, which fails the build if the version isn't higher
 - iOS and web version numbers are **independent** (e.g. web `1.5.40` and iOS `1.1.1` can coexist); only the increment **rules** are shared
 
 **Rules:**

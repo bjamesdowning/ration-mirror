@@ -110,14 +110,14 @@ export const HELP_ARTICLES: ReadonlyArray<HelpArticleMeta> = [
 		slug: "15-manifest-meal-plan",
 		title: "Manifest (meal plan)",
 		summary:
-			"Schedule meals, consume entries, share the week, and (iPhone) Macros averages.",
+			"Schedule meals, consume entries, share the week, and (iPhone) Macros averages, comparison, and notes.",
 		section: "kitchen",
 	},
 	{
 		slug: "16-supply-shopping-list",
 		title: "Supply (shopping list)",
 		summary:
-			"Live Supply, saved lists and Pull from (iPhone), snooze, share, and dock into Cargo.",
+			"Live Supply versus saved lists (iPhone always; web when enabled), notes, tags, snooze, share, and dock.",
 		section: "kitchen",
 	},
 	{

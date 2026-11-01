@@ -53,7 +53,7 @@ Your copy of Ration is older than the oldest version the service still supports.
 
 ## I can’t find saved lists on the web
 
-Saved lists, **Lists**, and **Pull from list** are in the iPhone app. The web Supply page shows **Live Supply** only. See *Supply (shopping list)*.
+iPhone always has **Lists** and **Pull from list**. On the web, **Lists** and **Pull from** show on Supply only when saved lists are enabled for the account. If those controls are missing, web Supply is **Live Supply** only. See *Supply (shopping list)*.
 
 ## Rate limited
 

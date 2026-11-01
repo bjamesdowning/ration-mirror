@@ -177,8 +177,8 @@ All tools are scoped to the authorized household. **MCP calls do not consume Rat
 
 | Tool | Scope | Description |
 |------|-------|-------------|
-| `add_supply_item` | `mcp:supply:write` | Add a line to the active shopping list. |
-| `update_supply_item` | `mcp:supply:write` | Update name, quantity, or unit on a supply line. |
+| `add_supply_item` | `mcp:supply:write` | Add a line to Live Supply. Optional `listId` targets a saved list when the library is enabled. |
+| `update_supply_item` | `mcp:supply:write` | Update name, quantity, or unit on a Live Supply line. |
 | `remove_supply_item` | `mcp:supply:write` | Remove a supply list line. |
 | `mark_supply_purchased_bulk` | `mcp:supply:write` | Mark one or many supply lines purchased / unpurchased. |
 | `sync_supply_from_selected_meals` | `mcp:supply:write` | Rebuild list from meal plan + Galley selections (buy only the delta). |

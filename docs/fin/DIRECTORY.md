@@ -21,8 +21,8 @@ Browse topics below, or open Ask Ration from the hub for the same answers with l
 - [Galley (recipes and provisions)](./12-galley-recipes.md) — Create meals, cook from stock, and select for Supply.
 - [Import a recipe (URL, social, or photo)](./13-add-meals-url-import.md) — Pull a recipe from a website, social video, or photo into Galley.
 - [AI meal generation](./14-ai-meal-generation.md) — Generate recipe ideas from your pantry.
-- [Manifest (meal plan)](./15-manifest-meal-plan.md) — Schedule meals, consume entries, share the week, and (iPhone) Macros averages.
-- [Supply (shopping list)](./16-supply-shopping-list.md) — Live Supply, saved lists and Pull from (iPhone), snooze, share, and dock into Cargo.
+- [Manifest (meal plan)](./15-manifest-meal-plan.md) — Schedule meals, consume entries, share the week, and (iPhone) Macros averages, comparison, and notes.
+- [Supply (shopping list)](./16-supply-shopping-list.md) — Live Supply versus saved lists (iPhone always; web when enabled), notes, tags, snooze, share, and dock.
 - [Matching cookable meals](./17-matching-cookable-meals.md) — Strict vs partial pantry match for meals ready to cook.
 - [Hub dashboard and settings](./18-hub-dashboard-and-settings.md) — Hub widgets, Feature enablement, preferences, developer tools, and account purge.
 - [Nutrition overview](./24-nutrition-overview.md) — USDA match, blank on miss, AI estimates, confidence, and where nutrition appears.

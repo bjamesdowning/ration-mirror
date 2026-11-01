@@ -47,7 +47,7 @@ export function Step5_Supply({ step, onNext, onBack, onSkip }: StepProps) {
 				and any meals or provisions selected directly in{" "}
 				<span className="text-hyper-green font-medium">Galley</span>. Both are
 				cross-referenced against your Cargo levels to generate exactly what you
-				need to buy. Share the list with others for live shopping runs.
+				need to buy. This is Live Supply, the list you check off and dock. Saved lists stay separate until you add them into Live. Share the Live list with others for live shopping runs.
 			</p>
 
 			<TechInsight>

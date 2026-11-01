@@ -27,7 +27,7 @@ Flags off: Manifest nutrition chrome is unchanged (no preference strip).
 **Cook / Log split (when enabled for your account):**
 
 - **Cook** — Shared household action: deducts Cargo once and marks the plan entry *Prepared*. Does **not** write personal nutrition.
-- **Log my serving** / **Edit serving** — Private to you. Opens plate-up for **how much you ate**: type any amount (0.01–100 servings) or use the stepper; optional **g / oz** when the meal has recipe-ingredient mass (`gramsPerServing`). Macros are `perServing × servings` and update live. Mass is ingredient grams, not cooked plated weight. Records a snapshot on your private intake row (including the unit you used, for edit round-trip).
+- **Log my serving** / **Edit serving** — Private to you. Opens plate-up for **how much you ate**: type any amount (0.01–100 servings) or use the stepper; optional **g / oz** when the meal has recipe-ingredient mass (`gramsPerServing`). Macros are `perServing × servings` and update live. Mass is ingredient grams, not cooked plated weight. Records a snapshot on your private intake row (including the unit you used, for edit round-trip). On iPhone, plate-up and Quick Eat include **Private note (optional)**. On the web, plate-up shows **Notes (optional)** (**Private note for this log**) only when intake notes are enabled. A note is private, at most 280 characters, and is stored only when intake notes are enabled.
 - **Explicit Macro Tracking** — First personal log requires Macro Tracking to be enabled in Settings → Feature enablement when that section is shown (versioned nutrition purposes under the hood). Consent is **not** an inline Eat field and is not implied by Cook, Prepared status, or saving goals.
 - **Remove my log** — Clears your personal intake for that entry without undoing Cook/Prepared.
 
@@ -66,14 +66,14 @@ Intake rows older than roughly **396 days (~13 months)** are purged on the same 
 
 ## Macros page (iPhone)
 
-On **Manifest**, tap the chart icon at the top-left to open **Macros**. **Range** offers **Week** (follows your **Week starts** setting), **Month** (this calendar month), or **Custom** (**Choose dates** → **Start** / **End**, up to 93 days).
+On **Manifest**, tap the chart icon at the top-left to open **Macros**. The page is iPhone-only. **Range** offers **Week** (follows your **Week starts** setting, Sunday or Monday), **Month** (this calendar month), or **Custom** (**Choose dates** → **Start** / **End**, up to 93 days).
 
-- **Daily average** — Calories (kcal), **P**, **C**, **F**, and **Fiber** when known, shown against your goals when set. Averages count only the days you logged; the caption reads *N of M days logged*. **Include today** is on by default; turn it off so a partial day does not pull the average down.
-- **Previous period** — The change from the same number of days immediately before (for example, last week vs this week). Needs intake in both periods. **Nutrition goals** opens your goals.
-- **Days** — Each day's kcal and macros, newest first.
-- **Notes** — Your private intake notes in the range.
+- **Daily average** — Calories (kcal), **P**, **C**, **F**, and **Fiber** when known, shown against your goals when set. The average is the mean of days with at least one log. The caption reads *N of M days logged*. With nothing logged, the page says *Log intakes on Manifest to see averages.* **Include today** is on by default. Turn it off to drop today from that average. The **Days** list and the energy sparkline still include today.
+- **Previous period** — The change versus the same number of days immediately before. A calendar month compares with that many days. The comparison covers calories, protein, carbs, and fat. Fiber stays on the average bars. Both periods need logs; otherwise the page says *Log intakes in both periods to compare them.* **Nutrition goals** opens your goals.
+- **Days** — Each day's kcal and macros, newest first, including today even when **Include today** is off.
+- **Notes** — Private intake notes in the range: the meal name (or **Intake**), the note, and the date. You write them on **Log my serving** / plate-up or **Quick Eat**, up to 280 characters. Turning off **Include today** also hides today's notes. An empty range says *No notes in this range.* The Macros page has no tags.
 
-Macros reads the same private intake log as Manifest; housemates never see it. *Not medical advice. Goals and totals are planning aids only.*
+Macros reads the same private intake log as Manifest; housemates never see it. Footer: *Not medical advice. Goals and totals are planning aids only.*
 
 On iPhone, the **Today** Home Screen widget (large size) also shows remaining calories, protein, carbs, and fat when you have goals and Macro Tracking is on, and the **Eat** widget logs one piece from Cargo as a private serving. See *Home Screen widgets (iPhone)*.
 

@@ -84,7 +84,7 @@ Gated by nutrition feature flags. Not medical advice. Cargo/meal read and write 
 | `list_nutrition_intakes` | `mcp:nutrition:read` | Row-level personal intake history for a UTC range (cursor-paginated). |
 | `set_nutrition_goal` | `mcp:nutrition:write` | Idempotently upsert a personal daily goal using `operationKey` (active consent required). Requires nutrition-goals. |
 | `clear_nutrition_goal` | `mcp:nutrition:write` | Idempotently clear the active goal as of a date using `operationKey`. Requires nutrition-goals. **`confirm: true`.** |
-| `log_manifest_intake` | `mcp:nutrition:write` | Atomic private Eat / plate-up for prepared entries (`operationKey` + `portions[]` with per-item keys). `servings` is 0.01–100, or `amount`+`unit` (`serving` \| `g` \| `oz`) when `get_meal_plan` `gramsPerServing` is present. Consent must already be active in Ration. Never deducts Cargo. |
+| `log_manifest_intake` | `mcp:nutrition:write` | Atomic private Eat / plate-up for prepared entries (`operationKey` + `portions[]` with per-item keys). `servings` is 0.01–100, or `amount`+`unit` (`serving` \| `g` \| `oz`) when `get_meal_plan` `gramsPerServing` is present. Consent must already be active in Ration. Never deducts Cargo. Optional `notes` (≤280) persist only when nutrition-intake-notes is on. |
 | `clear_manifest_intake` | `mcp:nutrition:write` | Atomically soft-void personal intake using `operationKey`. **`confirm: true`.** Does not uncook. |
 | `quick_eat_cargo` | `mcp:inventory:write` + `mcp:manifest:write` + `mcp:nutrition:write` | Personal Quick Eat: resolve by `cargoId` or `name`; create a missing line then eat (net 0 restock reminder). Manifest snack + optional private intake. Requires cargo-quick-eat + nutrition-cook-log-split. |
 
@@ -93,8 +93,8 @@ Gated by nutrition feature flags. Not medical advice. Cargo/meal read and write 
 | Tool | Scope | Purpose |
 |------|-------|---------|
 | `get_supply_list` | `mcp:read` | Live Supply (optional `listId` for a saved list when saved lists are enabled). |
-| `add_supply_item` | `mcp:supply:write` | Add a line. |
-| `update_supply_item` | `mcp:supply:write` | Patch a line. |
+| `add_supply_item` | `mcp:supply:write` | Add a line to Live Supply. Optional `listId` writes a saved list when the library is enabled. Does not check off or dock. No note or tag fields. |
+| `update_supply_item` | `mcp:supply:write` | Patch a Live Supply line (name, quantity, or unit). No note field. |
 | `remove_supply_item` | `mcp:supply:write` | Remove a line. |
 | `mark_supply_purchased_bulk` | `mcp:supply:write` | Mark one or many lines purchased (max 50). |
 | `sync_supply_from_selected_meals` | `mcp:supply:write` | Rebuild supply from plan + selections. |

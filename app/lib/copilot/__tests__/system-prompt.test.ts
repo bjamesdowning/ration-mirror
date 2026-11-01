@@ -73,6 +73,16 @@ describe("getCopilotSystemPrompt", () => {
 		expect(prompt).toContain("quick_eat_cargo");
 	});
 
+	it("explains Live Supply versus saved lists and the iPhone Macros page", () => {
+		const prompt = getCopilotSystemPrompt();
+		expect(prompt).toContain(
+			"Live Supply is the only list you check off or dock",
+		);
+		expect(prompt).toContain("no web Macros page");
+		expect(prompt).toContain("not those averages");
+		expect(prompt).toContain("nutrition-intake-notes");
+	});
+
 	it("includes readable output formatting guidance", () => {
 		const prompt = getCopilotSystemPrompt();
 		expect(prompt).toContain("Output format:");

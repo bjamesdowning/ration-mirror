@@ -24,7 +24,7 @@ The **Manifest** is the **meal plan calendar**: meals placed in breakfast, lunch
 
 ## Supply
 
-**Supply** is the **shopping list**, built from what your planned and selected meals need minus what you already have in Cargo. Macros do not rewrite the list. You can snooze items you do not need to buy and (on eligible plans) share a public link. The Supply tab is **Live Supply**, the list you shop and dock; on iPhone you can also keep **saved lists** that you add into Live Supply.
+**Supply** is the **shopping list**, built from what your planned and selected meals need minus what you already have in Cargo. Macros do not rewrite the list. You can snooze items you do not need to buy and (on eligible plans) share a public link. The Supply tab is **Live Supply**, the only list you check off and dock. **Saved lists** (staples, a party, a receipt) stay as they are until you add them into Live. iPhone always has saved lists. On the web, **Lists** and **Pull from** appear only when saved lists are enabled; otherwise web Supply is Live only.
 
 ## Credits
 

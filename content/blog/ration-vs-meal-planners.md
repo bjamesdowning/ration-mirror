@@ -93,11 +93,11 @@ Yes. Ration can analyse a TikTok video with AI and turn it into a Meal with Ingr
 
 **Does Ration track macros?**
 
-Yes. Ration tracks macros from the Meals you plan and cook, and the iOS app has a dedicated macro analytics page. It isn't medical advice.
+Yes. Ration tracks macros from the meals you plan and cook. On iPhone, the chart on Manifest opens **Macros**: Week, Month, or Custom (up to 93 days), averages of the days you logged, a previous period of the same length, and private intake notes. There is no Macros page on the web. It isn't medical advice.
 
 **Can I have more than one shopping list in Ration?**
 
-Yes. Ration supports multiple Supply Lists.
+Yes. **Live Supply** is the list you check off and dock. Saved lists (staples, a party, a receipt) stay put until you add them into Live. iPhone always has them. On the web, Lists and Pull from appear when saved lists are enabled; otherwise the web Supply page is Live only.
 
 **Do I have to use every part of Ration?**
 

@@ -65,7 +65,8 @@ export function createSupplyToolDefs(env: McpToolsEnv) {
 	return [
 		defineSharedTool({
 			name: "add_supply_item",
-			description: "Add an item to the active supply/shopping list.",
+			description:
+				"Add a line to Live Supply. Pass listId to write a saved list when the supply list library is enabled. Does not check off or dock. No note or tag fields.",
 			inputSchema: z.object({
 				name: z.string().min(1),
 				quantity: z.number().positive().optional(),
@@ -123,7 +124,7 @@ export function createSupplyToolDefs(env: McpToolsEnv) {
 		defineSharedTool({
 			name: "update_supply_item",
 			description:
-				"Update an existing supply list item. Quantity may be 0 (still needed / reminder to buy); the line stays on the list. Use remove_supply_item to delete the line.",
+				"Update a Live Supply line. Quantity may be 0 (still needed / reminder to buy); the line stays on the list. Use remove_supply_item to delete the line. Saved-list lines and notes are not edited here.",
 			inputSchema: z.object({
 				itemId: z.string().uuid(),
 				name: z.string().min(1).optional(),

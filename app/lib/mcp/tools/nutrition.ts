@@ -88,7 +88,7 @@ export function createNutritionToolDefs(env: McpToolsEnv) {
 		defineSharedTool({
 			name: "get_nutrition_summary",
 			description:
-				"Return the caller's personal daily nutrition intake totals (energy, macros, optional fiberG) for a UTC date range, plus the active goal when set. Use this when the user asks remaining calories or whether a meal fits their budget — read vsGoal (and nutritionV2.vsGoal); do not subtract consumed from target yourself. from/to default to today UTC (temporal.todayUtc). Remaining is the UTC calendar day, not a dinner-only slice. When nutrition-cross-org-diary is on, totals include intakes from every kitchen the user logged in — not only the authorized household. Requires nutrition-goals or nutrition-manifest. Not medical advice.",
+				"Return the caller's personal daily nutrition intake totals (energy, macros, optional fiberG) for a UTC date range, plus the active goal when set. Use this when the user asks remaining calories or whether a meal fits their budget — read vsGoal (and nutritionV2.vsGoal); do not subtract consumed from target yourself. from/to default to today UTC (temporal.todayUtc). Remaining is the UTC calendar day, not a dinner-only slice. When nutrition-cross-org-diary is on, totals include intakes from every kitchen the user logged in — not only the authorized household. Requires nutrition-goals or nutrition-manifest. Not medical advice. These are calendar-day totals, not the iPhone Macros page averages (mean of logged days, previous span of equal length). For that page, point iPhone users to Manifest → chart → Macros. There is no web Macros page.",
 			inputSchema: z.object({
 				from: z
 					.string()

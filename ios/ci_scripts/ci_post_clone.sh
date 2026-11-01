@@ -4,6 +4,9 @@ set -eu
 # Xcode Cloud runs this script with ios/ci_scripts as cwd.
 cd ..
 
+# Fail fast if MARKETING_VERSION reuses a version Apple already approved.
+sh scripts/check-marketing-version.sh
+
 if ! command -v xcodegen >/dev/null 2>&1; then
 	brew install xcodegen
 fi

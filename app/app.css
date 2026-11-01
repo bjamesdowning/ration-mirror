@@ -290,6 +290,57 @@
   margin: 3rem 0;
 }
 
+/* Tables: scroll sideways on narrow screens, sticky first column, zebra rows */
+.prose-article table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin: 2rem 0;
+  border-collapse: separate;
+  border-spacing: 0;
+  border: 1px solid var(--border-color);
+  border-radius: 0.5rem;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+
+.prose-article th,
+.prose-article td {
+  min-width: 9rem;
+  padding: 0.625rem 0.875rem;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--border-color);
+  background-color: var(--bg-primary);
+}
+
+.prose-article th {
+  color: var(--text-primary);
+  font-weight: 700;
+  white-space: nowrap;
+  background-color: var(--bg-secondary);
+}
+
+.prose-article tbody tr:nth-child(even) td {
+  background-color: color-mix(in srgb, var(--bg-secondary) 60%, var(--bg-primary));
+}
+
+.prose-article tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.prose-article th:first-child,
+.prose-article td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  color: var(--text-primary);
+  font-weight: 600;
+  border-right: 1px solid var(--border-color);
+}
+
+
 @keyframes slideUp {
   from {
     transform: translateY(100%);

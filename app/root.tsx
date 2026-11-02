@@ -25,6 +25,7 @@ import {
 	buildWebFlagContext,
 	getClientSafeFlags,
 } from "./lib/feature-flags/flags.server";
+import { readReviewLoginSecrets } from "./lib/mobile/review-auth.server";
 import { resolveAppTheme } from "./lib/theme";
 
 export const links: Route.LinksFunction = () => [
@@ -69,6 +70,10 @@ export const loader = async ({ request, context }: Route.LoaderArgs) => {
 		const clientFlags = await getClientSafeFlags(env, flagContext);
 		clientFlags.appleWebLogin =
 			clientFlags.appleWebLogin === true && hasAppleWebCredentials(env);
+		const appReviewLoginEmail =
+			clientFlags.appReviewLogin === true
+				? (readReviewLoginSecrets(env)?.email ?? null)
+				: null;
 
 		return {
 			user: session?.user,
@@ -76,6 +81,7 @@ export const loader = async ({ request, context }: Route.LoaderArgs) => {
 			origin: url.origin,
 			activeOrganizationId,
 			clientFlags,
+			appReviewLoginEmail,
 		};
 	});
 };

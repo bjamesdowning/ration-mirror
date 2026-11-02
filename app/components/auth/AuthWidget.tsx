@@ -1,7 +1,8 @@
-import { useMemo, useState } from "react";
-import { Link, useRouteLoaderData } from "react-router";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useFetcher, useRouteLoaderData } from "react-router";
 import { authClient } from "~/lib/auth-client";
 import { log } from "~/lib/logging.client";
+import { shouldShowWebReviewPassword } from "~/lib/review-login-gate";
 import type { loader as rootLoader } from "~/root";
 
 type FlowState = "idle" | "sending" | "sent" | "error";
@@ -58,10 +59,34 @@ export function AuthWidget({
 
 	const rootData = useRouteLoaderData<typeof rootLoader>("root");
 	const appleWebLogin = rootData?.clientFlags?.appleWebLogin === true;
+	const appReviewLogin = rootData?.clientFlags?.appReviewLogin === true;
+	const reviewEmail = rootData?.appReviewLoginEmail ?? null;
+	const [password, setPassword] = useState("");
+	const reviewFetcher = useFetcher<{ error?: string; code?: string }>();
+	const showReviewPassword = shouldShowWebReviewPassword({
+		mode,
+		email,
+		reviewEmail,
+		appReviewLogin,
+	});
+	const reviewPending = reviewFetcher.state !== "idle";
+	const reviewLoginError =
+		typeof reviewFetcher.data?.error === "string"
+			? reviewFetcher.data.error
+			: "";
+
+	useEffect(() => {
+		if (!showReviewPassword) {
+			setPassword("");
+		}
+	}, [showReviewPassword]);
 
 	const isDev = import.meta.env.DEV;
 	const isLoading =
-		flowState === "sending" || socialLoading !== null || devLoginLoading;
+		flowState === "sending" ||
+		socialLoading !== null ||
+		devLoginLoading ||
+		reviewPending;
 	const consentBlocked = mode === "signUp" && !tosConsent;
 
 	const resolvedCallbackURL = useMemo(() => {
@@ -242,6 +267,24 @@ export function AuthWidget({
 		setErrorMsg("");
 	};
 
+	const handleSubmit = (e: React.FormEvent) => {
+		if (!showReviewPassword) {
+			void handleMagicLink(e);
+			return;
+		}
+		e.preventDefault();
+		const trimmed = email.trim();
+		if (!trimmed || isLoading || password.length === 0) return;
+		const body = new FormData();
+		body.set("email", trimmed);
+		body.set("password", password);
+		body.set("callbackURL", callbackURL);
+		reviewFetcher.submit(body, {
+			method: "post",
+			action: "/auth/review-login",
+		});
+	};
+
 	// ── "Check your email" success state ─────────────────────────────────────
 	if (flowState === "sent") {
 		return (
@@ -378,13 +421,15 @@ export function AuthWidget({
 					)}
 
 					{/* Error banner */}
-					{(errorMsg || flowState === "error") && (
+					{(errorMsg || reviewLoginError || flowState === "error") && (
 						<div
 							className="bg-danger/10 border border-danger/20 rounded-lg p-3 text-danger text-sm mb-4"
 							role="alert"
 							aria-live="polite"
 						>
-							{errorMsg || "Something went wrong. Please try again."}
+							{errorMsg ||
+								reviewLoginError ||
+								"Something went wrong. Please try again."}
 						</div>
 					)}
 
@@ -420,8 +465,8 @@ export function AuthWidget({
 						</label>
 					)}
 
-					{/* Magic Link Form */}
-					<form onSubmit={handleMagicLink} className="space-y-3">
+					{/* Magic link, or the review password when this email is the review account */}
+					<form onSubmit={handleSubmit} className="space-y-3">
 						<div>
 							<label htmlFor="auth-email" className="sr-only">
 								Email address
@@ -438,17 +483,44 @@ export function AuthWidget({
 								className="w-full px-4 py-3 rounded-xl border border-carbon/10 bg-white/60 text-carbon placeholder:text-carbon/40 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-hyper-green/50 focus:border-hyper-green transition-all disabled:opacity-50"
 							/>
 						</div>
+						{showReviewPassword && (
+							<div>
+								<label htmlFor="auth-password" className="sr-only">
+									Password
+								</label>
+								<input
+									id="auth-password"
+									type="password"
+									value={password}
+									onChange={(e) => setPassword(e.target.value)}
+									placeholder="Password"
+									required
+									autoComplete="current-password"
+									disabled={isLoading}
+									className="w-full px-4 py-3 rounded-xl border border-carbon/10 bg-white/60 text-carbon placeholder:text-carbon/40 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-hyper-green/50 focus:border-hyper-green transition-all disabled:opacity-50"
+								/>
+							</div>
+						)}
 						<button
 							type="submit"
 							disabled={
 								isLoading ||
 								!email.trim() ||
 								!isValidEmail(email.trim()) ||
-								consentBlocked
+								consentBlocked ||
+								(showReviewPassword && password.length === 0)
 							}
 							className="w-full bg-hyper-green text-on-hyper-green font-bold py-3.5 px-6 rounded-xl shadow-glow hover:shadow-glow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 focus-ring"
 						>
-							{flowState === "sending" ? (
+							{reviewPending ? (
+								<>
+									<span
+										className="w-4 h-4 border-2 border-carbon/30 border-t-carbon rounded-full animate-spin"
+										aria-hidden="true"
+									/>
+									Signing in...
+								</>
+							) : flowState === "sending" ? (
 								<>
 									<span
 										className="w-4 h-4 border-2 border-carbon/30 border-t-carbon rounded-full animate-spin"
@@ -456,6 +528,8 @@ export function AuthWidget({
 									/>
 									Sending link...
 								</>
+							) : showReviewPassword ? (
+								"Sign in"
 							) : (
 								<>
 									<svg

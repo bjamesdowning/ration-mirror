@@ -6,7 +6,8 @@
  * nothing key-related is committed; the private key never leaves the
  * publisher's machine. See docs/mcp/registry-publishing.md.
  */
-const PROOF_PATTERN = /^v=MCPv1; k=(ed25519|ecdsap384); p=[A-Za-z0-9+/]+={0,2}$/;
+const PROOF_PATTERN =
+	/^v=MCPv1; k=(ed25519|ecdsap384); p=[A-Za-z0-9+/]+={0,2}$/;
 
 export function getMcpRegistryAuthRecord(
 	env: Partial<Record<string, unknown>> | undefined,

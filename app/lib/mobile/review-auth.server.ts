@@ -100,13 +100,14 @@ async function enforceTosAcceptance(
 }
 
 /**
- * Authenticates the single App Review demo account using Wrangler secrets.
- * Callers must enforce the `app-review-login` feature flag before invoking.
+ * Confirms the request is the single App Review demo account.
+ * Callers must enforce `app-review-login` before invoking.
+ * Does not issue a session or mobile token.
  */
-export async function authenticateMobileReviewLogin(
+export async function verifyReviewLoginCredentials(
 	env: Cloudflare.Env,
-	input: MobileReviewLoginInput,
-): Promise<MobileTokenPair> {
+	input: { email: string; password: string },
+): Promise<{ userId: string }> {
 	const secrets = readReviewLoginSecrets(env);
 	if (!secrets) {
 		throw new MobileReviewAuthError(
@@ -149,9 +150,22 @@ export async function authenticateMobileReviewLogin(
 		);
 	}
 
-	await enforceTosAcceptance(env, secrets.userId, input.tosAccepted);
+	return { userId: secrets.userId };
+}
 
-	const organizationId = await resolveActiveOrganizationId(env, secrets.userId);
+/**
+ * Authenticates the single App Review demo account using Wrangler secrets.
+ * Callers must enforce the `app-review-login` feature flag before invoking.
+ */
+export async function authenticateMobileReviewLogin(
+	env: Cloudflare.Env,
+	input: MobileReviewLoginInput,
+): Promise<MobileTokenPair> {
+	const { userId } = await verifyReviewLoginCredentials(env, input);
+
+	await enforceTosAcceptance(env, userId, input.tosAccepted);
+
+	const organizationId = await resolveActiveOrganizationId(env, userId);
 	if (!organizationId) {
 		throw new MobileReviewAuthError(
 			"no_organization",
@@ -160,5 +174,5 @@ export async function authenticateMobileReviewLogin(
 		);
 	}
 
-	return issueMobileTokenPair(env, secrets.userId, organizationId);
+	return issueMobileTokenPair(env, userId, organizationId);
 }

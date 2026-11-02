@@ -101,7 +101,43 @@ describe("buildKitchenSummary", () => {
 		expect(summary.cargo.expiredTotal).toBe(summary.cargo.stats.expiredCount);
 		expect(summary.cargo.expiredRecentlyLookbackDays).toBe(30);
 		expect(summary.mealPlan.entries).toHaveLength(1);
+		expect(summary.mealPlan.entries[0]?.servings).toBe(2);
+		expect(summary.mealPlan.entries[0]?.status).toBe("planned");
 		expect(summary.supply?.uncheckedCount).toBe(2);
 		expect(summary.supply?.preview[0]?.name).toBe("bread");
+	});
+
+	it("uses meal servings when the slot has no override and reports eaten", async () => {
+		const { getManifestPreview } = await import("~/lib/manifest.server");
+		vi.mocked(getManifestPreview).mockResolvedValueOnce({
+			planId: "plan-1",
+			entries: [
+				{
+					entryId: "e2",
+					date: "2026-07-13",
+					slotType: "dinner",
+					mealName: "Soup",
+					mealId: "m2",
+					servingsOverride: null,
+					mealServings: 4,
+					consumedAt: new Date("2026-07-13T18:00:00.000Z"),
+					cookedAt: new Date("2026-07-13T17:00:00.000Z"),
+				},
+			],
+		});
+		const summary = await buildKitchenSummary(env, "org-1", "user-1");
+		expect(summary.mealPlan.entries[0]).toMatchObject({
+			servings: 4,
+			status: "eaten",
+			consumedAt: "2026-07-13T18:00:00.000Z",
+		});
+		expect(getManifestPreview).toHaveBeenCalledWith(
+			expect.anything(),
+			"org-1",
+			1,
+			undefined,
+			undefined,
+			expect.objectContaining({ includeSlotState: true }),
+		);
 	});
 });

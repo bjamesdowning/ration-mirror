@@ -5,6 +5,7 @@ import { parseDirections, serializeDirections } from "./directions";
 import { SearchQuerySchema } from "./search";
 import { TagSlugsInputSchema } from "./tag";
 import { UnitSchema } from "./units";
+import { UNIT_FIELD_DESCRIPTION, UuidSchema } from "./uuid";
 
 /** Rejects common prompt injection patterns before user customization reaches the LLM */
 export const INJECTION_PATTERNS =
@@ -49,6 +50,7 @@ export const MealIngredientSchema = z.object({
 	quantity: z.coerce.number().nonnegative("Quantity must be zero or greater"),
 	unit: z
 		.union([UnitSchema, z.string().min(1)])
+		.describe(UNIT_FIELD_DESCRIPTION)
 		.transform((v) => normalizeUnitAlias(typeof v === "string" ? v : v)),
 	cargoId: z
 		.string()
@@ -122,6 +124,32 @@ export const McpCreateMealSchema = MealSchema.superRefine(
 );
 
 export type McpCreateMealInput = z.infer<typeof McpCreateMealSchema>;
+
+/**
+ * MCP wire schema keeps the submitted name. The handler re-parses with
+ * {@link McpCreateMealSchema}, which stores the lowercased name.
+ */
+export const McpCreateMealWireSchema = MealSchema.omit({ name: true })
+	.extend({
+		name: z.string().min(1, "Meal name is required"),
+	})
+	.superRefine(refineMcpMealTextFields);
+
+export const McpUpdateMealWireSchema = McpCreateMealWireSchema.extend({
+	id: UuidSchema,
+});
+
+export function storedMealNameFields(
+	submittedName: string,
+	storedName: string,
+): { name: string; submittedName?: string; warning?: string } {
+	if (submittedName === storedName) return { name: storedName };
+	return {
+		name: storedName,
+		submittedName,
+		warning: `Stored name is "${storedName}". Use that string on later calls.`,
+	};
+}
 
 /** MCP `update_meal` — MealSchema + id with the same injection checks as create. */
 export const McpUpdateMealSchema = MealSchema.extend({

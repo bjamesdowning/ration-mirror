@@ -28,6 +28,7 @@ import {
 	NutritionGoalUpsertSchema,
 	NutritionSummaryQuerySchema,
 } from "../../schemas/nutrition";
+import { UuidSchema } from "../../schemas/uuid";
 import {
 	resolveAgentFlagContext,
 	resolveAgentSurface,
@@ -62,7 +63,7 @@ function nutritionPrincipal(ctx: McpToolContext) {
 
 const intakePortionSchema = z
 	.object({
-		entryId: z.string().uuid(),
+		entryId: UuidSchema,
 		servings: z
 			.number()
 			.min(INTAKE_SERVINGS_MIN)
@@ -78,7 +79,7 @@ const intakePortionSchema = z
 			.enum(["serving", "servings", "g", "oz"])
 			.optional()
 			.describe("serving, g, or oz. Required with amount."),
-		idempotencyKey: z.string().uuid(),
+		idempotencyKey: UuidSchema,
 		notes: IntakeNotesSchema,
 	})
 	.superRefine(refineIntakeAmountFields);
@@ -213,7 +214,7 @@ export function createNutritionToolDefs(env: McpToolsEnv) {
 		defineSharedTool({
 			name: "set_nutrition_goal",
 			description:
-				"Idempotently upsert the caller's personal daily nutrition goal (any subset of energy/macros/fiber; at least one required) using operationKey. Requires active goals and agent-processing consent established in Ration. Not medical advice — do not prescribe diets.",
+				"Idempotently upsert the caller's personal daily nutrition goal (any subset of energy/macros/fiber; at least one required) using operationKey. carbG is an alias of carbsG and is stored as carbsG. An identical open goal does not insert another row. Requires active goals and agent-processing consent established in Ration. Not medical advice — do not prescribe diets.",
 			inputSchema: z.object({
 				dailyEnergyKcal: z
 					.number()
@@ -222,13 +223,28 @@ export function createNutritionToolDefs(env: McpToolsEnv) {
 					.nullable()
 					.optional(),
 				proteinG: z.number().nonnegative().max(2_000).nullable().optional(),
-				carbsG: z.number().nonnegative().max(2_000).nullable().optional(),
+				carbsG: z
+					.number()
+					.nonnegative()
+					.max(2_000)
+					.nullable()
+					.optional()
+					.describe(
+						"Daily carbohydrate grams. carbG is an alias stored as carbsG.",
+					),
+				carbG: z
+					.number()
+					.nonnegative()
+					.max(2_000)
+					.nullable()
+					.optional()
+					.describe("Alias of carbsG. Persisted as carbsG."),
 				fatG: z.number().nonnegative().max(2_000).nullable().optional(),
 				fiberG: z.number().nonnegative().max(500).nullable().optional(),
 				effectiveFrom: z
 					.string()
 					.regex(/^\d{4}-\d{2}-\d{2}$/, "Must be YYYY-MM-DD"),
-				operationKey: z.string().uuid(),
+				operationKey: UuidSchema,
 			}),
 			scopes: ["mcp:nutrition:write"],
 			rateLimitCategory: "mcp_write",
@@ -293,7 +309,7 @@ export function createNutritionToolDefs(env: McpToolsEnv) {
 					.regex(/^\d{4}-\d{2}-\d{2}$/, "Must be YYYY-MM-DD")
 					.optional()
 					.describe("UTC date to close goals as of (default: today)"),
-				operationKey: z.string().uuid(),
+				operationKey: UuidSchema,
 			}),
 			scopes: ["mcp:nutrition:write"],
 			rateLimitCategory: "mcp_write",
@@ -349,7 +365,7 @@ export function createNutritionToolDefs(env: McpToolsEnv) {
 				"Atomically log or update personal plate-up (Eat) for prepared Manifest entries. Never deducts Cargo. Requires active intake and agent-processing consent established in Ration. Pass operationKey plus portions[{entryId, servings? or amount+unit, idempotencyKey, notes?}] (1–50). servings is 0.01–100 recipe servings; amount+unit may be serving, g, or oz when get_meal_plan gramsPerServing is present. Optional notes (≤280) persist only when nutrition-intake-notes is on. During the compatibility window, omission derives a stable operation key from the ordered item keys. Returns stable replay semantics and authoritative day totals. Not medical advice.",
 			inputSchema: z.object({
 				portions: z.array(intakePortionSchema).min(1).max(50),
-				operationKey: z.string().uuid().optional(),
+				operationKey: UuidSchema.optional(),
 			}),
 			scopes: ["mcp:nutrition:write"],
 			rateLimitCategory: "mcp_write",
@@ -389,9 +405,9 @@ export function createNutritionToolDefs(env: McpToolsEnv) {
 			description:
 				"Atomically void the caller's active personal intake for prepared Manifest entries (soft-clear) using operationKey. Does not uncook or restore Cargo. Requires nutrition-cook-log-split + nutrition-manifest. Destructive — pass confirm:true.",
 			inputSchema: z.object({
-				entryIds: z.array(z.string().uuid()).min(1).max(50),
+				entryIds: z.array(UuidSchema).min(1).max(50),
 				confirm: z.boolean(),
-				operationKey: z.string().uuid(),
+				operationKey: UuidSchema,
 			}),
 			scopes: ["mcp:nutrition:write"],
 			rateLimitCategory: "mcp_write",

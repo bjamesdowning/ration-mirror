@@ -17,6 +17,7 @@ const CORE_TOOLS = [
 	"get_expiring_items",
 	"get_expired_items",
 	"list_meals",
+	"get_meal",
 	"match_meals",
 	"get_meal_plan",
 	"get_supply_list",

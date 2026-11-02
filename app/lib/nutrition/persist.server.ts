@@ -50,6 +50,7 @@ import {
 	estimateGramsFromPerServingDensity,
 	nutrientsPer100gFromCargoOverride,
 	pickBestCargoOverrideForIngredient,
+	resolveCountUnitMealContribution,
 } from "./override-scale";
 import { resolveFoodName } from "./resolve-food.server";
 import {
@@ -283,6 +284,7 @@ export async function recomputeAndStoreMealNutrition(
 		linkedCargoIds,
 	);
 
+	const rollupWarnings: string[] = [];
 	const resolvedInputs = await mapWithConcurrency(
 		ingredients,
 		NUTRITION_RESOLVE_CONCURRENCY,
@@ -307,6 +309,26 @@ export async function recomputeAndStoreMealNutrition(
 				const fdcId = override.nutrition.fdcId ?? null;
 
 				if (nutrientsPer100g) {
+					const countRollup = resolveCountUnitMealContribution({
+						snapshot: override.nutrition,
+						ingredientQuantity: ing.quantity ?? 0,
+						ingredientUnit: resolvedUnit,
+						packageQuantity: override.quantity,
+						packageUnit,
+					});
+					if (countRollup) {
+						if (countRollup.warning) rollupWarnings.push(countRollup.warning);
+						return {
+							name: ing.ingredientName,
+							quantity: ing.quantity,
+							unit: resolvedUnit,
+							nutrientsPer100g: null,
+							directContribution: countRollup.directContribution,
+							fdcId,
+							source,
+						};
+					}
+
 					let grams: number | null | undefined;
 					const convertible =
 						ing.quantity != null && resolvedUnit
@@ -477,6 +499,7 @@ export async function recomputeAndStoreMealNutrition(
 		attributions: result.attributions,
 		computedAt: new Date().toISOString(),
 		recipeMassG: result.recipeMassG,
+		...(rollupWarnings.length > 0 ? { warnings: rollupWarnings } : {}),
 	};
 
 	const now = new Date();

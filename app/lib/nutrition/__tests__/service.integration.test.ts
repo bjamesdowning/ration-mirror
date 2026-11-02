@@ -626,6 +626,33 @@ describe("canonical nutrition service with transactional SQLite", () => {
 		expect(await getGoal(env, principal, flags, "2026-08-09")).toBeNull();
 	});
 
+	it("does not insert a row when a new key repeats the open goal", async () => {
+		const { env, sqlite } = setup();
+		const input = {
+			operationKey: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+			dailyEnergyKcal: 2000,
+			proteinG: 100,
+			carbsG: 200,
+			fatG: 70,
+			fiberG: null,
+			effectiveFrom: "2026-08-09",
+		};
+		await setGoal(env, principal, flags, input);
+		const second = await setGoal(env, principal, flags, {
+			...input,
+			operationKey: "ffffffff-ffff-4fff-8fff-ffffffffffff",
+		});
+		expect(second.replayed).toBe(true);
+		const goals = sqlite
+			.prepare("select count(*) as n from nutrition_goal")
+			.get() as { n: number };
+		const operations = sqlite
+			.prepare("select count(*) as n from nutrition_operation")
+			.get() as { n: number };
+		expect(goals.n).toBe(1);
+		expect(operations.n).toBe(1);
+	});
+
 	it("replays goal operations across organization switches", async () => {
 		const { env } = setup();
 		const input = {

@@ -173,6 +173,8 @@ export type MealNutritionSnapshot = {
 	computedAt: string;
 	/** Whole-recipe convertible mass; omitted on snapshots computed before mass persist. */
 	recipeMassG?: number | null;
+	/** Rollup notes, such as count units that ignored per-100 g density. */
+	warnings?: string[];
 };
 
 export type MassResolutionResult = {

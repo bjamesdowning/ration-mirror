@@ -64,6 +64,11 @@ export interface McpToolContext {
 	 * alive after the tool envelope returns.
 	 */
 	waitUntil?: (promise: Promise<unknown>) => void;
+	/**
+	 * Model-facing results use `agent`. Copilot cards may project `card`
+	 * separately and must not attach that payload to the model message.
+	 */
+	responseProfile?: "agent" | "card";
 }
 
 function isOAuthEnabled(env: Cloudflare.Env): boolean {
@@ -122,6 +127,7 @@ async function authenticateApiKey(
 		scopes: expandedScopes,
 		authMethod: "api_key",
 		agentSurface: "mcp",
+		responseProfile: "agent",
 		preClaim: await resolvePreClaimForOrg(env, record.organizationId),
 		waitUntil,
 	};
@@ -144,6 +150,7 @@ async function authenticateOAuthToken(
 		authMethod: "oauth",
 		oauthClientId: verified.clientId,
 		agentSurface: "mcp",
+		responseProfile: "agent",
 		preClaim: await resolvePreClaimForOrg(env, verified.organizationId),
 		waitUntil,
 	};

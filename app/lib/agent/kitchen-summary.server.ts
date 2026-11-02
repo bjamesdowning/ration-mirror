@@ -18,6 +18,16 @@ export const KITCHEN_SUMMARY_MANIFEST_DAYS_MIN = 1;
 export const KITCHEN_SUMMARY_MANIFEST_DAYS_MAX = 7;
 export const KITCHEN_SUMMARY_EXPIRED_LOOKBACK_DAYS = 30;
 
+function timestampIso(
+	value: Date | string | number | null | undefined,
+): string | null {
+	if (value == null) return null;
+	if (value instanceof Date) return value.toISOString();
+	if (typeof value === "number") return new Date(value).toISOString();
+	const parsed = Date.parse(value);
+	return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null;
+}
+
 export async function buildKitchenSummary(
 	env: Cloudflare.Env,
 	organizationId: string,
@@ -66,6 +76,7 @@ export async function buildKitchenSummary(
 		getSupplyList(db, organizationId, { limit: KITCHEN_SUMMARY_SUPPLY_LIMIT }),
 		getManifestPreview(db, organizationId, manifestDays, undefined, undefined, {
 			todayIso: today,
+			includeSlotState: true,
 		}),
 	]);
 
@@ -78,14 +89,22 @@ export async function buildKitchenSummary(
 		expirationAlertDays,
 	};
 
-	const manifestEntries = (manifestPreview?.entries ?? []).map((entry) => ({
-		id: entry.entryId,
-		date: entry.date,
-		slotType: entry.slotType,
-		mealId: entry.mealId,
-		mealName: entry.mealName,
-		servings: entry.servingsOverride ?? null,
-	}));
+	const manifestEntries = (manifestPreview?.entries ?? []).map((entry) => {
+		const consumedAt = timestampIso(entry.consumedAt);
+		const cookedAt = timestampIso(entry.cookedAt);
+		const status = consumedAt ? "eaten" : cookedAt ? "cooked" : "planned";
+		return {
+			id: entry.entryId,
+			date: entry.date,
+			slotType: entry.slotType,
+			mealId: entry.mealId,
+			mealName: entry.mealName,
+			servings: entry.servingsOverride ?? entry.mealServings ?? null,
+			cookedAt,
+			consumedAt,
+			status,
+		};
+	});
 
 	return {
 		temporal,

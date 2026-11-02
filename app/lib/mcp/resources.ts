@@ -208,7 +208,7 @@ export function registerResourcesAndPrompts(server: McpServer): void {
 								"1. Call propose_manifest_plan (uses expiring items + match_meals internally).\n" +
 								"2. Present the compact proposal and confirm with the user.\n" +
 								"3. On confirm, call commit_manifest_plan with the entries (optionally syncSupply: true).\n" +
-								"Fallback: get_expiring_items → match_meals → commit_manifest_plan → sync_supply_from_selected_meals.",
+								"Fallback: get_expiring_items → match_meals → commit_manifest_plan → get_supply_list → add_supply_item.",
 						},
 					},
 				],

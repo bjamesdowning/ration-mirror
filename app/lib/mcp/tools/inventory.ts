@@ -17,6 +17,7 @@ import {
 	previewInventoryRemove,
 } from "../../inventory-remove.server";
 import { CargoNutritionOverrideSchema } from "../../schemas/nutrition";
+import { UNIT_FIELD_DESCRIPTION, UuidSchema } from "../../schemas/uuid";
 import { coerceToolUnit } from "../../units";
 import { findSimilarCargoBatch } from "../../vector.server";
 import { resolveAgentFlagContext } from "../agent-flag-context";
@@ -35,8 +36,7 @@ const CARGO_QTY_MIN0 = z
 	);
 
 /** Shared unit field description for inventory write tools. */
-const UNIT_ARG_DESCRIPTION =
-	"Measurement unit. Prefer SI symbols (g, kg, ml, l). Aliases are accepted (litres, liters, quarts, grams, cups) and normalized server-side. Read ration://units for the full list.";
+const UNIT_ARG_DESCRIPTION = UNIT_FIELD_DESCRIPTION;
 
 /** Min score gap between #1 and #2 to auto-pick a name match without asking. */
 const ADJUST_NAME_SCORE_GAP = 0.1;
@@ -177,7 +177,7 @@ export function createInventoryToolDefs(env: McpToolsEnv) {
 			description:
 				"Set absolute fields on a pantry item (name, quantity, unit, expiry, domain, tags, optional nutrition override). Quantity may be 0 (out of stock; item remains as a restock reminder). Pass expiresAt as null (or empty string) to clear expiry; omit expiresAt to leave it unchanged. When nutrition is omitted and name changes, USDA may auto-resolve if nutrition-engine is on. Use remove_cargo_item only when the user wants the line deleted. For relative changes like 'ate 2', prefer adjust_cargo_item.",
 			inputSchema: z.object({
-				itemId: z.string().uuid(),
+				itemId: UuidSchema,
 				name: z.string().min(1).optional(),
 				quantity: CARGO_QTY_MIN0.optional(),
 				unit: z.string().optional().describe(UNIT_ARG_DESCRIPTION),
@@ -262,7 +262,7 @@ export function createInventoryToolDefs(env: McpToolsEnv) {
 			description:
 				"Change pantry quantity by a relative delta (e.g. delta:-2 when stock was used or wasted). Floors at 0; the item stays in Cargo. For personal eating / 'I just ate X', use quick_eat_cargo instead (creates a missing line, Manifest snack, optional intake). Provide itemId, or name to resolve via semantic search. For absolute set (including 0), use update_cargo_item. For bulk add, use preview_inventory_import.",
 			inputSchema: z.object({
-				itemId: z.string().uuid().optional(),
+				itemId: UuidSchema.optional(),
 				name: z
 					.string()
 					.min(1)
@@ -438,7 +438,7 @@ export function createInventoryToolDefs(env: McpToolsEnv) {
 			description:
 				"Permanently delete a pantry line. Destructive — pass confirm:true. Prefer update_cargo_item or adjust_cargo_item to quantity 0 when the user still wants a restock reminder. Use itemId from list_inventory or search_ingredients.",
 			inputSchema: z.object({
-				itemId: z.string().uuid(),
+				itemId: UuidSchema,
 				confirm: z.boolean().describe("Set true to confirm permanent removal."),
 			}),
 			scopes: ["mcp:inventory:write"],
@@ -482,7 +482,7 @@ export function createInventoryToolDefs(env: McpToolsEnv) {
 			description:
 				"Dry-run bulk permanent Cargo deletes (2+ items). Returns previewToken, totals, a sample of rows, and warnings. No DB writes. Pass previewToken to apply_inventory_remove within 15 minutes after the user confirms in chat. For a single delete, prefer remove_cargo_item.",
 			inputSchema: z.object({
-				itemIds: z.array(z.string().uuid()).min(1).max(100),
+				itemIds: z.array(UuidSchema).min(1).max(100),
 			}),
 			scopes: ["mcp:inventory:write"],
 			rateLimitCategory: "mcp_write",
@@ -548,7 +548,7 @@ export function createInventoryToolDefs(env: McpToolsEnv) {
 				items: z
 					.array(
 						z.object({
-							id: z.string().uuid().optional(),
+							id: UuidSchema.optional(),
 							name: z.string().min(1),
 							quantity: z
 								.number()

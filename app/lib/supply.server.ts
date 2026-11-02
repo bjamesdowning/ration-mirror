@@ -1,4 +1,4 @@
-import { and, desc, eq, gt, inArray, lte, sql } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, lte, or, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import {
 	activeMealSelection,
@@ -563,6 +563,10 @@ export function filterSupplyItemsByCargoTags<T extends { name: string }>(
 export interface SupplyItemsFetchOptions {
 	limit?: number;
 	offset?: number;
+	/** Keyset cursor. Rows strictly after this `(createdAt, id)` pair. */
+	after?: { createdAt: Date; id: string };
+	/** Skip source-meal name lookup. Default true for existing callers. */
+	includeSourceMeals?: boolean;
 }
 
 /**
@@ -592,12 +596,23 @@ export async function getSupplyListById(
 ) {
 	const d1 = drizzle(db);
 
+	const itemConditions = [eq(supplyItem.listId, listId)];
+	if (options?.after) {
+		const cursorClause = or(
+			gt(supplyItem.createdAt, options.after.createdAt),
+			and(
+				eq(supplyItem.createdAt, options.after.createdAt),
+				gt(supplyItem.id, options.after.id),
+			),
+		);
+		if (cursorClause) itemConditions.push(cursorClause);
+	}
+
 	const itemsQuery = d1
 		.select()
 		.from(supplyItem)
-		.where(eq(supplyItem.listId, listId))
+		.where(and(...itemConditions))
 		.orderBy(supplyItem.createdAt, supplyItem.id)
-		.$dynamic()
 		.limit(options?.limit ?? Number.MAX_SAFE_INTEGER)
 		.offset(options?.offset ?? 0);
 
@@ -631,8 +646,9 @@ export async function getSupplyListById(
 		),
 	);
 
+	const includeSourceMeals = options?.includeSourceMeals !== false;
 	const mealNameById = new Map<string, string>();
-	if (sourceMealIds.length > 0) {
+	if (includeSourceMeals && sourceMealIds.length > 0) {
 		const sourceMeals = await chunkedQuery(
 			sourceMealIds,
 			(chunk) =>

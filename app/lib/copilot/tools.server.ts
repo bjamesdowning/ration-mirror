@@ -42,6 +42,7 @@ export function buildCopilotMcpContext(
 		keyName: "Ration Copilot",
 		keyPrefix: "copilot_",
 		agentSurface: "copilot",
+		responseProfile: "agent",
 		originatingClient: ctx.originatingClient,
 		waitUntil: ctx.waitUntil,
 	};

@@ -84,9 +84,12 @@ export function buildKitchenAwareSuggestedActions(
 
 	if (capabilities.canWriteSupply) {
 		actions.push({
-			action: "sync_supply_from_selected_meals",
-			description:
-				"Build a Supply shopping list from selected meals and missing Cargo.",
+			action: "get_supply_list",
+			description: "Read Live Supply before adding lines.",
+		});
+		actions.push({
+			action: "add_supply_item",
+			description: "Add a missing item to Live Supply.",
 		});
 	}
 
@@ -102,7 +105,7 @@ export function buildKitchenAwareSuggestedActions(
 		actions.push({
 			action: "bootstrap_kitchen",
 			description:
-				"New kitchen — start with inventory import, then match_meals and sync_supply_from_selected_meals.",
+				"New kitchen — start with inventory import, then match_meals, get_supply_list, and add_supply_item.",
 		});
 	}
 

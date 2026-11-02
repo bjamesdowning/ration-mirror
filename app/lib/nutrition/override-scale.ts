@@ -135,6 +135,37 @@ export function directNutrientsFromCountCargoOverride(
 	return scaleNutrientValues(perServing, ingredientQuantity * perUnitFactor);
 }
 
+const COUNT_UNIT_PER_SERVING_WARNING =
+	"per-100 g was not used; count-unit rollup used perServing";
+
+/**
+ * Count-unit user overrides roll up from perServing.
+ * When per100g is also stored, ignore it so energy density cannot invent grams.
+ */
+export function resolveCountUnitMealContribution(input: {
+	snapshot: NutritionSnapshot;
+	ingredientQuantity: number;
+	ingredientUnit: SupportedUnit | null | undefined;
+	packageQuantity: number;
+	packageUnit: SupportedUnit | null | undefined;
+}): { directContribution: NutrientValues; warning: string | null } | null {
+	if (input.snapshot.source !== "user_override" || !input.snapshot.perServing) {
+		return null;
+	}
+	const directContribution = directNutrientsFromCountCargoOverride(
+		input.snapshot,
+		input.ingredientQuantity,
+		input.ingredientUnit,
+		input.packageQuantity,
+		input.packageUnit,
+	);
+	if (!directContribution) return null;
+	return {
+		directContribution,
+		warning: input.snapshot.per100g ? COUNT_UNIT_PER_SERVING_WARNING : null,
+	};
+}
+
 /**
  * Ensure a user_override snapshot has consistent `per100g` when package mass is known.
  */

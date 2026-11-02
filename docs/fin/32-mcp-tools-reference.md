@@ -52,7 +52,8 @@ Prefer resource `ration://schemas/inventory-import` for the item shape.
 
 | Tool | Scope | Purpose |
 |------|-------|---------|
-| `list_meals` | `mcp:read` | Cursor-paginated recipe list. |
+| `list_meals` | `mcp:read` | Galley index. Ingredients omitted unless `includeIngredients` is true. |
+| `get_meal` | `mcp:read` | One recipe by id, including directions and ingredients. |
 | `match_meals` | `mcp:read` | Cookability match (`strict` / `delta`). Includes compact `nutrition.perServing` and optional `maxEnergyKcal` (unknown kcal stays listed). |
 | `create_meal` | `mcp:galley:write` | Create structured recipe (credit-free). |
 | `update_meal` | `mcp:galley:write` | Update a recipe. |
@@ -92,7 +93,7 @@ Gated by nutrition feature flags. Not medical advice. Cargo/meal read and write 
 
 | Tool | Scope | Purpose |
 |------|-------|---------|
-| `get_supply_list` | `mcp:read` | Live Supply (optional `listId` for a saved list when saved lists are enabled). |
+| `get_supply_list` | `mcp:read` | Live Supply, cursor default 50 max 100 (optional `listId` when the supply list library is enabled). No MCP tool can turn that library on. |
 | `add_supply_item` | `mcp:supply:write` | Add a line to Live Supply. Optional `listId` writes a saved list when the library is enabled. Does not check off or dock. No note or tag fields. |
 | `update_supply_item` | `mcp:supply:write` | Patch a Live Supply line (name, quantity, or unit). No note field. |
 | `remove_supply_item` | `mcp:supply:write` | Remove a line. |

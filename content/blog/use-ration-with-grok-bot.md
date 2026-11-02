@@ -81,7 +81,7 @@ Once connected, the assistant works on the same Cargo, Galley, Manifest and Supp
 | Stock check | "Do we have enough eggs?" |
 | Cookability | "What can I make without shopping?" |
 | Shopping | "Add missing fajita bits to Supply" |
-| Multiple lists | "Put party drinks on a separate list" |
+| Multiple lists | "Put party drinks on a separate list" when the supply list library is enabled |
 | Log a haul | "I bought spinach, feta and mince" |
 | Expiry rescue | "What's going off this week?" |
 

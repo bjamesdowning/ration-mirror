@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
 	AnyNutritionSnapshotSchema,
 	ConsumePortionsSchema,
+	NutrientValuesSchema,
 	NutritionGoalAsOfQuerySchema,
 	NutritionGoalSchema,
 	NutritionGoalUpsertSchema,
@@ -12,6 +13,24 @@ import {
 	NutritionSummaryQuerySchema,
 	NutritionSummarySchema,
 } from "../nutrition";
+
+describe("NutrientValuesSchema", () => {
+	it("stores carbsG input as carbG", () => {
+		const parsed = NutrientValuesSchema.parse({
+			energyKcal: 52,
+			proteinG: 0.3,
+			fatG: 0.2,
+			carbsG: 14,
+			fiberG: 2.4,
+			sugarG: 10,
+			satFatG: 0,
+			sodiumMg: 1,
+			saltG: 0,
+		});
+		expect(parsed.carbG).toBe(14);
+		expect(parsed).not.toHaveProperty("carbsG");
+	});
+});
 
 describe("NutritionSnapshotSchema", () => {
 	it("accepts a USDA snapshot", () => {
@@ -271,6 +290,16 @@ describe("NutritionGoalAsOfQuerySchema", () => {
 });
 
 describe("NutritionGoalUpsertSchema", () => {
+	it("persists carbG as carbsG", () => {
+		const parsed = NutritionGoalUpsertSchema.parse({
+			carbG: 180,
+			effectiveFrom: "2026-08-09",
+			operationKey: "11111111-1111-4111-8111-111111111111",
+		});
+		expect(parsed.carbsG).toBe(180);
+		expect(parsed).not.toHaveProperty("carbG");
+	});
+
 	it("accepts nutrient fields without a client consent signal", () => {
 		const parsed = NutritionGoalUpsertSchema.parse({
 			dailyEnergyKcal: 2000,

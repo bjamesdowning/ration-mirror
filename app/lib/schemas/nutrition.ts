@@ -11,31 +11,52 @@ export const NutritionSourceSchema = z.enum([
 const NutrientAmountSchema = z.number().nonnegative().max(100_000);
 const NullableNutrientAmountSchema = NutrientAmountSchema.nullable();
 
+/** Accept `carbsG` on input and store the canonical `carbG` key. */
+function aliasCarbGInput(value: unknown): unknown {
+	if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+	const rec = { ...(value as Record<string, unknown>) };
+	if (rec.carbG == null && rec.carbsG != null) {
+		rec.carbG = rec.carbsG;
+	}
+	delete rec.carbsG;
+	return rec;
+}
+
 /** Legacy v1 — core macros required; optional micronutrients nullable. */
-export const NutrientValuesSchema = z.object({
-	energyKcal: NutrientAmountSchema,
-	proteinG: NutrientAmountSchema,
-	fatG: NutrientAmountSchema,
-	carbG: NutrientAmountSchema,
-	fiberG: NullableNutrientAmountSchema,
-	sugarG: NullableNutrientAmountSchema,
-	satFatG: NullableNutrientAmountSchema,
-	sodiumMg: NullableNutrientAmountSchema,
-	saltG: NullableNutrientAmountSchema,
-});
+export const NutrientValuesSchema = z.preprocess(
+	aliasCarbGInput,
+	z
+		.object({
+			energyKcal: NutrientAmountSchema,
+			proteinG: NutrientAmountSchema,
+			fatG: NutrientAmountSchema,
+			carbG: NutrientAmountSchema,
+			fiberG: NullableNutrientAmountSchema,
+			sugarG: NullableNutrientAmountSchema,
+			satFatG: NullableNutrientAmountSchema,
+			sodiumMg: NullableNutrientAmountSchema,
+			saltG: NullableNutrientAmountSchema,
+		})
+		.meta({ id: "nutrientValues" }),
+);
 
 /** v2 — all nutrient amounts nullable (unknown ≠ zero). */
-export const NullableNutrientValuesSchema = z.object({
-	energyKcal: NullableNutrientAmountSchema,
-	proteinG: NullableNutrientAmountSchema,
-	fatG: NullableNutrientAmountSchema,
-	carbG: NullableNutrientAmountSchema,
-	fiberG: NullableNutrientAmountSchema,
-	sugarG: NullableNutrientAmountSchema,
-	satFatG: NullableNutrientAmountSchema,
-	sodiumMg: NullableNutrientAmountSchema,
-	saltG: NullableNutrientAmountSchema,
-});
+export const NullableNutrientValuesSchema = z.preprocess(
+	aliasCarbGInput,
+	z
+		.object({
+			energyKcal: NullableNutrientAmountSchema,
+			proteinG: NullableNutrientAmountSchema,
+			fatG: NullableNutrientAmountSchema,
+			carbG: NullableNutrientAmountSchema,
+			fiberG: NullableNutrientAmountSchema,
+			sugarG: NullableNutrientAmountSchema,
+			satFatG: NullableNutrientAmountSchema,
+			sodiumMg: NullableNutrientAmountSchema,
+			saltG: NullableNutrientAmountSchema,
+		})
+		.meta({ id: "nullableNutrientValues" }),
+);
 
 export const NutritionMatchQualitySchema = z.enum([
 	"verified",
@@ -139,13 +160,14 @@ function countSetGoalNutrients(data: {
 	dailyEnergyKcal?: number | null;
 	proteinG?: number | null;
 	carbsG?: number | null;
+	carbG?: number | null;
 	fatG?: number | null;
 	fiberG?: number | null;
 }): number {
 	return [
 		data.dailyEnergyKcal,
 		data.proteinG,
-		data.carbsG,
+		data.carbsG ?? data.carbG,
 		data.fatG,
 		data.fiberG,
 	].filter((v) => v != null && Number.isFinite(v)).length;
@@ -154,7 +176,12 @@ function countSetGoalNutrients(data: {
 const NutritionGoalFieldsObject = z.object({
 	dailyEnergyKcal: goalEnergyField,
 	proteinG: goalMacroField,
-	carbsG: goalMacroField,
+	carbsG: goalMacroField.describe(
+		"Daily carbohydrate grams. carbG is an accepted alias and is stored as carbsG.",
+	),
+	carbG: goalMacroField
+		.optional()
+		.describe("Alias of carbsG. Persisted as carbsG."),
 	fatG: goalMacroField,
 	fiberG: goalFiberField,
 	effectiveFrom: CalendarDateSchema,
@@ -180,7 +207,7 @@ function normalizeGoalFields(data: z.infer<typeof NutritionGoalFieldsSchema>) {
 	return {
 		dailyEnergyKcal: data.dailyEnergyKcal ?? null,
 		proteinG: data.proteinG ?? null,
-		carbsG: data.carbsG ?? null,
+		carbsG: data.carbsG ?? data.carbG ?? null,
 		fatG: data.fatG ?? null,
 		fiberG: data.fiberG ?? null,
 		effectiveFrom: data.effectiveFrom,

@@ -139,6 +139,10 @@ export interface ManifestPreviewEntry {
 	mealId: string;
 	mealType?: string;
 	servingsOverride?: number | null;
+	/** Present only when getManifestPreview is called with includeSlotState. */
+	mealServings?: number | null;
+	cookedAt?: Date | null;
+	consumedAt?: Date | null;
 }
 
 export interface ManifestPreviewData {

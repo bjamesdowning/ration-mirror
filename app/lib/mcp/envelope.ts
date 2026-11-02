@@ -31,6 +31,10 @@ export interface ToolMeta {
 	expiredTotal?: number;
 	/** Explicit daysBack window when set; null/undefined means unbounded. */
 	daysBack?: number | null;
+	/** Agent nutrition payloads use schema version 2 (no nutritionV2 duplicate). */
+	schemaVersion?: number;
+	/** list_meals omitted the ingredient fan-out. */
+	ingredients?: "omitted";
 }
 
 export type ToolErrorBody = {
@@ -80,6 +84,7 @@ export type ToolErrorCode =
 	| "timeout"
 	| "timeout_ambiguous"
 	| "feature_disabled"
+	| "validation_error"
 	| "cook_eat_split_required"
 	| "consent_required"
 	| "amount_unit_unavailable";
@@ -248,11 +253,17 @@ export function mapErrorToEnvelope(
 		});
 		return err(
 			tool,
-			"invalid_input",
+			"validation_error",
 			parts.length > 0
 				? `Validation failed — ${parts.join("; ")}`
 				: "Validation failed.",
-			{ details },
+			{
+				details,
+				recoveryHint:
+					fieldKeys.length > 0
+						? `Fix ${fieldKeys.join(", ")} and retry the same tool.`
+						: "Fix the invalid field and retry the same tool.",
+			},
 		);
 	}
 
@@ -392,10 +403,20 @@ export function mapErrorToEnvelope(
 			);
 		}
 		if (/not found/i.test(error.message)) {
-			return err(tool, "not_found", error.message, {
-				recoveryHint:
-					"Look up a valid id with the matching list/search tool, then retry.",
-			});
+			let recoveryHint =
+				"Look up a valid id with the matching list/search tool, then retry.";
+			if (
+				tool === "log_manifest_intake" ||
+				tool === "clear_manifest_intake" ||
+				error.name === "ManifestIntakeTargetNotFoundError"
+			) {
+				recoveryHint =
+					"Call get_meal_plan and retry only an entry that is already cooked.";
+			} else if (tool === "get_cargo_item" || /cargo/i.test(error.message)) {
+				recoveryHint =
+					"Call list_inventory to find a valid itemId, then retry.";
+			}
+			return err(tool, "not_found", error.message, { recoveryHint });
 		}
 		if (isD1ContentionError(error)) {
 			return err(

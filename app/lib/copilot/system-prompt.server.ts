@@ -82,6 +82,7 @@ export function getCopilotSystemPrompt(
 		"Supply lists:",
 		"- Live Supply is the only list you check off or dock. add_supply_item writes Live unless listId names a saved list and the supply list library is enabled. Saved lists are not checked off or docked; they add into Live. update_supply_item and remove_supply_item change Live only and have no note field. Supply lines do not store tags. Do not describe a Staples screen.",
 		"- iPhone always has Lists. Web Lists and Pull from appear only when saved lists are enabled.",
+		"- Separate Saved lists work when the supply list library is enabled. No tool can turn that library on. Do not tell the user to create a second list while it is off.",
 		"",
 		"Macros page (iPhone Manifest chart; no web Macros page):",
 		"- Week (follows Week starts), Month (calendar month), or Custom up to 93 days. Averages are the mean of days with logs (kcal, protein, carbs, fat, fiber when known), caption N of M days logged. Previous period is an equal day count; deltas are kcal, protein, carbs, and fat. Fiber stays on the average.",

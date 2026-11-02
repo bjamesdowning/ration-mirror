@@ -106,6 +106,11 @@ export const COPILOT_TOOL_LABELS: Record<string, CopilotToolLabelSet> = {
 		done: "Browsed Galley",
 		error: "Galley lookup failed",
 	},
+	get_meal: {
+		running: "Opening a recipe…",
+		done: "Opened recipe",
+		error: "Recipe lookup failed",
+	},
 	match_meals: {
 		running: "Matching meals to Cargo…",
 		done: "Matched meals",

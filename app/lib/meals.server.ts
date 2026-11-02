@@ -794,7 +794,7 @@ export async function createMeal(
 		d1.insert(meal).values({
 			id: mealId,
 			organizationId,
-			name: data.name,
+			name: data.name.toLowerCase(),
 			domain: data.domain,
 			description: data.description,
 			directions: data.directions,
@@ -914,7 +914,7 @@ export async function createMeals(
 			d1.insert(meal).values({
 				id: mealId,
 				organizationId,
-				name: data.name,
+				name: data.name.toLowerCase(),
 				domain: data.domain,
 				description: data.description,
 				directions: data.directions,
@@ -1030,7 +1030,7 @@ export async function updateMeal(
 		d1
 			.update(meal)
 			.set({
-				name: data.name,
+				name: data.name.toLowerCase(),
 				domain: data.domain,
 				description: data.description,
 				directions: data.directions,
@@ -1138,7 +1138,7 @@ export async function createProvision(
 		d1.insert(meal).values({
 			id: mealId,
 			organizationId,
-			name: data.name,
+			name: data.name.toLowerCase(),
 			domain: data.domain,
 			type: "provision",
 			servings: 1,
@@ -1918,7 +1918,7 @@ export async function createProvisionFromCargo(
 		d1.insert(meal).values({
 			id: mealId,
 			organizationId,
-			name: cargoItem.name,
+			name: cargoItem.name.toLowerCase(),
 			domain: cargoItem.domain,
 			type: "provision",
 			servings: 1,

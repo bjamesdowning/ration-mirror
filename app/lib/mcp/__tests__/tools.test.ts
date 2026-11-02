@@ -8,6 +8,7 @@ vi.mock("~/lib/cargo.server", () => ({
 	getCargo: vi.fn(),
 	getCargoByIds: vi.fn(),
 	getCargoItem: vi.fn(),
+	findCargoByExactName: vi.fn().mockResolvedValue(null),
 	getCargoPage: vi.fn(),
 	getExpiringCargo: vi.fn().mockResolvedValue([]),
 	getExpiredCargo: vi.fn().mockResolvedValue([]),
@@ -84,6 +85,7 @@ vi.mock("~/lib/matching.server", () => ({
 vi.mock("~/lib/meals.server", () => ({
 	getMeals: vi.fn(),
 	getMealsPage: vi.fn(),
+	getMeal: vi.fn(),
 	cookMeal: vi.fn(),
 	updateMeal: vi.fn(),
 	createMeal: vi.fn(),
@@ -125,6 +127,18 @@ vi.mock("~/lib/rate-limiter.server", () => ({
 	checkRateLimit: vi.fn(),
 }));
 
+vi.mock("~/lib/supply-lists.server", () => ({
+	archiveSupplyList: vi.fn(),
+	createCatalogList: vi.fn(),
+	createSupplyListFromReceipt: vi.fn(),
+	deleteSupplyStaple: vi.fn(),
+	duplicateSupplyList: vi.fn(),
+	getSupplyCatalog: vi.fn(),
+	listSupplyStaples: vi.fn(),
+	transferSupplyItems: vi.fn(),
+	upsertSupplyStaple: vi.fn(),
+}));
+
 vi.mock("~/lib/supply.server", () => ({
 	getSupplyList: vi.fn(),
 	getSupplyListById: vi.fn(),
@@ -162,6 +176,7 @@ vi.mock("drizzle-orm/d1", () => ({
 }));
 
 const {
+	findCargoByExactName,
 	getCargoItem,
 	getCargoPage,
 	getCargoStats,
@@ -204,6 +219,8 @@ const {
 } = await import("~/lib/supply.server");
 const { drizzle } = await import("drizzle-orm/d1");
 const { findSimilarCargoBatch } = await import("~/lib/vector.server");
+const { isFeatureEnabled } = await import("~/lib/feature-flags/flags.server");
+const { createCatalogList } = await import("~/lib/supply-lists.server");
 
 /**
  * Parses the MCP envelope from a tool response. Returns `data` on success,
@@ -289,6 +306,8 @@ describe("MCP tools", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
 		vi.mocked(checkRateLimit).mockResolvedValue(RATE_ALLOWED);
+		vi.mocked(isFeatureEnabled).mockResolvedValue(false);
+		vi.mocked(findCargoByExactName).mockResolvedValue(null);
 	});
 
 	// ── Existing Read Tools ──────────────────────────────────────────────────
@@ -314,6 +333,29 @@ describe("MCP tools", () => {
 			)({ query: "unicorn dust" });
 			const data = parseOk(result);
 			expect(data.matches).toEqual([]);
+			expect(findCargoByExactName).toHaveBeenCalled();
+		});
+
+		it("returns an exact name hit when the vector map is empty", async () => {
+			vi.mocked(findSimilarCargoBatch).mockResolvedValue(new Map());
+			vi.mocked(findCargoByExactName).mockResolvedValueOnce({
+				id: "cargo-exact",
+				name: "oats",
+				quantity: 1,
+				unit: "unit",
+				domain: "food",
+				createdAt: new Date("2020-01-01T00:00:00.000Z"),
+			} as never);
+			const server = makeServer();
+			const result = await getToolHandler(
+				server,
+				"search_ingredients",
+			)({ query: "Oats" });
+			const env = parseEnvelope(result);
+			expect(env.data.matches).toHaveLength(1);
+			expect(env.data.matches[0].id).toBe("cargo-exact");
+			expect(env.warnings ?? []).toEqual([]);
+			expect(env.meta?.embeddingMayBePending).toBeUndefined();
 		});
 	});
 
@@ -497,7 +539,7 @@ describe("MCP tools", () => {
 			expect(data).toEqual([]);
 		});
 
-		it("returns full meal shape with directions, equipment, ingredientName", async () => {
+		it("returns an index without ingredients or directions by default", async () => {
 			const mockMeals = [
 				{
 					id: "meal-1",
@@ -531,23 +573,61 @@ describe("MCP tools", () => {
 			} as never);
 			const server = makeServer();
 			const result = await getToolHandler(server, "list_meals")({});
-			const data = parseOk(result);
-			expect(data).toHaveLength(1);
-			expect(data[0]).toMatchObject({
+			const env = parseEnvelope(result);
+			expect(env.data).toHaveLength(1);
+			expect(env.data[0]).toMatchObject({
 				id: "meal-1",
 				name: "pancakes",
 				domain: "food",
-				directions: [{ position: 1, text: "Mix and cook." }],
-				equipment: ["pan"],
-				prepTime: 5,
-				cookTime: 10,
+				type: "recipe",
+				servings: 4,
+				tags: ["breakfast"],
 			});
+			expect(env.data[0].ingredients).toBeUndefined();
+			expect(env.data[0].directions).toBeUndefined();
+			expect(env.data[0].attributions).toBeUndefined();
+			expect(env.meta.ingredients).toBe("omitted");
+			expect(getMealsPage).toHaveBeenCalledWith(
+				expect.anything(),
+				"org-test-123",
+				expect.objectContaining({ includeIngredients: false }),
+			);
+		});
+
+		it("includes ingredients when includeIngredients is true", async () => {
+			vi.mocked(getMealsPage).mockResolvedValueOnce({
+				items: [
+					{
+						id: "meal-1",
+						name: "pancakes",
+						domain: "food",
+						type: "recipe",
+						servings: 4,
+						tags: [{ slug: "breakfast", name: "Breakfast" }],
+						ingredients: [
+							{
+								ingredientName: "flour",
+								quantity: 200,
+								unit: "g",
+								cargoId: null,
+								isOptional: false,
+								orderIndex: 0,
+							},
+						],
+					},
+				],
+				nextCursor: null,
+			} as never);
+			const server = makeServer();
+			const result = await getToolHandler(
+				server,
+				"list_meals",
+			)({ includeIngredients: true });
+			const data = parseOk(result);
 			expect(data[0].ingredients[0]).toMatchObject({
 				ingredientName: "flour",
 				quantity: 200,
 				unit: "g",
-				isOptional: false,
-				orderIndex: 0,
 			});
 		});
 	});
@@ -618,12 +698,13 @@ describe("MCP tools", () => {
 			const env = parseEnvelope(result);
 			expect(env.ok).toBe(false);
 			expect(env.error.code).toBe("feature_disabled");
+			expect(env.error.message).toContain("No MCP tool can turn it on");
 			expect(env.error.details).toMatchObject({ code: "FEATURE_DISABLED" });
 		});
 	});
 
 	describe("create_supply_list", () => {
-		it("returns feature_disabled when the library flag is off", async () => {
+		it("returns the library hint and writes nothing when the flag is off", async () => {
 			const server = makeServer();
 			const result = await getToolHandler(
 				server,
@@ -634,6 +715,36 @@ describe("MCP tools", () => {
 			const env = parseEnvelope(result);
 			expect(env.ok).toBe(false);
 			expect(env.error.code).toBe("feature_disabled");
+			expect(env.error.message).toBe(
+				"This kitchen has a single Live Supply list. Separate Saved lists are behind the supply list library, which is off. No MCP tool can turn it on.",
+			);
+			expect(env.error.recoveryHint).toBe(env.error.message);
+			expect(createCatalogList).not.toHaveBeenCalled();
+		});
+
+		it("creates a list when the flag is on", async () => {
+			vi.mocked(isFeatureEnabled).mockImplementation(
+				async (_env, flag) => flag === "supply-multi-lists",
+			);
+			vi.mocked(createCatalogList).mockResolvedValueOnce({
+				id: "list-new",
+				name: "Costco",
+				kind: "saved",
+			} as never);
+			const server = makeServer();
+			const result = await getToolHandler(
+				server,
+				"create_supply_list",
+			)({
+				name: "Costco",
+			});
+			const data = parseOk(result);
+			expect(data).toMatchObject({
+				id: "list-new",
+				name: "Costco",
+				kind: "saved",
+			});
+			expect(createCatalogList).toHaveBeenCalled();
 		});
 	});
 

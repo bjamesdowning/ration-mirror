@@ -1,5 +1,9 @@
 export const SUPPLY_LIST_NAME = "Supply";
 export const SUPPLY_MULTI_LISTS_FLAG = "supply-multi-lists" as const;
+
+/** MCP copy when saved lists are off. No tool can enable the library. */
+export const SUPPLY_LIBRARY_DISABLED_MESSAGE =
+	"This kitchen has a single Live Supply list. Separate Saved lists are behind the supply list library, which is off. No MCP tool can turn it on.";
 export const SUPPLY_SAVED_ITEM_LIMIT = 500;
 export const SUPPLY_LIST_NOTE_MAX = 280;
 

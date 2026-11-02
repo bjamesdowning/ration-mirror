@@ -15,6 +15,7 @@ import {
 	toolReply,
 } from "./envelope";
 import { recordMcpToolMetric } from "./metrics";
+import { projectToolResult } from "./response-profile";
 import { McpScopeError, requireScope } from "./scopes";
 
 export type McpToolsEnv = Cloudflare.Env & { __mcp: McpToolContext };
@@ -84,6 +85,8 @@ export type SharedToolDefinition = {
 	readOnlyHint?: boolean;
 	destructiveHint?: boolean;
 	idempotentHint?: boolean;
+	/** SDK output schema for structuredContent. Errors skip validation. */
+	outputSchema?: z.ZodType;
 	handler: (
 		ctx: McpToolContext,
 		args: Record<string, unknown>,
@@ -309,6 +312,32 @@ export async function runTool<TArgs extends Record<string, unknown>, TData>(
 				errorCode: envelope.ok ? undefined : envelope.error.code,
 			});
 		}
+		if (envelope.ok) {
+			const projected = projectToolResult({
+				tool: opts.name,
+				profile: ctx.responseProfile ?? "agent",
+				data: envelope.data,
+				meta: envelope.meta,
+				args: args as Record<string, unknown>,
+				warnings: envelope.warnings,
+			});
+			const meta =
+				projected.meta && Object.keys(projected.meta).length > 0
+					? projected.meta
+					: undefined;
+			envelope = {
+				...envelope,
+				data: projected.data as TData,
+				...(projected.warnings && projected.warnings.length > 0
+					? { warnings: projected.warnings }
+					: {}),
+				...(meta ? { meta } : {}),
+			};
+			if (!projected.warnings || projected.warnings.length === 0) {
+				delete envelope.warnings;
+			}
+			if (!meta) delete envelope.meta;
+		}
 		return envelope;
 	} catch (e) {
 		const origin = (env.BETTER_AUTH_URL ?? "").replace(/\/$/, "") || undefined;
@@ -374,7 +403,8 @@ export function registerSharedMcpTool(
 			inputSchema: definition.inputSchema.shape,
 			// SDK 1.32 types this against its own Zod copy. The app schema is
 			// still a Zod object at runtime and is what gets registered.
-			outputSchema: ToolEnvelopeSchema as unknown as AnySchema,
+			outputSchema: (definition.outputSchema ??
+				ToolEnvelopeSchema) as unknown as AnySchema,
 			annotations: {
 				readOnlyHint: isRead,
 				destructiveHint: definition.destructiveHint ?? false,

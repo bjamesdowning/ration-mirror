@@ -1046,7 +1046,7 @@ export async function getManifestPreview(
 	days = 7,
 	slotType?: string,
 	tags?: string[],
-	options?: { todayIso?: string },
+	options?: { todayIso?: string; includeSlotState?: boolean },
 ): Promise<ManifestPreviewData> {
 	const d1 = drizzle(db);
 
@@ -1075,6 +1075,9 @@ export async function getManifestPreview(
 			mealId: mealPlanEntry.mealId,
 			mealType: meal.type,
 			servingsOverride: mealPlanEntry.servingsOverride,
+			mealServings: meal.servings,
+			cookedAt: mealPlanEntry.cookedAt,
+			consumedAt: mealPlanEntry.consumedAt,
 		})
 		.from(mealPlanEntry)
 		.innerJoin(meal, eq(mealPlanEntry.mealId, meal.id))
@@ -1110,11 +1113,54 @@ export async function getManifestPreview(
 		const allowed = new Set(taggedRows.map((r) => r.mealId));
 		return {
 			planId: plan.id,
-			entries: rows.filter((r) => allowed.has(r.mealId)),
+			entries: shapeManifestPreviewEntries(
+				rows.filter((r) => allowed.has(r.mealId)),
+				options?.includeSlotState === true,
+			),
 		};
 	}
 
-	return { planId: plan.id, entries: rows };
+	return {
+		planId: plan.id,
+		entries: shapeManifestPreviewEntries(
+			rows,
+			options?.includeSlotState === true,
+		),
+	};
+}
+
+function shapeManifestPreviewEntries(
+	rows: Array<{
+		entryId: string;
+		date: string;
+		slotType: string;
+		mealName: string;
+		mealId: string;
+		mealType: string | null;
+		servingsOverride: number | null;
+		mealServings: number | null;
+		cookedAt: Date | null;
+		consumedAt: Date | null;
+	}>,
+	includeSlotState: boolean,
+): ManifestPreviewData["entries"] {
+	return rows.map((row) => {
+		const entry: ManifestPreviewData["entries"][number] = {
+			entryId: row.entryId,
+			date: row.date,
+			slotType: row.slotType,
+			mealName: row.mealName,
+			mealId: row.mealId,
+			mealType: row.mealType ?? undefined,
+			servingsOverride: row.servingsOverride,
+		};
+		if (includeSlotState) {
+			entry.mealServings = row.mealServings;
+			entry.cookedAt = row.cookedAt;
+			entry.consumedAt = row.consumedAt;
+		}
+		return entry;
+	});
 }
 
 /**

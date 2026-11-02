@@ -18,6 +18,7 @@ import {
 import { getUtcTodayISO, normalizeForCargoKey } from "../../cargo-utils";
 import { isFeatureEnabled } from "../../feature-flags/flags.server";
 import { IntakeNotesSchema } from "../../schemas/manifest";
+import { UuidSchema } from "../../schemas/uuid";
 import { coerceToolUnit } from "../../units";
 import { findSimilarCargoBatch } from "../../vector.server";
 import {
@@ -85,7 +86,7 @@ export function createQuickEatToolDefs(env: McpToolsEnv) {
 			description:
 				"Log that the caller personally ate a pantry item (Quick Eat). Resolves by cargoId or name; if no Cargo line exists, creates one for the eaten amount then deducts it (net 0, line kept as a restock reminder). Places a Manifest snack and optionally logs private intake. Use for 'I ate / just ate / had a snack of X'. Do not use adjust_cargo_item for personal eating. stockWasShort is expected when they ate more than stock. Requires cargo-quick-eat + nutrition-cook-log-split. Not medical advice.",
 			inputSchema: z.object({
-				cargoId: z.string().uuid().optional(),
+				cargoId: UuidSchema.optional(),
 				name: z
 					.string()
 					.min(1)
@@ -103,7 +104,7 @@ export function createQuickEatToolDefs(env: McpToolsEnv) {
 					.regex(/^\d{4}-\d{2}-\d{2}$/, "Must be YYYY-MM-DD")
 					.optional()
 					.describe("UTC calendar date (defaults to today UTC)"),
-				operationKey: z.string().uuid(),
+				operationKey: UuidSchema,
 				logIntake: z.boolean().optional().default(true),
 				notes: IntakeNotesSchema,
 			}),

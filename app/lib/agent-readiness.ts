@@ -69,6 +69,7 @@ export const MCP_TOOL_GROUPS = [
 		name: "Meals",
 		tools: [
 			"list_meals",
+			"get_meal",
 			"match_meals",
 			"create_meal",
 			"update_meal",

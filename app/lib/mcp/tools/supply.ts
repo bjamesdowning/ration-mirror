@@ -2,6 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { getUserSettings } from "../../auth.server";
 import { isFeatureEnabled } from "../../feature-flags/flags.server";
+import { UNIT_FIELD_DESCRIPTION, UuidSchema } from "../../schemas/uuid";
 import {
 	addSupplyItem,
 	completeSupplyList,
@@ -14,6 +15,7 @@ import {
 import {
 	LIVE_ONLY_DOCK_MESSAGE,
 	MUTABLE_SUPPLY_LIST_STATES,
+	SUPPLY_LIBRARY_DISABLED_MESSAGE,
 	SUPPLY_MULTI_LISTS_FLAG,
 } from "../../supply-list-kinds";
 import { requireSupplyListTarget } from "../../supply-list-target.server";
@@ -38,9 +40,6 @@ import {
 	registerSharedMcpTool,
 } from "../tool-runtime";
 
-const SUPPLY_LIBRARY_OFF_HINT =
-	"Use the Live Supply list, or enable the supply list library.";
-
 async function requireSupplyLibrary(
 	env: McpToolsEnv,
 	ctx: McpToolContext,
@@ -54,8 +53,8 @@ async function requireSupplyLibrary(
 	if (!enabled) {
 		return featureDisabled(
 			tool,
-			"Supply list library is not available.",
-			SUPPLY_LIBRARY_OFF_HINT,
+			SUPPLY_LIBRARY_DISABLED_MESSAGE,
+			SUPPLY_LIBRARY_DISABLED_MESSAGE,
 		);
 	}
 	return null;
@@ -70,12 +69,12 @@ export function createSupplyToolDefs(env: McpToolsEnv) {
 			inputSchema: z.object({
 				name: z.string().min(1),
 				quantity: z.number().positive().optional(),
-				unit: z.string().optional(),
+				unit: z.string().optional().describe(UNIT_FIELD_DESCRIPTION),
 				domain: z
 					.enum(["food", "household", "alcohol"])
 					.optional()
 					.default("food"),
-				listId: z.string().uuid().optional(),
+				listId: UuidSchema.optional(),
 			}),
 			scopes: ["mcp:supply:write"],
 			rateLimitCategory: "mcp_write",
@@ -91,7 +90,8 @@ export function createSupplyToolDefs(env: McpToolsEnv) {
 					if (!enabled) {
 						return featureDisabled(
 							"add_supply_item",
-							"Supply list library is not available.",
+							SUPPLY_LIBRARY_DISABLED_MESSAGE,
+							SUPPLY_LIBRARY_DISABLED_MESSAGE,
 						);
 					}
 					await requireSupplyListTarget(env.DB, ctx.organizationId, a.listId, {
@@ -126,7 +126,7 @@ export function createSupplyToolDefs(env: McpToolsEnv) {
 			description:
 				"Update a Live Supply line. Quantity may be 0 (still needed / reminder to buy); the line stays on the list. Use remove_supply_item to delete the line. Saved-list lines and notes are not edited here.",
 			inputSchema: z.object({
-				itemId: z.string().uuid(),
+				itemId: UuidSchema,
 				name: z.string().min(1).optional(),
 				quantity: z
 					.number()
@@ -135,7 +135,7 @@ export function createSupplyToolDefs(env: McpToolsEnv) {
 						"Quantity cannot be negative. 0 keeps the line as a buy reminder.",
 					)
 					.optional(),
-				unit: z.string().optional(),
+				unit: z.string().optional().describe(UNIT_FIELD_DESCRIPTION),
 			}),
 			scopes: ["mcp:supply:write"],
 			rateLimitCategory: "mcp_write",
@@ -179,7 +179,7 @@ export function createSupplyToolDefs(env: McpToolsEnv) {
 			name: "remove_supply_item",
 			description:
 				"Remove an item from the supply list. If the user bought it, prefer mark_supply_purchased_bulk then complete_supply_list.",
-			inputSchema: z.object({ itemId: z.string().uuid() }),
+			inputSchema: z.object({ itemId: UuidSchema }),
 			scopes: ["mcp:supply:write"],
 			rateLimitCategory: "mcp_write",
 			audit: true,
@@ -201,7 +201,7 @@ export function createSupplyToolDefs(env: McpToolsEnv) {
 			description:
 				"Purpose-built: mark many supply list items purchased/unpurchased in one call (max 50). Use for one or many items.",
 			inputSchema: z.object({
-				itemIds: z.array(z.string().uuid()).min(1).max(50),
+				itemIds: z.array(UuidSchema).min(1).max(50),
 				purchased: z.boolean().optional().default(true),
 			}),
 			scopes: ["mcp:supply:write"],
@@ -284,7 +284,7 @@ export function createSupplyToolDefs(env: McpToolsEnv) {
 				"Dock purchased items from Live Supply into pantry inventory and remove them from the list. Saved lists cannot be docked — add items to Live first. Destructive — pass confirm:true.",
 			inputSchema: z.object({
 				confirm: z.boolean(),
-				listId: z.string().uuid().optional(),
+				listId: UuidSchema.optional(),
 			}),
 			scopes: ["mcp:supply:write", "mcp:inventory:write"],
 			rateLimitCategory: "mcp_write",
@@ -308,7 +308,8 @@ export function createSupplyToolDefs(env: McpToolsEnv) {
 					if (!enabled) {
 						return featureDisabled(
 							"complete_supply_list",
-							"Supply list library is not available.",
+							SUPPLY_LIBRARY_DISABLED_MESSAGE,
+							SUPPLY_LIBRARY_DISABLED_MESSAGE,
 						);
 					}
 					await requireSupplyListTarget(env.DB, ctx.organizationId, a.listId, {
@@ -391,7 +392,7 @@ export function createSupplyToolDefs(env: McpToolsEnv) {
 			description:
 				"Duplicate a supply list into a Saved or Template copy. Requires the supply list library flag.",
 			inputSchema: z.object({
-				listId: z.string().uuid(),
+				listId: UuidSchema,
 				name: z.string().min(1).max(100).optional(),
 				kind: z.enum(["saved", "template"]).optional(),
 			}),
@@ -424,7 +425,7 @@ export function createSupplyToolDefs(env: McpToolsEnv) {
 			description:
 				"Archive a Saved supply list. Live cannot be archived. Requires the supply list library flag.",
 			inputSchema: z.object({
-				listId: z.string().uuid(),
+				listId: UuidSchema,
 			}),
 			scopes: ["mcp:supply:write"],
 			rateLimitCategory: "mcp_write",
@@ -453,9 +454,9 @@ export function createSupplyToolDefs(env: McpToolsEnv) {
 			description:
 				"Copy or move selected items between supply lists. Requires the supply list library flag.",
 			inputSchema: z.object({
-				sourceListId: z.string().uuid(),
-				targetListId: z.string().uuid(),
-				itemIds: z.array(z.string().uuid()).min(1),
+				sourceListId: UuidSchema,
+				targetListId: UuidSchema,
+				itemIds: z.array(UuidSchema).min(1),
 				mode: z.enum(["copy", "move"]),
 			}),
 			scopes: ["mcp:supply:write"],
@@ -488,10 +489,10 @@ export function createSupplyToolDefs(env: McpToolsEnv) {
 				"List, upsert, or delete kitchen staples used to seed Saved lists. Requires the supply list library flag.",
 			inputSchema: z.object({
 				action: z.enum(["list", "upsert", "delete"]),
-				stapleId: z.string().uuid().optional(),
+				stapleId: UuidSchema.optional(),
 				name: z.string().min(1).max(200).optional(),
 				quantity: z.number().positive().optional(),
-				unit: z.string().optional(),
+				unit: z.string().optional().describe(UNIT_FIELD_DESCRIPTION),
 				domain: z.enum(["food", "household", "alcohol"]).optional(),
 			}),
 			scopes: ["mcp:supply:write"],
@@ -547,7 +548,7 @@ export function createSupplyToolDefs(env: McpToolsEnv) {
 						z.object({
 							name: z.string().min(1),
 							quantity: z.number().positive(),
-							unit: z.string(),
+							unit: z.string().describe(UNIT_FIELD_DESCRIPTION),
 							domain: z.enum(["food", "household", "alcohol"]).optional(),
 						}),
 					)

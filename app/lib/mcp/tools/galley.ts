@@ -11,7 +11,14 @@ import {
 import { createMeal, deleteMeal, updateMeal } from "../../meals.server";
 import { parseDirections } from "../../schemas/directions";
 import { SLOT_TYPES } from "../../schemas/manifest";
-import { McpCreateMealSchema, McpUpdateMealSchema } from "../../schemas/meal";
+import {
+	McpCreateMealSchema,
+	McpCreateMealWireSchema,
+	McpUpdateMealSchema,
+	McpUpdateMealWireSchema,
+	storedMealNameFields,
+} from "../../schemas/meal";
+import { UuidSchema } from "../../schemas/uuid";
 import {
 	resolveAgentFlagContext,
 	resolveAgentSurface,
@@ -30,26 +37,38 @@ export function createGalleyToolDefs(env: McpToolsEnv) {
 			description:
 				"Create a structured recipe in the Galley (credit-free). Use this whenever the user asks to add, invent, or generate a meal from pantry context — pass a complete structured recipe (ingredients, directions, servings). Do not use for a URL; Copilot users must use Galley Import; MCP clients extract caption/page text with the client LLM, then pass a structured meal.",
 			inputSchema: z.object({
-				meal: McpCreateMealSchema,
+				meal: McpCreateMealWireSchema,
 			}),
 			scopes: ["mcp:galley:write"],
 			rateLimitCategory: "mcp_write",
 			audit: true,
 			handler: async (ctx, a) => {
+				const submittedName = a.meal.name;
 				const parsed = McpCreateMealSchema.parse(a.meal);
 				const created = await createMeal(env.DB, ctx.organizationId, parsed, {
 					env,
 					userId: ctx.userId,
 				});
-				return ok("create_meal", {
-					id: created?.id,
-					name: created?.name,
-					servings: created?.servings,
-					ingredientCount: created?.ingredients.length ?? 0,
-					tags: created?.tags ?? [],
-					directions: parseDirections(created?.directions ?? undefined),
-					...(created?.nutrition ? { nutrition: created.nutrition } : {}),
-				});
+				const nameFields = storedMealNameFields(
+					submittedName,
+					created?.name ?? parsed.name,
+				);
+				return ok(
+					"create_meal",
+					{
+						id: created?.id,
+						name: nameFields.name,
+						...(nameFields.submittedName
+							? { submittedName: nameFields.submittedName }
+							: {}),
+						servings: created?.servings,
+						ingredientCount: created?.ingredients.length ?? 0,
+						tags: created?.tags ?? [],
+						directions: parseDirections(created?.directions ?? undefined),
+						...(created?.nutrition ? { nutrition: created.nutrition } : {}),
+					},
+					nameFields.warning ? { warnings: [nameFields.warning] } : undefined,
+				);
 			},
 		}),
 		defineSharedTool({
@@ -57,12 +76,13 @@ export function createGalleyToolDefs(env: McpToolsEnv) {
 			description:
 				"Update a recipe in the Galley. Round-trip: list_meals → modify → pass complete object including id.",
 			inputSchema: z.object({
-				meal: McpUpdateMealSchema,
+				meal: McpUpdateMealWireSchema,
 			}),
 			scopes: ["mcp:galley:write"],
 			rateLimitCategory: "mcp_write",
 			audit: true,
 			handler: async (ctx, a) => {
+				const submittedName = a.meal.name;
 				const parsed = McpUpdateMealSchema.parse(a.meal);
 				const { id, ...mealInput } = parsed;
 				const updated = await updateMeal(
@@ -73,23 +93,33 @@ export function createGalleyToolDefs(env: McpToolsEnv) {
 					{ env, userId: ctx.userId },
 				);
 				if (!updated) {
-					return err("update_meal", "not_found", "Meal not found.");
+					return err("update_meal", "not_found", "Meal not found.", {
+						recoveryHint: "Call list_meals to find a valid meal id.",
+					});
 				}
-				return ok("update_meal", {
-					id: updated.id,
-					name: updated.name,
-					domain: updated.domain,
-					description: updated.description,
-					directions: parseDirections(updated.directions ?? undefined),
-					servings: updated.servings,
-					ingredients: updated.ingredients.map((i) => ({
-						ingredientName: i.ingredientName,
-						quantity: i.quantity,
-						unit: i.unit,
-					})),
-					tags: updated.tags,
-					...(updated.nutrition ? { nutrition: updated.nutrition } : {}),
-				});
+				const nameFields = storedMealNameFields(submittedName, updated.name);
+				return ok(
+					"update_meal",
+					{
+						id: updated.id,
+						name: nameFields.name,
+						...(nameFields.submittedName
+							? { submittedName: nameFields.submittedName }
+							: {}),
+						domain: updated.domain,
+						description: updated.description,
+						directions: parseDirections(updated.directions ?? undefined),
+						servings: updated.servings,
+						ingredients: updated.ingredients.map((i) => ({
+							ingredientName: i.ingredientName,
+							quantity: i.quantity,
+							unit: i.unit,
+						})),
+						tags: updated.tags,
+						...(updated.nutrition ? { nutrition: updated.nutrition } : {}),
+					},
+					nameFields.warning ? { warnings: [nameFields.warning] } : undefined,
+				);
 			},
 		}),
 		defineSharedTool({
@@ -97,7 +127,7 @@ export function createGalleyToolDefs(env: McpToolsEnv) {
 			description:
 				"Delete a recipe from the Galley. Destructive — pass confirm:true. Cascades to ingredients, tags, and linked meal plan entries (FK onDelete cascade).",
 			inputSchema: z.object({
-				mealId: z.string().uuid(),
+				mealId: UuidSchema,
 				confirm: z.boolean(),
 			}),
 			scopes: ["mcp:galley:write"],
@@ -128,7 +158,7 @@ export function createGalleyToolDefs(env: McpToolsEnv) {
 			description:
 				"Purpose-built: set the Galley active meal selection to exactly these mealIds (clears others). Optionally sync supply afterward.",
 			inputSchema: z.object({
-				mealIds: z.array(z.string().uuid()).max(50),
+				mealIds: z.array(UuidSchema).max(50),
 				syncSupply: z.boolean().optional().default(false),
 			}),
 			scopes: ["mcp:galley:write"],
@@ -205,7 +235,7 @@ export function createGalleyToolDefs(env: McpToolsEnv) {
 			description:
 				"Cook a Galley meal and deduct ingredients from the pantry. When nutrition-cook-log-split is on, also places a Prepared entry on today's Manifest. Never logs personal intake — when offerPersonalLog is true, follow up with log_manifest_intake after user consent. Use after the user reports cooking a meal.",
 			inputSchema: z.object({
-				mealId: z.string().uuid(),
+				mealId: UuidSchema,
 				servings: z.number().int().positive().optional(),
 				confirmInsufficient: z.boolean().optional(),
 				date: z

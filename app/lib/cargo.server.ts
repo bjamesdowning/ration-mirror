@@ -359,6 +359,28 @@ export async function getCargoItem(
 	return item ?? null;
 }
 
+/** Case-insensitive exact cargo name within one kitchen. */
+export async function findCargoByExactName(
+	db: D1Database,
+	organizationId: string,
+	name: string,
+) {
+	const needle = name.trim().toLowerCase();
+	if (!needle) return null;
+	const d1 = drizzle(db);
+	const [item] = await d1
+		.select()
+		.from(cargo)
+		.where(
+			and(
+				eq(cargo.organizationId, organizationId),
+				sql`lower(${cargo.name}) = ${needle}`,
+			),
+		)
+		.limit(1);
+	return item ?? null;
+}
+
 /**
  * Returns the IDs of the previous and next cargo items in the org-scoped list
  * (ordered by createdAt desc, id asc for tie-breaker).

@@ -124,10 +124,11 @@ All tools are scoped to the authorized household. **MCP calls do not consume Rat
 | `get_kitchen_stats` | `mcp:read` | Flight Recorder aggregates for a window (7d/30d/90d/365d). |
 | `get_expiring_items` | `mcp:read` | List items expiring within N UTC calendar days (defaults to user `expirationAlertDays`). |
 | `get_expired_items` | `mcp:read` | List items whose expiry date is before today (UTC). Optional `daysBack` (default 30). |
-| `list_meals` | `mcp:read` | Cursor-paginated recipe list. Set `includeIngredients: false` for a lightweight index. |
+| `list_meals` | `mcp:read` | Galley index (default omits ingredients). Set `includeIngredients: true` to include ingredient lines. Directions are on `get_meal`. |
+| `get_meal` | `mcp:read` | One recipe by id from `list_meals`, including directions, ingredients, and nutrition attributions. |
 | `match_meals` | `mcp:read` | Find cookable recipes from current pantry — `strict` or `delta`. Adds `allergenFlags` when user allergens are configured. |
 | `get_meal_plan` | `mcp:read` | Weekly meal plan entries by date and slot (`cookedAt`/`consumedAt`; `personalIntake` when nutrition flags allow; `gramsPerServing` is recipe-ingredient mass per serving when known). |
-| `get_supply_list` | `mcp:read` | Active shopping list with item ids for updates and purchase toggles. Optional `listId` when `supply-multi-lists` is on. |
+| `get_supply_list` | `mcp:read` | Live Supply, cursor-paginated (default 50, max 100). Optional `listId` when the supply list library is on. `sourceMeals` only with `includeSourceMeals: true`. No MCP tool can turn the library on. |
 | `list_supply_lists` | `mcp:read` | Catalog of Live, Saved, Template, and Archived lists. Flag-gated. |
 | `get_user_preferences` | `mcp:read` | Allergens, expiration alert days, theme, manifest defaults, and other user settings. |
 | `update_user_preferences` | `mcp:preferences:write` | Patch user settings (allergens, alerts, theme). Only provided fields change. |

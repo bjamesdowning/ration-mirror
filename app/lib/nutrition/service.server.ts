@@ -1556,6 +1556,15 @@ export async function clearManifestIntakes(
 	};
 }
 
+function sameGoalTarget(
+	stored: number | null,
+	incoming: number | null,
+): boolean {
+	if (stored == null && incoming == null) return true;
+	if (stored == null || incoming == null) return false;
+	return Math.abs(stored - incoming) < 1e-6;
+}
+
 export async function setGoal(
 	env: Env,
 	principal: NutritionPrincipal,
@@ -1597,6 +1606,27 @@ export async function setGoal(
 			operationId: existingOperation.id,
 			replayed: true,
 			goal,
+		};
+	}
+	const openGoal = await getActiveNutritionGoal(
+		env.DB,
+		principal.userId,
+		input.effectiveFrom,
+	);
+	if (
+		openGoal &&
+		openGoal.effectiveTo == null &&
+		openGoal.effectiveFrom === input.effectiveFrom &&
+		sameGoalTarget(openGoal.dailyEnergyKcal, input.dailyEnergyKcal) &&
+		sameGoalTarget(openGoal.proteinG, input.proteinG) &&
+		sameGoalTarget(openGoal.carbsG, input.carbsG) &&
+		sameGoalTarget(openGoal.fatG, input.fatG) &&
+		sameGoalTarget(openGoal.fiberG, input.fiberG)
+	) {
+		return {
+			operationId: openGoal.id,
+			replayed: true,
+			goal: openGoal,
 		};
 	}
 	const operationId = crypto.randomUUID();

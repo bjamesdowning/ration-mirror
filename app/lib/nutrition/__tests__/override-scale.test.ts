@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
+import { computeMealNutrition } from "../compute-meal-nutrition";
+import { gramsPerServingFromSnapshot } from "../intake-amount";
 import {
 	directNutrientsFromCountCargoOverride,
 	estimateGramsFromPerServingDensity,
 	nutrientsPer100gFromCargoOverride,
 	nutrientsPer100gFromPackageTotals,
 	pickBestCargoOverrideForIngredient,
+	resolveCountUnitMealContribution,
 	withDerivedPer100g,
 } from "../override-scale";
 import type { NutritionSnapshot } from "../types";
@@ -274,5 +277,71 @@ describe("directNutrientsFromCountCargoOverride", () => {
 			"pack",
 		);
 		expect(onePack?.energyKcal).toBe(100);
+	});
+});
+
+describe("resolveCountUnitMealContribution", () => {
+	it("rolls perServing protein through and does not invent 420 g", () => {
+		const snapshot: NutritionSnapshot = {
+			source: "user_override",
+			confidence: 1,
+			verified: true,
+			per100g: {
+				energyKcal: 10,
+				proteinG: 0,
+				fatG: 0,
+				carbG: 0,
+				fiberG: 0,
+				sugarG: null,
+				satFatG: null,
+				sodiumMg: null,
+				saltG: null,
+			},
+			perServing: {
+				energyKcal: 42,
+				proteinG: 1,
+				fatG: 0,
+				carbG: 0,
+				fiberG: 0,
+				sugarG: null,
+				satFatG: null,
+				sodiumMg: null,
+				saltG: null,
+			},
+			fdcId: null,
+			description: null,
+		};
+		const resolved = resolveCountUnitMealContribution({
+			snapshot,
+			ingredientQuantity: 1,
+			ingredientUnit: "unit",
+			packageQuantity: 1,
+			packageUnit: "unit",
+		});
+		expect(resolved?.directContribution.proteinG).toBe(1);
+		expect(resolved?.warning).toContain("perServing");
+		const meal = computeMealNutrition(
+			[
+				{
+					name: "egg",
+					quantity: 1,
+					unit: "unit",
+					nutrientsPer100g: null,
+					directContribution: resolved?.directContribution ?? null,
+				},
+			],
+			1,
+		);
+		expect(meal.perServing.proteinG).toBe(1);
+		expect(meal.recipeMassG).toBeNull();
+		expect(
+			gramsPerServingFromSnapshot(
+				{
+					attributions: meal.attributions,
+					recipeMassG: meal.recipeMassG,
+				},
+				1,
+			),
+		).toBeNull();
 	});
 });

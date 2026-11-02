@@ -1746,7 +1746,7 @@ A separate Cloudflare Worker (`ration-mcp`) exposes the Ration pantry to AI agen
 
 **Transport hardening:** POST bodies are capped at **4 MB**; JSON-RPC batches are capped at **10** requests (enforced even when `Content-Length` is absent). HTTP rate limiting keys on **`CF-Connecting-IP`** only (not spoofable `X-Forwarded-For`).
 
-**Tool envelope:** Every tool returns one `text` content item containing a uniform JSON envelope. Success: `{ ok: true, tool, data, warnings?, meta? }`. Error: `{ ok: false, tool, error: { code, message, details?, retryAfter? } }`. Error codes: `rate_limited`, `invalid_input`, `not_found`, `unauthorized`, `insufficient_scope`, `capacity_exceeded`, `conflict`, `idempotency_replay`, `internal_error`, `insufficient_cargo`. List tools support cursor pagination via `args.cursor` and `meta.nextCursor`.
+**Tool envelope:** Every tool returns one `text` content item containing a uniform JSON envelope. Success: `{ ok: true, tool, data, warnings?, meta? }`. Error: `{ ok: false, tool, error: { code, message, details?, retryAfter?, recoveryHint? } }`. Error codes include `rate_limited`, `invalid_input`, `validation_error`, `not_found`, `unauthorized`, `insufficient_scope`, `capacity_exceeded`, `conflict`, `idempotency_replay`, `internal_error`, `insufficient_cargo`, and `feature_disabled`. List tools support cursor pagination via `args.cursor` and `meta.nextCursor`. Model-facing MCP and Copilot results use a slim agent profile. No MCP tool can turn the supply list library on.
 
 **Audit logging:** Every mutating tool call emits a structured `mcp_audit` log line with **redacted** identifiers (`organizationId`, `userId`, `apiKeyId`, `keyPrefix`, delegation subjects), plus `tool`, `outcome`, `durationMs`, and optional `errorCode` — for security review without logging raw IDs.
 
@@ -1757,10 +1757,11 @@ A separate Cloudflare Worker (`ration-mcp`) exposes the Ration pantry to AI agen
 | `search_ingredients` | Read | `mcp:read` | Semantic vector search against the org's cargo (Vectorize, threshold 0.60) | mcp_search (20/min) |
 | `list_inventory` | Read | `mcp:read` | Cursor-paginated cargo list (default 100, max 200), `meta.nextCursor` for next page | mcp_list (30/min) |
 | `get_cargo_item` | Read | `mcp:read` | Full single-item view (tags, expiresAt, customFields) | mcp_list (30/min) |
-| `get_supply_list` | Read | `mcp:read` | Active supply list with item names, quantities, units, and source meal names. Optional `listId` when the library flag is on. | mcp_list (30/min) |
+| `get_supply_list` | Read | `mcp:read` | Live Supply, cursor-paginated (default 50, max 100). `sourceMeals` only when `includeSourceMeals` is true. Optional `listId` when the supply list library is on. No MCP tool can turn that library on. | mcp_list (30/min) |
 | `list_supply_lists` | Read | `mcp:read` | Catalog of Live/Saved/Template/Archived lists. Flag-gated (`supply-multi-lists`). | mcp_list (30/min) |
 | `get_meal_plan` | Read | `mcp:read` | Weekly meal plan entries for a date range (default: next 7 days) | mcp_list (30/min) |
-| `list_meals` | Read | `mcp:read` | Cursor-paginated recipes; pass `includeIngredients:false` to skip fan-out | mcp_list (30/min) |
+| `list_meals` | Read | `mcp:read` | Galley index. Ingredients omitted unless `includeIngredients` is true. Directions are on `get_meal`. | mcp_list (30/min) |
+| `get_meal` | Read | `mcp:read` | One recipe by id, including directions, ingredients, and nutrition attributions. | mcp_list (30/min) |
 | `match_meals` | Read | `mcp:read` | Meals cookable from pantry (strict or delta); compact `nutrition.perServing` + optional `maxEnergyKcal` | mcp_search (20/min) |
 | `get_expiring_items` | Read | `mcp:read` | Items expiring within a given number of days (default 7) | mcp_list (30/min) |
 | `get_kitchen_events` | Read | `mcp:read` | Flight Recorder timeline (filter by type/date; paginated, max 100) | mcp_list (30/min) |

@@ -20,6 +20,7 @@ import {
 } from "../../manifest-bulk-submit.server";
 import { cookManifestEntries } from "../../manifest-cook.server";
 import { MEAL_MATCH_CANDIDATE_CAP, matchMeals } from "../../matching.server";
+import { UuidSchema } from "../../schemas/uuid";
 import { createSupplyListFromSelectedMeals } from "../../supply.server";
 import {
 	resolveAgentFlagContext,
@@ -33,7 +34,7 @@ import {
 } from "../tool-runtime";
 
 const planEntryInput = z.object({
-	mealId: z.string().uuid(),
+	mealId: UuidSchema,
 	date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
 	slotType: z.enum(["breakfast", "lunch", "dinner", "snack"]),
 	servingsOverride: z.number().int().positive().nullable().optional(),
@@ -189,7 +190,7 @@ export function createManifestToolDefs(env: McpToolsEnv) {
 			description:
 				"Add a meal to the weekly meal plan for a specific date and slot. For 2+ entries prefer commit_manifest_plan.",
 			inputSchema: z.object({
-				mealId: z.string().uuid(),
+				mealId: UuidSchema,
 				date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Must be YYYY-MM-DD"),
 				slotType: z.enum(["breakfast", "lunch", "dinner", "snack"]),
 				servingsOverride: z.number().int().positive().optional(),
@@ -221,7 +222,7 @@ export function createManifestToolDefs(env: McpToolsEnv) {
 			description:
 				"Update an existing meal plan entry (date, slot, servings, notes). Cannot change consumed entries.",
 			inputSchema: z.object({
-				entryId: z.string().uuid(),
+				entryId: UuidSchema,
 				date: z
 					.string()
 					.regex(/^\d{4}-\d{2}-\d{2}$/, "Must be YYYY-MM-DD")
@@ -322,7 +323,7 @@ export function createManifestToolDefs(env: McpToolsEnv) {
 			description:
 				"Cook (prepare) Manifest entries: deduct Cargo once and mark Prepared. Never logs personal intake. Requires nutrition-cook-log-split. Soft-fails with requiresConfirmation when cargo is short — retry with confirmInsufficient:true after user confirms.",
 			inputSchema: z.object({
-				entryIds: z.array(z.string().uuid()).min(1).max(50),
+				entryIds: z.array(UuidSchema).min(1).max(50),
 				confirmInsufficient: z.boolean().optional(),
 			}),
 			scopes: ["mcp:manifest:write", "mcp:inventory:write"],
@@ -392,12 +393,12 @@ export function createManifestToolDefs(env: McpToolsEnv) {
 			description:
 				"Legacy: mark Manifest entries consumed and deduct Cargo. When nutrition-cook-log-split is on, this tool is refused — use cook_manifest_entries then log_manifest_intake. When split is off, optional logNutrition (default false for agents) may log intake if nutrition-manifest is on.",
 			inputSchema: z.object({
-				entryIds: z.array(z.string().uuid()).min(1).max(50),
+				entryIds: z.array(UuidSchema).min(1).max(50),
 				confirmInsufficient: z.boolean().optional(),
 				portions: z
 					.array(
 						z.object({
-							entryId: z.string().uuid(),
+							entryId: UuidSchema,
 							servings: z.number().positive().max(100),
 						}),
 					)
@@ -479,7 +480,7 @@ export function createManifestToolDefs(env: McpToolsEnv) {
 		defineSharedTool({
 			name: "remove_meal_plan_entry",
 			description: "Remove a meal from the weekly plan.",
-			inputSchema: z.object({ entryId: z.string().uuid() }),
+			inputSchema: z.object({ entryId: UuidSchema }),
 			scopes: ["mcp:manifest:write"],
 			rateLimitCategory: "mcp_write",
 			audit: true,

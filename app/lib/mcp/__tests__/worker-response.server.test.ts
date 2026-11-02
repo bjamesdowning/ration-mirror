@@ -6,6 +6,27 @@ import {
 } from "../worker-response.server";
 
 describe("sanitizeMcpHandlerResponse", () => {
+	it("annotates JSON-RPC -32602 without changing the code", async () => {
+		const res = new Response(
+			JSON.stringify({
+				jsonrpc: "2.0",
+				error: { code: -32602, message: "quantity: too small" },
+				id: 2,
+			}),
+			{
+				status: 400,
+				headers: { "Content-Type": "application/json" },
+			},
+		);
+		const out = await sanitizeMcpHandlerResponse(res);
+		const body = JSON.parse(await out.text()) as {
+			error: { code: number; message: string };
+		};
+		expect(body.error.code).toBe(-32602);
+		expect(body.error.message).toContain("quantity: too small");
+		expect(body.error.message).toContain("validation_error");
+	});
+
 	it("passes through sub-500 responses unchanged", async () => {
 		const res = new Response(JSON.stringify({ ok: true }), {
 			status: 200,

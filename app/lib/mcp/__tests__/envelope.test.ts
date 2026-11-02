@@ -65,8 +65,9 @@ describe("mapErrorToEnvelope", () => {
 		expect(envelope.ok).toBe(false);
 		if (envelope.ok) return;
 
-		expect(envelope.error.code).toBe("invalid_input");
+		expect(envelope.error.code).toBe("validation_error");
 		expect(envelope.error.message).toContain("query:");
+		expect(envelope.error.recoveryHint).toContain("query");
 		expect(envelope.error.details).toEqual({
 			query: [expect.any(String)],
 		});

@@ -6,6 +6,7 @@ import { detectAllergens, parseAllergens } from "../../allergens";
 import { getUserSettings } from "../../auth.server";
 import {
 	type CargoPageCursor,
+	findCargoByExactName,
 	getCargoByIds,
 	getCargoItem,
 	getCargoPage,
@@ -17,15 +18,19 @@ import { addUtcDays, getUtcTodayISO } from "../../cargo-utils";
 import { isFeatureEnabled } from "../../feature-flags/flags.server";
 import { getMealPlan, getWeekEntries } from "../../manifest.server";
 import { MEAL_MATCH_CANDIDATE_CAP, matchMeals } from "../../matching.server";
-import { getMealsPage } from "../../meals.server";
+import { getMeal, getMealsPage } from "../../meals.server";
 import { serializeNutritionSummary } from "../../nutrition/dto.server";
 import {
 	attachPersonalIntakeToEntries,
 	getSummary,
 } from "../../nutrition/service.server";
 import { parseDirections } from "../../schemas/directions";
+import { UuidSchema } from "../../schemas/uuid";
 import { getSupplyList, getSupplyListById } from "../../supply.server";
-import { SUPPLY_MULTI_LISTS_FLAG } from "../../supply-list-kinds";
+import {
+	SUPPLY_LIBRARY_DISABLED_MESSAGE,
+	SUPPLY_MULTI_LISTS_FLAG,
+} from "../../supply-list-kinds";
 import { requireSupplyListTarget } from "../../supply-list-target.server";
 import { getTagsForCargoIds, tagsToSlugs } from "../../tags.server";
 import { findSimilarCargoBatch } from "../../vector.server";
@@ -45,6 +50,14 @@ import {
 	ok,
 } from "../envelope";
 import { mapExpiryCargoItems } from "../expiry-map";
+import {
+	getKitchenSummaryOutputSchema,
+	getMealPlanOutputSchema,
+	getSupplyListOutputSchema,
+	listMealsOutputSchema,
+	matchMealsOutputSchema,
+} from "../output-schemas";
+import { toAgentMealIndexItem } from "../response-profile";
 import { hasScope } from "../scopes";
 import {
 	defineSharedTool,
@@ -53,6 +66,9 @@ import {
 } from "../tool-runtime";
 
 const MAX_PAGE_LIMIT = 200;
+const SUPPLY_LIST_PAGE_DEFAULT = 50;
+const SUPPLY_LIST_PAGE_MAX = 100;
+const SEARCH_EXACT_RECENT_MS = 5 * 60 * 1000;
 const MAX_MATCH_MEALS_LIMIT = 50;
 const MAX_EXPIRING_DAYS = 90;
 const MAX_EXPIRING_ITEMS = 200;
@@ -248,7 +264,7 @@ export function createReadToolDefs(env: McpToolsEnv) {
 		defineSharedTool({
 			name: "search_ingredients",
 			description:
-				"Semantic search for ingredients in the pantry using vector similarity. Useful for finding available ingredients without knowing the exact name.",
+				"Search pantry ingredients. Tries vector similarity first, then an exact case-insensitive cargo name when the vector hit is empty.",
 			inputSchema: z.object({
 				query: z.string().min(1).describe("The ingredient to search for"),
 				topK: z
@@ -271,15 +287,42 @@ export function createReadToolDefs(env: McpToolsEnv) {
 				);
 				const matches = results.get(a.query) || [];
 				if (matches.length === 0) {
+					const exact = await findCargoByExactName(
+						env.DB,
+						ctx.organizationId,
+						a.query,
+					);
+					if (!exact) {
+						return ok(
+							"search_ingredients",
+							{ matches: [] },
+							{
+								meta: { embeddingMayBePending: true },
+								warnings: [
+									"No semantic matches. If the item was just added, embeddings may still be backfilling — try list_inventory or get_cargo_item by id.",
+								],
+							},
+						);
+					}
+					const createdAtMs =
+						exact.createdAt instanceof Date
+							? exact.createdAt.getTime()
+							: Date.parse(String(exact.createdAt));
+					const recent =
+						Number.isFinite(createdAtMs) &&
+						Date.now() - createdAtMs >= 0 &&
+						Date.now() - createdAtMs < SEARCH_EXACT_RECENT_MS;
 					return ok(
 						"search_ingredients",
-						{ matches: [] },
-						{
-							meta: { embeddingMayBePending: true },
-							warnings: [
-								"No semantic matches. If the item was just added, embeddings may still be backfilling — try list_inventory or get_cargo_item by id.",
-							],
-						},
+						{ matches: [{ ...exact, matchScore: 1 }] },
+						recent
+							? {
+									meta: { embeddingMayBePending: true },
+									warnings: [
+										"Exact name matched a row written in the last few minutes. Embeddings may still be backfilling.",
+									],
+								}
+							: undefined,
 					);
 				}
 				const matchedIds = matches.map((m) => m.itemId);
@@ -421,7 +464,7 @@ export function createReadToolDefs(env: McpToolsEnv) {
 			description:
 				"Fetch one pantry item by id with all fields (tags, expiresAt, customFields, nutrition when present). Useful before update_cargo_item.",
 			inputSchema: z.object({
-				itemId: z.string().uuid().describe("Cargo item id"),
+				itemId: UuidSchema.describe("Cargo item id"),
 			}),
 			scopes: ["mcp:read"],
 			rateLimitCategory: "mcp_list",
@@ -433,23 +476,74 @@ export function createReadToolDefs(env: McpToolsEnv) {
 						"get_cargo_item",
 						"not_found",
 						`Cargo item ${a.itemId} not found.`,
+						{
+							recoveryHint:
+								"Call list_inventory to find a valid itemId, then retry.",
+						},
 					);
 				}
-				return ok("get_cargo_item", item);
+				const tagMap = await getTagsForCargoIds(env.DB, [item.id]);
+				return ok("get_cargo_item", {
+					id: item.id,
+					name: item.name,
+					quantity: item.quantity,
+					unit: item.unit,
+					domain: item.domain,
+					tags: tagsToSlugs(tagMap.get(item.id) ?? []),
+					expiresAt: item.expiresAt,
+					...(item.nutrition ? { nutrition: item.nutrition } : {}),
+				});
 			},
 		}),
 		defineSharedTool({
 			name: "get_supply_list",
 			description:
-				"Retrieve the user's active supply list. Each item includes its `id` so it can be referenced by update_supply_item, mark_supply_purchased_bulk, and remove_supply_item. Optional listId targets a Saved list when the supply list library is enabled.",
+				"Retrieve Live Supply, or a Saved list when listId is set and the supply list library is enabled. Cursor-paginated (default 50, max 100). sourceMeals is omitted unless includeSourceMeals is true. Item ids feed update_supply_item, mark_supply_purchased_bulk, and remove_supply_item (Live only).",
 			inputSchema: z.object({
-				listId: z.string().uuid().optional(),
+				listId: UuidSchema.optional(),
+				limit: z
+					.number()
+					.int()
+					.min(1)
+					.max(SUPPLY_LIST_PAGE_MAX)
+					.optional()
+					.describe(
+						`Page size (default ${SUPPLY_LIST_PAGE_DEFAULT}, max ${SUPPLY_LIST_PAGE_MAX})`,
+					),
+				cursor: z
+					.string()
+					.optional()
+					.describe("Cursor from a previous response's meta.nextCursor"),
+				includeSourceMeals: z
+					.boolean()
+					.optional()
+					.describe("Include source meal names on each line. Default false."),
 			}),
+			outputSchema: getSupplyListOutputSchema,
 			scopes: ["mcp:read"],
 			rateLimitCategory: "mcp_list",
 			audit: false,
 			handler: async (ctx, a) => {
-				let list = await getSupplyList(env.DB, ctx.organizationId);
+				const limit = Math.min(
+					a.limit ?? SUPPLY_LIST_PAGE_DEFAULT,
+					SUPPLY_LIST_PAGE_MAX,
+				);
+				const decoded = a.cursor ? decodeCursor(a.cursor) : null;
+				if (a.cursor && !decoded) {
+					return err(
+						"get_supply_list",
+						"invalid_input",
+						"Malformed cursor; omit it to start from the first page.",
+					);
+				}
+				const fetchOptions = {
+					limit: limit + 1,
+					after: decoded
+						? { createdAt: new Date(decoded.createdAt), id: decoded.id }
+						: undefined,
+					includeSourceMeals: a.includeSourceMeals === true,
+				};
+				let targetListId = a.listId;
 				if (a.listId) {
 					const enabled = await isFeatureEnabled(
 						env,
@@ -459,39 +553,71 @@ export function createReadToolDefs(env: McpToolsEnv) {
 					if (!enabled) {
 						return featureDisabled(
 							"get_supply_list",
-							"Supply list library is not available.",
-							"Use the Live Supply list, or enable the supply list library.",
+							SUPPLY_LIBRARY_DISABLED_MESSAGE,
+							SUPPLY_LIBRARY_DISABLED_MESSAGE,
 						);
 					}
 					await requireSupplyListTarget(env.DB, ctx.organizationId, a.listId, {
 						multiListsEnabled: true,
 					});
-					list = await getSupplyListById(env.DB, ctx.organizationId, a.listId);
+				} else {
+					const live = await getSupplyList(env.DB, ctx.organizationId, {
+						limit: 1,
+					});
+					if (!live) {
+						return ok("get_supply_list", null);
+					}
+					targetListId = live.id;
 				}
-				if (!list) {
+				if (!targetListId) {
 					return ok("get_supply_list", null);
 				}
 				const fullList = await getSupplyListById(
 					env.DB,
 					ctx.organizationId,
-					list.id,
+					targetListId,
+					fetchOptions,
 				);
 				if (!fullList) {
 					return ok("get_supply_list", null);
 				}
-				return ok("get_supply_list", {
-					id: fullList.id,
-					name: fullList.name,
-					items: fullList.items.map((i) => ({
-						id: i.id,
-						name: i.name,
-						quantity: i.quantity,
-						unit: i.unit,
-						domain: i.domain,
-						isPurchased: i.isPurchased,
-						sourceMeals: i.sourceMealNames,
-					})),
-				});
+				const hasMore = fullList.items.length > limit;
+				const pageItems = hasMore
+					? fullList.items.slice(0, limit)
+					: fullList.items;
+				const last = pageItems[pageItems.length - 1];
+				const lastCreated =
+					last?.createdAt instanceof Date
+						? last.createdAt.toISOString()
+						: last
+							? new Date(last.createdAt).toISOString()
+							: null;
+				return ok(
+					"get_supply_list",
+					{
+						id: fullList.id,
+						name: fullList.name,
+						items: pageItems.map((i) => ({
+							id: i.id,
+							name: i.name,
+							quantity: i.quantity,
+							unit: i.unit,
+							domain: i.domain,
+							isPurchased: i.isPurchased,
+							...(a.includeSourceMeals === true
+								? { sourceMeals: i.sourceMealNames }
+								: {}),
+						})),
+					},
+					{
+						meta: {
+							nextCursor:
+								hasMore && last && lastCreated
+									? encodeCursor({ createdAt: lastCreated, id: last.id })
+									: null,
+						},
+					},
+				);
 			},
 		}),
 		defineSharedTool({
@@ -505,6 +631,7 @@ export function createReadToolDefs(env: McpToolsEnv) {
 					.optional(),
 				days: z.number().int().min(1).max(14).optional().default(7),
 			}),
+			outputSchema: getMealPlanOutputSchema,
 			scopes: ["mcp:read"],
 			rateLimitCategory: "mcp_list",
 			audit: false,
@@ -580,19 +707,26 @@ export function createReadToolDefs(env: McpToolsEnv) {
 		defineSharedTool({
 			name: "list_meals",
 			description:
-				"List meals/recipes (cursor-paginated, default limit 100, max 200). Pass includeIngredients:false to skip ingredient fan-out — useful when scanning the index.",
+				"Galley index (cursor-paginated, default limit 100, max 200). Returns id, name, type, servings, domain, tag slugs, and compact per-serving nutrition. Ingredients are omitted unless includeIngredients is true. Directions and attributions are on get_meal.",
 			inputSchema: z.object({
 				tag: z.string().optional(),
 				domain: z.enum(["food", "household", "alcohol"]).optional(),
 				limit: z.number().int().min(1).max(MAX_PAGE_LIMIT).optional(),
 				cursor: z.string().optional(),
-				includeIngredients: z.boolean().optional(),
+				includeIngredients: z
+					.boolean()
+					.optional()
+					.describe(
+						"Default false. False omits ingredients. True includes ingredient lines.",
+					),
 			}),
+			outputSchema: listMealsOutputSchema,
 			scopes: ["mcp:read"],
 			rateLimitCategory: "mcp_list",
 			audit: false,
 			handler: async (ctx, a) => {
 				const limit = a.limit ?? 100;
+				const includeIngredients = a.includeIngredients === true;
 				const decoded = a.cursor ? decodeCursor(a.cursor) : null;
 				if (a.cursor && !decoded) {
 					return err(
@@ -612,32 +746,34 @@ export function createReadToolDefs(env: McpToolsEnv) {
 						cursor,
 						tag: a.tag,
 						domain: a.domain,
-						includeIngredients: a.includeIngredients ?? true,
+						includeIngredients,
 					},
 				);
-				const mapped = items.map((m) => ({
-					id: m.id,
-					name: m.name,
-					domain: m.domain,
-					description: m.description ?? undefined,
-					directions: parseDirections(m.directions ?? undefined),
-					equipment: m.equipment ?? [],
-					servings: m.servings ?? 1,
-					prepTime: m.prepTime ?? undefined,
-					cookTime: m.cookTime ?? undefined,
-					customFields: m.customFields ?? {},
-					type: m.type,
-					tags: m.tags,
-					ingredients: m.ingredients.map((i) => ({
-						ingredientName: i.ingredientName,
-						quantity: i.quantity,
-						unit: i.unit,
-						cargoId: i.cargoId ?? undefined,
-						isOptional: i.isOptional ?? false,
-						orderIndex: i.orderIndex ?? 0,
-					})),
-					...(m.nutrition ? { nutrition: m.nutrition } : {}),
-				}));
+				const mapped = items.map((m) =>
+					toAgentMealIndexItem(
+						{
+							id: m.id,
+							name: m.name,
+							domain: m.domain,
+							type: m.type,
+							servings: m.servings,
+							tags: m.tags,
+							nutrition: m.nutrition,
+							nutritionStatus: m.nutritionStatus,
+							ingredients: includeIngredients
+								? m.ingredients.map((i) => ({
+										ingredientName: i.ingredientName,
+										quantity: i.quantity,
+										unit: i.unit,
+										cargoId: i.cargoId ?? undefined,
+										isOptional: i.isOptional ?? false,
+										orderIndex: i.orderIndex ?? 0,
+									}))
+								: undefined,
+						},
+						{ includeIngredients },
+					),
+				);
 				return ok("list_meals", mapped, {
 					meta: {
 						nextCursor: nextCursor
@@ -647,6 +783,51 @@ export function createReadToolDefs(env: McpToolsEnv) {
 								})
 							: null,
 					},
+				});
+			},
+		}),
+		defineSharedTool({
+			name: "get_meal",
+			description:
+				"Fetch one Galley meal by id, including directions, ingredients, equipment, and nutrition attributions. Use list_meals to choose an id.",
+			inputSchema: z.object({
+				mealId: UuidSchema.describe("Meal id from list_meals"),
+			}),
+			scopes: ["mcp:read"],
+			rateLimitCategory: "mcp_list",
+			audit: false,
+			handler: async (ctx, a) => {
+				const meal = await getMeal(env.DB, ctx.organizationId, a.mealId);
+				if (!meal) {
+					return err("get_meal", "not_found", `Meal ${a.mealId} not found.`, {
+						recoveryHint: "Call list_meals to find a valid meal id.",
+					});
+				}
+				return ok("get_meal", {
+					id: meal.id,
+					name: meal.name,
+					domain: meal.domain,
+					description: meal.description ?? undefined,
+					directions: parseDirections(meal.directions ?? undefined),
+					equipment: meal.equipment ?? [],
+					servings: meal.servings ?? 1,
+					prepTime: meal.prepTime ?? undefined,
+					cookTime: meal.cookTime ?? undefined,
+					customFields: meal.customFields ?? {},
+					type: meal.type,
+					tags: meal.tags,
+					ingredients: meal.ingredients.map((i) => ({
+						ingredientName: i.ingredientName,
+						quantity: i.quantity,
+						unit: i.unit,
+						cargoId: i.cargoId ?? undefined,
+						isOptional: i.isOptional ?? false,
+						orderIndex: i.orderIndex ?? 0,
+					})),
+					...(meal.nutrition ? { nutrition: meal.nutrition } : {}),
+					...(meal.nutritionStatus
+						? { nutritionStatus: meal.nutritionStatus }
+						: {}),
 				});
 			},
 		}),
@@ -681,6 +862,7 @@ export function createReadToolDefs(env: McpToolsEnv) {
 						"Exclude meals whose known per-serving energyKcal is greater than this cap. Unknown nutrition stays listed.",
 					),
 			}),
+			outputSchema: matchMealsOutputSchema,
 			scopes: ["mcp:read"],
 			rateLimitCategory: "mcp_search",
 			audit: false,
@@ -844,6 +1026,7 @@ export function createReadToolDefs(env: McpToolsEnv) {
 						"Meal plan lookahead in UTC calendar days starting today (default 1, max 7)",
 					),
 			}),
+			outputSchema: getKitchenSummaryOutputSchema,
 			scopes: ["mcp:read"],
 			rateLimitCategory: "mcp_list",
 			audit: false,

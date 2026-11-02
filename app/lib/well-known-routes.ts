@@ -13,6 +13,7 @@ export const WELL_KNOWN_ALLOW_EXACT = [
 	"/.well-known/openid-configuration",
 	"/.well-known/openid-configuration/api/auth",
 	"/.well-known/mcp/server-card.json",
+	"/.well-known/mcp-registry-auth",
 	"/.well-known/apple-app-site-association",
 	"/.well-known/agent-skills/index.json",
 ] as const;

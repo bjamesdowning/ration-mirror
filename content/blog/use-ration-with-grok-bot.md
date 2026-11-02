@@ -4,7 +4,7 @@ description: "Connect Ration's live kitchen MCP to Grok Bot, Claude, Cursor or C
 date: 2026-11-02
 dateModified: 2026-11-02
 authorName: "Ration"
-image: "/static/og/use-ration-with-grok-bot.jpg"
+image: "/static/og/use-ration-with-grok-bot.svg"
 tags:
   - Grok Bot
   - MCP
@@ -24,7 +24,7 @@ This post shows a real Grok Bot conversation that mixes today's meal plan with a
 
 Here is a Grok Bot chat asking Ration for today's plan and a grocery delivery time:
 
-![Grok Bot answering a question about today's Ration meal plan and a Tesco grocery delivery window in Dublin](/static/og/use-ration-with-grok-bot.jpg)
+![Grok Bot answering a question about today's Ration meal plan and a Tesco grocery delivery window in Dublin](/static/og/use-ration-with-grok-bot.svg)
 
 > **You:** What's my meal plan from Ration today? And when are my groceries getting delivered?
 >
@@ -43,7 +43,7 @@ Two systems, one answer. Ration supplied the Manifest slots. The delivery window
 
 Agents can also write Daily Fuel (personal intake) when you grant nutrition scopes. Here Grok Bot looks up a Starbucks caramel flat white, logs accurate macros into Ration, and shows today's running total:
 
-![Grok Bot looking up Starbucks caramel flat white macros, logging them into Ration Daily Fuel, and showing today's calorie total](/static/og/use-ration-with-grok-bot-macros.jpg)
+![Grok Bot looking up Starbucks caramel flat white macros, logging them into Ration Daily Fuel, and showing today's calorie total](/static/og/use-ration-with-grok-bot-macros.svg)
 
 > **You:** I just had a caramel flat white from Starbucks, can you check Ration and update the current provision with accurate macros, and consume it so I can track my macros for it
 >

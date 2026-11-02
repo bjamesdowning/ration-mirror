@@ -31,6 +31,10 @@ export default [
 		"routes/well-known.mcp.server-card.ts",
 	),
 	route(
+		".well-known/mcp-registry-auth",
+		"routes/well-known.mcp-registry-auth.ts",
+	),
+	route(
 		".well-known/apple-app-site-association",
 		"routes/well-known.apple-app-site-association.ts",
 	),

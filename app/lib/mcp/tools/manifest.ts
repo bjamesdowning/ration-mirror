@@ -130,16 +130,27 @@ export function createManifestToolDefs(env: McpToolsEnv) {
 		defineSharedTool({
 			name: "commit_manifest_plan",
 			description:
-				"Purpose-built write: commit a confirmed meal schedule (max 50) and optionally sync supply. Prefer this for week fills. Requires approval.",
+				"Purpose-built write: commit a confirmed meal schedule (max 50) and optionally sync supply. Prefer this for week fills. Requires approval — pass confirm:true.",
 			inputSchema: z.object({
 				entries: z.array(planEntryInput).min(1).max(50),
 				syncSupply: z.boolean().optional().default(false),
+				confirm: z
+					.boolean()
+					.describe("Set true to confirm the schedule after the user agrees."),
 			}),
 			scopes: ["mcp:manifest:write"],
 			rateLimitCategory: "mcp_write",
 			audit: true,
 			needsApproval: true,
+			destructiveHint: true,
 			handler: async (ctx, a) => {
+				if (!a.confirm) {
+					return err(
+						"commit_manifest_plan",
+						"invalid_input",
+						"Pass confirm:true to commit this Manifest plan.",
+					);
+				}
 				const plan = await ensureMealPlan(env.DB, ctx.organizationId);
 				try {
 					const result = await insertManifestBulkEntries(

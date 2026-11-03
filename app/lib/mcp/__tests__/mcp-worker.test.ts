@@ -70,6 +70,36 @@ describe("MCP worker fetch", () => {
 		});
 	});
 
+	it("serves the MCP server card on the MCP host", async () => {
+		const { buildMcpServerCard } = await import("~/lib/agent-readiness");
+		const request = new Request(
+			"https://mcp.ration.mayutic.com/.well-known/mcp/server-card.json",
+		);
+		const res = await mcpWorker.default.fetch(
+			request,
+			makeEnv(),
+			{} as ExecutionContext,
+		);
+		expect(res.status).toBe(200);
+		expect(res.headers.get("Content-Type")).toContain("application/json");
+		const body = await res.json();
+		expect(body).toEqual(
+			JSON.parse(
+				JSON.stringify(
+					buildMcpServerCard(
+						new Request(
+							"https://ration.mayutic.com/.well-known/mcp/server-card.json",
+						),
+					),
+				),
+			),
+		);
+		expect((body as { transport: { url: string } }).transport.url).toBe(
+			"https://mcp.ration.mayutic.com/mcp",
+		);
+		expect(authenticateMcp).not.toHaveBeenCalled();
+	});
+
 	it("returns 404 for unknown paths", async () => {
 		const res = await mcpWorker.default.fetch(
 			new Request("https://mcp.example.com/unknown"),

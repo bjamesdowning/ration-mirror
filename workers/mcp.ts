@@ -5,6 +5,7 @@ import { createMcpHandler } from "agents/mcp";
 import {
 	AGENT_DISCOVERY_LINK_HEADER,
 	buildMcpProtectedResourceMetadata,
+	buildMcpServerCard,
 } from "../app/lib/agent-readiness";
 import type { McpToolContext } from "../app/lib/mcp/auth";
 import { authenticateMcp, MCP_AUTH_ERRORS } from "../app/lib/mcp/auth";
@@ -27,6 +28,15 @@ import { logMcpOAuthVerifyFailure } from "../app/lib/oauth-telemetry.server";
 import { fetchLogContext, runWithOpsEnv } from "../app/lib/ops-context.server";
 import { checkRateLimit } from "../app/lib/rate-limiter.server";
 import { MCP_SERVER_VERSION } from "../app/lib/version";
+
+const MCP_SERVER_CARD_PATH = "/.well-known/mcp/server-card.json";
+
+/** Main-app URL for this MCP host (mcp.example.com -> example.com). */
+function appOriginRequest(url: URL): Request {
+	const app = new URL(url.toString());
+	app.hostname = app.hostname.replace(/^mcp\./, "");
+	return new Request(app.toString());
+}
 
 const PROTECTED_RESOURCE_PATHS = new Set([
 	"/.well-known/oauth-protected-resource",
@@ -83,6 +93,18 @@ export default {
 					const metadata = buildMcpProtectedResourceMetadata(request, issuer);
 					return withMcpCors(
 						Response.json(metadata, {
+							headers: {
+								...MCP_CORS_HEADERS,
+								"Cache-Control": "public, max-age=3600",
+							},
+						}),
+					);
+				}
+
+				if (url.pathname === MCP_SERVER_CARD_PATH) {
+					// Same document as the main app's /.well-known/mcp/server-card.json.
+					return withMcpCors(
+						Response.json(buildMcpServerCard(appOriginRequest(url)), {
 							headers: {
 								...MCP_CORS_HEADERS,
 								"Cache-Control": "public, max-age=3600",

@@ -181,7 +181,7 @@ export function createReadToolDefs(env: McpToolsEnv) {
 		defineSharedTool({
 			name: "get_context",
 			description:
-				"Return organization id, API key identity, scopes, capabilities, onboarding, a slim kitchen tier/credits snapshot, and suggested next actions. For full pantry/manifest/supply status prefer get_kitchen_summary.",
+				"Return organization id, caller identity (API key or OAuth grant), scopes, capabilities, onboarding, a slim kitchen tier/credits snapshot, and suggested next actions. For full pantry/manifest/supply status prefer get_kitchen_summary.",
 			inputSchema: z.object({}),
 			scopes: ["mcp:read"],
 			rateLimitCategory: "mcp_list",

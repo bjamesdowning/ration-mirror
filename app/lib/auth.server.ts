@@ -2,6 +2,7 @@ import { waitUntil } from "cloudflare:workers";
 import { oauthProvider } from "@better-auth/oauth-provider";
 import { APIError, betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { createAuthMiddleware } from "better-auth/api";
 import { jwt, magicLink, organization } from "better-auth/plugins";
 import { createAccessControl } from "better-auth/plugins/access";
 import {
@@ -35,6 +36,7 @@ import { magicLinkVerifyToContinueUrl } from "./magic-link-interstitial.server";
 import {
 	OAUTH_ACCESS_TOKEN_TTL_SEC,
 	OAUTH_ADVERTISED_SCOPES,
+	OAUTH_GRANT_TYPES,
 	OAUTH_PROVIDER_SCOPES,
 	OAUTH_REGISTRATION_DEFAULT_SCOPES,
 	OAUTH_REGISTRATION_SCOPES,
@@ -44,6 +46,10 @@ import {
 	buildOAuthAccessTokenClaims,
 	shouldOAuthPostLoginRedirect,
 } from "./oauth.server";
+import {
+	isAuthorizeRedirectAllowed,
+	matchesRegisteredRedirectUri,
+} from "./oauth-loopback-redirect";
 import { isUserPurgePending } from "./purge-pending.server";
 import {
 	buildStarterMealStatements,
@@ -191,6 +197,32 @@ export function createAuth(env: Cloudflare.Env): Auth {
 				},
 			},
 		},
+		hooks: {
+			before: createAuthMiddleware(async (ctx) => {
+				if (ctx.path !== "/oauth2/authorize") return;
+				const allowed = await isAuthorizeRedirectAllowed(
+					ctx.query as Record<string, unknown> | undefined,
+					async (clientId) => {
+						const [row] = await db
+							.select({
+								redirectUris: schema.oauthClient.redirectUris,
+								tokenEndpointAuthMethod:
+									schema.oauthClient.tokenEndpointAuthMethod,
+							})
+							.from(schema.oauthClient)
+							.where(eq(schema.oauthClient.clientId, clientId))
+							.limit(1);
+						return row ?? null;
+					},
+				);
+				if (!allowed) {
+					throw new APIError("BAD_REQUEST", {
+						error: "invalid_redirect",
+						error_description: "invalid redirect uri",
+					});
+				}
+			}),
+		},
 		plugins: [
 			jwt(),
 			oauthProvider({
@@ -204,6 +236,16 @@ export function createAuth(env: Cloudflare.Env): Auth {
 				clientRegistrationDefaultResources: [mcpResource],
 				clientRegistrationAllowedResources: [mcpResource],
 				accessTokenExpiresIn: OAUTH_ACCESS_TOKEN_TTL_SEC,
+				// No client_credentials: DCR drops/rejects it and discovery
+				// metadata stops advertising it. Tokens always need user consent.
+				grantTypes: [...OAUTH_GRANT_TYPES],
+				// RFC 8252 loopback: only the port may vary (parsed-URL compare).
+				// This hook has no client context, so the authorize `before` hook
+				// below keeps confidential clients on exact matching.
+				validateRedirectUri: (redirectUri, registeredUris) =>
+					matchesRegisteredRedirectUri(redirectUri, registeredUris, {
+						publicClient: true,
+					}),
 				allowDynamicClientRegistration: true,
 				allowUnauthenticatedClientRegistration: true,
 				scopes: [...OAUTH_PROVIDER_SCOPES],

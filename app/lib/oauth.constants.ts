@@ -73,6 +73,15 @@ export const RATION_ORG_CLAIM = "https://ration.mayutic.com/org";
 export const MCP_RESOURCE_AUDIENCE_PROD = "https://mcp.ration.mayutic.com/mcp";
 
 /** Access token lifetime — 1 hour (clients must refresh via offline_access). */
+/**
+ * Grants the OAuth provider issues and advertises. `client_credentials` is
+ * excluded: every MCP token must come from a user consent (authorization_code).
+ */
+export const OAUTH_GRANT_TYPES = [
+	"authorization_code",
+	"refresh_token",
+] as const;
+
 export const OAUTH_ACCESS_TOKEN_TTL_SEC = 3600;
 
 export function getAuthorizationServerIssuer(authBaseUrl: string): string {

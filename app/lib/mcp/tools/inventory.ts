@@ -445,6 +445,7 @@ export function createInventoryToolDefs(env: McpToolsEnv) {
 			rateLimitCategory: "mcp_write",
 			audit: true,
 			needsApproval: true,
+			destructiveHint: true,
 			handler: async (ctx, a) => {
 				if (!a.confirm) {
 					return err(
@@ -499,7 +500,7 @@ export function createInventoryToolDefs(env: McpToolsEnv) {
 		defineSharedTool({
 			name: "apply_inventory_remove",
 			description:
-				"Commit a previously-previewed bulk Cargo delete. Pass the previewToken from preview_inventory_remove. Idempotent via idempotencyKey. Call immediately after the user confirms the preview in chat — no second host approval step.",
+				"Commit a previously-previewed bulk Cargo delete. Pass the previewToken from preview_inventory_remove. Idempotent via idempotencyKey. Call immediately after the user confirms the preview in chat; the preview confirmation is the consent step, so this tool does not show a separate host approval prompt.",
 			inputSchema: z.object({
 				previewToken: z
 					.string()
@@ -580,7 +581,7 @@ export function createInventoryToolDefs(env: McpToolsEnv) {
 		defineSharedTool({
 			name: "apply_inventory_import",
 			description:
-				"Commit a previously-previewed inventory import. Pass the previewToken from preview_inventory_import. Idempotent via idempotencyKey. Call immediately after the user confirms the preview in chat — no second host approval step.",
+				"Commit a previously-previewed inventory import. Pass the previewToken from preview_inventory_import. Idempotent via idempotencyKey. Call immediately after the user confirms the preview in chat; the preview confirmation is the consent step, so this tool does not show a separate host approval prompt.",
 			inputSchema: z.object({
 				previewToken: z
 					.string()
@@ -638,19 +639,34 @@ export function createInventoryToolDefs(env: McpToolsEnv) {
 		defineSharedTool({
 			name: "import_inventory_csv",
 			description:
-				"Import inventory from a raw CSV string (max 1 MB). Convenience wrapper that parses the CSV and applies the result in one call. For large or untrusted inputs, prefer preview_inventory_import + apply_inventory_import.",
+				"Import inventory from a raw CSV string (max 1 MB). Convenience wrapper that parses the CSV and applies the result in one call. For large or untrusted inputs, prefer preview_inventory_import + apply_inventory_import. Destructive (adds or overwrites Cargo) — pass confirm:true.",
 			inputSchema: z.object({
 				csv: z
 					.string()
 					.min(1)
 					.max(1024 * 1024),
 				idempotencyKey: z.string().min(8).max(128),
+				confirm: z
+					.boolean()
+					.describe("Set true to confirm the import after the user agrees."),
 			}),
 			scopes: ["mcp:inventory:write"],
 			rateLimitCategory: "mcp_write",
 			audit: true,
 			needsApproval: true,
+			destructiveHint: true,
 			handler: async (ctx, a) => {
+				if (!a.confirm) {
+					return err(
+						"import_inventory_csv",
+						"invalid_input",
+						"Pass confirm:true to import this CSV into Cargo.",
+						{
+							recoveryHint:
+								"Retry with confirm:true after the user explicitly agrees, or use preview_inventory_import to show the changes first.",
+						},
+					);
+				}
 				const result = await importInventoryCsv(env, ctx.organizationId, {
 					csv: a.csv,
 					idempotencyKey: a.idempotencyKey,

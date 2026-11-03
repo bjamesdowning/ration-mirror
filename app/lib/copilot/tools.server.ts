@@ -212,7 +212,9 @@ export function toAiSdkTools(
 							def.name === "clear_active_meals" ||
 							def.name === "complete_supply_list" ||
 							def.name === "clear_nutrition_goal" ||
-							def.name === "clear_manifest_intake"
+							def.name === "clear_manifest_intake" ||
+							def.name === "import_inventory_csv" ||
+							def.name === "commit_manifest_plan"
 								? { ...args, confirm: true }
 								: args;
 						if (resolveNeedsApproval(args as Record<string, unknown>)) {

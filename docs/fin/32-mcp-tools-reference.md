@@ -39,7 +39,7 @@ Prefer resource `ration://schemas/inventory-import` for the item shape.
 |------|-------|---------|
 | `preview_inventory_import` | `mcp:inventory:write` | Dry-run import. Returns `previewToken`, `totals`, sample rows + `rowsOmitted`, warnings. |
 | `apply_inventory_import` | `mcp:inventory:write` | Commits a preview after chat confirmation (no second host approval card). Idempotent. Embeddings do not block return. |
-| `import_inventory_csv` | `mcp:inventory:write` | Parse a CSV string and apply directly. |
+| `import_inventory_csv` | `mcp:inventory:write` | Parse a CSV string and apply directly. Approval required; pass `confirm: true`. |
 
 ### Bulk Cargo remove (no credits)
 
@@ -68,7 +68,7 @@ Prefer resource `ration://schemas/inventory-import` for the item shape.
 |------|-------|---------|
 | `get_meal_plan` | `mcp:read` | Meal plan entries for a date range (`cookedAt`/`consumedAt`; `personalIntake` when nutrition flags allow; `gramsPerServing` when recipe mass is known). |
 | `propose_manifest_plan` | `mcp:read` | Compact week proposal from expiring + match_meals. No writes. |
-| `commit_manifest_plan` | `mcp:manifest:write` | Commit confirmed entries; optional supply sync. Approval required. |
+| `commit_manifest_plan` | `mcp:manifest:write` | Commit confirmed entries; optional supply sync. Approval required; pass `confirm: true`. |
 | `add_meal_plan_entry` | `mcp:manifest:write` | Schedule one meal. |
 | `update_meal_plan_entry` | `mcp:manifest:write` | Patch an unconsumed entry. |
 | `cook_manifest_entries` | `mcp:manifest:write` + `mcp:inventory:write` | Shared Cook: deduct Cargo once and mark Prepared. Requires nutrition-cook-log-split. Never logs intake. |

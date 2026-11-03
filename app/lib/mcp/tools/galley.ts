@@ -134,6 +134,7 @@ export function createGalleyToolDefs(env: McpToolsEnv) {
 			rateLimitCategory: "mcp_write",
 			audit: true,
 			needsApproval: true,
+			destructiveHint: true,
 			handler: async (ctx, a) => {
 				if (!a.confirm) {
 					return err(
@@ -218,6 +219,7 @@ export function createGalleyToolDefs(env: McpToolsEnv) {
 			rateLimitCategory: "mcp_write",
 			audit: true,
 			needsApproval: true,
+			destructiveHint: true,
 			handler: async (ctx, a) => {
 				if (!a.confirm) {
 					return err(

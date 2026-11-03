@@ -207,7 +207,7 @@ export function registerResourcesAndPrompts(server: McpServer): void {
 								"You are an agent helping plan meals for the next 7 days. Prefer the purpose-built path:\n" +
 								"1. Call propose_manifest_plan (uses expiring items + match_meals internally).\n" +
 								"2. Present the compact proposal and confirm with the user.\n" +
-								"3. On confirm, call commit_manifest_plan with the entries (optionally syncSupply: true).\n" +
+								"3. On confirm, call commit_manifest_plan with the entries and confirm: true (optionally syncSupply: true).\n" +
 								"Fallback: get_expiring_items → match_meals → commit_manifest_plan → get_supply_list → add_supply_item.",
 						},
 					},

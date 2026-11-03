@@ -150,7 +150,7 @@ All tools are scoped to the authorized household. **MCP calls do not consume Rat
 | `apply_inventory_import` | `mcp:inventory:write` | Commit a previewed import after chat confirmation. Idempotent via `idempotencyKey`. |
 | `preview_inventory_remove` | `mcp:inventory:write` | Dry-run bulk Cargo deletes (prefer for 2+ items). |
 | `apply_inventory_remove` | `mcp:inventory:write` | Commit a remove preview after chat confirmation. Idempotent. |
-| `import_inventory_csv` | `mcp:inventory:write` | Parse and apply a CSV string in one call (convenience wrapper). |
+| `import_inventory_csv` | `mcp:inventory:write` | Parse and apply a CSV string in one call (convenience wrapper). Approval required; pass `confirm: true`. |
 
 ### Galley (recipes)
 
@@ -168,7 +168,7 @@ All tools are scoped to the authorized household. **MCP calls do not consume Rat
 | Tool | Scope | Description |
 |------|-------|-------------|
 | `add_meal_plan_entry` | `mcp:manifest:write` | Schedule a meal on a date and slot. |
-| `commit_manifest_plan` | `mcp:manifest:write` | Commit a confirmed multi-entry schedule (optionally sync supply). |
+| `commit_manifest_plan` | `mcp:manifest:write` | Commit a confirmed multi-entry schedule (optionally sync supply). Approval required; pass `confirm: true`. |
 | `update_meal_plan_entry` | `mcp:manifest:write` | Patch date, slot, servings, or notes. Cannot edit consumed entries. |
 | `remove_meal_plan_entry` | `mcp:manifest:write` | Remove a scheduled plan entry. |
 | `cook_manifest_entries` | `mcp:manifest:write` + `mcp:inventory:write` | Shared Cook (Cargo + Prepared). Requires `nutrition-cook-log-split`. Never logs intake. |

@@ -34,6 +34,17 @@ export function roundMacro(value: number): number {
 	return Math.round(value * 1000) / 1000;
 }
 
+/** Supply quantities: 2 decimal places; JSON numbers drop trailing zeros. */
+export function roundSupplyQuantity(value: number): number {
+	if (!Number.isFinite(value)) return value;
+	const rounded = Math.round((value + Number.EPSILON) * 100) / 100;
+	return Object.is(rounded, -0) ? 0 : rounded;
+}
+
+function isSupplyTool(tool: string): boolean {
+	return tool.includes("supply");
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return value !== null && typeof value === "object" && !Array.isArray(value);
 }
@@ -100,6 +111,10 @@ function projectNode(
 			continue;
 		}
 		next[key] = projectNode(child, profile, tool, keepDetail);
+	}
+
+	if (isSupplyTool(tool) && typeof next.quantity === "number") {
+		next.quantity = roundSupplyQuantity(next.quantity);
 	}
 
 	if (looksLikeNutrients(next)) {

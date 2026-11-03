@@ -3,12 +3,21 @@
 	"name": "com.mayutic.ration/mcp",
 	"title": "Ration Kitchen Agent Server",
 	"description": "Control Ration inventory, meals, meal plans, shopping lists, and credits from an MCP client.",
-	"version": "1.10.0",
+	"version": "1.10.1",
 	"websiteUrl": "https://ration.mayutic.com/docs/api",
 	"remotes": [
 		{
 			"type": "streamable-http",
 			"url": "https://mcp.ration.mayutic.com/mcp"
+		}
+	],
+	"icons": [
+		{
+			"src": "https://ration.mayutic.com/static/ration-logo.png",
+			"mimeType": "image/png",
+			"sizes": [
+				"512x512"
+			]
 		}
 	]
 }

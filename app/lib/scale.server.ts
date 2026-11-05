@@ -6,6 +6,7 @@ export {
 	getScaleFactor,
 	isCountUnit,
 	roundShoppingCountQuantity,
+	scaleCookQuantity,
 	scaleQuantity,
 	scaleQuantityExact,
 } from "./scale";

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { computeBaseFields } from "../base-quantity";
 import type { CargoIndexRow } from "../cargo-index.server";
 import { findCargoForDeduction } from "../meals.server";
+import { getScaleFactor, scaleCookQuantity } from "../scale";
 
 function cargoRow(
 	overrides: Partial<CargoIndexRow> &
@@ -180,6 +181,90 @@ describe("findCargoForDeduction", () => {
 		expect(strict.shortfallInTargetUnit).toBe(3);
 		expect(partial.allocations).toEqual([]);
 		expect(partial.shortfallInTargetUnit).toBe(3);
+	});
+
+	it("deducts a fraction of a head for one serving of a one-clove recipe", () => {
+		const orgCargo = [
+			cargoRow({ id: "g1", name: "Garlic", quantity: 1, unit: "head" }),
+		];
+		const scaled = scaleCookQuantity(1, getScaleFactor(4, 1), "clove");
+
+		const result = findCargoForDeduction(
+			orgCargo,
+			"garlic",
+			scaled,
+			"clove",
+			new Map(),
+			false,
+		);
+
+		expect(scaled).toBe(0.25);
+		expect(result.shortfallInTargetUnit).toBe(0);
+		expect(result.allocations[0]?.quantityToDeduct).toBeCloseTo(0.025, 5);
+		expect((result.allocations[0]?.quantityToDeduct ?? 0) * 4).toBeCloseTo(
+			0.1,
+			5,
+		);
+	});
+
+	it("deducts a fraction of a loaf for one serving of a one-slice recipe", () => {
+		const orgCargo = [
+			cargoRow({ id: "b1", name: "Bread", quantity: 1, unit: "loaf" }),
+		];
+		const scaled = scaleCookQuantity(1, getScaleFactor(4, 1), "slice");
+
+		const result = findCargoForDeduction(
+			orgCargo,
+			"bread",
+			scaled,
+			"slice",
+			new Map(),
+			false,
+		);
+
+		expect(result.shortfallInTargetUnit).toBe(0);
+		expect(result.allocations[0]?.quantityToDeduct).toBeCloseTo(0.0125, 5);
+	});
+
+	it("deducts one whole can when one serving is a quarter of the recipe", () => {
+		const orgCargo = [
+			cargoRow({ id: "c1", name: "Tomatoes", quantity: 3, unit: "can" }),
+		];
+		const scaled = scaleCookQuantity(1, getScaleFactor(4, 1), "can");
+
+		const result = findCargoForDeduction(
+			orgCargo,
+			"tomatoes",
+			scaled,
+			"can",
+			new Map(),
+			false,
+		);
+
+		expect(scaled).toBe(1);
+		expect(result.allocations[0]?.quantityToDeduct).toBe(1);
+		expect(result.shortfallInTargetUnit).toBe(0);
+	});
+
+	it("deducts one egg, as a twelfth of a dozen, not zero", () => {
+		const orgCargo = [
+			cargoRow({ id: "e1", name: "Eggs", quantity: 1, unit: "dozen" }),
+		];
+		const scaled = scaleCookQuantity(1, getScaleFactor(4, 1), "unit");
+
+		const result = findCargoForDeduction(
+			orgCargo,
+			"eggs",
+			scaled,
+			"unit",
+			new Map(),
+			false,
+		);
+
+		expect(scaled).toBe(1);
+		expect(result.shortfallInTargetUnit).toBe(0);
+		expect(result.allocations[0]?.quantityToDeduct).toBeCloseTo(1 / 12, 5);
+		expect(result.allocations[0]?.quantityToDeduct).toBeGreaterThan(0);
 	});
 
 	it("deducts part of a loaf for bread slices", () => {

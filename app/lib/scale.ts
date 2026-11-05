@@ -67,13 +67,84 @@ export function roundShoppingCountQuantity(
 }
 
 /**
+ * Count spellings cook may see, including plurals and bulb/loaf.
+ * Same mapping as the count aliases in `units.ts`. Continuous units are
+ * absent so grams and millilitres keep {@link scaleQuantity}.
+ */
+const COOK_COUNT_NOUNS: Record<string, string> = {
+	unit: "unit",
+	units: "unit",
+	piece: "piece",
+	pieces: "piece",
+	dozen: "dozen",
+	dozens: "dozen",
+	can: "can",
+	cans: "can",
+	pack: "pack",
+	packs: "pack",
+	bunch: "bunch",
+	bunches: "bunch",
+	head: "head",
+	heads: "head",
+	bulb: "head",
+	bulbs: "head",
+	loaf: "unit",
+	loaves: "unit",
+	clove: "clove",
+	cloves: "clove",
+	slice: "slice",
+	slices: "slice",
+	stalk: "stalk",
+	stalks: "stalk",
+	sprig: "sprig",
+	sprigs: "sprig",
+};
+
+/**
+ * Small pieces. Cook may deduct a fraction of these, including after a
+ * count bridge (a quarter clove of garlic is a fraction of a bulb).
+ */
+const COOK_SUB_UNIT_NOUNS = new Set(["clove", "slice", "sprig", "stalk"]);
+
+function cookCountNoun(unit?: string): string | undefined {
+	if (!unit) return undefined;
+	const key = unit.trim().toLowerCase().replace(/\s+/g, " ");
+	return COOK_COUNT_NOUNS[key];
+}
+
+/**
+ * Serving scale for cook deduction only.
+ *
+ * Sub-unit nouns keep the exact fraction so repeated cooks add up. Whole
+ * count nouns (can, egg `unit` / `piece` / `dozen`, pack, head, bunch, loaf)
+ * deduct at least one when the line quantity is above zero, and never deduct
+ * zero. Display and cookability keep {@link scaleQuantity}.
+ */
+export function scaleCookQuantity(
+	quantity: number,
+	scaleFactor: number,
+	unit?: string,
+): number {
+	const noun = cookCountNoun(unit);
+	if (noun && COOK_SUB_UNIT_NOUNS.has(noun)) {
+		if (quantity <= 0) return 0;
+		return scaleQuantityExact(quantity, scaleFactor);
+	}
+	if (noun) {
+		return scaleQuantity(quantity, scaleFactor, noun);
+	}
+	return scaleQuantity(quantity, scaleFactor, unit);
+}
+
+/**
  * Scales a quantity by the given factor.
  * - Continuous units: rounded to ≤2 decimal places to avoid floating-point noise.
  * - Count units (piece, clove, etc.): rounded to the nearest integer (minimum 1
  *   when the original quantity was > 0).
  *
- * Use for single-cook / match paths. For Supply weekly aggregation, prefer
- * {@link scaleQuantityExact} then {@link roundShoppingCountQuantity}.
+ * Use for display and cookability. Cook deduction uses {@link scaleCookQuantity}
+ * so a fraction of a clove can deduct a fraction. For Supply weekly aggregation,
+ * prefer {@link scaleQuantityExact} then {@link roundShoppingCountQuantity}.
  */
 export function scaleQuantity(
 	quantity: number,

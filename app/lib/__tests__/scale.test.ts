@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
 	getScaleFactor,
 	roundShoppingCountQuantity,
+	scaleCookQuantity,
 	scaleQuantity,
 	scaleQuantityExact,
 } from "~/lib/scale";
+import { convertIngredientAmount } from "~/lib/units";
 
 describe("getScaleFactor", () => {
 	it("returns correct scale factor for halving", () => {
@@ -91,6 +93,104 @@ describe("scaleQuantityExact", () => {
 
 	it("rounds continuous noise to 2dp", () => {
 		expect(scaleQuantityExact(1, 1 / 3)).toBe(0.33);
+	});
+});
+
+describe("scaleCookQuantity", () => {
+	const oneOfFour = getScaleFactor(4, 1);
+
+	it("deducts a fraction of a clove, slice, sprig, or stalk", () => {
+		expect(scaleCookQuantity(1, oneOfFour, "clove")).toBe(0.25);
+		expect(scaleCookQuantity(1, oneOfFour, "slice")).toBe(0.25);
+		expect(scaleCookQuantity(1, oneOfFour, "sprig")).toBe(0.25);
+		expect(scaleCookQuantity(1, oneOfFour, "stalk")).toBe(0.25);
+		expect(scaleCookQuantity(1, oneOfFour, "Cloves")).toBe(0.25);
+	});
+
+	it("adds four one-serving cooks of one clove back to one clove", () => {
+		const eachCook = scaleCookQuantity(1, oneOfFour, "clove");
+		expect(eachCook * 4).toBe(1);
+	});
+
+	it("keeps a fractional clove through the garlic and bread bridges", () => {
+		const clove = scaleCookQuantity(1, oneOfFour, "clove");
+		const slice = scaleCookQuantity(1, oneOfFour, "slice");
+		const stalk = scaleCookQuantity(1, oneOfFour, "stalk");
+		const sprig = scaleCookQuantity(1, oneOfFour, "sprig");
+
+		expect(
+			convertIngredientAmount(clove, "clove", "head", "garlic"),
+		).toBeCloseTo(0.025, 5);
+		expect(
+			convertIngredientAmount(slice, "slice", "unit", "bread"),
+		).toBeCloseTo(0.0125, 5);
+		expect(
+			convertIngredientAmount(stalk, "stalk", "head", "celery"),
+		).toBeCloseTo(0.03125, 5);
+		expect(
+			convertIngredientAmount(sprig, "sprig", "bunch", "parsley"),
+		).toBeCloseTo(0.025, 5);
+
+		const headEachCook = convertIngredientAmount(
+			clove,
+			"clove",
+			"head",
+			"garlic",
+		);
+		expect(headEachCook).toBeCloseTo(0.025, 5);
+		expect((headEachCook ?? 0) * 4).toBeCloseTo(0.1, 5);
+		expect(convertIngredientAmount(0.1, "head", "clove", "garlic")).toBeCloseTo(
+			1,
+			5,
+		);
+	});
+
+	it("deducts at least one of a can, egg, pack, head, bunch, or dozen", () => {
+		for (const unit of [
+			"can",
+			"unit",
+			"piece",
+			"pack",
+			"dozen",
+			"head",
+			"bunch",
+			"loaf",
+		]) {
+			expect(scaleCookQuantity(1, oneOfFour, unit)).toBe(1);
+		}
+		// A tenth of a can would round to 0; cook still takes one.
+		expect(scaleCookQuantity(1, 0.1, "can")).toBe(1);
+		expect(scaleCookQuantity(1, 0.1, "unit")).toBe(1);
+		expect(scaleCookQuantity(1, 0.01, "cans")).toBe(1);
+		expect(scaleCookQuantity(1, oneOfFour, "bulb")).toBe(1);
+	});
+
+	it("does not deduct zero of a whole item when the line quantity is above zero", () => {
+		expect(scaleCookQuantity(1, 0.1, "can")).toBeGreaterThan(0);
+		expect(scaleCookQuantity(1, 0.1, "piece")).toBeGreaterThan(0);
+		expect(scaleCookQuantity(0, 4, "can")).toBe(0);
+		expect(scaleCookQuantity(0, oneOfFour, "clove")).toBe(0);
+	});
+
+	it("leaves display and cookability on the whole-count minimum", () => {
+		// MealDetail and matching call scaleQuantity, not scaleCookQuantity.
+		expect(scaleQuantity(1, oneOfFour, "clove")).toBe(1);
+		expect(scaleQuantity(1, oneOfFour, "can")).toBe(1);
+		expect(scaleQuantity(1, oneOfFour, "unit")).toBe(1);
+	});
+
+	it("still scales grams exactly to 2 decimal places", () => {
+		expect(scaleCookQuantity(100, 1.5, "g")).toBe(150);
+		expect(scaleCookQuantity(1, 1 / 3, "ml")).toBe(0.33);
+	});
+
+	it("turns one fractional egg into one egg, then one twelfth of a dozen", () => {
+		const egg = scaleCookQuantity(1, oneOfFour, "unit");
+		expect(egg).toBe(1);
+		expect(convertIngredientAmount(egg, "unit", "dozen", "egg")).toBeCloseTo(
+			1 / 12,
+			5,
+		);
 	});
 });
 

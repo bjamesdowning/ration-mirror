@@ -67,7 +67,7 @@ import {
 	D1_MAX_TAG_ROWS_PER_STATEMENT,
 } from "./query-utils.server";
 import { bumpReadinessCacheVersions } from "./readiness-cache.server";
-import { getScaleFactor, scaleQuantity } from "./scale.server";
+import { getScaleFactor, scaleCookQuantity } from "./scale.server";
 import type { KitchenEventSource } from "./schemas/kitchen-events";
 import type {
 	MealInput,
@@ -1555,7 +1555,11 @@ export async function cookMeal(
 				if (!isCargoUsableForMatching(c.expiresAt)) return true;
 				const ingUnit = toSupportedUnit(ing.unit);
 				const cargoUnit = toSupportedUnit(c.unit);
-				const scaledQty = scaleQuantity(ing.quantity, scaleFactor, ing.unit);
+				const scaledQty = scaleCookQuantity(
+					ing.quantity,
+					scaleFactor,
+					ing.unit,
+				);
 				const deductionInCargoUnit = convertIngredientAmount(
 					scaledQty,
 					ingUnit,
@@ -1574,7 +1578,7 @@ export async function cookMeal(
 
 		for (const ing of linkedIngredients) {
 			const c = cargoById.get(ing.cargoId as string);
-			const scaledQty = scaleQuantity(ing.quantity, scaleFactor, ing.unit);
+			const scaledQty = scaleCookQuantity(ing.quantity, scaleFactor, ing.unit);
 			if (!c) {
 				if (ing.isOptional) continue;
 				if (allowPartial) {
@@ -1729,7 +1733,7 @@ export async function cookMeal(
 
 		for (const ing of unlinkedIngredients) {
 			const targetUnit = toSupportedUnit(ing.unit) as SupportedUnit;
-			const scaledQty = scaleQuantity(ing.quantity, scaleFactor, ing.unit);
+			const scaledQty = scaleCookQuantity(ing.quantity, scaleFactor, ing.unit);
 			if (scaledQty <= 0) continue;
 
 			const { allocations, shortfallInTargetUnit } = findCargoForDeduction(

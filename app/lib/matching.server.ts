@@ -199,53 +199,102 @@ export function buildCargoIndex(items: CargoIndexRow[]) {
 	return index;
 }
 
+type CargoQuantityMatch = {
+	original: CargoIndexRow;
+	totalQuantity: number;
+	normalizedName: string;
+};
+
+/** One cargo row expressed in `targetUnit`, or null when it cannot convert. */
+function cargoAmountInTarget(
+	match: CargoQuantityMatch,
+	targetUnit: SupportedUnit,
+	ingredientName?: string,
+): number | null {
+	if (!isCargoUsableForMatching(match.original.expiresAt)) return null;
+	const hasBase =
+		match.original.baseQuantity != null && match.original.baseUnit != null;
+	if (!hasBase) {
+		return convertIngredientAmount(
+			match.totalQuantity,
+			toSupportedUnit(match.original.unit),
+			targetUnit,
+			ingredientName,
+		);
+	}
+	const base = effectiveBaseFields(
+		match.original.quantity,
+		match.original.unit,
+		match.original.baseQuantity as number,
+		match.original.baseUnit as string,
+		ingredientName ?? match.original.name,
+	);
+	return convertIngredientAmount(
+		base.baseQuantity,
+		toSupportedUnit(base.baseUnit),
+		targetUnit,
+		ingredientName,
+	);
+}
+
 /**
  * Converts cargo quantity to target unit and sums. Returns 0 if no convertible matches.
  * Uses the canonical convertIngredientAmount for consistent same-family and
  * density-backed cross-family (weight ↔ volume) conversion.
  */
 export function sumConvertedToTarget(
-	matches: {
-		original: CargoIndexRow;
-		totalQuantity: number;
-		normalizedName: string;
-	}[],
+	matches: CargoQuantityMatch[],
 	targetUnit: SupportedUnit,
 	ingredientName?: string,
 ): number {
 	let total = 0;
 	for (const match of matches) {
-		if (!isCargoUsableForMatching(match.original.expiresAt)) continue;
-		const hasBase =
-			match.original.baseQuantity != null && match.original.baseUnit != null;
-		if (!hasBase) {
-			const fromUnit = toSupportedUnit(match.original.unit);
-			const converted = convertIngredientAmount(
-				match.totalQuantity,
-				fromUnit,
-				targetUnit,
-				ingredientName,
-			);
-			if (converted !== null) total += converted;
-			continue;
-		}
-		const base = effectiveBaseFields(
-			match.original.quantity,
-			match.original.unit,
-			match.original.baseQuantity as number,
-			match.original.baseUnit as string,
-			ingredientName ?? match.original.name,
-		);
-		const fromUnit = toSupportedUnit(base.baseUnit);
-		const converted = convertIngredientAmount(
-			base.baseQuantity,
-			fromUnit,
-			targetUnit,
-			ingredientName,
-		);
+		const converted = cargoAmountInTarget(match, targetUnit, ingredientName);
 		if (converted !== null) total += converted;
 	}
 	return total;
+}
+
+/** Similarity map from findSimilarCargoBatch: ingredientName -> cargo matches */
+type SimilarityMap = Map<string, SimilarCargoMatch[]>;
+
+/**
+ * Cookability coverage. A real conversion is compared to `required`.
+ * When nothing converts but usable stock is on hand (clove vs unit, no bridge),
+ * the ingredient counts as present instead of 0 available. Supply gap math
+ * stays on {@link sumConvertedToTarget} and does not use this.
+ */
+function ingredientCoverage(
+	ingredientName: string,
+	targetUnit: SupportedUnit,
+	required: number,
+	cargoIndex: ReturnType<typeof buildCargoIndex>,
+	similarityMap: SimilarityMap,
+	tokenIndexes: CargoTokenIndexes,
+): { available: number; covered: boolean } {
+	const { buckets } = resolveCargoBucketsForIngredient(
+		ingredientName,
+		cargoIndex,
+		tokenIndexes,
+		similarityMap,
+	);
+	let available = 0;
+	let unconvertibleStock = false;
+	for (const match of buckets) {
+		if (!isCargoUsableForMatching(match.original.expiresAt)) continue;
+		if (!(match.totalQuantity > 0)) continue;
+		const converted = cargoAmountInTarget(match, targetUnit, ingredientName);
+		if (converted === null) {
+			unconvertibleStock = true;
+			continue;
+		}
+		available += converted;
+	}
+	if (available >= required) return { available, covered: true };
+	if (available === 0 && unconvertibleStock && required > 0) {
+		return { available: required, covered: true };
+	}
+	return { available, covered: false };
 }
 
 /**
@@ -269,9 +318,6 @@ export function getAvailableQuantityWithMap(
 	);
 	return sumConvertedToTarget(buckets, targetUnit, ingredientName);
 }
-
-/** Similarity map from findSimilarCargoBatch: ingredientName -> cargo matches */
-type SimilarityMap = Map<string, SimilarCargoMatch[]>;
 
 /**
  * Performs strict matching: only returns meals where ALL non-optional
@@ -298,20 +344,21 @@ export function strictMatch(
 
 		for (const ingredient of ingredients) {
 			const targetUnit = toSupportedUnit(ingredient.unit);
-			const available = getAvailableQuantityWithMap(
-				ingredient.ingredientName,
-				targetUnit,
-				cargoIndex,
-				similarityMap,
-				indexes,
-			);
 			const required = scaleQuantity(
 				ingredient.quantity,
 				scaleFactor,
 				ingredient.unit,
 			);
+			const { available, covered } = ingredientCoverage(
+				ingredient.ingredientName,
+				targetUnit,
+				required,
+				cargoIndex,
+				similarityMap,
+				indexes,
+			);
 
-			if (available >= required) {
+			if (covered) {
 				availableIngredients.push({
 					name: ingredient.ingredientName,
 					requiredQuantity: required,
@@ -386,25 +433,26 @@ function deltaMatch(
 
 		for (const ingredient of ingredients) {
 			const targetUnit = toSupportedUnit(ingredient.unit);
-			const available = getAvailableQuantityWithMap(
-				ingredient.ingredientName,
-				targetUnit,
-				cargoIndex,
-				similarityMap,
-				indexes,
-			);
 			const required = scaleQuantity(
 				ingredient.quantity,
 				scaleFactor,
 				ingredient.unit,
 			);
+			const { available, covered } = ingredientCoverage(
+				ingredient.ingredientName,
+				targetUnit,
+				required,
+				cargoIndex,
+				similarityMap,
+				indexes,
+			);
 
 			if (!ingredient.isOptional) {
 				totalIngredients++;
-				if (available >= required) availableCount++;
+				if (covered) availableCount++;
 			}
 
-			if (available >= required) {
+			if (covered) {
 				availableIngredients.push({
 					name: ingredient.ingredientName,
 					requiredQuantity: required,
@@ -858,14 +906,15 @@ export async function checkMealReadiness(
 			if (ingredient.isOptional) continue;
 
 			const targetUnit = toSupportedUnit(ingredient.unit);
-			const available = getAvailableQuantityWithMap(
+			const { covered } = ingredientCoverage(
 				ingredient.ingredientName,
 				targetUnit,
+				ingredient.quantity,
 				cargoIndex,
 				similarityMap,
 				tokenIndexes,
 			);
-			if (available < ingredient.quantity) {
+			if (!covered) {
 				hasAllRequired = false;
 				break;
 			}
@@ -950,14 +999,15 @@ export async function getMealMissingIngredients(
 			scaleFactor,
 			ingredient.unit,
 		);
-		const available = getAvailableQuantityWithMap(
+		const { available, covered } = ingredientCoverage(
 			ingredient.ingredientName,
 			targetUnit,
+			required,
 			cargoIndex,
 			similarityMap,
 			tokenIndexes,
 		);
-		if (available < required) {
+		if (!covered) {
 			missing.push({
 				name: ingredient.ingredientName,
 				required,

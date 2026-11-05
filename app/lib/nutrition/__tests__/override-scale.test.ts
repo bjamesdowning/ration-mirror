@@ -393,6 +393,26 @@ describe("directNutrientsFromCountCargoOverride", () => {
 		);
 		expect(onePack?.energyKcal).toBe(100);
 	});
+
+	it("still rolls a clove line up from perServing", () => {
+		const snap: NutritionSnapshot = {
+			source: "user_override",
+			confidence: 1,
+			verified: true,
+			per100g: null,
+			perServing: { ...milkPackageTotals, energyKcal: 40 },
+			fdcId: null,
+			description: null,
+		};
+		const twoCloves = directNutrientsFromCountCargoOverride(
+			snap,
+			2,
+			"clove",
+			1,
+			"clove",
+		);
+		expect(twoCloves?.energyKcal).toBe(80);
+	});
 });
 
 describe("resolveCountUnitMealContribution", () => {
@@ -609,6 +629,39 @@ describe("resolveCountUnitMealContribution", () => {
 			fatG: 6,
 		});
 		expect(agreedGramsPerCountUnit(per100g, perServing)).toBeNull();
+	});
+
+	it("lets a confirmed clove mass link win over any count bridge", () => {
+		const per100g = countMacros({
+			energyKcal: 100,
+			proteinG: 10,
+			carbG: 12,
+			fatG: 4,
+		});
+		const perServing = countMacros({
+			energyKcal: 50,
+			proteinG: 5,
+			carbG: 6,
+			fatG: 2,
+		});
+		expect(agreedGramsPerCountUnit(per100g, perServing)).toBe(50);
+		expect(
+			resolveCountUnitMealContribution({
+				snapshot: {
+					source: "user_override",
+					confidence: 1,
+					verified: true,
+					per100g,
+					perServing,
+					fdcId: null,
+					description: null,
+				},
+				ingredientQuantity: 3,
+				ingredientUnit: "clove",
+				packageQuantity: 1,
+				packageUnit: "clove",
+			}),
+		).toBeNull();
 	});
 });
 

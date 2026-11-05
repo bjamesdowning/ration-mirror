@@ -24,6 +24,7 @@ import { dedupeTagSlugs } from "./tags";
 import {
 	getUnitFamily,
 	getUnitMultiplier,
+	isDiscreteCountFamily,
 	type SupportedUnit,
 	toSupportedUnit,
 } from "./units";
@@ -33,19 +34,14 @@ const SCAN_COMPLETE_IDEMPOTENCY_TTL = 86_400;
 const MAX_QTY_MULTIPLIER = 10;
 const MAX_ABSOLUTE_QTY = 10_000;
 
-const PACKAGING_COUNT_FAMILIES = new Set([
-	"count_unit",
-	"count_can",
-	"count_pack",
-]);
-
 function isPackagingCountUnit(unit: SupportedUnit): boolean {
-	return PACKAGING_COUNT_FAMILIES.has(getUnitFamily(unit));
+	return isDiscreteCountFamily(getUnitFamily(unit));
 }
 
 /**
  * Piece-equivalent for packaging anti-abuse.
- * count_unit uses base factors (dozen → 12); can/pack stay 1:1 opaque packages.
+ * count_unit uses base factors (dozen → 12). Other count nouns, cans, and
+ * packs stay 1:1 so a clove is not inflated into a dozen.
  */
 function packagingPieceCount(quantity: number, unit: SupportedUnit): number {
 	if (getUnitFamily(unit) === "count_unit") {

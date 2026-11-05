@@ -1,3 +1,4 @@
+import { convertCountBridge } from "./count-unit-bridge";
 import { isLikelyLiquidIngredient, lookupDensity } from "./ingredient-density";
 
 const UNIT_FACTORS_TO_BASE = {
@@ -17,16 +18,18 @@ const UNIT_FACTORS_TO_BASE = {
 	pt: { family: "volume", baseUnit: "ml", factor: 473.176 },
 	qt: { family: "volume", baseUnit: "ml", factor: 946.353 },
 	gal: { family: "volume", baseUnit: "ml", factor: 3785.41 },
-	// Count
+	// Count. Eggs stay on count_unit (dozen = 12). Culinary nouns each have
+	// their own base so a clove is not a bulb and a slice is not a loaf.
+	// Ingredient bridges live in count-unit-bridge.ts.
 	unit: { family: "count_unit", baseUnit: "unit", factor: 1 },
 	piece: { family: "count_unit", baseUnit: "unit", factor: 1 },
 	dozen: { family: "count_unit", baseUnit: "unit", factor: 12 },
-	bunch: { family: "count_unit", baseUnit: "unit", factor: 1 },
-	clove: { family: "count_unit", baseUnit: "unit", factor: 1 },
-	slice: { family: "count_unit", baseUnit: "unit", factor: 1 },
-	head: { family: "count_unit", baseUnit: "unit", factor: 1 },
-	stalk: { family: "count_unit", baseUnit: "unit", factor: 1 },
-	sprig: { family: "count_unit", baseUnit: "unit", factor: 1 },
+	bunch: { family: "count_bunch", baseUnit: "bunch", factor: 1 },
+	clove: { family: "count_clove", baseUnit: "clove", factor: 1 },
+	slice: { family: "count_slice", baseUnit: "slice", factor: 1 },
+	head: { family: "count_head", baseUnit: "head", factor: 1 },
+	stalk: { family: "count_stalk", baseUnit: "stalk", factor: 1 },
+	sprig: { family: "count_sprig", baseUnit: "sprig", factor: 1 },
 	can: { family: "count_can", baseUnit: "can", factor: 1 },
 	pack: { family: "count_pack", baseUnit: "pack", factor: 1 },
 } as const;
@@ -88,7 +91,31 @@ const UNIT_ALIASES: Record<string, SupportedUnit> = {
 	heads: "head",
 	stalks: "stalk",
 	sprigs: "sprig",
+	// A bulb is a head. A loaf is one pantry unit; bread's bridge makes it 20 slices.
+	bulb: "head",
+	bulbs: "head",
+	loaf: "unit",
+	loaves: "unit",
 };
+
+/**
+ * Applied on read as well as write. Other aliases stay on normalizeUnitAlias
+ * so a stray "grams" string is not silently retyped by toSupportedUnit.
+ */
+const READ_COUNT_ALIASES: Record<string, SupportedUnit> = {
+	bulb: "head",
+	bulbs: "head",
+	loaf: "unit",
+	loaves: "unit",
+};
+
+/** True for bulb/loaf spellings that read as head/unit. */
+export function isCulinaryCountAlias(raw: string | null | undefined): boolean {
+	const u = String(raw ?? "")
+		.trim()
+		.toLowerCase();
+	return Object.hasOwn(READ_COUNT_ALIASES, u);
+}
 
 /**
  * Normalizes a raw unit string (e.g. from AI/import) via aliases first, then falls
@@ -155,6 +182,8 @@ export function toSupportedUnit(raw: string | null | undefined): SupportedUnit {
 		.trim()
 		.toLowerCase();
 	if (u && SUPPORTED_UNIT_KEYS.has(u)) return u as SupportedUnit;
+	const culinary = READ_COUNT_ALIASES[u];
+	if (culinary) return culinary;
 	return "unit";
 }
 
@@ -162,13 +191,27 @@ export function getUnitFamily(unit: SupportedUnit): UnitFamily {
 	return UNIT_FACTORS_TO_BASE[unit].family;
 }
 
-/** Discrete stock counts (unit/piece/…, can, pack) for nutrition mass resolution. */
+/**
+ * Discrete stock counts for nutrition mass resolution.
+ * Includes every spelling iOS CountUnitMass treats as a count, each in its
+ * own family where the noun is not an egg-style unit.
+ */
+const DISCRETE_COUNT_FAMILIES: ReadonlySet<UnitFamily> = new Set([
+	"count_unit",
+	"count_bunch",
+	"count_clove",
+	"count_slice",
+	"count_head",
+	"count_stalk",
+	"count_sprig",
+	"count_can",
+	"count_pack",
+]);
+
 export function isDiscreteCountFamily(
 	family: UnitFamily | null | undefined,
 ): boolean {
-	return (
-		family === "count_unit" || family === "count_can" || family === "count_pack"
-	);
+	return family != null && DISCRETE_COUNT_FAMILIES.has(family);
 }
 
 export function areSameFamily(a: SupportedUnit, b: SupportedUnit): boolean {
@@ -394,8 +437,9 @@ export function convertQuantityWithDensity(
  *
  * Decision order:
  *   1. Same-family / cross-weight-family conversion via `convertQuantity`.
- *   2. Cross-family weight ↔ volume conversion via density lookup + `convertQuantityWithDensity`.
- *   3. Returns `null` only when conversion is genuinely impossible.
+ *   2. Culinary count bridge (clove ↔ head, slice ↔ loaf). Counts only — no grams.
+ *   3. Cross-family weight ↔ volume conversion via density lookup + `convertQuantityWithDensity`.
+ *   4. Returns `null` only when conversion is genuinely impossible.
  *
  * This is the ONLY function that should be used for ingredient quantity
  * conversions in business logic. Direct calls to `convertQuantity`,
@@ -420,7 +464,13 @@ export function convertIngredientAmount(
 	const direct = convertQuantity(quantity, from, to);
 	if (direct !== null) return direct;
 
-	// Step 2: cross-family weight ↔ volume via density
+	// Step 2: clove/head, slice/loaf, and the other count bridges. Not grams.
+	if (ingredientName) {
+		const bridged = convertCountBridge(quantity, from, to, ingredientName);
+		if (bridged !== null) return bridged;
+	}
+
+	// Step 3: cross-family weight ↔ volume via density
 	if (!ingredientName) return null;
 	const density = lookupDensity(ingredientName);
 	if (!density) return null;

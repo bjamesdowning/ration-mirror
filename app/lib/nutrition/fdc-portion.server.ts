@@ -3,7 +3,7 @@
  */
 import { normalizeForMatch } from "~/lib/matching";
 import type { SupportedUnit } from "~/lib/units";
-import { getUnitFamily } from "~/lib/units";
+import { getUnitFamily, isDiscreteCountFamily } from "~/lib/units";
 import {
 	NUTRITION_FDC_CACHE_TTL_SECONDS,
 	nutritionPortionCacheKey,
@@ -125,12 +125,7 @@ export async function resolveFdcPortionGrams(
 		return { grams: null, portion: null, confidence: 0 };
 	}
 
-	const family = getUnitFamily(unit);
-	if (
-		family !== "count_unit" &&
-		family !== "count_can" &&
-		family !== "count_pack"
-	) {
+	if (!isDiscreteCountFamily(getUnitFamily(unit))) {
 		return { grams: null, portion: null, confidence: 0 };
 	}
 

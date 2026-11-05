@@ -18,6 +18,7 @@ import {
 	fulfillCargoSelectionsFromDockedSupplyItems,
 	getActiveCargoSelections,
 } from "./cargo-selection.server";
+import { preferExactCountBase } from "./count-unit-bridge";
 import { parseDockExpiresAt } from "./date-utils";
 import type { ITEM_DOMAINS } from "./domain";
 import { retryOnD1Contention } from "./error-handler";
@@ -107,6 +108,7 @@ import {
 	convertIngredientAmount,
 	convertQuantity,
 	getUnitMultiplier,
+	isCulinaryCountAlias,
 	normalizeToBaseUnit,
 	type SupportedUnit,
 	toCookingUnit,
@@ -319,8 +321,13 @@ function mergeIntoAggregation(
 	if (added === null) return false;
 
 	const merged = normalizeToBaseUnit(existingInTarget + added, targetUnit);
-	existing.baseQuantity = merged.quantity;
-	existing.baseUnit = merged.unit;
+	const settled = preferExactCountBase(
+		merged.quantity,
+		merged.unit,
+		ingredientName,
+	);
+	existing.baseQuantity = settled.quantity;
+	existing.baseUnit = settled.unit as BaseUnit;
 	existing.sourceMealIds.add(mealId);
 	existing.sourceOrigins.add(supplyOrigin);
 	return true;
@@ -335,7 +342,9 @@ function baseUnitToSupported(baseUnit: BaseUnit): SupportedUnit {
 		case "oz":
 			return "oz";
 		default:
-			return "unit";
+			// Count bases (unit, clove, head, slice, …) are their own unit.
+			// Falling through to "unit" would drop a clove/head merge.
+			return toSupportedUnit(baseUnit);
 	}
 }
 
@@ -362,7 +371,8 @@ export function aggregateIngredients(
 		const normalizedName = normalizeForCargoDedup(ingredient.ingredientName);
 		const rawUnit = ingredient.unit ?? "";
 		const safeUnit = toSupportedUnit(rawUnit);
-		if (String(rawUnit).trim().toLowerCase() !== safeUnit) {
+		const rawKey = String(rawUnit).trim().toLowerCase();
+		if (rawKey !== safeUnit && !isCulinaryCountAlias(rawKey)) {
 			log.warn("[Supply] Unsupported ingredient unit, using count", {
 				rawUnit: String(rawUnit),
 				safeUnit,
@@ -1847,8 +1857,13 @@ function mergeContributionQuantities(
 	if (added === null) return false;
 
 	const merged = normalizeToBaseUnit(existingInTarget + added, targetUnit);
-	existing.baseQuantity = merged.quantity;
-	existing.baseUnit = merged.unit;
+	const settled = preferExactCountBase(
+		merged.quantity,
+		merged.unit,
+		incoming.name,
+	);
+	existing.baseQuantity = settled.quantity;
+	existing.baseUnit = settled.unit as BaseUnit;
 	return true;
 }
 

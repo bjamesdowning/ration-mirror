@@ -117,6 +117,89 @@ describe("findCargoForDeduction", () => {
 		expect(totalDeducted).toBe(100);
 	});
 
+	it("deducts 0.3 head for 3 garlic cloves so a strict cook can proceed", () => {
+		const orgCargo = [
+			cargoRow({ id: "g1", name: "Garlic", quantity: 1, unit: "head" }),
+		];
+
+		const result = findCargoForDeduction(
+			orgCargo,
+			"garlic",
+			3,
+			"clove",
+			new Map(),
+			false,
+		);
+
+		expect(result.shortfallInTargetUnit).toBe(0);
+		expect(result.allocations).toHaveLength(1);
+		expect(result.allocations[0]?.quantityToDeduct).toBeCloseTo(0.3, 5);
+	});
+
+	it("deducts a garlic bulb stored as bulb the same way as a head", () => {
+		const orgCargo = [
+			cargoRow({ id: "g1", name: "Garlic", quantity: 1, unit: "bulb" }),
+		];
+
+		const result = findCargoForDeduction(
+			orgCargo,
+			"garlic",
+			3,
+			"clove",
+			new Map(),
+			false,
+		);
+
+		expect(result.shortfallInTargetUnit).toBe(0);
+		expect(result.allocations[0]?.quantityToDeduct).toBeCloseTo(0.3, 5);
+	});
+
+	it("does not deduct onion units as cloves, including in partial mode", () => {
+		const orgCargo = [
+			cargoRow({ id: "o1", name: "Onion", quantity: 2, unit: "unit" }),
+		];
+
+		const strict = findCargoForDeduction(
+			orgCargo,
+			"onion",
+			3,
+			"clove",
+			new Map(),
+			false,
+		);
+		const partial = findCargoForDeduction(
+			orgCargo,
+			"onion",
+			3,
+			"clove",
+			new Map(),
+			true,
+		);
+
+		expect(strict.allocations).toEqual([]);
+		expect(strict.shortfallInTargetUnit).toBe(3);
+		expect(partial.allocations).toEqual([]);
+		expect(partial.shortfallInTargetUnit).toBe(3);
+	});
+
+	it("deducts part of a loaf for bread slices", () => {
+		const orgCargo = [
+			cargoRow({ id: "b1", name: "Bread", quantity: 1, unit: "loaf" }),
+		];
+
+		const result = findCargoForDeduction(
+			orgCargo,
+			"bread",
+			4,
+			"slice",
+			new Map(),
+			false,
+		);
+
+		expect(result.shortfallInTargetUnit).toBe(0);
+		expect(result.allocations[0]?.quantityToDeduct).toBeCloseTo(0.2, 5);
+	});
+
 	it("does not deduct peanut butter for butter", () => {
 		const orgCargo = [
 			cargoRow({ id: "pb", name: "Peanut Butter", quantity: 500, unit: "g" }),

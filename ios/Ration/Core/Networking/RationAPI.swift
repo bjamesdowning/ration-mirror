@@ -63,6 +63,15 @@ final class RationAPI {
         )
     }
 
+    func captureOrganizationTimeZone(
+        _ timeZone: String
+    ) async throws -> OrganizationSupplySettingsResponse {
+        try await client.patch(
+            "organization/supply-settings",
+            body: OrganizationTimeZoneCapture(timeZone: timeZone)
+        )
+    }
+
     func patchOrganizationProfile(name: String) async throws -> OrganizationProfilePatchResponse {
         try await client.patch(
             "organization/profile",

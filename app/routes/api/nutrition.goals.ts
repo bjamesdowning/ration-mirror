@@ -2,7 +2,6 @@ import { data } from "react-router";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { handleApiError } from "~/lib/error-handler";
 import { buildWebFlagContext } from "~/lib/feature-flags/flags.server";
-import { getTodayISO } from "~/lib/manifest-dates";
 import { serializeNutritionGoal } from "~/lib/nutrition/dto.server";
 import {
 	clearGoal,
@@ -10,6 +9,7 @@ import {
 	resolveHttpOperationKey,
 	setGoal,
 } from "~/lib/nutrition/service.server";
+import { kitchenTodayForOrganization } from "~/lib/org-supply-settings.server";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import {
 	NutritionGoalAsOfQuerySchema,
@@ -19,7 +19,7 @@ import type { Route } from "./+types/nutrition.goals";
 
 /**
  * GET /api/nutrition/goals?asOf=YYYY-MM-DD — current effective goal.
- * Defaults to today (UTC) when asOf is omitted.
+ * Defaults to the kitchen's local today, or UTC when no zone is stored.
  */
 export async function loader({ request, context }: Route.LoaderArgs) {
 	try {
@@ -39,7 +39,9 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 				{ status: 400 },
 			);
 		}
-		const asOf = asOfParsed.data.asOf ?? getTodayISO();
+		const asOf =
+			asOfParsed.data.asOf ??
+			(await kitchenTodayForOrganization(env.DB, groupId));
 		const goal = await getGoal(
 			env,
 			{
@@ -109,7 +111,9 @@ export async function action({ request, context }: Route.ActionArgs) {
 			}
 			return clearGoal(env, principal, flagContext, {
 				operationKey,
-				asOfDate: asOfParsed.data.asOf ?? getTodayISO(),
+				asOfDate:
+					asOfParsed.data.asOf ??
+					(await kitchenTodayForOrganization(env.DB, groupId)),
 			});
 		}
 

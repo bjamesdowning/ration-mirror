@@ -112,6 +112,7 @@ export function getCalendarDates(
 	return dates;
 }
 
+import { kitchenTodayISO } from "./kitchen-time";
 import {
 	SUPPLY_MANIFEST_HORIZON_DEFAULT,
 	SUPPLY_MANIFEST_HORIZON_MAX,
@@ -144,7 +145,7 @@ export function resolveManifestHorizonDays(
 /** Resolves the manifest date range used for Supply sync (org-scoped, forward-looking). */
 export function resolveSupplyManifestWindow(
 	orgMetadata: OrganizationMetadata | null | undefined,
-	today = getTodayISO(),
+	today = kitchenTodayISO(orgMetadata),
 ): { startDate: string; endDate: string; horizonDays: number } {
 	const horizonDays = resolveManifestHorizonDays(orgMetadata);
 	return {

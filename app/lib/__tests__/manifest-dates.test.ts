@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
 	addDays,
 	getCalendarDates,
@@ -242,5 +242,21 @@ describe("resolveSupplyManifestWindow", () => {
 		const window = resolveSupplyManifestWindow(null, "2025-01-08");
 		expect(window.endDate).toBe("2025-01-14");
 		expect(window.horizonDays).toBe(7);
+	});
+
+	it("uses the kitchen calendar day when today is omitted", () => {
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date("2026-07-13T23:30:00.000Z"));
+		const dublin = resolveSupplyManifestWindow({
+			supplySettings: { timeZone: "Europe/Dublin", manifestHorizonDays: 2 },
+		});
+		expect(dublin.startDate).toBe("2026-07-14");
+		expect(dublin.endDate).toBe("2026-07-15");
+
+		const unset = resolveSupplyManifestWindow({
+			supplySettings: { manifestHorizonDays: 2 },
+		});
+		expect(unset.startDate).toBe("2026-07-13");
+		vi.useRealTimers();
 	});
 });

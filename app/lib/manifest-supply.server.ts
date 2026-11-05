@@ -1,7 +1,9 @@
 import { and, eq, gte, lte } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { manifestSupplyDay } from "../db/schema";
-import { getTodayISO, getWeekEnd, getWeekStart } from "./manifest-dates";
+import { kitchenTodayISO } from "./kitchen-time";
+import { getWeekEnd, getWeekStart } from "./manifest-dates";
+import { getOrganizationMetadata } from "./org-supply-settings.server";
 
 const ISO_DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -108,7 +110,9 @@ export async function getManifestSupplyDayMapForWeek(
 	organizationId: string,
 	weekStart: "sunday" | "monday" = "sunday",
 ): Promise<Record<string, boolean>> {
-	const today = getTodayISO();
+	const today = kitchenTodayISO(
+		await getOrganizationMetadata(db, organizationId),
+	);
 	const startDate = getWeekStart(today, weekStart);
 	const endDate = getWeekEnd(startDate);
 	const excluded = await getExcludedManifestDates(

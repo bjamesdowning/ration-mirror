@@ -2,7 +2,6 @@ import { data, Link } from "react-router";
 import { CalendarIcon } from "~/components/icons/PageIcons";
 import {
 	getMealPlanByShareToken,
-	getTodayISO,
 	getWeekDates,
 	getWeekStart,
 } from "~/lib/manifest.server";
@@ -50,7 +49,7 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
 			{ status: 404 },
 		);
 
-	const today = getTodayISO();
+	const today = plan.today;
 	// Show current week and next week (2 weeks)
 	const weekStart1 = getWeekStart(today, "sunday");
 	const weekStart2 = (() => {

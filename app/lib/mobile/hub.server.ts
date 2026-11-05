@@ -4,11 +4,13 @@ import { getCargoStats, getExpiringCargo } from "~/lib/cargo.server";
 import { buildMobileFlagContext } from "~/lib/feature-flags/flags.server";
 import { getHubMealMatchWidgets } from "~/lib/hub-match.server";
 import { getKitchenEvents, getKitchenStats } from "~/lib/kitchen-events.server";
+import { kitchenTodayISO } from "~/lib/kitchen-time";
 import { log } from "~/lib/logging.server";
 import { getDistinctMealTags, getManifestPreview } from "~/lib/manifest.server";
 import { resolveNutritionCapabilities } from "~/lib/nutrition/feature-policy.server";
 import { loadHubNutritionData } from "~/lib/nutrition/hub-data.server";
 import { isNutritionHubWidgetsEnabled } from "~/lib/nutrition/hub-widgets";
+import { getOrganizationMetadata } from "~/lib/org-supply-settings.server";
 import { HubLayoutSchema } from "~/lib/schemas/hub";
 import {
 	MobileHubMealMatchSchema,
@@ -164,7 +166,11 @@ export async function getMobileHubData(
 	request: Request,
 ) {
 	const db = env.DB;
-	const settings = await getUserSettings(db, userId);
+	const [settings, orgMetadata] = await Promise.all([
+		getUserSettings(db, userId),
+		getOrganizationMetadata(db, organizationId),
+	]);
+	const kitchenToday = kitchenTodayISO(orgMetadata);
 	const expirationAlertDays = sanitizeExpirationAlertDays(
 		settings.expirationAlertDays,
 	);
@@ -252,6 +258,7 @@ export async function getMobileHubData(
 			manifestDaySpan,
 			manifestSlotType,
 			manifestTags,
+			{ todayIso: kitchenToday },
 		),
 		getHubMealMatchWidgets(env, organizationId, {
 			mealsReady: {
@@ -280,6 +287,7 @@ export async function getMobileHubData(
 			organizationId,
 			surface: "mobile",
 			requestId: request?.headers.get("cf-ray") ?? undefined,
+			today: kitchenToday,
 			todayVisible: nutritionTodayVisible,
 			trendsVisible: nutritionTrendsVisible,
 			trendsRange: nutritionTrendsConfig?.filters?.nutritionRange,

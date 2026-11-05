@@ -84,6 +84,7 @@ final class SessionStore {
         session = nil
         hasAIConsent = false
         orgSelectionOrganizations = nil
+        KitchenClock.set(identifier: nil)
     }
 
 #if DEBUG
@@ -137,5 +138,9 @@ final class SessionStore {
             nutritionConsent?.configure(userId: userId, organizationId: organizationId)
         }
         orgGeneration += 1
+        await KitchenTimeZoneSync.sync(
+            api: api,
+            canCapture: activeOrg?.canManageSupplySettings == true
+        )
     }
 }

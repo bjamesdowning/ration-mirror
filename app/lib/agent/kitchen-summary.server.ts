@@ -4,9 +4,11 @@ import {
 	getExpiredCargo,
 	getExpiringCargo,
 } from "../cargo.server";
-import { addUtcDays, getUtcTodayISO } from "../cargo-utils";
+import { addUtcDays } from "../cargo-utils";
+import { kitchenTodayISO } from "../kitchen-time";
 import { getManifestPreview } from "../manifest.server";
 import { mapExpiryCargoItems } from "../mcp/expiry-map";
+import { getOrganizationMetadata } from "../org-supply-settings.server";
 import { getSupplyItemStats, getSupplyList } from "../supply.server";
 import { getAgentKitchenSnapshot } from "./kitchen-snapshot.server";
 import {
@@ -45,6 +47,8 @@ export async function buildKitchenSummary(
 ) {
 	const db = env.DB;
 	const now = new Date();
+	const orgMetadata = await getOrganizationMetadata(db, organizationId);
+	const today = kitchenTodayISO(orgMetadata, now);
 	const settings = await getUserSettings(db, userId);
 	const expirationAlertDays = settings.expirationAlertDays ?? 7;
 	const manifestDays = Math.min(
@@ -54,8 +58,6 @@ export async function buildKitchenSummary(
 		),
 		KITCHEN_SUMMARY_MANIFEST_DAYS_MAX,
 	);
-	const today = getUtcTodayISO(now);
-
 	const [
 		kitchen,
 		expiringRaw,
@@ -94,7 +96,7 @@ export async function buildKitchenSummary(
 		: null;
 
 	const temporal = {
-		...buildAgentTemporalContext(now),
+		...buildAgentTemporalContext(now, orgMetadata),
 		expirationAlertDays,
 	};
 

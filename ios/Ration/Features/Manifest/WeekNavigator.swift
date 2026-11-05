@@ -30,7 +30,7 @@ enum ManifestDateHelpers {
     }
 
     static func todayISO() -> String {
-        isoString(from: Date())
+        KitchenClock.zonedTodayISO() ?? isoString(from: Date())
     }
 
     static func weekStart(for date: String, preference: String) -> String {

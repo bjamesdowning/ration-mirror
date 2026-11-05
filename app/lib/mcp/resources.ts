@@ -64,8 +64,8 @@ const FIT_REMAINING_MACROS_PROMPT = `You are helping the caller choose something
 Not medical advice. Do not prescribe targets.
 
 1. If flags/consent are unknown, call get_context.
-2. Call get_nutrition_summary with no dates (defaults to today UTC) or from=to=temporal.todayUtc.
-3. Read vsGoal — remaining is the UTC calendar day, not a dinner-only slice. If lunch is unlogged, remaining still includes it; say so. Do not subtract consumed from target yourself.
+2. Call get_nutrition_summary with no dates (defaults to the kitchen's local today, temporal.today, or today UTC when the kitchen has no time zone) or from=to=temporal.today.
+3. Read vsGoal — remaining is that calendar day, not a dinner-only slice. Pantry expiry stays on UTC calendar days (temporal.todayUtc). If lunch is unlogged, remaining still includes it; say so. Do not subtract consumed from target yourself.
 4. Call match_meals (strict, then delta if empty). When a kcal target exists, pass maxEnergyKcal ≈ vsGoal.energyKcal.remaining. Compare protein/carbs/fat the same way when those targets are set.
 5. Present meals that fit. Omit unknown-nutrition meals from "fits" claims; mention them separately. Include pantry gaps from delta matches.
 6. Offer add_meal_plan_entry for tonight's dinner only after confirmation.

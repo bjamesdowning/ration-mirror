@@ -1,4 +1,5 @@
 import { Link } from "react-router";
+import { formatISODateInTimeZone } from "~/lib/kitchen-time";
 import type {
 	HubWidgetProps,
 	ManifestPreviewData,
@@ -28,7 +29,8 @@ const MONTH_NAMES = [
 	"Dec",
 ];
 
-function getTodayISO(): string {
+function getTodayISO(timeZone?: string | null): string {
+	if (timeZone) return formatISODateInTimeZone(new Date(), timeZone);
 	const now = new Date();
 	const y = now.getFullYear();
 	const m = String(now.getMonth() + 1).padStart(2, "0");
@@ -45,9 +47,8 @@ function addDays(date: string, n: number): string {
 	return `${y}-${m}-${day}`;
 }
 
-function formatDayHeader(date: string): string {
+function formatDayHeader(date: string, today: string): string {
 	const d = new Date(`${date}T00:00:00`);
-	const today = getTodayISO();
 	if (date === today) return "Today";
 	const dayName = DAY_NAMES_SHORT[d.getDay()];
 	return `${dayName} ${d.getDate()}`;
@@ -124,9 +125,13 @@ function DaySlotList({
 }
 
 // ------ Small: Today full view with per-meal links ------
-function ManifestSmall({ data }: { data: ManifestPreviewData }) {
-	const today = getTodayISO();
-
+function ManifestSmall({
+	data,
+	today,
+}: {
+	data: ManifestPreviewData;
+	today: string;
+}) {
 	return (
 		<div className="glass-panel p-4 rounded-2xl hover:border-hyper-green/30 transition-all h-full">
 			<div className="flex items-center justify-between mb-3">
@@ -154,8 +159,13 @@ function ManifestSmall({ data }: { data: ManifestPreviewData }) {
 }
 
 // ------ Medium: 3-day rolling with per-meal links ------
-function ManifestMedium({ data }: { data: ManifestPreviewData }) {
-	const today = getTodayISO();
+function ManifestMedium({
+	data,
+	today,
+}: {
+	data: ManifestPreviewData;
+	today: string;
+}) {
 	const days = [today, addDays(today, 1), addDays(today, 2)];
 
 	return (
@@ -186,7 +196,7 @@ function ManifestMedium({ data }: { data: ManifestPreviewData }) {
 										: "bg-platinum/60 text-muted"
 								}`}
 							>
-								{formatDayHeader(date)}
+								{formatDayHeader(date, today)}
 							</div>
 							<div
 								className={`rounded-lg border p-1.5 space-y-1.5 min-h-[48px] ${
@@ -231,8 +241,13 @@ function ManifestMedium({ data }: { data: ManifestPreviewData }) {
 }
 
 // ------ Large: Full 7-day week (desktop) / today only (mobile) ------
-function ManifestLarge({ data }: { data: ManifestPreviewData }) {
-	const today = getTodayISO();
+function ManifestLarge({
+	data,
+	today,
+}: {
+	data: ManifestPreviewData;
+	today: string;
+}) {
 	const days = Array.from({ length: 7 }, (_, i) => addDays(today, i));
 
 	return (
@@ -339,6 +354,7 @@ function ManifestEmpty({ size: _size }: { size: "sm" | "md" | "lg" }) {
 
 export function ManifestWidget({ data, size = "md" }: HubWidgetProps) {
 	const preview = data.manifestPreview as ManifestPreviewData | null;
+	const today = getTodayISO(data.kitchenTimeZone);
 
 	if (!preview?.planId) {
 		return <ManifestEmpty size={size} />;
@@ -348,7 +364,7 @@ export function ManifestWidget({ data, size = "md" }: HubWidgetProps) {
 		return <ManifestEmpty size={size} />;
 	}
 
-	if (size === "sm") return <ManifestSmall data={preview} />;
-	if (size === "lg") return <ManifestLarge data={preview} />;
-	return <ManifestMedium data={preview} />;
+	if (size === "sm") return <ManifestSmall data={preview} today={today} />;
+	if (size === "lg") return <ManifestLarge data={preview} today={today} />;
+	return <ManifestMedium data={preview} today={today} />;
 }

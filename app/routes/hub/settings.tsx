@@ -57,6 +57,11 @@ import {
 	groupDeleteCreditWarning,
 	requiresCreditForfeitAck,
 } from "~/lib/group-delete-credits";
+import {
+	formatISODateInTimeZone,
+	kitchenTodayISO,
+	resolveKitchenTimeZone,
+} from "~/lib/kitchen-time";
 import { getTodayISO } from "~/lib/manifest-dates";
 import { getActiveNutritionGoal } from "~/lib/nutrition/persist.server";
 import { listConnectedAgentGrants } from "~/lib/oauth.server";
@@ -327,7 +332,11 @@ export async function loader(args: Route.LoaderArgs) {
 			flagContext,
 		);
 		const nutritionGoalRow = nutritionGoalsEnabled
-			? await getActiveNutritionGoal(env.DB, userId, getTodayISO())
+			? await getActiveNutritionGoal(
+					env.DB,
+					userId,
+					kitchenTodayISO(orgMetadata),
+				)
 			: null;
 		const nutritionGoal = nutritionGoalRow
 			? {
@@ -434,6 +443,7 @@ export async function loader(args: Route.LoaderArgs) {
 			canManageSupplySettings: canManageGroupSupplySettings(currentUserRole),
 			nutritionGoalsEnabled,
 			nutritionGoal,
+			kitchenTimeZone: resolveKitchenTimeZone(orgMetadata),
 		};
 	});
 }
@@ -646,6 +656,7 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 		userMemberships = [],
 		isAdmin,
 		nutritionGoal = null,
+		kitchenTimeZone = null,
 	} = loaderData;
 
 	// Determine initial section from URL hash
@@ -810,6 +821,7 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 						<PreferencesSection
 							settings={settings}
 							nutritionGoal={nutritionGoal}
+							kitchenTimeZone={kitchenTimeZone}
 						/>
 					)}
 					{activeSection === "developer" && (
@@ -1552,7 +1564,9 @@ function parseOptionalNutrient(raw: string): number | null {
 
 function NutritionGoalsSection({
 	initialGoal,
+	kitchenTimeZone,
 }: {
+	kitchenTimeZone: string | null;
 	initialGoal: {
 		dailyEnergyKcal: number | null;
 		proteinG: number | null;
@@ -1626,7 +1640,9 @@ function NutritionGoalsSection({
 				carbsG: parseOptionalNutrient(carbsG),
 				fatG: parseOptionalNutrient(fatG),
 				fiberG: parseOptionalNutrient(fiberG),
-				effectiveFrom: getTodayISO(),
+				effectiveFrom: kitchenTimeZone
+					? formatISODateInTimeZone(new Date(), kitchenTimeZone)
+					: getTodayISO(),
 				operationKey: crypto.randomUUID(),
 			}),
 			{
@@ -1811,8 +1827,10 @@ function FeatureEnablementSection() {
 function PreferencesSection({
 	settings,
 	nutritionGoal = null,
+	kitchenTimeZone = null,
 }: {
 	settings: UserSettings;
+	kitchenTimeZone?: string | null;
 	nutritionGoal?: {
 		dailyEnergyKcal: number | null;
 		proteinG: number | null;
@@ -1845,7 +1863,10 @@ function PreferencesSection({
 			<FeatureEnablementSection />
 
 			{nutritionGoalsEnabled && (
-				<NutritionGoalsSection initialGoal={nutritionGoal} />
+				<NutritionGoalsSection
+					initialGoal={nutritionGoal}
+					kitchenTimeZone={kitchenTimeZone}
+				/>
 			)}
 
 			{/* Appearance */}

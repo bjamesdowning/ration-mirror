@@ -45,6 +45,7 @@ import {
 import { useConfirm } from "~/lib/confirm-context";
 import { buildWebFlagContext } from "~/lib/feature-flags/context.server";
 import { isFeatureEnabled } from "~/lib/feature-flags/flags.server";
+import { kitchenTodayISO } from "~/lib/kitchen-time";
 import { AI_COSTS, checkBalance } from "~/lib/ledger.server";
 import type {
 	MealForPicker,
@@ -52,7 +53,6 @@ import type {
 } from "~/lib/manifest.server";
 import {
 	ensureMealPlan,
-	getTodayISO,
 	getTriggeredAllergens,
 	getWeekEntriesWithTags,
 	getWeekStart,
@@ -69,6 +69,7 @@ import {
 	getHistory,
 	getSummary,
 } from "~/lib/nutrition/service.server";
+import { getOrganizationMetadata } from "~/lib/org-supply-settings.server";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import { getManifestReadyCacheVersion } from "~/lib/readiness-cache.server";
 import type { SlotType } from "~/lib/schemas/manifest";
@@ -93,7 +94,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 
 	const url = new URL(request.url);
 	const weekParam = url.searchParams.get("week");
-	const today = getTodayISO();
+	const today = kitchenTodayISO(await getOrganizationMetadata(db, groupId));
 
 	// For 7-day: ?week= is week start; for 3/5-day: ?week= is first visible day
 	let anchor: string;

@@ -61,6 +61,12 @@ final class LaunchCoordinator {
                 session.applyConsent(settings)
                 theme.syncFromServer(settings)
                 unitDisplayMode.syncFromServer(settings)
+            },
+            syncKitchenClock: {
+                await KitchenTimeZoneSync.sync(
+                    api: api,
+                    canCapture: session.activeOrg?.canManageSupplySettings == true
+                )
             }
         )
     }
@@ -68,7 +74,8 @@ final class LaunchCoordinator {
     func performStartup(
         loadSession: @escaping () async -> Bool,
         loadSettings: @escaping () async -> UserSettings?,
-        applySettings: (UserSettings) -> Void
+        applySettings: (UserSettings) -> Void,
+        syncKitchenClock: () async -> Void = {}
     ) async {
         guard loadedForGeneration != startupGeneration else { return }
         let generation = startupGeneration
@@ -98,6 +105,8 @@ final class LaunchCoordinator {
 
         userSettings = settings
         applySettings(settings)
+        await syncKitchenClock()
+        guard generation == startupGeneration else { return }
         phase = .ready
     }
 

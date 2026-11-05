@@ -5,6 +5,10 @@ vi.mock("~/lib/auth.server", () => ({
 	getUserSettings: vi.fn().mockResolvedValue({ expirationAlertDays: 7 }),
 }));
 
+vi.mock("~/lib/org-supply-settings.server", () => ({
+	getOrganizationMetadata: vi.fn().mockResolvedValue(null),
+}));
+
 vi.mock("~/lib/agent/kitchen-snapshot.server", () => ({
 	getAgentKitchenSnapshot: vi.fn().mockResolvedValue({
 		tier: "free",

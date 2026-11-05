@@ -98,6 +98,8 @@ describe("buildAgentTemporalContext", () => {
 		const now = new Date("2026-07-13T16:34:00.000Z");
 		expect(buildAgentTemporalContext(now)).toEqual({
 			todayUtc: "2026-07-13",
+			today: "2026-07-13",
+			timeZone: null,
 			serverTimeIso: "2026-07-13T16:34:00.000Z",
 			expirySemantics: "utc_calendar_day",
 		});

@@ -20,6 +20,7 @@ import {
 import { buildWebFlagContext } from "~/lib/feature-flags/flags.server";
 import { getHubMealMatchWidgets } from "~/lib/hub-match.server";
 import { getKitchenEvents, getKitchenStats } from "~/lib/kitchen-events.server";
+import { kitchenTodayISO, resolveKitchenTimeZone } from "~/lib/kitchen-time";
 import { getDistinctMealTags, getManifestPreview } from "~/lib/manifest.server";
 import { MOBILE_SUPPLY_ITEMS_SLICE } from "~/lib/mobile/hub.server";
 import { resolveNutritionCapabilities } from "~/lib/nutrition/feature-policy.server";
@@ -28,6 +29,7 @@ import {
 	filterNutritionHubWidgetsByFlags,
 	isNutritionHubWidgetsEnabled,
 } from "~/lib/nutrition/hub-widgets";
+import { getOrganizationMetadata } from "~/lib/org-supply-settings.server";
 import {
 	filterSupplyItemsByCargoTags,
 	getSupplyList,
@@ -43,7 +45,12 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 	const env = context.cloudflare.env;
 	const db = env.DB;
 
-	const settings = await getUserSettings(db, user.id);
+	const [settings, orgMetadata] = await Promise.all([
+		getUserSettings(db, user.id),
+		getOrganizationMetadata(db, groupId),
+	]);
+	const kitchenToday = kitchenTodayISO(orgMetadata);
+	const kitchenTimeZone = resolveKitchenTimeZone(orgMetadata);
 	const expirationAlertDays = settings.expirationAlertDays ?? 7;
 	const hubProfile = settings.hubProfile;
 	const hubLayout = settings.hubLayout;
@@ -113,6 +120,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 			manifestDaySpan,
 			manifestSlotType,
 			manifestTags,
+			{ todayIso: kitchenToday },
 		),
 		getDistinctMealTags(db, groupId),
 		getCargoTags(db, groupId),
@@ -130,6 +138,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 			organizationId: groupId,
 			surface: "web",
 			requestId: request.headers.get("cf-ray") ?? undefined,
+			today: kitchenToday,
 			todayVisible: nutritionTodayVisible,
 			trendsVisible: nutritionTrendsVisible,
 			trendsRange: nutritionTrendsConfig?.filters?.nutritionRange,
@@ -190,6 +199,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		nutritionToday: nutritionPayload.nutritionToday,
 		nutritionTrends: nutritionPayload.nutritionTrends,
 		nutritionWidgetsEnabled,
+		kitchenTimeZone,
 	};
 }
 

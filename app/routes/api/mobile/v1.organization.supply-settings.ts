@@ -7,7 +7,10 @@ import {
 	resolveSupplyContext,
 } from "~/lib/org-supply-settings.server";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
-import { OrganizationSupplySettingsPatchSchema } from "~/lib/schemas/org-supply-settings";
+import {
+	compactSupplySettingsPatch,
+	OrganizationSupplySettingsPatchSchema,
+} from "~/lib/schemas/org-supply-settings";
 import type { Route } from "./+types/v1.organization.supply-settings";
 
 /** GET /api/mobile/v1/organization/supply-settings */
@@ -53,7 +56,9 @@ export async function action({ request, context }: Route.ActionArgs) {
 		}
 
 		const body = await request.json();
-		const patch = OrganizationSupplySettingsPatchSchema.parse(body);
+		const patch = compactSupplySettingsPatch(
+			OrganizationSupplySettingsPatchSchema.parse(body),
+		);
 		const result = await patchOrganizationSupplySettings(
 			context.cloudflare.env.DB,
 			organizationId,

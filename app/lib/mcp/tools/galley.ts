@@ -2,7 +2,6 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { cookDeductionNote } from "../../cook-feedback";
 import { cookMealFromGalley } from "../../galley-cook-manifest.server";
-import { getTodayISO } from "../../manifest-dates";
 import { storedMealName } from "../../meal-name";
 import {
 	clearMealSelections,
@@ -10,6 +9,7 @@ import {
 	validateMealOwnership,
 } from "../../meal-selection.server";
 import { createMeal, deleteMeal, updateMeal } from "../../meals.server";
+import { kitchenTodayForOrganization } from "../../org-supply-settings.server";
 import { parseDirections } from "../../schemas/directions";
 import { SLOT_TYPES } from "../../schemas/manifest";
 import {
@@ -249,7 +249,7 @@ export function createGalleyToolDefs(env: McpToolsEnv) {
 					.regex(/^\d{4}-\d{2}-\d{2}$/)
 					.optional()
 					.describe(
-						"Local YYYY-MM-DD for Manifest bridge (defaults to today UTC).",
+						"YYYY-MM-DD for the Manifest bridge (defaults to the kitchen's local today, or today UTC when no zone is stored).",
 					),
 				slotType: z.enum(SLOT_TYPES).optional(),
 			}),
@@ -269,7 +269,9 @@ export function createGalleyToolDefs(env: McpToolsEnv) {
 						confirmInsufficient: a.confirmInsufficient,
 						userId: ctx.userId,
 						source: surface,
-						date: a.date ?? getTodayISO(),
+						date:
+							a.date ??
+							(await kitchenTodayForOrganization(env.DB, ctx.organizationId)),
 						slotType: a.slotType,
 					},
 				);

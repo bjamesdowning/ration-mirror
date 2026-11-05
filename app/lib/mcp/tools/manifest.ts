@@ -4,7 +4,7 @@ import { drizzle } from "drizzle-orm/d1";
 import { z } from "zod";
 import { mealPlanEntry } from "../../../db/schema";
 import { getExpiringCargo } from "../../cargo.server";
-import { addUtcDays, getUtcTodayISO } from "../../cargo-utils";
+import { addUtcDays } from "../../cargo-utils";
 import { manifestConsumeNote } from "../../cook-feedback";
 import { isFeatureEnabled } from "../../feature-flags/flags.server";
 import {
@@ -20,6 +20,7 @@ import {
 } from "../../manifest-bulk-submit.server";
 import { cookManifestEntries } from "../../manifest-cook.server";
 import { MEAL_MATCH_CANDIDATE_CAP, matchMeals } from "../../matching.server";
+import { kitchenTodayForOrganization } from "../../org-supply-settings.server";
 import { UuidSchema } from "../../schemas/uuid";
 import { createSupplyListFromSelectedMeals } from "../../supply.server";
 import {
@@ -81,7 +82,11 @@ export function createManifestToolDefs(env: McpToolsEnv) {
 					limit: Math.min(30, daysAhead * mealsPerDay + 5),
 					preLimit: MEAL_MATCH_CANDIDATE_CAP,
 				});
-				const today = getUtcTodayISO(now);
+				const today = await kitchenTodayForOrganization(
+					env.DB,
+					ctx.organizationId,
+					now,
+				);
 				const proposed: Array<{
 					date: string;
 					slotType: string;

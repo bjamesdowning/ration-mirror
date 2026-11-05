@@ -6,7 +6,6 @@ import { isFeatureEnabled } from "~/lib/feature-flags/flags.server";
 import {
 	addEntry,
 	ensureMealPlan,
-	getTodayISO,
 	getWeekEntries,
 	getWeekStart,
 } from "~/lib/manifest.server";
@@ -22,6 +21,7 @@ import {
 	attachPersonalIntakeToEntries,
 	getHistory,
 } from "~/lib/nutrition/service.server";
+import { kitchenTodayForOrganization } from "~/lib/org-supply-settings.server";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import {
 	MealPlanEntryCreateSchema,
@@ -54,7 +54,10 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 			const span =
 				(settings.manifestSettings as { calendarSpan?: 3 | 5 | 7 })
 					?.calendarSpan ?? 5;
-			const anchor = getTodayISO();
+			const anchor = await kitchenTodayForOrganization(
+				context.cloudflare.env.DB,
+				organizationId,
+			);
 			const resolvedAnchor =
 				span === 7 ? getWeekStart(anchor, weekStart) : anchor;
 			const dates = getCalendarDates(span, resolvedAnchor, weekStart);

@@ -3,6 +3,7 @@
  * Soft-fails (null) when flags/consent block reads so Hub still loads.
  */
 
+import { kitchenTodayISO } from "~/lib/kitchen-time";
 import { log } from "~/lib/logging.server";
 import { getNutritionConsentStatus } from "~/lib/nutrition/consent.server";
 import { serializeNutritionSummary } from "~/lib/nutrition/dto.server";
@@ -18,6 +19,7 @@ import {
 	type NutritionPrincipal,
 	type NutritionSurface,
 } from "~/lib/nutrition/service.server";
+import { getOrganizationMetadata } from "~/lib/org-supply-settings.server";
 import {
 	type NutritionSummary,
 	NutritionSummarySchema,
@@ -63,6 +65,7 @@ export async function loadHubNutritionData(options: {
 	surface: NutritionSurface;
 	authMethod?: string;
 	requestId?: string;
+	today?: string;
 	todayVisible: boolean;
 	trendsVisible: boolean;
 	trendsRange?: number;
@@ -76,6 +79,7 @@ export async function loadHubNutritionData(options: {
 			surface,
 			authMethod = surface === "mobile" ? "mobile_bearer" : "session",
 			requestId,
+			today: kitchenToday,
 			todayVisible,
 			trendsVisible,
 			trendsRange,
@@ -104,7 +108,9 @@ export async function loadHubNutritionData(options: {
 			requestId: requestId ?? crypto.randomUUID(),
 		};
 
-		const today = nutritionRangeBounds(7).to;
+		const today =
+			kitchenToday ??
+			kitchenTodayISO(await getOrganizationMetadata(env.DB, organizationId));
 		const range = normalizeNutritionHubRange(trendsRange) as NutritionHubRange;
 		const trendsBounds = nutritionRangeBounds(range, today);
 

@@ -49,6 +49,7 @@ const SHARE_TOKEN_EXPIRY_SECONDS = SHARE_TOKEN_EXPIRY_DAYS * 24 * 60 * 60;
 // ---------------------------------------------------------------------------
 
 import { addUtcDays } from "./cargo-utils";
+import { kitchenTodayISO } from "./kitchen-time";
 import {
 	getTodayISO as getTodayISOShared,
 	getWeekDates as getWeekDatesShared,
@@ -56,6 +57,7 @@ import {
 	getWeekStart as getWeekStartShared,
 	toISODateString as toISODateStringShared,
 } from "./manifest-dates";
+import { getOrganizationMetadata } from "./org-supply-settings.server";
 
 export const getTodayISO = getTodayISOShared;
 export const getWeekStart = getWeekStartShared;
@@ -899,6 +901,8 @@ export interface SharedMealPlan {
 		mealName: string;
 		mealType?: string;
 	}>;
+	/** Kitchen calendar day used to choose the shared window. */
+	today: string;
 }
 
 export async function getMealPlanByShareToken(
@@ -921,8 +925,10 @@ export async function getMealPlanByShareToken(
 		return null;
 	}
 
-	// Fetch next 14 days of entries from today
-	const today = getTodayISO();
+	// Fetch next 14 days of entries from the kitchen's today.
+	const today = kitchenTodayISO(
+		await getOrganizationMetadata(db, plan.organizationId),
+	);
 	const endDate = (() => {
 		const d = new Date(`${today}T00:00:00`);
 		d.setDate(d.getDate() + 13);
@@ -957,6 +963,7 @@ export async function getMealPlanByShareToken(
 	return {
 		id: plan.id,
 		name: plan.name,
+		today,
 		entries: entries.map((e) => ({
 			...e,
 			mealType: e.mealType ?? "recipe",
@@ -999,7 +1006,9 @@ export async function getManifestWeekMealsForSupply(
 
 	if (!plan) return [];
 
-	const today = getTodayISO();
+	const today = window
+		? window.startDate
+		: kitchenTodayISO(await getOrganizationMetadata(db, organizationId));
 	const startDate = window?.startDate ?? getWeekStart(today, "sunday");
 	const endDate = window?.endDate ?? getWeekEnd(startDate);
 
@@ -1064,7 +1073,7 @@ export async function getManifestPreview(
 
 	if (!plan) return { planId: null, entries: [] };
 
-	const today = options?.todayIso ?? getTodayISO();
+	const today = options?.todayIso ?? kitchenTodayISO(null);
 	const endDate = addUtcDays(today, days - 1);
 
 	const rows = await d1

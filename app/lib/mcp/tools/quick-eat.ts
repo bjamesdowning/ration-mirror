@@ -15,8 +15,9 @@ import {
 	QuickEatValidationError,
 	quickEatFromCargo,
 } from "../../cargo-quick-eat.server";
-import { getUtcTodayISO, normalizeForCargoKey } from "../../cargo-utils";
+import { normalizeForCargoKey } from "../../cargo-utils";
 import { isFeatureEnabled } from "../../feature-flags/flags.server";
+import { kitchenTodayForOrganization } from "../../org-supply-settings.server";
 import { IntakeNotesSchema } from "../../schemas/manifest";
 import { UuidSchema } from "../../schemas/uuid";
 import { coerceToolUnit } from "../../units";
@@ -117,7 +118,9 @@ export function createQuickEatToolDefs(env: McpToolsEnv) {
 					.string()
 					.regex(/^\d{4}-\d{2}-\d{2}$/, "Must be YYYY-MM-DD")
 					.optional()
-					.describe("UTC calendar date (defaults to today UTC)"),
+					.describe(
+						"Calendar date (defaults to the kitchen's local today, or today UTC when no zone is stored)",
+					),
 				operationKey: UuidSchema,
 				logIntake: z.boolean().optional().default(true),
 				notes: IntakeNotesSchema,
@@ -295,7 +298,9 @@ export function createQuickEatToolDefs(env: McpToolsEnv) {
 							cargoId,
 							quantity: a.quantity,
 							unit: a.unit,
-							date: a.date ?? getUtcTodayISO(),
+							date:
+								a.date ??
+								(await kitchenTodayForOrganization(env.DB, ctx.organizationId)),
 							operationKey: a.operationKey,
 							logIntake: a.logIntake !== false,
 							notes: a.notes,

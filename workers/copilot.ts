@@ -17,7 +17,7 @@ import {
 	routeAgentRequest,
 } from "agents";
 import type { ToolSet } from "ai";
-import { formatCopilotTemporalContextAppend } from "../app/lib/agent/temporal-context.server";
+import { formatCopilotTemporalContextForOrganization } from "../app/lib/agent/temporal-context.server";
 import { getUserSettings } from "../app/lib/auth.server";
 import { resolveCopilotActiveTools } from "../app/lib/copilot/active-tools.server";
 import { authenticateCopilot } from "../app/lib/copilot/auth.server";
@@ -725,7 +725,7 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 					: profile.maxOutputTokens;
 
 			return {
-				system: `${ctx.system}${formatCopilotTemporalContextAppend()}${getOnboardingBriefingSystemPromptAppend(briefingTurn)}`,
+				system: `${ctx.system}${await formatCopilotTemporalContextForOrganization(this.env.DB, identity.organizationId)}${getOnboardingBriefingSystemPromptAppend(briefingTurn)}`,
 				activeTools: policy.activeTools,
 				maxSteps: policy.maxSteps,
 				maxOutputTokens,
@@ -888,7 +888,7 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 		this.turnNativeSuggestionMatched = nativeSuggestion != null;
 		this.turnDeflectionNudged = false;
 		this.turnDeflectionMetricEmitted = false;
-		this.turnSystemPrompt = `${ctx.system}${nativeAdvisory}${formatCopilotTemporalContextAppend()}`;
+		this.turnSystemPrompt = `${ctx.system}${nativeAdvisory}${await formatCopilotTemporalContextForOrganization(this.env.DB, identity.organizationId)}`;
 
 		return {
 			system: this.turnSystemPrompt,

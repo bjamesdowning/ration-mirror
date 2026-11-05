@@ -13,6 +13,7 @@ import { OnboardingTour } from "~/components/onboarding";
 import { BottomNav, RailSidebar } from "~/components/shell";
 import { ConfirmDialog } from "~/components/shell/ConfirmDialog";
 import { GroupSwitcher } from "~/components/shell/GroupSwitcher";
+import { KitchenTimeZoneCapture } from "~/components/shell/KitchenTimeZoneCapture";
 import { PwaInstallPrompt } from "~/components/shell/PwaInstallPrompt";
 import { ThemeToggle } from "~/components/shell/ThemeToggle";
 import { UnitDisplayModeProvider } from "~/components/shell/UnitDisplayToggle";
@@ -31,8 +32,14 @@ import {
 	buildWebFlagContext,
 	isFeatureEnabled,
 } from "~/lib/feature-flags/flags.server";
+import { resolveKitchenTimeZone } from "~/lib/kitchen-time";
 import { AI_COSTS, checkBalance } from "~/lib/ledger.server";
 import { log } from "~/lib/logging.server";
+import {
+	canManageGroupSupplySettings,
+	getMemberRole,
+	getOrganizationMetadata,
+} from "~/lib/org-supply-settings.server";
 import { registerServiceWorker } from "~/lib/pwa.client";
 import { resolveUnitDisplayMode } from "~/lib/unit-display-mode";
 import type { Route } from "./+types/hub";
@@ -131,6 +138,11 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 			flagContext,
 		);
 		const db = drizzle(context.cloudflare.env.DB, { schema });
+		const [orgMetadata, memberRole] = await Promise.all([
+			getOrganizationMetadata(context.cloudflare.env.DB, groupId),
+			getMemberRole(context.cloudflare.env.DB, groupId, session.user.id),
+		]);
+		const kitchenTimeZone = resolveKitchenTimeZone(orgMetadata);
 		const [
 			orgRow,
 			balance,
@@ -207,12 +219,22 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 			onboardingStep: userSettings.onboardingStep ?? 0,
 			unitDisplayMode: resolveUnitDisplayMode(userSettings),
 			copilotStatus,
+			organizationId: groupId,
+			canCaptureKitchenTimeZone:
+				canManageGroupSupplySettings(memberRole ?? "member") &&
+				kitchenTimeZone === null,
 		};
 	});
 }
 
 export default function DashboardLayout({ loaderData }: Route.ComponentProps) {
-	const { onboardingCompletedAt, onboardingStep, copilotStatus } = loaderData;
+	const {
+		onboardingCompletedAt,
+		onboardingStep,
+		copilotStatus,
+		organizationId,
+		canCaptureKitchenTimeZone,
+	} = loaderData;
 	const [isAskOpen, setIsAskOpen] = useState(false);
 	const [hasAskMounted, setHasAskMounted] = useState(false);
 	const navigate = useNavigate();
@@ -239,6 +261,10 @@ export default function DashboardLayout({ loaderData }: Route.ComponentProps) {
 
 	return (
 		<ConfirmProvider>
+			<KitchenTimeZoneCapture
+				enabled={canCaptureKitchenTimeZone}
+				organizationId={organizationId}
+			/>
 			<UnitDisplayModeProvider>
 				<div className="flex min-h-screen bg-ceramic">
 					{/* Desktop Rail Sidebar */}

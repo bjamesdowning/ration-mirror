@@ -39,6 +39,10 @@ vi.mock("~/lib/auth.server", () => ({
 	getUserSettings: () => getUserSettings(),
 }));
 
+vi.mock("~/lib/org-supply-settings.server", () => ({
+	getOrganizationMetadata: vi.fn().mockResolvedValue(null),
+}));
+
 vi.mock("~/lib/cargo.server", () => ({
 	getExpiringCargo: () => getExpiringCargo(),
 	getCargoStats: () => getCargoStats(),

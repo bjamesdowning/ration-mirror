@@ -38,6 +38,16 @@ vi.mock("~/lib/vector.server", async (importOriginal) => {
 	};
 });
 
+vi.mock("~/lib/org-supply-settings.server", () => ({
+	kitchenTodayForOrganization: vi.fn(async () => {
+		const now = new Date();
+		const y = now.getUTCFullYear();
+		const m = String(now.getUTCMonth() + 1).padStart(2, "0");
+		const d = String(now.getUTCDate()).padStart(2, "0");
+		return `${y}-${m}-${d}`;
+	}),
+}));
+
 vi.mock("~/lib/feature-flags/flags.server", () => ({
 	isFeatureEnabled: vi.fn().mockResolvedValue(false),
 }));

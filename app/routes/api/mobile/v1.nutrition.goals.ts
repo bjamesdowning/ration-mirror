@@ -1,7 +1,6 @@
 import { data } from "react-router";
 import { handleApiError } from "~/lib/error-handler";
 import { buildMobileFlagContext } from "~/lib/feature-flags/flags.server";
-import { getTodayISO } from "~/lib/manifest-dates";
 import { requireMobileActiveGroup } from "~/lib/mobile/auth.server";
 import { serializeNutritionGoal } from "~/lib/nutrition/dto.server";
 import {
@@ -10,6 +9,7 @@ import {
 	resolveHttpOperationKey,
 	setGoal,
 } from "~/lib/nutrition/service.server";
+import { kitchenTodayForOrganization } from "~/lib/org-supply-settings.server";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import {
 	NutritionGoalAsOfQuerySchema,
@@ -51,7 +51,12 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 				{ status: 400 },
 			);
 		}
-		const asOf = asOfParsed.data.asOf ?? getTodayISO();
+		const asOf =
+			asOfParsed.data.asOf ??
+			(await kitchenTodayForOrganization(
+				context.cloudflare.env.DB,
+				organizationId,
+			));
 		const goal = await getGoal(env, principal, flagContext, asOf);
 		return { goal: goal ? serializeNutritionGoal(goal) : null };
 	} catch (e) {
@@ -111,7 +116,12 @@ export async function action({ request, context }: Route.ActionArgs) {
 			}
 			return clearGoal(env, principal, flagContext, {
 				operationKey,
-				asOfDate: asOfParsed.data.asOf ?? getTodayISO(),
+				asOfDate:
+					asOfParsed.data.asOf ??
+					(await kitchenTodayForOrganization(
+						context.cloudflare.env.DB,
+						organizationId,
+					)),
 			});
 		}
 

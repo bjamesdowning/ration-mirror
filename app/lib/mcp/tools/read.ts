@@ -18,7 +18,7 @@ import {
 	getExpiredCargo,
 	getExpiringCargo,
 } from "../../cargo.server";
-import { addUtcDays, getUtcTodayISO } from "../../cargo-utils";
+import { addUtcDays } from "../../cargo-utils";
 import { isFeatureEnabled } from "../../feature-flags/flags.server";
 import {
 	getMealPlan,
@@ -32,6 +32,10 @@ import {
 	attachPersonalIntakeToEntries,
 	getSummary,
 } from "../../nutrition/service.server";
+import {
+	getOrganizationMetadata,
+	kitchenTodayForOrganization,
+} from "../../org-supply-settings.server";
 import { parseDirections } from "../../schemas/directions";
 import { UuidSchema } from "../../schemas/uuid";
 import { getSupplyList, getSupplyListById } from "../../supply.server";
@@ -209,7 +213,7 @@ async function maybePersonalNutritionToday(
 		isFeatureEnabled(env, "nutrition-manifest", flagContext),
 	]);
 	if (!goalsOn && !manifestOn) return undefined;
-	const today = getUtcTodayISO();
+	const today = await kitchenTodayForOrganization(env.DB, ctx.organizationId);
 	try {
 		const summary = await getSummary(
 			env,
@@ -319,7 +323,10 @@ export function createReadToolDefs(env: McpToolsEnv) {
 					kitchen,
 					capabilities,
 					suggestedNextActions,
-					temporal: buildAgentTemporalContext(),
+					temporal: buildAgentTemporalContext(
+						new Date(),
+						await getOrganizationMetadata(env.DB, ctx.organizationId),
+					),
 					versions: { mcp: MCP_SERVER_VERSION },
 					note: "For detailed pantry/manifest/supply status call get_kitchen_summary.",
 					...(nutritionNotes.length > 0 ? { nutritionNotes } : {}),
@@ -695,13 +702,15 @@ export function createReadToolDefs(env: McpToolsEnv) {
 		defineSharedTool({
 			name: "get_meal_plan",
 			description:
-				"Retrieve the user's meal plan. days defaults to 7 (inclusive, max 14). When startDate is omitted, the window starts on today UTC. Returns scheduled meals by date and slot (breakfast, lunch, dinner, snack), including cookedAt/consumedAt. status is planned or cooked for the household: cooked when cookedAt or a legacy consumedAt is set. Cooking is not eating. gramsPerServing is recipe-ingredient mass per serving when known — use it to convert plated grams/oz for log_manifest_intake; do not invent grams if it is null. When nutrition-manifest is on, the key has mcp:nutrition:read, and intake consent exists, each entry includes the caller's personalIntake and loggedByYou (true only after that caller logs a serving). Callers without that gate never receive loggedByYou.",
+				"Retrieve the user's meal plan. days defaults to 7 (inclusive, max 14). When startDate is omitted, the window starts on the kitchen's local today, or today UTC when the kitchen has no time zone yet. Stored dates are not rewritten. Returns scheduled meals by date and slot (breakfast, lunch, dinner, snack), including cookedAt/consumedAt. status is planned or cooked for the household: cooked when cookedAt or a legacy consumedAt is set. Cooking is not eating. gramsPerServing is recipe-ingredient mass per serving when known — use it to convert plated grams/oz for log_manifest_intake; do not invent grams if it is null. When nutrition-manifest is on, the key has mcp:nutrition:read, and intake consent exists, each entry includes the caller's personalIntake and loggedByYou (true only after that caller logs a serving). Callers without that gate never receive loggedByYou. Pantry expiry stays on UTC calendar days.",
 			inputSchema: z.object({
 				startDate: z
 					.string()
 					.regex(/^\d{4}-\d{2}-\d{2}$/, "Must be YYYY-MM-DD format")
 					.optional()
-					.describe("Window start (YYYY-MM-DD). Defaults to today UTC."),
+					.describe(
+						"Window start (YYYY-MM-DD). Defaults to the kitchen's local today, or today UTC when no kitchen time zone is stored.",
+					),
 				days: z
 					.number()
 					.int()
@@ -722,7 +731,9 @@ export function createReadToolDefs(env: McpToolsEnv) {
 				if (!plan) {
 					return ok("get_meal_plan", null);
 				}
-				const startDate = a.startDate ?? getUtcTodayISO();
+				const startDate =
+					a.startDate ??
+					(await kitchenTodayForOrganization(env.DB, ctx.organizationId));
 				const days = a.days ?? 7;
 				const endDate = addUtcDays(startDate, days - 1);
 				let entries = await getWeekEntries(env.DB, plan.id, startDate, endDate);
@@ -1077,7 +1088,7 @@ export function createReadToolDefs(env: McpToolsEnv) {
 		defineSharedTool({
 			name: "get_kitchen_summary",
 			description:
-				"Single-call operational snapshot: temporal context, tier/credits/capacity, cargo stats with expiring/expired previews, meal plan entries, and active supply list preview. Prefer this for 'how is my kitchen?' before fanning out to granular tools. Meal plan status is planned or cooked (cookedAt or legacy consumedAt). Cooking is not eating. loggedByYou is included only when nutrition-manifest is on, the key has mcp:nutrition:read, and intake consent exists; it is the caller's own plate-up. When mcp:nutrition:read is granted and nutrition flags are on, includes personalNutritionToday (caller-only consumed/goal/vsGoal for today UTC) — never household-shared.",
+				"Single-call operational snapshot: temporal context, tier/credits/capacity, cargo stats with expiring/expired previews, meal plan entries, and active supply list preview. Prefer this for 'how is my kitchen?' before fanning out to granular tools. Meal plan status is planned or cooked (cookedAt or legacy consumedAt). Cooking is not eating. loggedByYou is included only when nutrition-manifest is on, the key has mcp:nutrition:read, and intake consent exists; it is the caller's own plate-up. When mcp:nutrition:read is granted and nutrition flags are on, includes personalNutritionToday (caller-only consumed/goal/vsGoal for the kitchen's local today, or today UTC when no zone is stored) — never household-shared. Pantry expiry stays on UTC calendar days.",
 			inputSchema: z.object({
 				manifestDays: z
 					.number()

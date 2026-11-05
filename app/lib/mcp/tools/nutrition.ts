@@ -1,6 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { getUtcTodayISO } from "../../cargo-utils";
 import { isFeatureEnabled } from "../../feature-flags/flags.server";
 import { ensureMealPlan } from "../../manifest.server";
 import {
@@ -20,6 +19,7 @@ import {
 	logManifestIntakes,
 	setGoal,
 } from "../../nutrition/service.server";
+import { kitchenTodayForOrganization } from "../../org-supply-settings.server";
 import {
 	IntakeNotesSchema,
 	refineIntakeAmountFields,
@@ -89,18 +89,22 @@ export function createNutritionToolDefs(env: McpToolsEnv) {
 		defineSharedTool({
 			name: "get_nutrition_summary",
 			description:
-				"Return the caller's personal daily nutrition intake totals (energy, macros, optional fiberG) for a UTC date range, plus the active goal when set. Use this when the user asks remaining calories or whether a meal fits their budget — read vsGoal (and nutritionV2.vsGoal); do not subtract consumed from target yourself. from/to default to today UTC (temporal.todayUtc). Remaining is the UTC calendar day, not a dinner-only slice. When nutrition-cross-org-diary is on, totals include intakes from every kitchen the user logged in — not only the authorized household. Requires nutrition-goals or nutrition-manifest. Not medical advice. These are calendar-day totals, not the iPhone Macros page averages (mean of logged days, previous span of equal length). For that page, point iPhone users to Manifest → chart → Macros. There is no web Macros page.",
+				"Return the caller's personal daily nutrition intake totals (energy, macros, optional fiberG) for a date range, plus the active goal when set. Use this when the user asks remaining calories or whether a meal fits their budget — read vsGoal (and nutritionV2.vsGoal); do not subtract consumed from target yourself. from/to default to the kitchen's local today (temporal.today), or today UTC (temporal.todayUtc) when the kitchen has no time zone yet. Remaining is that calendar day, not a dinner-only slice. Pantry expiry stays on UTC calendar days. When nutrition-cross-org-diary is on, totals include intakes from every kitchen the user logged in — not only the authorized household. Requires nutrition-goals or nutrition-manifest. Not medical advice. These are calendar-day totals, not the iPhone Macros page averages (mean of logged days, previous span of equal length). For that page, point iPhone users to Manifest → chart → Macros. There is no web Macros page.",
 			inputSchema: z.object({
 				from: z
 					.string()
 					.regex(/^\d{4}-\d{2}-\d{2}$/, "Must be YYYY-MM-DD")
 					.optional()
-					.describe("Inclusive UTC start date (defaults to today UTC)"),
+					.describe(
+						"Inclusive start date (defaults to the kitchen's local today, or today UTC when no zone is stored)",
+					),
 				to: z
 					.string()
 					.regex(/^\d{4}-\d{2}-\d{2}$/, "Must be YYYY-MM-DD")
 					.optional()
-					.describe("Inclusive UTC end date (defaults to today UTC)"),
+					.describe(
+						"Inclusive end date (defaults to the kitchen's local today, or today UTC when no zone is stored)",
+					),
 			}),
 			scopes: ["mcp:nutrition:read"],
 			rateLimitCategory: "mcp_list",
@@ -119,7 +123,10 @@ export function createNutritionToolDefs(env: McpToolsEnv) {
 						"Enable nutrition-goals or nutrition-manifest for this environment, or use Cargo/Galley/Manifest without intake totals.",
 					);
 				}
-				const today = getUtcTodayISO();
+				const today = await kitchenTodayForOrganization(
+					env.DB,
+					ctx.organizationId,
+				);
 				const parsed = NutritionSummaryQuerySchema.safeParse({
 					from: a.from ?? today,
 					to: a.to ?? today,
@@ -301,14 +308,16 @@ export function createNutritionToolDefs(env: McpToolsEnv) {
 		defineSharedTool({
 			name: "clear_nutrition_goal",
 			description:
-				"Idempotently close open-ended nutrition goals using operationKey so none remain effective on asOfDate (defaults to today UTC). Requires nutrition-goals. Destructive — pass confirm:true.",
+				"Idempotently close open-ended nutrition goals using operationKey so none remain effective on asOfDate (defaults to the kitchen's local today, or today UTC when no zone is stored). Requires nutrition-goals. Destructive — pass confirm:true.",
 			inputSchema: z.object({
 				confirm: z.boolean(),
 				asOfDate: z
 					.string()
 					.regex(/^\d{4}-\d{2}-\d{2}$/, "Must be YYYY-MM-DD")
 					.optional()
-					.describe("UTC date to close goals as of (default: today)"),
+					.describe(
+						"Calendar date to close goals as of (default: kitchen local today, or UTC when no zone is stored)",
+					),
 				operationKey: UuidSchema,
 			}),
 			scopes: ["mcp:nutrition:write"],
@@ -338,7 +347,9 @@ export function createNutritionToolDefs(env: McpToolsEnv) {
 						"Enable nutrition-goals for this environment before clearing goals.",
 					);
 				}
-				const asOfDate = a.asOfDate ?? getUtcTodayISO();
+				const asOfDate =
+					a.asOfDate ??
+					(await kitchenTodayForOrganization(env.DB, ctx.organizationId));
 				const principal = nutritionPrincipal(ctx);
 				const result = await clearGoal(env, principal, flagContext, {
 					operationKey: a.operationKey,

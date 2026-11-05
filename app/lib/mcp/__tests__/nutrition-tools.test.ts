@@ -25,6 +25,17 @@ vi.mock("~/lib/feature-flags/flags.server", () => ({
 	isFeatureEnabled: vi.fn().mockResolvedValue(false),
 }));
 
+vi.mock("~/lib/org-supply-settings.server", () => ({
+	getOrganizationMetadata: vi.fn().mockResolvedValue(null),
+	kitchenTodayForOrganization: vi.fn(async () => {
+		const now = new Date();
+		const y = now.getUTCFullYear();
+		const m = String(now.getUTCMonth() + 1).padStart(2, "0");
+		const d = String(now.getUTCDate()).padStart(2, "0");
+		return `${y}-${m}-${d}`;
+	}),
+}));
+
 vi.mock("~/lib/mcp/agent-flag-context", async () => {
 	const { APP_VERSION } = await import("~/lib/version");
 	return {

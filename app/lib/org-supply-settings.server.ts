@@ -1,6 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import * as schema from "~/db/schema";
+import { kitchenTodayISO, resolveKitchenTimeZone } from "~/lib/kitchen-time";
 import { resolveSupplyManifestWindow } from "~/lib/manifest-dates";
 import {
 	type OrganizationSupplySettingsPatch,
@@ -60,6 +61,42 @@ export function getOrganizationSupplySettings(
 	return metadata?.supplySettings ?? {};
 }
 
+/**
+ * Merge a supply-settings patch. A time zone is written only when the kitchen
+ * does not already have a valid one, so a later visit cannot move existing days.
+ * Horizon updates keep the stored zone. Other metadata keys are preserved.
+ */
+export function applySupplySettingsPatch(
+	current: OrganizationMetadata | null | undefined,
+	patch: OrganizationSupplySettingsPatch,
+): OrganizationMetadata {
+	const supplySettings: OrganizationSupplySettings = {
+		...(current?.supplySettings ?? {}),
+	};
+	if (patch.manifestHorizonDays !== undefined) {
+		supplySettings.manifestHorizonDays = patch.manifestHorizonDays;
+	}
+	if (
+		patch.timeZone !== undefined &&
+		resolveKitchenTimeZone(current) === null
+	) {
+		supplySettings.timeZone = patch.timeZone;
+	}
+	return {
+		...(current ?? {}),
+		supplySettings,
+	};
+}
+
+export async function kitchenTodayForOrganization(
+	db: D1Database,
+	organizationId: string,
+	now = new Date(),
+): Promise<string> {
+	const metadata = await getOrganizationMetadata(db, organizationId);
+	return kitchenTodayISO(metadata, now);
+}
+
 export async function patchOrganizationSupplySettings(
 	db: D1Database,
 	organizationId: string,
@@ -80,13 +117,7 @@ export async function patchOrganizationSupplySettings(
 	const parsed = OrganizationSupplySettingsPatchSchema.parse(patch);
 	const d1 = drizzle(db, { schema });
 	const current = await getOrganizationMetadata(db, organizationId);
-	const nextMetadata: OrganizationMetadata = {
-		...(current ?? {}),
-		supplySettings: {
-			...(current?.supplySettings ?? {}),
-			manifestHorizonDays: parsed.manifestHorizonDays,
-		},
-	};
+	const nextMetadata = applySupplySettingsPatch(current, parsed);
 
 	await d1
 		.update(schema.organization)

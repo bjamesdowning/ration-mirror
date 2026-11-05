@@ -32,4 +32,22 @@ describe("OrganizationSupplySettingsPatchSchema", () => {
 			}).success,
 		).toBe(false);
 	});
+
+	it("accepts an IANA time zone without a horizon", () => {
+		expect(
+			OrganizationSupplySettingsPatchSchema.parse({
+				timeZone: "America/Los_Angeles",
+			}),
+		).toEqual({ timeZone: "America/Los_Angeles" });
+	});
+
+	it("rejects abbreviations and an empty patch", () => {
+		expect(
+			OrganizationSupplySettingsPatchSchema.safeParse({ timeZone: "PST" })
+				.success,
+		).toBe(false);
+		expect(OrganizationSupplySettingsPatchSchema.safeParse({}).success).toBe(
+			false,
+		);
+	});
 });

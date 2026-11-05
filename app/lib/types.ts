@@ -171,6 +171,8 @@ export interface HubLoaderData {
 	snackMatches: MealMatchResultShim | Promise<MealMatchResultShim>;
 	expirationAlertDays: number;
 	manifestPreview: ManifestPreviewData | null;
+	/** IANA kitchen zone when captured. Absent means the widget keeps the browser's local day. */
+	kitchenTimeZone?: string | null;
 	cargoTagIndex?: { id: string; name: string }[];
 	/** Flight Recorder weekly activity (stats + recent events). */
 	flightRecorderActivity?: {
@@ -217,6 +219,11 @@ export interface HubWidgetProps {
 export interface OrganizationSupplySettings {
 	/** Manifest meal entries through today + (N-1) days contribute to Supply. Default 7. */
 	manifestHorizonDays?: number;
+	/**
+	 * IANA zone for this kitchen's Manifest and Supply calendar days.
+	 * Absent means the server still uses UTC. Not a user setting.
+	 */
+	timeZone?: string;
 }
 
 // Extended organization type with credits and metadata

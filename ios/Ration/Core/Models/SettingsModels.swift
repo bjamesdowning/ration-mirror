@@ -4,6 +4,7 @@ import Foundation
 
 struct OrganizationSupplySettings: Codable, Sendable {
     var manifestHorizonDays: Int?
+    var timeZone: String?
 }
 
 struct SupplyPlanningWindow: Codable, Sendable {
@@ -19,6 +20,10 @@ struct OrganizationSupplySettingsResponse: Codable, Sendable {
 
 struct OrganizationSupplySettingsPatch: Encodable, Sendable {
     let manifestHorizonDays: Int
+}
+
+struct OrganizationTimeZoneCapture: Encodable, Sendable {
+    let timeZone: String
 }
 
 struct OrganizationProfilePatchRequest: Encodable, Sendable {

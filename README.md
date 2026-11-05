@@ -917,7 +917,7 @@ flowchart LR
 | `INGREDIENT_MATCH` | 0.78 | Universal threshold for supply sync, meal match, and AI generation verification. Balanced for breadth. |
 | `CARGO_MERGE` | 0.78 | Dedup on ingest — same threshold for consistency with matching. |
 | `CARGO_DEDUCTION` | 0.78 | Aligned with `INGREDIENT_MATCH` so cook deduction matches preparedness checks. |
-| MCP search | 0.60 | Agents benefit from wider recall when exploring the pantry. |
+| MCP search | 0.60 | Recall for `search_ingredients`. Each hit includes `cookMatch` when the score is at least 0.78. `adjust_cargo_item` and `quick_eat_cargo` do not apply a name below 0.78. |
 
 ---
 
@@ -1754,12 +1754,12 @@ A separate Cloudflare Worker (`ration-mcp`) exposes the Ration pantry to AI agen
 
 | Tool | Type | Scope | Description | Rate Category |
 |------|------|-------|-------------|---------------|
-| `search_ingredients` | Read | `mcp:read` | Semantic vector search against the org's cargo (Vectorize, threshold 0.60) | mcp_search (20/min) |
+| `search_ingredients` | Read | `mcp:read` | Semantic pantry search (recall threshold 0.60). Each hit includes `matchScore` and `cookMatch` (true at ≥ 0.78). Exact name fallback when the vector hit is empty | mcp_search (20/min) |
 | `list_inventory` | Read | `mcp:read` | Cursor-paginated cargo list (default 100, max 200), `meta.nextCursor` for next page | mcp_list (30/min) |
-| `get_cargo_item` | Read | `mcp:read` | Full single-item view (tags, expiresAt, customFields) | mcp_list (30/min) |
+| `get_cargo_item` | Read | `mcp:read` | One pantry item (name, quantity, unit, domain, tags, expiresAt, nutrition when present) | mcp_list (30/min) |
 | `get_supply_list` | Read | `mcp:read` | Live Supply, cursor-paginated (default 50, max 100). `sourceMeals` only when `includeSourceMeals` is true. Optional `listId` when the supply list library is on. No MCP tool can turn that library on. | mcp_list (30/min) |
 | `list_supply_lists` | Read | `mcp:read` | Catalog of Live/Saved/Template/Archived lists. Flag-gated (`supply-multi-lists`). | mcp_list (30/min) |
-| `get_meal_plan` | Read | `mcp:read` | Weekly meal plan entries for a date range (default: next 7 days) | mcp_list (30/min) |
+| `get_meal_plan` | Read | `mcp:read` | Meal plan entries. `days` defaults to 7 (inclusive, max 14). Omitted `startDate` is today UTC | mcp_list (30/min) |
 | `list_meals` | Read | `mcp:read` | Galley index. Ingredients omitted unless `includeIngredients` is true. Directions are on `get_meal`. | mcp_list (30/min) |
 | `get_meal` | Read | `mcp:read` | One recipe by id, including directions, ingredients, and nutrition attributions. | mcp_list (30/min) |
 | `match_meals` | Read | `mcp:read` | Meals cookable from pantry (strict or delta); compact `nutrition.perServing` + optional `maxEnergyKcal` | mcp_search (20/min) |
@@ -1775,7 +1775,7 @@ A separate Cloudflare Worker (`ration-mcp`) exposes the Ration pantry to AI agen
 | `import_inventory_csv` | Write | `mcp:inventory:write` | Parse a CSV string and apply directly | mcp_write (15/min) |
 | `add_cargo_item` | Write | `mcp:inventory:write` | Add a single pantry item, qty > 0 (skips embedding, no credit cost). Prefer import for bulk. | mcp_write (15/min) |
 | `update_cargo_item` | Write | `mcp:inventory:write` | Set absolute fields; quantity may be 0 (restock reminder; item kept) | mcp_write (15/min) |
-| `adjust_cargo_item` | Write | `mcp:inventory:write` | Relative `delta` (e.g. -2); floors at 0; keeps the row. Pantry used/wasted only — personal eating uses `quick_eat_cargo` | mcp_write (15/min) |
+| `adjust_cargo_item` | Write | `mcp:inventory:write` | Relative `delta` (e.g. -2); floors at 0; keeps the row. Exact name, or a semantic match at ≥ 0.78. A weaker name returns candidates and does not change quantity. Pantry used/wasted only — personal eating uses `quick_eat_cargo` | mcp_write (15/min) |
 | `remove_cargo_item` | Write | `mcp:inventory:write` | Permanently delete a pantry line (requires `confirm: true`; Copilot host Approve binds confirm) | mcp_write (15/min) |
 | `create_meal` | Write | `mcp:galley:write` | Create a new Galley recipe (structured data) | mcp_write (15/min) |
 | `update_meal` | Write | `mcp:galley:write` | Update any aspect of a Galley recipe | mcp_write (15/min) |
@@ -1800,7 +1800,7 @@ A separate Cloudflare Worker (`ration-mcp`) exposes the Ration pantry to AI agen
 | `manage_supply_staples` | Write | `mcp:supply:write` | List, upsert, or delete kitchen staples. Flag-gated. | mcp_write (15/min) |
 | `save_receipt_as_supply_list` | Write | `mcp:supply:write` | Save reviewed receipt lines as a Saved list (no second AI credit). Flag-gated. | mcp_write (15/min) |
 | `update_user_preferences` | Write | `mcp:preferences:write` | Patch allergens, expiration alert days, theme | mcp_write (15/min) |
-| `quick_eat_cargo` | Write | `mcp:inventory:write` + `mcp:manifest:write` + `mcp:nutrition:write` | Personal Quick Eat — resolve or create cargo, Manifest snack, optional private intake | mcp_write (15/min) |
+| `quick_eat_cargo` | Write | `mcp:inventory:write` + `mcp:manifest:write` + `mcp:nutrition:write` | Personal Quick Eat. Exact name, or a semantic match at ≥ 0.78. A weaker name returns candidates and does not eat or create. Otherwise creates a missing line, Manifest snack, optional private intake | mcp_write (15/min) |
 
 **Rate limits:** Read tools use `mcp_list` (30/min) or `mcp_search` (20/min). Write tools use `mcp_write` (15/min), except `sync_supply_from_selected_meals` which uses `mcp_supply_sync` (8/min) because it is heavier (D1 + Vectorize). A separate `mcp_write_per_key` (15/min per API key or OAuth client) caps **all mutation categories** including `mcp_supply_sync` from any single compromised credential. Writes do not consume **AI credits**. Hub Supply → Update list uses `grocery_mutation` (60/min per user); MCP sync is org-scoped and separate. Bulk recipe import remains `POST /api/v1/galley/import` (galley scope).
 
@@ -2460,7 +2460,7 @@ Copilot exposes **shared MCP tools** through the shared tool runtime (including 
 | `get_billing_summary` | Shared MCP | Live tier, credits, renewal, store/management URLs |
 | `get_expired_items` | Shared MCP | All expired pantry lines (before today UTC); no lookback wall by default. `meta.expiredTotal` is the all-time count. |
 | `get_nutrition_summary` | Shared MCP | Personal UTC-day totals plus additive `vsGoal` remaining/overage (defaults to today) |
-| `quick_eat_cargo` | Shared MCP | Personal Quick Eat — resolve/create cargo, Manifest snack, optional intake |
+| `quick_eat_cargo` | Shared MCP | Personal Quick Eat — exact name or semantic match at ≥ 0.78; a weaker name asks. Otherwise creates cargo, Manifest snack, optional intake |
 
 **Expiry semantics:** expired = `expiresAt` calendar date before today (UTC). `get_expiring_items` is the future window only (today onward). Per-item `status` (`expired`/`today`/`soon`) is display nuance, never a filter.
 

@@ -30,9 +30,13 @@ vi.mock("~/lib/cargo-index.server", () => ({
 	fetchOrgCargoIndex: vi.fn().mockResolvedValue([]),
 }));
 
-vi.mock("~/lib/vector.server", () => ({
-	findSimilarCargoBatch: vi.fn().mockResolvedValue(new Map()),
-}));
+vi.mock("~/lib/vector.server", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("~/lib/vector.server")>();
+	return {
+		...actual,
+		findSimilarCargoBatch: vi.fn().mockResolvedValue(new Map()),
+	};
+});
 
 vi.mock("~/lib/feature-flags/flags.server", () => ({
 	isFeatureEnabled: vi.fn().mockResolvedValue(false),
@@ -255,5 +259,109 @@ describe("quick_eat_cargo", () => {
 		});
 		expect(ingestCargoItems).not.toHaveBeenCalled();
 		expect(quickEatFromCargo).not.toHaveBeenCalled();
+	});
+
+	it("does not eat or create when the only semantic hit is below 0.78", async () => {
+		const { isFeatureEnabled } = await import(
+			"~/lib/feature-flags/flags.server"
+		);
+		vi.mocked(isFeatureEnabled).mockResolvedValue(true);
+		const { fetchOrgCargoIndex } = await import("~/lib/cargo-index.server");
+		vi.mocked(fetchOrgCargoIndex).mockResolvedValue([]);
+		const { findSimilarCargoBatch } = await import("~/lib/vector.server");
+		vi.mocked(findSimilarCargoBatch).mockResolvedValue(
+			new Map([
+				[
+					"grapes",
+					[{ itemId: CARGO_ID, score: 0.62, itemName: "grape juice" }],
+				],
+			]),
+		);
+		const { getCargoByIds, ingestCargoItems } = await import(
+			"~/lib/cargo.server"
+		);
+		vi.mocked(getCargoByIds).mockResolvedValue([
+			{
+				id: CARGO_ID,
+				name: "grape juice",
+				quantity: 1,
+				unit: "l",
+			},
+		] as never);
+		const { quickEatFromCargo } = await import("~/lib/cargo-quick-eat.server");
+
+		const defs = createQuickEatToolDefs({} as never);
+		const tool = defs[0];
+		if (!tool) throw new Error("expected quick_eat_cargo");
+		const envelope = await tool.handler(baseCtx, {
+			name: "grapes",
+			quantity: 1,
+			operationKey: OP_KEY,
+		});
+		expect(envelope.ok).toBe(true);
+		if (!envelope.ok) return;
+		expect(envelope.data).toMatchObject({
+			eaten: false,
+			requiresDisambiguation: true,
+			note: expect.stringContaining("Nothing was changed"),
+			candidates: [expect.objectContaining({ id: CARGO_ID, matchScore: 0.62 })],
+		});
+		expect(ingestCargoItems).not.toHaveBeenCalled();
+		expect(quickEatFromCargo).not.toHaveBeenCalled();
+		expect(findSimilarCargoBatch).toHaveBeenCalledWith(
+			expect.anything(),
+			"org-1",
+			["grapes"],
+			{ topK: 3, threshold: 0.6 },
+		);
+	});
+
+	it("eats a lone semantic hit at the cook threshold", async () => {
+		const { isFeatureEnabled } = await import(
+			"~/lib/feature-flags/flags.server"
+		);
+		vi.mocked(isFeatureEnabled).mockResolvedValue(true);
+		const { fetchOrgCargoIndex } = await import("~/lib/cargo-index.server");
+		vi.mocked(fetchOrgCargoIndex).mockResolvedValue([]);
+		const { findSimilarCargoBatch } = await import("~/lib/vector.server");
+		vi.mocked(findSimilarCargoBatch).mockResolvedValue(
+			new Map([
+				["grapes", [{ itemId: CARGO_ID, score: 0.78, itemName: "grapes" }]],
+			]),
+		);
+		const { getCargoItem, ingestCargoItems } = await import(
+			"~/lib/cargo.server"
+		);
+		vi.mocked(getCargoItem).mockResolvedValue({
+			id: CARGO_ID,
+			name: "grapes",
+			quantity: 2,
+			unit: "unit",
+		} as never);
+		const { quickEatFromCargo } = await import("~/lib/cargo-quick-eat.server");
+		vi.mocked(quickEatFromCargo).mockResolvedValue(eatResult);
+
+		const defs = createQuickEatToolDefs({} as never);
+		const tool = defs[0];
+		if (!tool) throw new Error("expected quick_eat_cargo");
+		const envelope = await tool.handler(baseCtx, {
+			name: "grapes",
+			quantity: 1,
+			operationKey: OP_KEY,
+		});
+		expect(envelope.ok).toBe(true);
+		if (!envelope.ok) return;
+		expect(envelope.data).toMatchObject({
+			eaten: true,
+			created: false,
+		});
+		expect(ingestCargoItems).not.toHaveBeenCalled();
+		expect(quickEatFromCargo).toHaveBeenCalledWith(
+			expect.anything(),
+			"org-1",
+			expect.anything(),
+			expect.anything(),
+			expect.objectContaining({ cargoId: CARGO_ID }),
+		);
 	});
 });

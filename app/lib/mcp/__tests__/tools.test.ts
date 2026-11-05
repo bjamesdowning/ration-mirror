@@ -150,9 +150,13 @@ vi.mock("~/lib/supply.server", () => ({
 	completeSupplyList: vi.fn(),
 }));
 
-vi.mock("~/lib/vector.server", () => ({
-	findSimilarCargoBatch: vi.fn(),
-}));
+vi.mock("~/lib/vector.server", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("~/lib/vector.server")>();
+	return {
+		...actual,
+		findSimilarCargoBatch: vi.fn(),
+	};
+});
 
 vi.mock("~/lib/agent/kitchen-summary.server", () => ({
 	buildKitchenSummary: vi.fn().mockResolvedValue({
@@ -354,8 +358,62 @@ describe("MCP tools", () => {
 			const env = parseEnvelope(result);
 			expect(env.data.matches).toHaveLength(1);
 			expect(env.data.matches[0].id).toBe("cargo-exact");
+			expect(env.data.matches[0].matchScore).toBe(1);
+			expect(env.data.matches[0].cookMatch).toBe(true);
 			expect(env.warnings ?? []).toEqual([]);
 			expect(env.meta?.embeddingMayBePending).toBeUndefined();
+		});
+
+		it("marks cookMatch only when the score meets the cook threshold", async () => {
+			vi.mocked(findSimilarCargoBatch).mockResolvedValueOnce(
+				new Map([
+					[
+						"rice",
+						[
+							{ itemId: "weak", score: 0.62 },
+							{ itemId: "strong", score: 0.78 },
+						],
+					],
+				]) as never,
+			);
+			const { getCargoByIds } = await import("~/lib/cargo.server");
+			vi.mocked(getCargoByIds).mockResolvedValueOnce([
+				{ id: "weak", name: "rice flour" },
+				{ id: "strong", name: "rice" },
+			] as never);
+			const server = makeServer();
+			const result = await getToolHandler(
+				server,
+				"search_ingredients",
+			)({ query: "rice" });
+			const data = parseOk(result);
+			const byId = new Map(
+				(data.matches as Array<{ id: string; cookMatch: boolean }>).map(
+					(row) => [row.id, row.cookMatch],
+				),
+			);
+			expect(byId.get("weak")).toBe(false);
+			expect(byId.get("strong")).toBe(true);
+			expect(findSimilarCargoBatch).toHaveBeenCalledWith(
+				expect.anything(),
+				"org-test-123",
+				["rice"],
+				{ topK: 5, threshold: 0.6 },
+			);
+		});
+
+		it("does not claim cargo customFields and states the plan window", async () => {
+			const { createReadToolDefs } = await import("~/lib/mcp/tools/read");
+			const defs = createReadToolDefs({} as never);
+			const cargo = defs.find((def) => def.name === "get_cargo_item");
+			const plan = defs.find((def) => def.name === "get_meal_plan");
+			const search = defs.find((def) => def.name === "search_ingredients");
+			expect(cargo?.description).not.toContain("customFields");
+			expect(cargo?.description).toContain("expiresAt");
+			expect(plan?.description).toContain("defaults to 7");
+			expect(plan?.description).toContain("today UTC");
+			expect(search?.description).toContain("cookMatch");
+			expect(search?.description).toContain("0.6");
 		});
 	});
 
@@ -2077,6 +2135,129 @@ describe("MCP tools", () => {
 			});
 			expect(envelope.data.candidates).toHaveLength(2);
 			expect(updateItem).not.toHaveBeenCalled();
+		});
+
+		it("adjusts an exact name without semantic search", async () => {
+			vi.mocked(findCargoByExactName).mockResolvedValueOnce({
+				id: "00000000-0000-0000-0000-000000000001",
+				name: "oats",
+				quantity: 3,
+				unit: "unit",
+			} as never);
+			vi.mocked(getCargoItem).mockResolvedValueOnce({
+				id: "00000000-0000-0000-0000-000000000001",
+				name: "oats",
+				quantity: 3,
+				unit: "unit",
+			} as never);
+			vi.mocked(updateItem).mockResolvedValueOnce({
+				id: "00000000-0000-0000-0000-000000000001",
+				name: "oats",
+				quantity: 2,
+				unit: "unit",
+			} as never);
+			const server = makeServer();
+			const result = await getToolHandler(
+				server,
+				"adjust_cargo_item",
+			)({
+				name: "Oats",
+				delta: -1,
+			});
+			const envelope = parseEnvelope(result);
+			expect(envelope.ok).toBe(true);
+			expect(envelope.data).toMatchObject({
+				adjusted: true,
+				id: "00000000-0000-0000-0000-000000000001",
+				quantity: 2,
+			});
+			expect(findSimilarCargoBatch).not.toHaveBeenCalled();
+		});
+
+		it("does not write a lone semantic hit below 0.78", async () => {
+			vi.mocked(findSimilarCargoBatch).mockResolvedValueOnce(
+				new Map([
+					[
+						"rice",
+						[{ itemId: "11111111-1111-4111-8111-111111111111", score: 0.62 }],
+					],
+				]) as never,
+			);
+			const { getCargoByIds } = await import("~/lib/cargo.server");
+			vi.mocked(getCargoByIds).mockResolvedValueOnce([
+				{
+					id: "11111111-1111-4111-8111-111111111111",
+					name: "rice flour",
+					quantity: 1,
+					unit: "kg",
+				},
+			] as never);
+			const server = makeServer();
+			const result = await getToolHandler(
+				server,
+				"adjust_cargo_item",
+			)({
+				name: "rice",
+				delta: -1,
+			});
+			const envelope = parseEnvelope(result);
+			expect(envelope.ok).toBe(true);
+			expect(envelope.data).toMatchObject({
+				adjusted: false,
+				requiresDisambiguation: true,
+			});
+			expect(envelope.data.candidates).toEqual([
+				expect.objectContaining({
+					id: "11111111-1111-4111-8111-111111111111",
+					name: "rice flour",
+					matchScore: 0.62,
+				}),
+			]);
+			expect(envelope.data.note).toContain("Nothing was changed");
+			expect(updateItem).not.toHaveBeenCalled();
+			expect(findSimilarCargoBatch).toHaveBeenCalledWith(
+				expect.anything(),
+				"org-test-123",
+				["rice"],
+				{ topK: 3, threshold: 0.6 },
+			);
+		});
+
+		it("writes a lone semantic hit at the cook threshold", async () => {
+			vi.mocked(findSimilarCargoBatch).mockResolvedValueOnce(
+				new Map([
+					[
+						"oats",
+						[{ itemId: "33333333-3333-4333-8333-333333333333", score: 0.78 }],
+					],
+				]) as never,
+			);
+			vi.mocked(getCargoItem).mockResolvedValueOnce({
+				id: "33333333-3333-4333-8333-333333333333",
+				name: "rolled oats",
+				quantity: 4,
+				unit: "unit",
+			} as never);
+			vi.mocked(updateItem).mockResolvedValueOnce({
+				id: "33333333-3333-4333-8333-333333333333",
+				name: "rolled oats",
+				quantity: 3,
+				unit: "unit",
+			} as never);
+			const server = makeServer();
+			const result = await getToolHandler(
+				server,
+				"adjust_cargo_item",
+			)({
+				name: "oats",
+				delta: -1,
+			});
+			const envelope = parseEnvelope(result);
+			expect(envelope.data).toMatchObject({
+				adjusted: true,
+				id: "33333333-3333-4333-8333-333333333333",
+				quantity: 3,
+			});
 		});
 	});
 

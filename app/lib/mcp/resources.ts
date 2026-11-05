@@ -85,7 +85,7 @@ const QUICK_EAT_SNACK_PROMPT = `The user personally ate a snack or pantry item.
 Use quick_eat_cargo (not adjust_cargo_item). Missing pantry lines are created inside the tool, then deducted (net 0, restock reminder).
 
 1. Call quick_eat_cargo with name (or cargoId), quantity > 0, a new operationKey UUID, and optional unit/date/notes. logIntake defaults true.
-2. If the tool returns requiresDisambiguation, ask which candidate and retry with cargoId.
+2. If the tool returns requiresDisambiguation, ask which candidate and retry with cargoId. A weak semantic match does this instead of eating or creating a line.
 3. stockWasShort is expected when they ate more than stock (including a brand-new 0-net line).
 4. Summarize what was logged (snack on Manifest, optional private intake). Not medical advice.`;
 

@@ -116,9 +116,9 @@ All tools are scoped to the authorized household. **MCP calls do not consume Rat
 | Tool | Scope | Description |
 |------|-------|-------------|
 | `get_context` | `mcp:read` | Return org id, scopes, kitchen tier/usage/credits/lastActivityAt, capabilities, suggested next actions, and `temporal` (todayUtc, server time, expiry semantics). Safe to call first. |
-| `search_ingredients` | `mcp:read` | Semantic pantry search by meaning — find items without knowing the exact name. |
+| `search_ingredients` | `mcp:read` | Semantic pantry search (recall 0.60). Each hit includes `matchScore` and `cookMatch` (true at ≥ 0.78). |
 | `list_inventory` | `mcp:read` | Cursor-paginated pantry list (default 100, max 200). Optional domain filter, UTC `expiresBefore` / `expiresAfter`, and `sortBy: expiresAt`. Includes `nutrition` when present. |
-| `get_cargo_item` | `mcp:read` | Fetch one pantry item by id (tags, expiry, custom fields, nutrition when present). |
+| `get_cargo_item` | `mcp:read` | Fetch one pantry item by id (name, quantity, unit, domain, tags, expiry, nutrition when present). |
 | `get_kitchen_summary` | `mcp:read` | Single-call operational snapshot (cargo, manifest, supply, tier/credits). Optional `manifestDays` (1–7). |
 | `get_kitchen_events` | `mcp:read` | Flight Recorder timeline of cooks, docks, expiries, and jettisons (filterable, paginated). |
 | `get_kitchen_stats` | `mcp:read` | Flight Recorder aggregates for a window (7d/30d/90d/365d). |
@@ -127,7 +127,7 @@ All tools are scoped to the authorized household. **MCP calls do not consume Rat
 | `list_meals` | `mcp:read` | Galley index (default omits ingredients). Set `includeIngredients: true` to include ingredient lines. Directions are on `get_meal`. |
 | `get_meal` | `mcp:read` | One recipe by id from `list_meals`, including directions, ingredients, and nutrition attributions. |
 | `match_meals` | `mcp:read` | Find cookable recipes from current pantry — `strict` or `delta`. Adds `allergenFlags` when user allergens are configured. |
-| `get_meal_plan` | `mcp:read` | Weekly meal plan entries by date and slot (`cookedAt`/`consumedAt`; `personalIntake` when nutrition flags allow; `gramsPerServing` is recipe-ingredient mass per serving when known). |
+| `get_meal_plan` | `mcp:read` | Meal plan entries by date and slot. `days` defaults to 7 (inclusive, max 14). Omitted `startDate` is today UTC. `cookedAt`/`consumedAt`; `personalIntake` when nutrition flags allow; `gramsPerServing` is recipe-ingredient mass per serving when known. |
 | `get_supply_list` | `mcp:read` | Live Supply, cursor-paginated (default 50, max 100). Optional `listId` when the supply list library is on. `sourceMeals` only with `includeSourceMeals: true`. No MCP tool can turn the library on. |
 | `list_supply_lists` | `mcp:read` | Catalog of Live, Saved, Template, and Archived lists. Flag-gated. |
 | `get_user_preferences` | `mcp:read` | Allergens, expiration alert days, theme, manifest defaults, and other user settings. |
@@ -144,7 +144,7 @@ All tools are scoped to the authorized household. **MCP calls do not consume Rat
 |------|-------|-------------|
 | `add_cargo_item` | `mcp:inventory:write` | Add a single pantry item (qty > 0). Optional `nutrition` override; when omitted and `nutrition-engine` is on, USDA auto-resolves. No credits; vectors backfilled async. Prefer import tools for bulk. |
 | `update_cargo_item` | `mcp:inventory:write` | Set absolute fields (including optional `nutrition`). Quantity may be **0** (kept as a restock reminder). |
-| `adjust_cargo_item` | `mcp:inventory:write` | Relative `delta` change (e.g. `-2` when the user ate 2). Floors at 0; keeps the row. |
+| `adjust_cargo_item` | `mcp:inventory:write` | Relative `delta` change (e.g. `-2`). Floors at 0; keeps the row. Exact name, or a semantic match at ≥ 0.78. A weaker name returns candidates and does not change quantity. |
 | `remove_cargo_item` | `mcp:inventory:write` | Permanently delete a pantry line. **Requires `confirm: true`.** |
 | `preview_inventory_import` | `mcp:inventory:write` | Dry-run receipt/bulk import — returns `previewToken` and sample rows. Prefer `ration://schemas/inventory-import` for shape. |
 | `apply_inventory_import` | `mcp:inventory:write` | Commit a previewed import after chat confirmation. Idempotent via `idempotencyKey`. |

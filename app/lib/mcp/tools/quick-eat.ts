@@ -27,6 +27,13 @@ import {
 } from "../agent-flag-context";
 import type { McpToolContext } from "../auth";
 import { err, featureDisabled, ok, type ToolEnvelope } from "../envelope";
+import {
+	decideStockNameMatch,
+	NAME_SEARCH_RECALL_THRESHOLD,
+	type NameMatchDisambiguationReason,
+	STOCK_NAME_MATCH_THRESHOLD,
+	stockNameDisambiguationNote,
+} from "../name-match";
 import { defineSharedTool, type McpToolsEnv } from "../tool-runtime";
 
 const QUICK_EAT_NAME_SCORE_GAP = 0.1;
@@ -70,12 +77,20 @@ type QuickEatCargoData =
 			created: boolean;
 	  } & QuickEatResult);
 
-function disambiguationOk(candidates: QuickEatCandidate[], query: string) {
+function disambiguationOk(
+	candidates: QuickEatCandidate[],
+	query: string,
+	reason: NameMatchDisambiguationReason = "close_scores",
+) {
 	return ok("quick_eat_cargo", {
 		eaten: false as const,
 		requiresDisambiguation: true as const,
 		candidates,
-		note: `Multiple pantry items matched "${query}". Ask which one, then retry quick_eat_cargo with that cargoId.`,
+		note: stockNameDisambiguationNote(
+			query,
+			reason,
+			"retry quick_eat_cargo with that cargoId",
+		),
 	});
 }
 
@@ -83,8 +98,7 @@ export function createQuickEatToolDefs(env: McpToolsEnv) {
 	return [
 		defineSharedTool({
 			name: "quick_eat_cargo",
-			description:
-				"Log that the caller personally ate a pantry item (Quick Eat). Resolves by cargoId or name; if no Cargo line exists, creates one for the eaten amount then deducts it (net 0, line kept as a restock reminder). Places a Manifest snack and optionally logs private intake. Use for 'I ate / just ate / had a snack of X'. Do not use adjust_cargo_item for personal eating. stockWasShort is expected when they ate more than stock. Requires cargo-quick-eat + nutrition-cook-log-split. Not medical advice.",
+			description: `Log that the caller personally ate a pantry item (Quick Eat). Resolves by cargoId or exact name. A semantic match is used only at or above the cook threshold (${STOCK_NAME_MATCH_THRESHOLD}); a weaker hit returns candidates and does not eat or create a line. If no pantry line matches, creates one for the eaten amount then deducts it (net 0, line kept as a restock reminder). Places a Manifest snack and optionally logs private intake. Use for 'I ate / just ate / had a snack of X'. Do not use adjust_cargo_item for personal eating. stockWasShort is expected when they ate more than stock. Requires cargo-quick-eat + nutrition-cook-log-split. Not medical advice.`,
 			inputSchema: z.object({
 				cargoId: UuidSchema.optional(),
 				name: z
@@ -175,38 +189,41 @@ export function createQuickEatToolDefs(env: McpToolsEnv) {
 							env,
 							ctx.organizationId,
 							[a.name],
-							{ topK: 3, threshold: 0.6 },
+							{ topK: 3, threshold: NAME_SEARCH_RECALL_THRESHOLD },
 						);
 						const matches = results.get(a.name) ?? [];
-						const top = matches[0];
-						const runnerUp = matches[1];
-						const ambiguous =
-							top != null &&
-							runnerUp != null &&
-							top.score - runnerUp.score < QUICK_EAT_NAME_SCORE_GAP;
-						if (ambiguous) {
+						const decision = decideStockNameMatch(
+							matches,
+							QUICK_EAT_NAME_SCORE_GAP,
+						);
+						if (decision.kind === "disambiguate") {
 							const rows = await getCargoByIds(
 								env.DB,
 								ctx.organizationId,
-								matches.map((m) => m.itemId),
+								decision.matches.map((match) => match.itemId),
 							);
-							const scoreById = new Map(
-								matches.map((m) => [m.itemId, m.score] as const),
-							);
-							return disambiguationOk(
-								rows.map((row) => ({
-									id: row.id,
-									name: row.name,
-									quantity: row.quantity,
-									unit: row.unit,
-									matchScore: scoreById.get(row.id) ?? 0,
-								})),
-								a.name,
-							);
+							if (rows.length > 0) {
+								const scoreById = new Map(
+									decision.matches.map(
+										(match) => [match.itemId, match.score] as const,
+									),
+								);
+								return disambiguationOk(
+									rows.map((row) => ({
+										id: row.id,
+										name: row.name,
+										quantity: row.quantity,
+										unit: row.unit,
+										matchScore: scoreById.get(row.id) ?? 0,
+									})),
+									a.name,
+									decision.reason,
+								);
+							}
+						} else if (decision.kind === "use") {
+							cargoId = decision.itemId;
 						}
-						if (top) {
-							cargoId = top.itemId;
-						} else {
+						if (!cargoId) {
 							const coerced = coerceToolUnit(a.unit ?? "unit");
 							const ingest = await ingestCargoItems(
 								env,

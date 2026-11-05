@@ -19,8 +19,8 @@ Exact windows may be tuned; if you hit limits, wait for the window to reset. Rat
 | Tool | Scope | Purpose |
 |------|-------|---------|
 | `list_inventory` | `mcp:read` | Cursor-paginated cargo list (default 100, max 200). Optional `domain`, `expiresBefore` / `expiresAfter` (UTC YYYY-MM-DD), and `sortBy: expiresAt`. |
-| `get_cargo_item` | `mcp:read` | Fetch one item by id with all fields (tags, expiresAt, customFields). |
-| `search_ingredients` | `mcp:read` | Semantic search in pantry by meaning. |
+| `get_cargo_item` | `mcp:read` | Fetch one item by id (name, quantity, unit, domain, tags, expiresAt, nutrition when present). |
+| `search_ingredients` | `mcp:read` | Semantic search in pantry by meaning (recall 0.60). Each hit includes `matchScore` and `cookMatch` (true at ≥ 0.78). |
 | `get_expiring_items` | `mcp:read` | Pantry lines expiring within N UTC calendar days. Defaults to the user's `expirationAlertDays` when `days` is omitted. |
 | `get_expired_items` | `mcp:read` | Pantry lines whose expiry date is before today (UTC). |
 | `get_kitchen_summary` | `mcp:read` | Single-call kitchen snapshot. Prefer this over `get_context` for status. When `mcp:nutrition:read` is granted, may include caller-only `personalNutritionToday`. |
@@ -28,7 +28,7 @@ Exact windows may be tuned; if you hit limits, wait for the window to reset. Rat
 | `get_kitchen_stats` | `mcp:read` | Flight Recorder aggregates (7d/30d/90d/365d counts + top cooked meals). |
 | `add_cargo_item` | `mcp:inventory:write` | Add a single pantry item. Fuzzy Vectorize merge skipped; embeddings backfill async. |
 | `update_cargo_item` | `mcp:inventory:write` | Set absolute pantry fields. Quantity may be **0**. |
-| `adjust_cargo_item` | `mcp:inventory:write` | Relative quantity change (`delta`). Prefer for “used/ate N”. |
+| `adjust_cargo_item` | `mcp:inventory:write` | Relative quantity change (`delta`). Exact name, or a semantic match at ≥ 0.78. A weaker name returns candidates and does not change quantity. Prefer for pantry used/wasted, not personal eating. |
 | `remove_cargo_item` | `mcp:inventory:write` | Permanently delete a pantry line. **Requires `confirm: true`** (Copilot host Approve binds confirm). |
 
 ### Receipt → pantry workflow (no credits)
@@ -66,7 +66,7 @@ Prefer resource `ration://schemas/inventory-import` for the item shape.
 
 | Tool | Scope | Purpose |
 |------|-------|---------|
-| `get_meal_plan` | `mcp:read` | Meal plan entries for a date range (`cookedAt`/`consumedAt`; `personalIntake` when nutrition flags allow; `gramsPerServing` when recipe mass is known). |
+| `get_meal_plan` | `mcp:read` | Meal plan entries for a date range. `days` defaults to 7 (inclusive, max 14). Omitted `startDate` is today UTC. `cookedAt`/`consumedAt`; `personalIntake` when nutrition flags allow; `gramsPerServing` when recipe mass is known. |
 | `propose_manifest_plan` | `mcp:read` | Compact week proposal from expiring + match_meals. No writes. |
 | `commit_manifest_plan` | `mcp:manifest:write` | Commit confirmed entries; optional supply sync. Approval required; pass `confirm: true`. |
 | `add_meal_plan_entry` | `mcp:manifest:write` | Schedule one meal. |
@@ -87,7 +87,7 @@ Gated by nutrition feature flags. Not medical advice. Cargo/meal read and write 
 | `clear_nutrition_goal` | `mcp:nutrition:write` | Idempotently clear the active goal as of a date using `operationKey`. Requires nutrition-goals. **`confirm: true`.** |
 | `log_manifest_intake` | `mcp:nutrition:write` | Atomic private Eat / plate-up for prepared entries (`operationKey` + `portions[]` with per-item keys). `servings` is 0.01–100, or `amount`+`unit` (`serving` \| `g` \| `oz`) when `get_meal_plan` `gramsPerServing` is present. Consent must already be active in Ration. Never deducts Cargo. Optional `notes` (≤280) persist only when nutrition-intake-notes is on. |
 | `clear_manifest_intake` | `mcp:nutrition:write` | Atomically soft-void personal intake using `operationKey`. **`confirm: true`.** Does not uncook. |
-| `quick_eat_cargo` | `mcp:inventory:write` + `mcp:manifest:write` + `mcp:nutrition:write` | Personal Quick Eat: resolve by `cargoId` or `name`; create a missing line then eat (net 0 restock reminder). Manifest snack + optional private intake. Requires cargo-quick-eat + nutrition-cook-log-split. |
+| `quick_eat_cargo` | `mcp:inventory:write` + `mcp:manifest:write` + `mcp:nutrition:write` | Personal Quick Eat: resolve by `cargoId`, exact name, or a semantic match at ≥ 0.78. A weaker name returns candidates and does not eat or create. Otherwise creates a missing line then eats (net 0 restock reminder). Manifest snack + optional private intake. Requires cargo-quick-eat + nutrition-cook-log-split. |
 
 ## Supply (Shopping)
 

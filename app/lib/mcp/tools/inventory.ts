@@ -1,6 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import {
+	findCargoByExactName,
 	getCargoByIds,
 	getCargoItem,
 	ingestCargoItems,
@@ -22,6 +23,12 @@ import { coerceToolUnit } from "../../units";
 import { findSimilarCargoBatch } from "../../vector.server";
 import { resolveAgentFlagContext } from "../agent-flag-context";
 import { err, ok, type ToolEnvelope } from "../envelope";
+import {
+	decideStockNameMatch,
+	NAME_SEARCH_RECALL_THRESHOLD,
+	STOCK_NAME_MATCH_THRESHOLD,
+	stockNameDisambiguationNote,
+} from "../name-match";
 import {
 	defineSharedTool,
 	type McpToolsEnv,
@@ -259,8 +266,7 @@ export function createInventoryToolDefs(env: McpToolsEnv) {
 		}),
 		defineSharedTool({
 			name: "adjust_cargo_item",
-			description:
-				"Change pantry quantity by a relative delta (e.g. delta:-2 when stock was used or wasted). Floors at 0; the item stays in Cargo. For personal eating / 'I just ate X', use quick_eat_cargo instead (creates a missing line, Manifest snack, optional intake). Provide itemId, or name to resolve via semantic search. For absolute set (including 0), use update_cargo_item. For bulk add, use preview_inventory_import.",
+			description: `Change pantry quantity by a relative delta (e.g. delta:-2 when stock was used or wasted). Floors at 0; the item stays in Cargo. For personal eating / 'I just ate X', use quick_eat_cargo instead (creates a missing line, Manifest snack, optional intake). Provide itemId, or name. An exact case-insensitive name is applied. A semantic match is applied only at or above the cook threshold (${STOCK_NAME_MATCH_THRESHOLD}); a weaker hit returns candidates and does not change quantity. For absolute set (including 0), use update_cargo_item. For bulk add, use preview_inventory_import.`,
 			inputSchema: z.object({
 				itemId: UuidSchema.optional(),
 				name: z
@@ -268,7 +274,7 @@ export function createInventoryToolDefs(env: McpToolsEnv) {
 					.min(1)
 					.optional()
 					.describe(
-						"Used when itemId is unknown; resolved via semantic search.",
+						`Used when itemId is unknown. Exact case-insensitive name wins. Semantic matches below ${STOCK_NAME_MATCH_THRESHOLD} are not applied.`,
 					),
 				delta: z
 					.number()
@@ -296,63 +302,77 @@ export function createInventoryToolDefs(env: McpToolsEnv) {
 
 				let itemId = a.itemId;
 				if (!itemId && a.name) {
-					const results = await findSimilarCargoBatch(
-						env,
+					const exact = await findCargoByExactName(
+						env.DB,
 						ctx.organizationId,
-						[a.name],
-						{ topK: 3, threshold: 0.6 },
+						a.name,
 					);
-					const matches = results.get(a.name) ?? [];
-					if (matches.length === 0) {
-						return err(
-							"adjust_cargo_item",
-							"not_found",
-							`No pantry item matched "${a.name}".`,
-							{
-								recoveryHint:
-									"Call search_ingredients with a broader query, or list_inventory.",
-							},
-						);
-					}
-					const top = matches[0];
-					if (!top) {
-						return err(
-							"adjust_cargo_item",
-							"not_found",
-							`No pantry item matched "${a.name}".`,
-							{
-								recoveryHint:
-									"Call search_ingredients with a broader query, or list_inventory.",
-							},
-						);
-					}
-					const runnerUp = matches[1];
-					const ambiguous =
-						runnerUp != null &&
-						top.score - runnerUp.score < ADJUST_NAME_SCORE_GAP;
-					if (ambiguous) {
-						const rows = await getCargoByIds(
-							env.DB,
+					if (exact) {
+						itemId = exact.id;
+					} else {
+						const results = await findSimilarCargoBatch(
+							env,
 							ctx.organizationId,
-							matches.map((m) => m.itemId),
+							[a.name],
+							{ topK: 3, threshold: NAME_SEARCH_RECALL_THRESHOLD },
 						);
-						const scoreById = new Map(
-							matches.map((m) => [m.itemId, m.score] as const),
+						const matches = results.get(a.name) ?? [];
+						const decision = decideStockNameMatch(
+							matches,
+							ADJUST_NAME_SCORE_GAP,
 						);
-						return ok("adjust_cargo_item", {
-							adjusted: false,
-							requiresDisambiguation: true,
-							candidates: rows.map((row) => ({
-								id: row.id,
-								name: row.name,
-								quantity: row.quantity,
-								unit: row.unit,
-								matchScore: scoreById.get(row.id) ?? 0,
-							})),
-							note: `Multiple pantry items matched "${a.name}". Ask which one, then retry adjust_cargo_item with that itemId.`,
-						});
+						if (decision.kind === "disambiguate") {
+							const rows = await getCargoByIds(
+								env.DB,
+								ctx.organizationId,
+								decision.matches.map((match) => match.itemId),
+							);
+							if (rows.length === 0) {
+								return err(
+									"adjust_cargo_item",
+									"not_found",
+									`No pantry item matched "${a.name}".`,
+									{
+										recoveryHint:
+											"Call search_ingredients with a broader query, or list_inventory.",
+									},
+								);
+							}
+							const scoreById = new Map(
+								decision.matches.map(
+									(match) => [match.itemId, match.score] as const,
+								),
+							);
+							return ok("adjust_cargo_item", {
+								adjusted: false,
+								requiresDisambiguation: true,
+								candidates: rows.map((row) => ({
+									id: row.id,
+									name: row.name,
+									quantity: row.quantity,
+									unit: row.unit,
+									matchScore: scoreById.get(row.id) ?? 0,
+								})),
+								note: stockNameDisambiguationNote(
+									a.name,
+									decision.reason,
+									"retry adjust_cargo_item with that itemId",
+								),
+							});
+						}
+						if (decision.kind === "none") {
+							return err(
+								"adjust_cargo_item",
+								"not_found",
+								`No pantry item matched "${a.name}".`,
+								{
+									recoveryHint:
+										"Call search_ingredients with a broader query, or list_inventory.",
+								},
+							);
+						}
+						itemId = decision.itemId;
 					}
-					itemId = top.itemId;
 				}
 				if (!itemId) {
 					return err(

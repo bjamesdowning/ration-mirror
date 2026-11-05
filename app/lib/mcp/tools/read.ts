@@ -51,6 +51,11 @@ import {
 } from "../envelope";
 import { mapExpiryCargoItems } from "../expiry-map";
 import {
+	cookMatchForScore,
+	NAME_SEARCH_RECALL_THRESHOLD,
+	STOCK_NAME_MATCH_THRESHOLD,
+} from "../name-match";
+import {
 	getKitchenSummaryOutputSchema,
 	getMealPlanOutputSchema,
 	getSupplyListOutputSchema,
@@ -263,8 +268,7 @@ export function createReadToolDefs(env: McpToolsEnv) {
 		}),
 		defineSharedTool({
 			name: "search_ingredients",
-			description:
-				"Search pantry ingredients. Tries vector similarity first, then an exact case-insensitive cargo name when the vector hit is empty.",
+			description: `Search pantry ingredients. Tries vector similarity first (recall threshold ${NAME_SEARCH_RECALL_THRESHOLD}), then an exact case-insensitive cargo name when the vector hit is empty. Each hit includes matchScore and cookMatch (true when matchScore is at least ${STOCK_NAME_MATCH_THRESHOLD}, the cook threshold). cookMatch false is a recall hint and does not change stock.`,
 			inputSchema: z.object({
 				query: z.string().min(1).describe("The ingredient to search for"),
 				topK: z
@@ -283,7 +287,7 @@ export function createReadToolDefs(env: McpToolsEnv) {
 					env,
 					ctx.organizationId,
 					[a.query],
-					{ topK: a.topK ?? 5, threshold: 0.6 },
+					{ topK: a.topK ?? 5, threshold: NAME_SEARCH_RECALL_THRESHOLD },
 				);
 				const matches = results.get(a.query) || [];
 				if (matches.length === 0) {
@@ -314,7 +318,11 @@ export function createReadToolDefs(env: McpToolsEnv) {
 						Date.now() - createdAtMs < SEARCH_EXACT_RECENT_MS;
 					return ok(
 						"search_ingredients",
-						{ matches: [{ ...exact, matchScore: 1 }] },
+						{
+							matches: [
+								{ ...exact, matchScore: 1, cookMatch: cookMatchForScore(1) },
+							],
+						},
 						recent
 							? {
 									meta: { embeddingMayBePending: true },
@@ -332,10 +340,14 @@ export function createReadToolDefs(env: McpToolsEnv) {
 					matchedIds,
 				);
 				const scoreByItemId = new Map(matches.map((m) => [m.itemId, m.score]));
-				const items = cargoRows.map((c) => ({
-					...c,
-					matchScore: scoreByItemId.get(c.id) ?? 0,
-				}));
+				const items = cargoRows.map((c) => {
+					const matchScore = scoreByItemId.get(c.id) ?? 0;
+					return {
+						...c,
+						matchScore,
+						cookMatch: cookMatchForScore(matchScore),
+					};
+				});
 				return ok("search_ingredients", { matches: items });
 			},
 		}),
@@ -462,7 +474,7 @@ export function createReadToolDefs(env: McpToolsEnv) {
 		defineSharedTool({
 			name: "get_cargo_item",
 			description:
-				"Fetch one pantry item by id with all fields (tags, expiresAt, customFields, nutrition when present). Useful before update_cargo_item.",
+				"Fetch one pantry item by id (name, quantity, unit, domain, tags, expiresAt, and nutrition when present). Useful before update_cargo_item.",
 			inputSchema: z.object({
 				itemId: UuidSchema.describe("Cargo item id"),
 			}),
@@ -623,13 +635,23 @@ export function createReadToolDefs(env: McpToolsEnv) {
 		defineSharedTool({
 			name: "get_meal_plan",
 			description:
-				"Retrieve the user's weekly meal plan. Returns scheduled meals by date and slot (breakfast, lunch, dinner, snack), including cookedAt/consumedAt. gramsPerServing is recipe-ingredient mass per serving when known — use it to convert plated grams/oz for log_manifest_intake; do not invent grams if it is null. When nutrition-manifest is on and the key has mcp:nutrition:read, includes the caller's personalIntake per entry.",
+				"Retrieve the user's meal plan. days defaults to 7 (inclusive, max 14). When startDate is omitted, the window starts on today UTC. Returns scheduled meals by date and slot (breakfast, lunch, dinner, snack), including cookedAt/consumedAt. gramsPerServing is recipe-ingredient mass per serving when known — use it to convert plated grams/oz for log_manifest_intake; do not invent grams if it is null. When nutrition-manifest is on and the key has mcp:nutrition:read, includes the caller's personalIntake per entry.",
 			inputSchema: z.object({
 				startDate: z
 					.string()
 					.regex(/^\d{4}-\d{2}-\d{2}$/, "Must be YYYY-MM-DD format")
-					.optional(),
-				days: z.number().int().min(1).max(14).optional().default(7),
+					.optional()
+					.describe("Window start (YYYY-MM-DD). Defaults to today UTC."),
+				days: z
+					.number()
+					.int()
+					.min(1)
+					.max(14)
+					.optional()
+					.default(7)
+					.describe(
+						"Inclusive day count from startDate. Defaults to 7, max 14.",
+					),
 			}),
 			outputSchema: getMealPlanOutputSchema,
 			scopes: ["mcp:read"],

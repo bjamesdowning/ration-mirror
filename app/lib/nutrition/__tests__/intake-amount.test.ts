@@ -55,6 +55,24 @@ describe("recipe mass helpers", () => {
 		).toBe(250);
 	});
 
+	it("does not rebuild a partial mass when recipeMassG is null", () => {
+		expect(
+			recipeMassGFromSnapshot({
+				recipeMassG: null,
+				attributions: [{ grams: 200 }, { grams: null }],
+			}),
+		).toBeNull();
+		expect(
+			gramsPerServingFromSnapshot(
+				{
+					recipeMassG: null,
+					attributions: [{ grams: 200 }, { grams: null }],
+				},
+				1,
+			),
+		).toBeNull();
+	});
+
 	it("computes gramsPerServing from recipe yield", () => {
 		expect(gramsPerServingFromSnapshot({ recipeMassG: 800 }, 4)).toBe(200);
 		expect(gramsPerServingFromSnapshot({ recipeMassG: 800 }, 0)).toBeNull();

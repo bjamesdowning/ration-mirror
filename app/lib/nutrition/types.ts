@@ -154,7 +154,10 @@ export type MealNutritionResult = {
 	perServing: NutrientsPerServing;
 	coverage: number;
 	attributions: NutrientAttribution[];
-	/** Sum of convertible ingredient grams for the whole recipe (not per serving). */
+	/**
+	 * Whole-recipe grams. Null when mass is unknown or partial (a contributing
+	 * line has nutrients but no grams).
+	 */
 	recipeMassG: number | null;
 };
 
@@ -171,7 +174,10 @@ export type MealNutritionSnapshot = {
 	coverage: number;
 	attributions: NutrientAttribution[];
 	computedAt: string;
-	/** Whole-recipe convertible mass; omitted on snapshots computed before mass persist. */
+	/**
+	 * Whole-recipe grams. Null when mass is unknown or partial. Omitted on
+	 * snapshots computed before mass was stored; those still sum attribution grams.
+	 */
 	recipeMassG?: number | null;
 	/** Rollup notes, such as count units that ignored per-100 g density. */
 	warnings?: string[];

@@ -45,6 +45,7 @@ import {
 import { coerceIntakeLoggedUnit } from "./intake-amount";
 import { mapWithConcurrency } from "./map-concurrency";
 import {
+	agreedCountUnitPortionGrams,
 	type CargoOverrideCandidate,
 	directNutrientsFromCountCargoOverride,
 	estimateGramsFromPerServingDensity,
@@ -309,6 +310,10 @@ export async function recomputeAndStoreMealNutrition(
 				const fdcId = override.nutrition.fdcId ?? null;
 
 				if (nutrientsPer100g) {
+					// Direct perServing only when the count-unit macros disagree
+					// (or there is no recoverable gram weight). A consistent iOS
+					// mass link returns null and falls through to the confirmed
+					// Eat weight below.
 					const countRollup = resolveCountUnitMealContribution({
 						snapshot: override.nutrition,
 						ingredientQuantity: ing.quantity ?? 0,
@@ -361,17 +366,27 @@ export async function recomputeAndStoreMealNutrition(
 							override.nutrition.source === "user_override" &&
 							override.nutrition.perServing
 						) {
-							const confirmed = estimateGramsFromPerServingDensity(
+							const agreed = agreedCountUnitPortionGrams(
 								nutrientsPer100g,
 								override.nutrition.perServing,
 								ing.quantity,
 							);
-							if (
-								confirmed != null &&
-								Number.isFinite(confirmed) &&
-								confirmed > 0
-							) {
-								grams = confirmed;
+							if (agreed != null) {
+								grams = agreed;
+							}
+							if (grams == null || grams <= 0) {
+								const confirmed = estimateGramsFromPerServingDensity(
+									nutrientsPer100g,
+									override.nutrition.perServing,
+									ing.quantity,
+								);
+								if (
+									confirmed != null &&
+									Number.isFinite(confirmed) &&
+									confirmed > 0
+								) {
+									grams = confirmed;
+								}
 							}
 						}
 						if ((grams == null || grams <= 0) && fdcId != null) {

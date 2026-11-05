@@ -41,6 +41,10 @@ export type MealNutritionIngredientInput = {
  * {@link MealNutritionIngredientInput.directContribution}. Unresolved ingredients
  * with known grams count against coverage. When every matched contribution is
  * direct (no mass), coverage is 1.
+ *
+ * `recipeMassG` is the sum of convertible grams only when every contributing
+ * line has a gram weight. A direct contribution with no grams makes the total
+ * partial, so `recipeMassG` is null and Eat-by-grams stays off.
  */
 export function computeMealNutrition(
 	ingredients: MealNutritionIngredientInput[],
@@ -49,6 +53,7 @@ export function computeMealNutrition(
 	let matchedGrams = 0;
 	let totalGrams = 0;
 	let directMatched = 0;
+	let masslessContribution = false;
 	let total = zeroNutrientAccumulator();
 	const attributions: NutrientAttribution[] = [];
 
@@ -86,6 +91,7 @@ export function computeMealNutrition(
 		const direct = ing.directContribution;
 		if (direct) {
 			directMatched += 1;
+			masslessContribution = true;
 			total = addNutrients(total, direct);
 			attributions.push({
 				ingredientIndex: i,
@@ -108,6 +114,6 @@ export function computeMealNutrition(
 			...a,
 			contribution: nutrientsPerServingFromTotal(a.contribution, servings),
 		})),
-		recipeMassG: totalGrams > 0 ? totalGrams : null,
+		recipeMassG: masslessContribution || totalGrams <= 0 ? null : totalGrams,
 	};
 }

@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { computeMealNutrition } from "../compute-meal-nutrition";
-import { gramsPerServingFromSnapshot } from "../intake-amount";
 import {
+	canLogIntakeByMass,
+	gramsPerServingFromSnapshot,
+} from "../intake-amount";
+import {
+	agreedCountUnitPortionGrams,
+	agreedGramsPerCountUnit,
 	directNutrientsFromCountCargoOverride,
 	estimateGramsFromPerServingDensity,
 	nutrientsPer100gFromCargoOverride,
@@ -10,7 +15,7 @@ import {
 	resolveCountUnitMealContribution,
 	withDerivedPer100g,
 } from "../override-scale";
-import type { NutritionSnapshot } from "../types";
+import type { NutrientValues, NutritionSnapshot } from "../types";
 
 const milkPackageTotals = {
 	energyKcal: 500,
@@ -334,6 +339,13 @@ describe("resolveCountUnitMealContribution", () => {
 		);
 		expect(meal.perServing.proteinG).toBe(1);
 		expect(meal.recipeMassG).toBeNull();
+		expect(snapshot.per100g).not.toBeNull();
+		expect(snapshot.perServing).not.toBeNull();
+		if (snapshot.per100g && snapshot.perServing) {
+			expect(
+				agreedGramsPerCountUnit(snapshot.per100g, snapshot.perServing),
+			).toBeNull();
+		}
 		expect(
 			gramsPerServingFromSnapshot(
 				{
@@ -344,4 +356,161 @@ describe("resolveCountUnitMealContribution", () => {
 			),
 		).toBeNull();
 	});
+
+	it("keeps 150 g when perServing matches per100g on every macro", () => {
+		const per100g = countMacros({
+			energyKcal: 100,
+			proteinG: 10,
+			carbG: 12,
+			fatG: 4,
+		});
+		const perServing = countMacros({
+			energyKcal: 150,
+			proteinG: 15,
+			carbG: 18,
+			fatG: 6,
+		});
+		expect(agreedGramsPerCountUnit(per100g, perServing)).toBe(150);
+		expect(agreedCountUnitPortionGrams(per100g, perServing, 2)).toBe(300);
+		const snapshot: NutritionSnapshot = {
+			source: "user_override",
+			confidence: 1,
+			verified: true,
+			per100g,
+			perServing,
+			fdcId: null,
+			description: null,
+		};
+		expect(
+			resolveCountUnitMealContribution({
+				snapshot,
+				ingredientQuantity: 1,
+				ingredientUnit: "unit",
+				packageQuantity: 1,
+				packageUnit: "unit",
+			}),
+		).toBeNull();
+		const meal = computeMealNutrition(
+			[
+				{
+					name: "yogurt",
+					quantity: 1,
+					unit: "unit",
+					nutrientsPer100g: per100g,
+					grams: agreedCountUnitPortionGrams(per100g, perServing, 1),
+				},
+			],
+			1,
+		);
+		expect(meal.recipeMassG).toBe(150);
+		expect(meal.perServing.energyKcal).toBeCloseTo(150, 5);
+		expect(meal.perServing.proteinG).toBeCloseTo(15, 5);
+		expect(meal.perServing.carbG).toBeCloseTo(18, 5);
+		expect(meal.perServing.fatG).toBeCloseTo(6, 5);
+		const gramsPerServing = gramsPerServingFromSnapshot(
+			{
+				attributions: meal.attributions,
+				recipeMassG: meal.recipeMassG,
+			},
+			1,
+		);
+		expect(gramsPerServing).toBe(150);
+		expect(canLogIntakeByMass(gramsPerServing)).toBe(true);
+	});
+
+	it("treats a zero density beside a positive portion as a disagreement", () => {
+		const per100g = countMacros({
+			energyKcal: 100,
+			proteinG: 0,
+			carbG: 10,
+			fatG: 2,
+		});
+		const perServing = countMacros({
+			energyKcal: 150,
+			proteinG: 1,
+			carbG: 15,
+			fatG: 3,
+		});
+		expect(agreedGramsPerCountUnit(per100g, perServing)).toBeNull();
+		const snapshot: NutritionSnapshot = {
+			source: "user_override",
+			confidence: 1,
+			verified: true,
+			per100g,
+			perServing,
+			fdcId: null,
+			description: null,
+		};
+		const resolved = resolveCountUnitMealContribution({
+			snapshot,
+			ingredientQuantity: 1,
+			ingredientUnit: "unit",
+			packageQuantity: 1,
+			packageUnit: "unit",
+		});
+		expect(resolved?.directContribution.energyKcal).toBe(150);
+		expect(resolved?.directContribution.proteinG).toBe(1);
+		expect(resolved?.warning).toContain("perServing");
+	});
+
+	it("skips macros that are zero on both sides", () => {
+		const per100g = countMacros({
+			energyKcal: 100,
+			proteinG: 0,
+			carbG: 0,
+			fatG: 0,
+		});
+		const perServing = countMacros({
+			energyKcal: 150,
+			proteinG: 0,
+			carbG: 0,
+			fatG: 0,
+		});
+		expect(agreedGramsPerCountUnit(per100g, perServing)).toBe(150);
+	});
+
+	it("allows a small gram difference between macros", () => {
+		const per100g = countMacros({
+			energyKcal: 100,
+			proteinG: 10,
+			carbG: 12,
+			fatG: 4,
+		});
+		const perServing = countMacros({
+			energyKcal: 150,
+			proteinG: 15.04,
+			carbG: 18,
+			fatG: 6,
+		});
+		expect(agreedGramsPerCountUnit(per100g, perServing)).toBe(150);
+	});
+
+	it("rejects macro ratios that imply different gram weights", () => {
+		const per100g = countMacros({
+			energyKcal: 100,
+			proteinG: 10,
+			carbG: 12,
+			fatG: 4,
+		});
+		const perServing = countMacros({
+			energyKcal: 150,
+			proteinG: 20,
+			carbG: 18,
+			fatG: 6,
+		});
+		expect(agreedGramsPerCountUnit(per100g, perServing)).toBeNull();
+	});
 });
+
+function countMacros(
+	macros: Pick<NutrientValues, "energyKcal" | "proteinG" | "carbG" | "fatG">,
+): NutrientValues {
+	return {
+		...macros,
+		fiberG: 0,
+		sugarG: null,
+		satFatG: null,
+		sodiumMg: null,
+		saltG: null,
+	};
+}

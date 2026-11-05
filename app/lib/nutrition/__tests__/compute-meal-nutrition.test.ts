@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { computeMealNutrition } from "~/lib/nutrition/compute-meal-nutrition";
-import type { NutrientsPer100g } from "~/lib/nutrition/types";
+import { gramsPerServingFromSnapshot } from "~/lib/nutrition/intake-amount";
+import type { NutrientsPer100g, NutrientValues } from "~/lib/nutrition/types";
 
 const ONION: NutrientsPer100g = {
 	energyKcal: 40,
@@ -77,6 +78,7 @@ describe("computeMealNutrition", () => {
 		expect(result.coverage).toBe(0.5);
 		expect(result.attributions).toHaveLength(1);
 		expect(result.perServing.energyKcal).toBe(40);
+		expect(result.recipeMassG).toBe(200);
 	});
 
 	it("ignores ingredients that cannot convert to grams", () => {
@@ -97,6 +99,7 @@ describe("computeMealNutrition", () => {
 
 		expect(result.coverage).toBe(1);
 		expect(result.attributions).toHaveLength(1);
+		expect(result.recipeMassG).toBe(100);
 	});
 
 	it("uses precomputed grams when provided", () => {
@@ -147,6 +150,7 @@ describe("computeMealNutrition", () => {
 		expect(result.coverage).toBe(1);
 		expect(result.attributions).toHaveLength(1);
 		expect(result.attributions[0]?.grams).toBeNull();
+		expect(result.recipeMassG).toBeNull();
 	});
 
 	it("uses directContribution when count unit has density but no grams", () => {
@@ -172,5 +176,61 @@ describe("computeMealNutrition", () => {
 
 		expect(result.perServing.energyKcal).toBe(90);
 		expect(result.coverage).toBe(1);
+		expect(result.recipeMassG).toBeNull();
+	});
+
+	it("drops recipe mass when a contributing line has no grams", () => {
+		const rice: NutrientsPer100g = {
+			energyKcal: 130,
+			proteinG: 2.7,
+			fatG: 0.3,
+			carbG: 28,
+			fiberG: 0.4,
+			sugarG: 0,
+			satFatG: 0.1,
+			sodiumMg: 1,
+			saltG: 0,
+		};
+		const egg: NutrientValues = {
+			energyKcal: 155,
+			proteinG: 13,
+			fatG: 11,
+			carbG: 1.1,
+			fiberG: 0,
+			sugarG: 0,
+			satFatG: 3.3,
+			sodiumMg: 124,
+			saltG: 0.3,
+		};
+		const result = computeMealNutrition([
+			{
+				name: "rice",
+				quantity: 200,
+				unit: "g",
+				nutrientsPer100g: rice,
+			},
+			{
+				name: "egg",
+				quantity: 2,
+				unit: "unit",
+				nutrientsPer100g: null,
+				directContribution: egg,
+			},
+		]);
+
+		expect(result.perServing.energyKcal).toBeCloseTo(260 + 155, 5);
+		expect(result.perServing.proteinG).toBeCloseTo(2.7 * 2 + 13, 5);
+		expect(result.attributions[0]?.grams).toBe(200);
+		expect(result.attributions[1]?.grams).toBeNull();
+		expect(result.recipeMassG).toBeNull();
+		expect(
+			gramsPerServingFromSnapshot(
+				{
+					recipeMassG: result.recipeMassG,
+					attributions: result.attributions,
+				},
+				1,
+			),
+		).toBeNull();
 	});
 });

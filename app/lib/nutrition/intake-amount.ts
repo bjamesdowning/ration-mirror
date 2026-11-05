@@ -116,6 +116,9 @@ export function recipeMassGFromSnapshot(
 	snapshot: RecipeMassSnapshot | null | undefined,
 ): number | null {
 	if (!snapshot) return null;
+	// Explicit null means this compute refused a mass (unknown or partial).
+	// Do not rebuild it from the lines that happened to have grams.
+	if (snapshot.recipeMassG === null) return null;
 	const stored = snapshot.recipeMassG;
 	if (stored != null && Number.isFinite(stored) && stored > 0) {
 		return stored;

@@ -69,6 +69,82 @@ export function nutrientsPer100gFromCargoOverride(
 }
 
 /**
+ * Macros iOS uses to recover grams per counted unit (`CountUnitMass.storedGramsPerUnit`).
+ * Energy first, then protein, carb, and fat.
+ */
+const COUNT_UNIT_MASS_KEYS = [
+	"energyKcal",
+	"proteinG",
+	"carbG",
+	"fatG",
+] as const;
+
+/**
+ * Same band iOS uses when a saved gram weight is "the same" (`shouldPersist`, 0.5 g),
+ * widened to 1% so a large unit still agrees after normal rounding.
+ */
+const COUNT_UNIT_GRAMS_ABSOLUTE_TOLERANCE = 0.5;
+const COUNT_UNIT_GRAMS_RELATIVE_TOLERANCE = 0.01;
+
+function countUnitGramsAgree(reference: number, candidate: number): boolean {
+	const diff = Math.abs(reference - candidate);
+	const tolerance = Math.max(
+		COUNT_UNIT_GRAMS_ABSOLUTE_TOLERANCE,
+		Math.abs(reference) * COUNT_UNIT_GRAMS_RELATIVE_TOLERANCE,
+	);
+	return diff <= tolerance;
+}
+
+/**
+ * Grams per one count unit when every present macro implies the same weight.
+ *
+ * A zero density beside a positive portion is a disagreement and returns null.
+ * That keeps a contradictory snapshot (42 kcal and 1 g protein against 10 kcal
+ * per 100 g) on `perServing` instead of inventing 420 g. Both sides zero, or a
+ * missing side, is not a ratio and is skipped.
+ */
+export function agreedGramsPerCountUnit(
+	per100g: NutrientsPer100g,
+	perServing: NutrientValues,
+): number | null {
+	let grams: number | null = null;
+	for (const key of COUNT_UNIT_MASS_KEYS) {
+		const density = per100g[key];
+		const portion = perServing[key];
+		if (density == null || portion == null) continue;
+		if (!Number.isFinite(density) || !Number.isFinite(portion)) continue;
+		if (density === 0 && portion === 0) continue;
+		if (density <= 0 || portion <= 0) return null;
+		const implied = (portion / density) * 100;
+		if (!Number.isFinite(implied) || implied <= 0) return null;
+		if (grams == null) {
+			grams = implied;
+			continue;
+		}
+		if (!countUnitGramsAgree(grams, implied)) return null;
+	}
+	return grams;
+}
+
+/**
+ * Ingredient grams for a count line whose per-serving macros match per-100 g.
+ * `perServing` is one pantry unit (the iOS mass link), so quantity scales it.
+ */
+export function agreedCountUnitPortionGrams(
+	per100g: NutrientsPer100g,
+	perServing: NutrientValues,
+	quantity: number,
+): number | null {
+	const perUnit = agreedGramsPerCountUnit(per100g, perServing);
+	if (perUnit == null || !Number.isFinite(quantity) || quantity <= 0) {
+		return null;
+	}
+	const grams = perUnit * quantity;
+	if (!Number.isFinite(grams) || grams <= 0) return null;
+	return grams;
+}
+
+/**
  * Infer portion mass from household `perServing` vs density `per100g` (energy ratio).
  * Used when count units cannot convert to grams directly.
  */
@@ -139,8 +215,11 @@ const COUNT_UNIT_PER_SERVING_WARNING =
 	"per-100 g was not used; count-unit rollup used perServing";
 
 /**
- * Count-unit user overrides roll up from perServing.
- * When per100g is also stored, ignore it so energy density cannot invent grams.
+ * Count-unit user overrides.
+ *
+ * When every present macro agrees, return null so the caller keeps the gram
+ * weight and scales with per-100 g. A contradictory per-100 g block still
+ * rolls up `perServing` and warns, so density cannot invent grams.
  */
 export function resolveCountUnitMealContribution(input: {
 	snapshot: NutritionSnapshot;
@@ -160,6 +239,15 @@ export function resolveCountUnitMealContribution(input: {
 		input.packageUnit,
 	);
 	if (!directContribution) return null;
+	if (
+		input.snapshot.per100g &&
+		agreedGramsPerCountUnit(
+			input.snapshot.per100g,
+			input.snapshot.perServing,
+		) != null
+	) {
+		return null;
+	}
 	return {
 		directContribution,
 		warning: input.snapshot.per100g ? COUNT_UNIT_PER_SERVING_WARNING : null,

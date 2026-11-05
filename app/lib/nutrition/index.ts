@@ -80,6 +80,8 @@ export {
 	resolveIngredientMass,
 } from "./mass-resolution";
 export {
+	agreedCountUnitPortionGrams,
+	agreedGramsPerCountUnit,
 	type CargoOverrideCandidate,
 	directNutrientsFromCountCargoOverride,
 	estimateGramsFromPerServingDensity,

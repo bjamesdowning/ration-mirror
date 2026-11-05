@@ -65,10 +65,7 @@ const MIN_SERVINGS = 1;
 const DEFAULT_SERVINGS = 1;
 
 export const MealSchema = z.object({
-	name: z
-		.string()
-		.min(1, "Meal name is required")
-		.transform((v) => v.toLowerCase()),
+	name: z.string().trim().min(1, "Meal name is required"),
 	domain: z.enum(ITEM_DOMAINS).default("food"),
 	description: z.string().optional(),
 	directions: z
@@ -127,11 +124,11 @@ export type McpCreateMealInput = z.infer<typeof McpCreateMealSchema>;
 
 /**
  * MCP wire schema keeps the submitted name. The handler re-parses with
- * {@link McpCreateMealSchema}, which stores the lowercased name.
+ * {@link McpCreateMealSchema}, which stores that same trimmed name.
  */
 export const McpCreateMealWireSchema = MealSchema.omit({ name: true })
 	.extend({
-		name: z.string().min(1, "Meal name is required"),
+		name: z.string().trim().min(1, "Meal name is required"),
 	})
 	.superRefine(refineMcpMealTextFields);
 
@@ -164,10 +161,7 @@ export type MealUpdateInput = z.infer<typeof MealUpdateSchema>;
 
 /** Schema for creating/updating a provision (single-item "meal"). */
 export const ProvisionSchema = z.object({
-	name: z
-		.string()
-		.min(1, "Item name is required")
-		.transform((v) => v.trim().toLowerCase()),
+	name: z.string().trim().min(1, "Item name is required"),
 	domain: z.enum(ITEM_DOMAINS).default("food"),
 	quantity: z.coerce.number().positive("Quantity must be greater than zero"),
 	unit: z

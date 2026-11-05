@@ -64,7 +64,7 @@ final class GenerateMealViewModel {
             let steps = DirectionsParser.parseDirections(recipe.directions)
             let directionsPayload = steps.isEmpty ? recipe.directions : DirectionsParser.serializeDirections(steps)
             let body = CreateMealRequest(
-                name: recipe.name.lowercased(),
+                name: recipe.name.trimmingCharacters(in: .whitespacesAndNewlines),
                 description: recipe.description,
                 directions: directionsPayload,
                 servings: recipe.servings ?? 2,

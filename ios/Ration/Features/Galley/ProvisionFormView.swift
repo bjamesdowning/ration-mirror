@@ -82,7 +82,7 @@ struct ProvisionFormView: View {
         switch QuantityValidation.validate(quantity) {
         case let .valid(qty):
             let body = CreateProvisionRequest(
-                name: name.trimmingCharacters(in: .whitespaces).lowercased(),
+                name: name.trimmingCharacters(in: .whitespacesAndNewlines),
                 domain: domain,
                 quantity: qty,
                 unit: unit.isEmpty ? "unit" : unit,

@@ -1591,10 +1591,10 @@ describe("MCP tools", () => {
 			expect(createMeal).not.toHaveBeenCalled();
 		});
 
-		it("creates meal and returns id", async () => {
+		it("creates meal and returns the typed name", async () => {
 			vi.mocked(createMeal).mockResolvedValueOnce({
 				id: "new-meal-id",
-				name: "toast",
+				name: "BBQ Chicken",
 				servings: 1,
 				ingredients: [{ ingredientName: "bread", quantity: 1, unit: "slice" }],
 				tags: [],
@@ -1605,19 +1605,23 @@ describe("MCP tools", () => {
 				"create_meal",
 			)({
 				meal: {
-					name: "Toast",
+					name: "  BBQ Chicken  ",
 					servings: 1,
 					ingredients: [
 						{ ingredientName: "bread", quantity: 1, unit: "slice" },
 					],
 				},
 			});
+			const envelope = parseEnvelope(result);
 			const data = parseOk(result);
 			expect(data.id).toBe("new-meal-id");
+			expect(data.name).toBe("BBQ Chicken");
+			expect(data.submittedName).toBeUndefined();
+			expect(envelope.warnings).toBeUndefined();
 			expect(createMeal).toHaveBeenCalledWith(
 				expect.anything(),
 				"org-test-123",
-				expect.objectContaining({ name: "toast", servings: 1 }),
+				expect.objectContaining({ name: "BBQ Chicken", servings: 1 }),
 				expect.objectContaining({
 					userId: "user-test-123",
 					env: expect.anything(),

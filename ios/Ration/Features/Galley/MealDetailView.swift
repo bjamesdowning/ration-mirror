@@ -74,7 +74,7 @@ struct MealDetailView: View {
         .copilotDockScrollMargins()
         .copilotScrollTracked(tab: .galley, isActive: true)
         .background(Theme.ceramic)
-        .navigationTitle((meal ?? initialMeal).name.capitalized)
+        .navigationTitle(MealNameDisplay.text((meal ?? initialMeal).name))
         .navigationBarTitleDisplayMode(.inline)
         .overlay(alignment: .bottom) {
             if showCookUndo, cookUndoToken != nil {
@@ -214,7 +214,7 @@ struct MealDetailView: View {
     private func header(_ meal: Meal) -> some View {
         GlassCard {
             VStack(alignment: .leading, spacing: 10) {
-                Text(meal.name.capitalized).rationTitle()
+                Text(MealNameDisplay.text(meal.name)).rationTitle()
                 if let description = meal.description, !description.isEmpty {
                     Text(description).rationBody()
                 }

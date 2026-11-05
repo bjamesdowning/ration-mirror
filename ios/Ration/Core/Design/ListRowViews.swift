@@ -177,7 +177,7 @@ struct MealRowView: View {
     private var mealMetadata: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
-                Text(meal.name.capitalized)
+                Text(MealNameDisplay.text(meal.name))
                     .rationBody()
                     .lineLimit(1)
                 if isSelectedForSupply {
@@ -221,7 +221,7 @@ struct MealRowView: View {
     }
 
     private var mealAccessibilityLabel: String {
-        var parts = [meal.name.capitalized, meal.type.capitalized]
+        var parts = [MealNameDisplay.text(meal.name), meal.type.capitalized]
         if !meal.ingredients.isEmpty {
             parts.append("\(meal.ingredients.count) ingredients")
         }
@@ -267,7 +267,7 @@ struct ManifestEntryRow: View {
                 env.openDeepLink(.meal(id: entry.mealId))
             } label: {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(entry.mealName.capitalized)
+                    Text(MealNameDisplay.text(entry.mealName))
                         .rationBody()
                         .strikethrough(entry.isCooked)
                         .foregroundStyle(entry.isCooked ? Theme.muted : Theme.carbon)
@@ -289,7 +289,7 @@ struct ManifestEntryRow: View {
                 }
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("\(entry.mealName.capitalized), \(entry.mealType.capitalized)")
+            .accessibilityLabel("\(MealNameDisplay.text(entry.mealName)), \(entry.mealType.capitalized)")
             Spacer()
             actionControl
         }

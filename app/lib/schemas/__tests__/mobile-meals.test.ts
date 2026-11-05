@@ -8,6 +8,11 @@ describe("MobileUpdateMealSchema", () => {
 		expect(Object.keys({ name: "stir fry" }).length).toBe(1);
 	});
 
+	it("keeps the typed meal name", () => {
+		const parsed = MobileUpdateMealSchema.parse({ name: "  BBQ Chicken  " });
+		expect(parsed.name).toBe("BBQ Chicken");
+	});
+
 	it("accepts partial patches with servings and prep time", () => {
 		const parsed = MobileUpdateMealSchema.parse({
 			servings: 4,

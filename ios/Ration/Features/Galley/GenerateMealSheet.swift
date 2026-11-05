@@ -107,7 +107,7 @@ struct GenerateMealSheet: View {
                                 HStack {
                                     Image(systemName: selectedRecipeNames.contains(recipe.name) ? "checkmark.circle.fill" : "circle")
                                         .foregroundStyle(selectedRecipeNames.contains(recipe.name) ? Theme.hyperGreen : Theme.muted)
-                                    Text(recipe.name.capitalized).rationHeadline()
+                                    Text(MealNameDisplay.text(recipe.name)).rationHeadline()
                                     Spacer()
                                 }
                                 if let description = recipe.description {

@@ -7,6 +7,7 @@ import {
 	isNull,
 	lte,
 	notInArray,
+	sql,
 } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import {
@@ -1218,7 +1219,7 @@ export async function getMealsForPicker(
 		})
 		.from(meal)
 		.where(eq(meal.organizationId, organizationId))
-		.orderBy(meal.name);
+		.orderBy(sql`${meal.name} COLLATE NOCASE`);
 
 	if (rows.length === 0) {
 		return [];

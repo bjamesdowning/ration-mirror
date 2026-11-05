@@ -5,6 +5,7 @@ import {
 	MealIngredientSchema,
 	MealSchema,
 	ProvisionSchema,
+	storedMealNameFields,
 } from "~/lib/schemas/meal";
 
 describe("MealIngredientSchema", () => {
@@ -86,9 +87,18 @@ describe("MealSchema", () => {
 		expect(result.success).toBe(true);
 	});
 
-	it("lowercases meal name", () => {
-		const result = MealSchema.safeParse(validMeal);
-		if (result.success) expect(result.data.name).toBe("chicken stir fry");
+	it("keeps the typed meal name and trims it", () => {
+		const result = MealSchema.safeParse({
+			...validMeal,
+			name: "  BBQ Chicken  ",
+		});
+		expect(result.success).toBe(true);
+		if (result.success) expect(result.data.name).toBe("BBQ Chicken");
+	});
+
+	it("rejects a whitespace-only meal name", () => {
+		const result = MealSchema.safeParse({ ...validMeal, name: "   " });
+		expect(result.success).toBe(false);
 	});
 
 	it("rejects empty meal name", () => {
@@ -198,6 +208,22 @@ describe("McpUpdateMealSchema", () => {
 	});
 });
 
+describe("storedMealNameFields", () => {
+	it("is a no-op when the stored name matches what was submitted", () => {
+		expect(storedMealNameFields("BBQ Chicken", "BBQ Chicken")).toEqual({
+			name: "BBQ Chicken",
+		});
+	});
+
+	it("still reports a stored name that differs from the submission", () => {
+		expect(storedMealNameFields("BBQ Chicken", "bbq chicken")).toEqual({
+			name: "bbq chicken",
+			submittedName: "BBQ Chicken",
+			warning: 'Stored name is "bbq chicken". Use that string on later calls.',
+		});
+	});
+});
+
 describe("ProvisionSchema", () => {
 	const validProvision = {
 		name: "Greek Yogurt",
@@ -210,12 +236,13 @@ describe("ProvisionSchema", () => {
 		expect(result.success).toBe(true);
 	});
 
-	it("trims and lowercases name", () => {
+	it("trims the name and keeps typed case", () => {
 		const result = ProvisionSchema.safeParse({
 			...validProvision,
 			name: "  Greek Yogurt  ",
 		});
-		if (result.success) expect(result.data.name).toBe("greek yogurt");
+		expect(result.success).toBe(true);
+		if (result.success) expect(result.data.name).toBe("Greek Yogurt");
 	});
 
 	it("rejects zero quantity", () => {

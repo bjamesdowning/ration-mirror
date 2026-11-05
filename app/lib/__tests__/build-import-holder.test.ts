@@ -67,7 +67,7 @@ describe("buildImportHolderMeal", () => {
 			importTag: "social-import",
 		});
 		expect(completeness).toBe("link_holder");
-		expect(meal.name).toBe("smash burger");
+		expect(meal.name).toBe("Smash Burger");
 		expect(meal.description).toContain("https://www.tiktok.com/@chef/video/99");
 		expect(meal.customFields.sourceUrl).toBe(
 			"https://www.tiktok.com/@chef/video/99",

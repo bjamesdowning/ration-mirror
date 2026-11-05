@@ -351,7 +351,7 @@ struct CargoDetailView: View {
                     env.openDeepLink(.meal(id: meal.id))
                 } label: {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(meal.name.capitalized).rationBody()
+                        Text(MealNameDisplay.text(meal.name)).rationBody()
                         if let description = meal.description, !description.isEmpty, isExpanded {
                             Text(description).rationCaption()
                         }

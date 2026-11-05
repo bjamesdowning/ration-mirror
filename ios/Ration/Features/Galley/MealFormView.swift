@@ -153,7 +153,7 @@ struct MealFormView: View {
                 !$0.ingredientName.trimmingCharacters(in: .whitespaces).isEmpty
             }
             let body = CreateMealRequest(
-                name: name.trimmingCharacters(in: .whitespaces).lowercased(),
+                name: name.trimmingCharacters(in: .whitespacesAndNewlines),
                 domain: domain,
                 description: description.isEmpty ? nil : description,
                 directions: directionsPayload,

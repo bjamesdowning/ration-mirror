@@ -31,10 +31,7 @@ const ManifestIngredientSchema = z.object({
 /** Recipe meal in manifest format (has ingredients). */
 export const ManifestRecipeSchema = z.object({
 	id: optionalUuid,
-	name: z
-		.string()
-		.min(1, "Meal name is required")
-		.transform((v) => v.toLowerCase()),
+	name: z.string().trim().min(1, "Meal name is required"),
 	type: z.literal("recipe"),
 	domain: z.enum(ITEM_DOMAINS).default("food"),
 	description: z.string().optional(),
@@ -59,10 +56,7 @@ export const ManifestRecipeSchema = z.object({
 /** Provision meal in manifest format (single-item, no ingredients array). */
 export const ManifestProvisionSchema = z.object({
 	id: optionalUuid,
-	name: z
-		.string()
-		.min(1, "Item name is required")
-		.transform((v) => v.trim().toLowerCase()),
+	name: z.string().trim().min(1, "Item name is required"),
 	type: z.literal("provision"),
 	domain: z.enum(ITEM_DOMAINS).default("food"),
 	quantity: z.coerce.number().positive("Quantity must be greater than zero"),

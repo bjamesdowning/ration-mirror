@@ -3,6 +3,7 @@ import { z } from "zod";
 import { cookDeductionNote } from "../../cook-feedback";
 import { cookMealFromGalley } from "../../galley-cook-manifest.server";
 import { getTodayISO } from "../../manifest-dates";
+import { storedMealName } from "../../meal-name";
 import {
 	clearMealSelections,
 	upsertMealSelection,
@@ -50,7 +51,7 @@ export function createGalleyToolDefs(env: McpToolsEnv) {
 					userId: ctx.userId,
 				});
 				const nameFields = storedMealNameFields(
-					submittedName,
+					storedMealName(submittedName),
 					created?.name ?? parsed.name,
 				);
 				return ok(
@@ -97,7 +98,10 @@ export function createGalleyToolDefs(env: McpToolsEnv) {
 						recoveryHint: "Call list_meals to find a valid meal id.",
 					});
 				}
-				const nameFields = storedMealNameFields(submittedName, updated.name);
+				const nameFields = storedMealNameFields(
+					storedMealName(submittedName),
+					updated.name,
+				);
 				return ok(
 					"update_meal",
 					{

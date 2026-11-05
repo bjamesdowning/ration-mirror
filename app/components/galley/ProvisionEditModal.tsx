@@ -49,7 +49,7 @@ export function ProvisionEditModal({
 		e.preventDefault();
 		fetcher.submit(
 			JSON.stringify({
-				name: name.trim().toLowerCase(),
+				name: name.trim(),
 				quantity: Number(quantity) || 1,
 				unit: unit || "unit",
 				domain: domain || "food",

@@ -57,7 +57,7 @@ export function ProvisionQuickAdd({
 			.filter(Boolean);
 		fetcher.submit(
 			JSON.stringify({
-				name: name.trim().toLowerCase(),
+				name: name.trim(),
 				quantity: Number(quantity) || 1,
 				unit: unit || "unit",
 				domain: domain || "food",

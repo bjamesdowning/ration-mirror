@@ -37,7 +37,7 @@ struct AddManifestEntrySheet: View {
                     Section("Meal") {
                         Picker("Meal", selection: $model.selectedMealId) {
                             ForEach(model.meals) { meal in
-                                Text(meal.name.capitalized).tag(Optional(meal.id))
+                                Text(MealNameDisplay.text(meal.name)).tag(Optional(meal.id))
                             }
                         }
                     }

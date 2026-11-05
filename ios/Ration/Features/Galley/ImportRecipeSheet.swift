@@ -381,7 +381,7 @@ struct ImportRecipeSheet: View {
                         .rationCaption()
                         .foregroundStyle(Theme.hyperGreen)
                     Text("Review import").rationHeadline()
-                    Text(extracted.name.capitalized).rationBody()
+                    Text(MealNameDisplay.text(extracted.name)).rationBody()
                     Text(verificationSummary(extracted, softFailToPhoto: softFailToPhoto))
                         .rationCaption()
                         .foregroundStyle(Theme.muted)
@@ -454,7 +454,7 @@ struct ImportRecipeSheet: View {
                 VStack(spacing: 8) {
                     Text("Already imported").rationHeadline()
                     if let existingName {
-                        Text(existingName.capitalized).rationCaption()
+                        Text(MealNameDisplay.text(existingName)).rationCaption()
                     }
                 }
             }
@@ -474,7 +474,7 @@ struct ImportRecipeSheet: View {
                         .font(Typography.heroIcon(36))
                         .foregroundStyle(Theme.hyperGreen)
                     Text("Added to Galley").rationHeadline()
-                    Text(meal.name.capitalized).rationCaption()
+                    Text(MealNameDisplay.text(meal.name)).rationCaption()
                 }
             }
             Button("View meal") {

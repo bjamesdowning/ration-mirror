@@ -224,7 +224,7 @@ struct MealsReadyWidget: View {
                         } label: {
                             HStack(spacing: 10) {
                                 HubMatchRing(percentage: match.matchPercentage)
-                                Text(match.meal.name.capitalized)
+                                Text(MealNameDisplay.text(match.meal.name))
                                     .rationBody()
                                     .lineLimit(2)
                                 Spacer()
@@ -235,7 +235,7 @@ struct MealsReadyWidget: View {
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel("Open \(match.meal.name)")
+                        .accessibilityLabel("Open \(MealNameDisplay.text(match.meal.name))")
                     }
                 }
             }
@@ -263,7 +263,7 @@ struct MealsPartialWidget: View {
                         } label: {
                             HStack(spacing: 10) {
                                 HubMatchRing(percentage: match.matchPercentage)
-                                Text(match.meal.name.capitalized).rationBody().lineLimit(2)
+                                Text(MealNameDisplay.text(match.meal.name)).rationBody().lineLimit(2)
                                 Spacer()
                                 Image(systemName: "chevron.right")
                                     .font(.caption)
@@ -379,7 +379,7 @@ struct ManifestPreviewWidget: View {
                 } label: {
                     HStack(spacing: 10) {
                         HubSlotBadge(slotType: entry.slotType)
-                        Text(entry.mealName.capitalized)
+                        Text(MealNameDisplay.text(entry.mealName))
                             .rationBody()
                             .multilineTextAlignment(.leading)
                         Spacer()
@@ -411,7 +411,7 @@ struct ManifestPreviewWidget: View {
                     onSelectEntry?(entry)
                 } label: {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(entry.mealName.capitalized)
+                        Text(MealNameDisplay.text(entry.mealName))
                             .font(Typography.caption())
                             .lineLimit(daySpan == 1 ? nil : 2)
                             .multilineTextAlignment(.leading)

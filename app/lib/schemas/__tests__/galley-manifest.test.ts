@@ -17,9 +17,13 @@ describe("ManifestMealSchema — recipe type", () => {
 		expect(result.success).toBe(true);
 	});
 
-	it("lowercases recipe name", () => {
-		const result = ManifestMealSchema.safeParse(validRecipe);
-		if (result.success) expect(result.data.name).toBe("pasta carbonara");
+	it("keeps the typed recipe name and trims it", () => {
+		const result = ManifestMealSchema.safeParse({
+			...validRecipe,
+			name: "  Pasta Carbonara  ",
+		});
+		expect(result.success).toBe(true);
+		if (result.success) expect(result.data.name).toBe("Pasta Carbonara");
 	});
 
 	it("accepts optional UUID id", () => {
@@ -82,12 +86,13 @@ describe("ManifestMealSchema — provision type", () => {
 		expect(result.success).toBe(true);
 	});
 
-	it("trims and lowercases provision name", () => {
+	it("trims the provision name and keeps typed case", () => {
 		const result = ManifestMealSchema.safeParse({
 			...validProvision,
 			name: "  Greek Yogurt  ",
 		});
-		if (result.success) expect(result.data.name).toBe("greek yogurt");
+		expect(result.success).toBe(true);
+		if (result.success) expect(result.data.name).toBe("Greek Yogurt");
 	});
 
 	it("rejects zero quantity", () => {

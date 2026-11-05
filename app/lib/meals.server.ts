@@ -48,6 +48,7 @@ import {
 	type MissingIngredientDetail,
 	resolveCargoBucketsForIngredient,
 } from "./matching.server";
+import { storedMealName } from "./meal-name";
 import { NUTRITION_MEAL_RECOMPUTE_CONCURRENCY } from "./nutrition/constants";
 import { mapWithConcurrency } from "./nutrition/map-concurrency";
 import {
@@ -794,7 +795,7 @@ export async function createMeal(
 		d1.insert(meal).values({
 			id: mealId,
 			organizationId,
-			name: data.name.toLowerCase(),
+			name: storedMealName(data.name),
 			domain: data.domain,
 			description: data.description,
 			directions: data.directions,
@@ -914,7 +915,7 @@ export async function createMeals(
 			d1.insert(meal).values({
 				id: mealId,
 				organizationId,
-				name: data.name.toLowerCase(),
+				name: storedMealName(data.name),
 				domain: data.domain,
 				description: data.description,
 				directions: data.directions,
@@ -1030,7 +1031,7 @@ export async function updateMeal(
 		d1
 			.update(meal)
 			.set({
-				name: data.name.toLowerCase(),
+				name: storedMealName(data.name),
 				domain: data.domain,
 				description: data.description,
 				directions: data.directions,
@@ -1138,7 +1139,7 @@ export async function createProvision(
 		d1.insert(meal).values({
 			id: mealId,
 			organizationId,
-			name: data.name.toLowerCase(),
+			name: storedMealName(data.name),
 			domain: data.domain,
 			type: "provision",
 			servings: 1,
@@ -1918,7 +1919,7 @@ export async function createProvisionFromCargo(
 		d1.insert(meal).values({
 			id: mealId,
 			organizationId,
-			name: cargoItem.name.toLowerCase(),
+			name: storedMealName(cargoItem.name),
 			domain: cargoItem.domain,
 			type: "provision",
 			servings: 1,

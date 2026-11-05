@@ -79,7 +79,7 @@ struct ManifestPlateUpSheet: View {
         NavigationStack {
             Form {
                 Section {
-                    Text(entry.mealName.capitalized).rationHeadline()
+                    Text(MealNameDisplay.text(entry.mealName)).rationHeadline()
                     Text(entry.mealType.capitalized).rationCaption()
                     Text("Not medical advice. Goals and totals are planning aids only.")
                         .rationCaption()

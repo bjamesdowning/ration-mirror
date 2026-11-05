@@ -98,7 +98,7 @@ struct PlanWeekSheet: View {
                 GlassCard {
                     HStack {
                         Text(entry.date).rationCaption()
-                        Text(entry.mealName.capitalized).rationBody()
+                        Text(MealNameDisplay.text(entry.mealName)).rationBody()
                         Spacer()
                         Text(entry.slotType.capitalized).rationCaption()
                     }

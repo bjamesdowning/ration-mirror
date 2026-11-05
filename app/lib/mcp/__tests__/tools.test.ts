@@ -412,6 +412,9 @@ describe("MCP tools", () => {
 			expect(cargo?.description).toContain("expiresAt");
 			expect(plan?.description).toContain("defaults to 7");
 			expect(plan?.description).toContain("today UTC");
+			expect(plan?.description).toContain("loggedByYou");
+			expect(plan?.description).toContain("Cooking is not eating");
+			expect(plan?.description).not.toContain("eaten");
 			expect(search?.description).toContain("cookMatch");
 			expect(search?.description).toContain("0.6");
 		});
@@ -551,7 +554,9 @@ describe("MCP tools", () => {
 				slotType: "breakfast",
 				servings: 2,
 				gramsPerServing: null,
+				status: "planned",
 			});
+			expect(data.entries[0]).not.toHaveProperty("loggedByYou");
 			expect(getWeekEntries).toHaveBeenCalledWith(
 				expect.anything(),
 				"plan-1",
@@ -582,6 +587,157 @@ describe("MCP tools", () => {
 				"2026-03-10",
 				"2026-03-12",
 			);
+		});
+
+		it("reports cooked without loggedByYou when the key lacks nutrition read", async () => {
+			const { attachPersonalIntakeToEntries } = await import(
+				"~/lib/nutrition/service.server"
+			);
+			vi.mocked(isFeatureEnabled).mockResolvedValue(true);
+			vi.mocked(getMealPlan).mockResolvedValueOnce({
+				id: "plan-1",
+				name: "Meal Plan",
+			} as never);
+			vi.mocked(getWeekEntries).mockResolvedValueOnce([
+				{
+					id: "entry-cooked",
+					mealId: "meal-1",
+					date: "2026-07-13",
+					slotType: "dinner",
+					servingsOverride: null,
+					mealServings: 2,
+					mealName: "Pasta",
+					notes: null,
+					gramsPerServing: null,
+					cookedAt: new Date("2026-07-13T18:00:00.000Z"),
+					consumedAt: new Date("2026-07-13T18:00:00.000Z"),
+				},
+			] as never);
+
+			const server = makeServer();
+			const data = parseOk(await getToolHandler(server, "get_meal_plan")({}));
+			expect(data.entries[0]).toMatchObject({
+				status: "cooked",
+				cookedAt: "2026-07-13T18:00:00.000Z",
+				consumedAt: "2026-07-13T18:00:00.000Z",
+			});
+			expect(data.entries[0]).not.toHaveProperty("loggedByYou");
+			expect(attachPersonalIntakeToEntries).not.toHaveBeenCalled();
+		});
+
+		it("keeps status cooked and sets loggedByYou only after the caller logs intake", async () => {
+			const { attachPersonalIntakeToEntries } = await import(
+				"~/lib/nutrition/service.server"
+			);
+			vi.mocked(isFeatureEnabled).mockImplementation(
+				async (_env, key) => key === "nutrition-manifest",
+			);
+			const cooked = {
+				id: "entry-cooked",
+				mealId: "meal-1",
+				date: "2026-07-13",
+				slotType: "dinner",
+				servingsOverride: null,
+				mealServings: 2,
+				mealName: "Pasta",
+				notes: null,
+				gramsPerServing: null,
+				cookedAt: new Date("2026-07-13T18:00:00.000Z"),
+				consumedAt: new Date("2026-07-13T18:00:00.000Z"),
+			};
+			vi.mocked(getMealPlan)
+				.mockResolvedValueOnce({
+					id: "plan-1",
+					name: "Meal Plan",
+				} as never)
+				.mockResolvedValueOnce({
+					id: "plan-1",
+					name: "Meal Plan",
+				} as never);
+			vi.mocked(getWeekEntries)
+				.mockResolvedValueOnce([cooked] as never)
+				.mockResolvedValueOnce([cooked] as never);
+			vi.mocked(attachPersonalIntakeToEntries).mockImplementationOnce(
+				async (_env, _principal, _flags, entries) =>
+					entries.map((entry) => ({
+						...entry,
+						personalIntake: null,
+					})),
+			);
+
+			const server = makeServer("org-test-123", [
+				"mcp:read",
+				"mcp:nutrition:read",
+			]);
+			const before = parseOk(await getToolHandler(server, "get_meal_plan")({}));
+			expect(before.entries[0]).toMatchObject({
+				status: "cooked",
+				loggedByYou: false,
+				personalIntake: null,
+			});
+
+			vi.mocked(attachPersonalIntakeToEntries).mockImplementationOnce(
+				async (_env, _principal, _flags, entries) =>
+					entries.map((entry) => ({
+						...entry,
+						personalIntake: {
+							id: "intake-1",
+							servings: 1,
+							energyKcal: 400,
+							proteinG: 20,
+							carbsG: 40,
+							fatG: 10,
+							occurredAt: "2026-07-13T19:00:00.000Z",
+						},
+					})),
+			);
+			const after = parseOk(await getToolHandler(server, "get_meal_plan")({}));
+			expect(after.entries[0]).toMatchObject({
+				status: "cooked",
+				loggedByYou: true,
+			});
+			expect(after.entries[0].personalIntake.id).toBe("intake-1");
+		});
+
+		it("omits loggedByYou when intake consent is missing", async () => {
+			const { attachPersonalIntakeToEntries } = await import(
+				"~/lib/nutrition/service.server"
+			);
+			vi.mocked(isFeatureEnabled).mockImplementation(
+				async (_env, key) => key === "nutrition-manifest",
+			);
+			vi.mocked(attachPersonalIntakeToEntries).mockRejectedValueOnce(
+				Object.assign(new Error("Consent required"), {
+					code: "nutrition_consent_required",
+				}),
+			);
+			vi.mocked(getMealPlan).mockResolvedValueOnce({
+				id: "plan-1",
+				name: "Meal Plan",
+			} as never);
+			vi.mocked(getWeekEntries).mockResolvedValueOnce([
+				{
+					id: "entry-cooked",
+					mealId: "meal-1",
+					date: "2026-07-13",
+					slotType: "dinner",
+					servingsOverride: null,
+					mealServings: 2,
+					mealName: "Pasta",
+					notes: null,
+					cookedAt: new Date("2026-07-13T18:00:00.000Z"),
+					consumedAt: new Date("2026-07-13T18:00:00.000Z"),
+				},
+			] as never);
+
+			const server = makeServer("org-test-123", [
+				"mcp:read",
+				"mcp:nutrition:read",
+			]);
+			const data = parseOk(await getToolHandler(server, "get_meal_plan")({}));
+			expect(data.entries[0].status).toBe("cooked");
+			expect(data.entries[0]).not.toHaveProperty("loggedByYou");
+			expect(data.entries[0]).not.toHaveProperty("personalIntake");
 		});
 	});
 
@@ -1819,6 +1975,62 @@ describe("MCP tools", () => {
 			const data = parseOk(result);
 			expect(data.kitchen.credits).toBe(5);
 			expect(data.personalNutritionToday).toBeUndefined();
+		});
+
+		it("does not request loggedByYou when nutrition-manifest is off", async () => {
+			const server = makeServer("org-test-123", [
+				"mcp:read",
+				"mcp:nutrition:read",
+			]);
+			await getToolHandler(
+				server,
+				"get_kitchen_summary",
+			)({
+				manifestDays: 1,
+			});
+			expect(buildKitchenSummary).toHaveBeenCalledWith(
+				expect.anything(),
+				"org-test-123",
+				"user-test-123",
+				{ manifestDays: 1 },
+			);
+		});
+
+		it("does not request loggedByYou without the nutrition scope", async () => {
+			vi.mocked(isFeatureEnabled).mockResolvedValue(true);
+			const server = makeServer();
+			await getToolHandler(
+				server,
+				"get_kitchen_summary",
+			)({
+				manifestDays: 1,
+			});
+			expect(buildKitchenSummary).toHaveBeenCalledWith(
+				expect.anything(),
+				"org-test-123",
+				"user-test-123",
+				{ manifestDays: 1 },
+			);
+		});
+
+		it("requests loggedByYou when nutrition read and nutrition-manifest are on", async () => {
+			vi.mocked(isFeatureEnabled).mockImplementation(
+				async (_env, key) => key === "nutrition-manifest",
+			);
+			const server = makeServer("org-test-123", [
+				"mcp:read",
+				"mcp:nutrition:read",
+			]);
+			await getToolHandler(
+				server,
+				"get_kitchen_summary",
+			)({
+				manifestDays: 1,
+			});
+			const options = vi.mocked(buildKitchenSummary).mock.calls.at(-1)?.[3] as
+				| { loggedByYouForEntries?: unknown }
+				| undefined;
+			expect(typeof options?.loggedByYouForEntries).toBe("function");
 		});
 	});
 

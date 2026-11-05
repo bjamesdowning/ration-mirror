@@ -23,7 +23,7 @@ Exact windows may be tuned; if you hit limits, wait for the window to reset. Rat
 | `search_ingredients` | `mcp:read` | Semantic search in pantry by meaning (recall 0.60). Each hit includes `matchScore` and `cookMatch` (true at ≥ 0.78). |
 | `get_expiring_items` | `mcp:read` | Pantry lines expiring within N UTC calendar days. Defaults to the user's `expirationAlertDays` when `days` is omitted. |
 | `get_expired_items` | `mcp:read` | Pantry lines whose expiry date is before today (UTC). |
-| `get_kitchen_summary` | `mcp:read` | Single-call kitchen snapshot. Prefer this over `get_context` for status. When `mcp:nutrition:read` is granted, may include caller-only `personalNutritionToday`. |
+| `get_kitchen_summary` | `mcp:read` | Single-call kitchen snapshot. Prefer this over `get_context` for status. Manifest `status` is `planned` or `cooked`. `loggedByYou` is caller-only and omitted without nutrition read, `nutrition-manifest`, and intake consent. When `mcp:nutrition:read` is granted, may include caller-only `personalNutritionToday`. |
 | `get_kitchen_events` | `mcp:read` | Flight Recorder timeline (filter by event type / date range; paginated). |
 | `get_kitchen_stats` | `mcp:read` | Flight Recorder aggregates (7d/30d/90d/365d counts + top cooked meals). |
 | `add_cargo_item` | `mcp:inventory:write` | Add a single pantry item. Fuzzy Vectorize merge skipped; embeddings backfill async. |
@@ -66,7 +66,7 @@ Prefer resource `ration://schemas/inventory-import` for the item shape.
 
 | Tool | Scope | Purpose |
 |------|-------|---------|
-| `get_meal_plan` | `mcp:read` | Meal plan entries for a date range. `days` defaults to 7 (inclusive, max 14). Omitted `startDate` is today UTC. `cookedAt`/`consumedAt`; `personalIntake` when nutrition flags allow; `gramsPerServing` when recipe mass is known. |
+| `get_meal_plan` | `mcp:read` | Meal plan entries for a date range. `days` defaults to 7 (inclusive, max 14). Omitted `startDate` is today UTC. `status` is `planned` or `cooked` (`cookedAt` or legacy `consumedAt`). `personalIntake` and `loggedByYou` when nutrition flags, `mcp:nutrition:read`, and intake consent allow; `gramsPerServing` when recipe mass is known. Cooking is not eating. |
 | `propose_manifest_plan` | `mcp:read` | Compact week proposal from expiring + match_meals. No writes. |
 | `commit_manifest_plan` | `mcp:manifest:write` | Commit confirmed entries; optional supply sync. Approval required; pass `confirm: true`. |
 | `add_meal_plan_entry` | `mcp:manifest:write` | Schedule one meal. |

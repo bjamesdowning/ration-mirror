@@ -1,6 +1,10 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { buildKitchenSummary } from "../../agent/kitchen-summary.server";
+import {
+	manifestKitchenStatus,
+	manifestTimestampIso,
+} from "../../agent/manifest-kitchen-status";
 import { buildAgentTemporalContext } from "../../agent/temporal-context.server";
 import { detectAllergens, parseAllergens } from "../../allergens";
 import { getUserSettings } from "../../auth.server";
@@ -16,7 +20,11 @@ import {
 } from "../../cargo.server";
 import { addUtcDays, getUtcTodayISO } from "../../cargo-utils";
 import { isFeatureEnabled } from "../../feature-flags/flags.server";
-import { getMealPlan, getWeekEntries } from "../../manifest.server";
+import {
+	getMealPlan,
+	getWeekEntries,
+	type MealPlanEntryWithMeal,
+} from "../../manifest.server";
 import { MEAL_MATCH_CANDIDATE_CAP, matchMeals } from "../../matching.server";
 import { getMeal, getMealsPage } from "../../meals.server";
 import { serializeNutritionSummary } from "../../nutrition/dto.server";
@@ -136,6 +144,58 @@ function isNutritionConsentError(error: unknown): boolean {
 		code === "nutrition_reconsent_required" ||
 		error.name === "NutritionConsentRequiredError"
 	);
+}
+
+/** Same personal-intake gate `get_meal_plan` uses for `personalIntake`. */
+async function nutritionManifestReadable(
+	env: McpToolsEnv,
+	ctx: McpToolContext,
+): Promise<boolean> {
+	if (!hasScope(ctx, "mcp:nutrition:read")) return false;
+	return isFeatureEnabled(
+		env,
+		"nutrition-manifest",
+		resolveAgentFlagContext(env, ctx),
+	);
+}
+
+function nutritionReadPrincipal(ctx: McpToolContext) {
+	return {
+		userId: ctx.userId,
+		organizationId: ctx.organizationId,
+		surface: resolveAgentSurface(ctx),
+		authMethod: ctx.authMethod,
+		credentialId: ctx.apiKeyId,
+		clientId: ctx.oauthClientId ?? null,
+		scopes: ["nutrition:read"] as const,
+		requestId: crypto.randomUUID(),
+	};
+}
+
+/**
+ * Caller-only plate-up flags. `null` means consent is missing, so the
+ * field must be omitted. Cooking a household meal does not set these.
+ */
+async function lookupLoggedByYou(
+	env: McpToolsEnv,
+	ctx: McpToolContext,
+	entryIds: readonly string[],
+): Promise<ReadonlyMap<string, boolean> | null> {
+	if (entryIds.length === 0) return new Map();
+	try {
+		const attached = await attachPersonalIntakeToEntries(
+			env,
+			nutritionReadPrincipal(ctx),
+			resolveAgentFlagContext(env, ctx),
+			entryIds.map((id) => ({ id }) as MealPlanEntryWithMeal),
+		);
+		return new Map(
+			attached.map((entry) => [entry.id, entry.personalIntake != null]),
+		);
+	} catch (error) {
+		if (isNutritionConsentError(error)) return null;
+		throw error;
+	}
 }
 
 async function maybePersonalNutritionToday(
@@ -635,7 +695,7 @@ export function createReadToolDefs(env: McpToolsEnv) {
 		defineSharedTool({
 			name: "get_meal_plan",
 			description:
-				"Retrieve the user's meal plan. days defaults to 7 (inclusive, max 14). When startDate is omitted, the window starts on today UTC. Returns scheduled meals by date and slot (breakfast, lunch, dinner, snack), including cookedAt/consumedAt. gramsPerServing is recipe-ingredient mass per serving when known — use it to convert plated grams/oz for log_manifest_intake; do not invent grams if it is null. When nutrition-manifest is on and the key has mcp:nutrition:read, includes the caller's personalIntake per entry.",
+				"Retrieve the user's meal plan. days defaults to 7 (inclusive, max 14). When startDate is omitted, the window starts on today UTC. Returns scheduled meals by date and slot (breakfast, lunch, dinner, snack), including cookedAt/consumedAt. status is planned or cooked for the household: cooked when cookedAt or a legacy consumedAt is set. Cooking is not eating. gramsPerServing is recipe-ingredient mass per serving when known — use it to convert plated grams/oz for log_manifest_intake; do not invent grams if it is null. When nutrition-manifest is on, the key has mcp:nutrition:read, and intake consent exists, each entry includes the caller's personalIntake and loggedByYou (true only after that caller logs a serving). Callers without that gate never receive loggedByYou.",
 			inputSchema: z.object({
 				startDate: z
 					.string()
@@ -666,35 +726,13 @@ export function createReadToolDefs(env: McpToolsEnv) {
 				const days = a.days ?? 7;
 				const endDate = addUtcDays(startDate, days - 1);
 				let entries = await getWeekEntries(env.DB, plan.id, startDate, endDate);
-				const { resolveAgentFlagContext } = await import(
-					"../agent-flag-context"
-				);
-				const { isFeatureEnabled } = await import(
-					"../../feature-flags/flags.server"
-				);
-				const { hasScope } = await import("../scopes");
-				const flagContext = resolveAgentFlagContext(env, ctx);
-				const manifestOn = await isFeatureEnabled(
-					env,
-					"nutrition-manifest",
-					flagContext,
-				);
 				// Personal intake is mcp:nutrition:read — never leak under mcp:read alone.
-				if (manifestOn && hasScope(ctx, "mcp:nutrition:read")) {
+				if (await nutritionManifestReadable(env, ctx)) {
 					try {
 						entries = await attachPersonalIntakeToEntries(
 							env,
-							{
-								userId: ctx.userId,
-								organizationId: ctx.organizationId,
-								surface: ctx.agentSurface === "copilot" ? "copilot" : "mcp",
-								authMethod: ctx.authMethod,
-								credentialId: ctx.apiKeyId,
-								clientId: ctx.oauthClientId ?? null,
-								scopes: ["nutrition:read"],
-								requestId: crypto.randomUUID(),
-							},
-							flagContext,
+							nutritionReadPrincipal(ctx),
+							resolveAgentFlagContext(env, ctx),
 							entries,
 						);
 					} catch (error) {
@@ -717,10 +755,14 @@ export function createReadToolDefs(env: McpToolsEnv) {
 						servings: e.servingsOverride ?? e.mealServings,
 						gramsPerServing: e.gramsPerServing ?? null,
 						notes: e.notes,
-						consumedAt: e.consumedAt,
-						cookedAt: e.cookedAt,
+						consumedAt: manifestTimestampIso(e.consumedAt),
+						cookedAt: manifestTimestampIso(e.cookedAt),
+						status: manifestKitchenStatus(e.cookedAt, e.consumedAt),
 						...(e.personalIntake !== undefined
-							? { personalIntake: e.personalIntake }
+							? {
+									personalIntake: e.personalIntake,
+									loggedByYou: e.personalIntake != null,
+								}
 							: {}),
 					})),
 				});
@@ -1035,7 +1077,7 @@ export function createReadToolDefs(env: McpToolsEnv) {
 		defineSharedTool({
 			name: "get_kitchen_summary",
 			description:
-				"Single-call operational snapshot: temporal context, tier/credits/capacity, cargo stats with expiring/expired previews, meal plan entries, and active supply list preview. Prefer this for 'how is my kitchen?' before fanning out to granular tools. When mcp:nutrition:read is granted and nutrition flags are on, includes personalNutritionToday (caller-only consumed/goal/vsGoal for today UTC) — never household-shared.",
+				"Single-call operational snapshot: temporal context, tier/credits/capacity, cargo stats with expiring/expired previews, meal plan entries, and active supply list preview. Prefer this for 'how is my kitchen?' before fanning out to granular tools. Meal plan status is planned or cooked (cookedAt or legacy consumedAt). Cooking is not eating. loggedByYou is included only when nutrition-manifest is on, the key has mcp:nutrition:read, and intake consent exists; it is the caller's own plate-up. When mcp:nutrition:read is granted and nutrition flags are on, includes personalNutritionToday (caller-only consumed/goal/vsGoal for today UTC) — never household-shared.",
 			inputSchema: z.object({
 				manifestDays: z
 					.number()
@@ -1053,11 +1095,21 @@ export function createReadToolDefs(env: McpToolsEnv) {
 			rateLimitCategory: "mcp_list",
 			audit: false,
 			handler: async (ctx, a) => {
+				const manifestDays = a.manifestDays ?? 1;
+				const includeLoggedByYou = await nutritionManifestReadable(env, ctx);
 				const summary = await buildKitchenSummary(
 					env,
 					ctx.organizationId,
 					ctx.userId,
-					{ manifestDays: a.manifestDays ?? 1 },
+					{
+						manifestDays,
+						...(includeLoggedByYou
+							? {
+									loggedByYouForEntries: (entryIds) =>
+										lookupLoggedByYou(env, ctx, entryIds),
+								}
+							: {}),
+					},
 				);
 				const personalNutritionToday = await maybePersonalNutritionToday(
 					env,

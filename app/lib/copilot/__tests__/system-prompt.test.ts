@@ -58,6 +58,8 @@ describe("getCopilotSystemPrompt", () => {
 		const prompt = getCopilotSystemPrompt();
 		expect(prompt).toContain("Nutrition (when flags enabled");
 		expect(prompt).toContain("Cook ≠ Eat");
+		expect(prompt).toContain("loggedByYou");
+		expect(prompt).toContain("Cooking is not eating");
 		expect(prompt).toContain("log_manifest_intake");
 		expect(prompt).toContain("gramsPerServing");
 		expect(prompt).toContain("0.01");

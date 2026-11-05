@@ -1759,7 +1759,7 @@ A separate Cloudflare Worker (`ration-mcp`) exposes the Ration pantry to AI agen
 | `get_cargo_item` | Read | `mcp:read` | One pantry item (name, quantity, unit, domain, tags, expiresAt, nutrition when present) | mcp_list (30/min) |
 | `get_supply_list` | Read | `mcp:read` | Live Supply, cursor-paginated (default 50, max 100). `sourceMeals` only when `includeSourceMeals` is true. Optional `listId` when the supply list library is on. No MCP tool can turn that library on. | mcp_list (30/min) |
 | `list_supply_lists` | Read | `mcp:read` | Catalog of Live/Saved/Template/Archived lists. Flag-gated (`supply-multi-lists`). | mcp_list (30/min) |
-| `get_meal_plan` | Read | `mcp:read` | Meal plan entries. `days` defaults to 7 (inclusive, max 14). Omitted `startDate` is today UTC | mcp_list (30/min) |
+| `get_meal_plan` | Read | `mcp:read` | Meal plan entries. `days` defaults to 7 (inclusive, max 14). Omitted `startDate` is today UTC. `status` is `planned` or `cooked` (household). `loggedByYou` is the caller's plate-up and is omitted without `mcp:nutrition:read`, `nutrition-manifest`, and intake consent | mcp_list (30/min) |
 | `list_meals` | Read | `mcp:read` | Galley index. Ingredients omitted unless `includeIngredients` is true. Directions are on `get_meal`. | mcp_list (30/min) |
 | `get_meal` | Read | `mcp:read` | One recipe by id, including directions, ingredients, and nutrition attributions. | mcp_list (30/min) |
 | `match_meals` | Read | `mcp:read` | Meals cookable from pantry (strict or delta); compact `nutrition.perServing` + optional `maxEnergyKcal` | mcp_search (20/min) |

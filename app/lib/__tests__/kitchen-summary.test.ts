@@ -103,11 +103,12 @@ describe("buildKitchenSummary", () => {
 		expect(summary.mealPlan.entries).toHaveLength(1);
 		expect(summary.mealPlan.entries[0]?.servings).toBe(2);
 		expect(summary.mealPlan.entries[0]?.status).toBe("planned");
+		expect(summary.mealPlan.entries[0]).not.toHaveProperty("loggedByYou");
 		expect(summary.supply?.uncheckedCount).toBe(2);
 		expect(summary.supply?.preview[0]?.name).toBe("bread");
 	});
 
-	it("uses meal servings when the slot has no override and reports eaten", async () => {
+	it("uses meal servings when the slot has no override and reports cooked", async () => {
 		const { getManifestPreview } = await import("~/lib/manifest.server");
 		vi.mocked(getManifestPreview).mockResolvedValueOnce({
 			planId: "plan-1",
@@ -128,9 +129,11 @@ describe("buildKitchenSummary", () => {
 		const summary = await buildKitchenSummary(env, "org-1", "user-1");
 		expect(summary.mealPlan.entries[0]).toMatchObject({
 			servings: 4,
-			status: "eaten",
+			status: "cooked",
+			cookedAt: "2026-07-13T17:00:00.000Z",
 			consumedAt: "2026-07-13T18:00:00.000Z",
 		});
+		expect(summary.mealPlan.entries[0]).not.toHaveProperty("loggedByYou");
 		expect(getManifestPreview).toHaveBeenCalledWith(
 			expect.anything(),
 			"org-1",
@@ -139,5 +142,91 @@ describe("buildKitchenSummary", () => {
 			undefined,
 			expect.objectContaining({ includeSlotState: true }),
 		);
+	});
+
+	it("treats a legacy consumedAt dual-write as cooked, not eaten", async () => {
+		const { getManifestPreview } = await import("~/lib/manifest.server");
+		vi.mocked(getManifestPreview).mockResolvedValueOnce({
+			planId: "plan-1",
+			entries: [
+				{
+					entryId: "e3",
+					date: "2026-07-13",
+					slotType: "lunch",
+					mealName: "Rice",
+					mealId: "m3",
+					servingsOverride: 1,
+					consumedAt: new Date("2026-07-13T18:00:00.000Z"),
+					cookedAt: null,
+				},
+			],
+		});
+		const summary = await buildKitchenSummary(env, "org-1", "user-1");
+		expect(summary.mealPlan.entries[0]).toMatchObject({
+			status: "cooked",
+			cookedAt: null,
+			consumedAt: "2026-07-13T18:00:00.000Z",
+		});
+		expect(summary.mealPlan.entries[0]).not.toHaveProperty("loggedByYou");
+	});
+
+	it("emits loggedByYou false after cook and true after the caller logs intake", async () => {
+		const { getManifestPreview } = await import("~/lib/manifest.server");
+		const cookedEntry = {
+			entryId: "e2",
+			date: "2026-07-13",
+			slotType: "dinner",
+			mealName: "Soup",
+			mealId: "m2",
+			servingsOverride: null,
+			mealServings: 4,
+			consumedAt: new Date("2026-07-13T18:00:00.000Z"),
+			cookedAt: new Date("2026-07-13T18:00:00.000Z"),
+		};
+		vi.mocked(getManifestPreview).mockResolvedValue({
+			planId: "plan-1",
+			entries: [cookedEntry],
+		});
+
+		const beforeIntake = await buildKitchenSummary(env, "org-1", "user-1", {
+			loggedByYouForEntries: async () => new Map(),
+		});
+		expect(beforeIntake.mealPlan.entries[0]).toMatchObject({
+			status: "cooked",
+			cookedAt: "2026-07-13T18:00:00.000Z",
+			consumedAt: "2026-07-13T18:00:00.000Z",
+			loggedByYou: false,
+		});
+
+		const afterIntake = await buildKitchenSummary(env, "org-1", "user-1", {
+			loggedByYouForEntries: async () => new Map([["e2", true]]),
+		});
+		expect(afterIntake.mealPlan.entries[0]).toMatchObject({
+			status: "cooked",
+			loggedByYou: true,
+		});
+	});
+
+	it("omits loggedByYou when the intake read has no consent", async () => {
+		const { getManifestPreview } = await import("~/lib/manifest.server");
+		vi.mocked(getManifestPreview).mockResolvedValueOnce({
+			planId: "plan-1",
+			entries: [
+				{
+					entryId: "e2",
+					date: "2026-07-13",
+					slotType: "dinner",
+					mealName: "Soup",
+					mealId: "m2",
+					consumedAt: new Date("2026-07-13T18:00:00.000Z"),
+					cookedAt: new Date("2026-07-13T18:00:00.000Z"),
+				},
+			],
+		});
+		const summary = await buildKitchenSummary(env, "org-1", "user-1", {
+			loggedByYouForEntries: async () => null,
+		});
+		expect(summary.mealPlan.entries[0]?.status).toBe("cooked");
+		expect(summary.mealPlan.entries[0]).not.toHaveProperty("loggedByYou");
 	});
 });

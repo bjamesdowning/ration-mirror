@@ -85,7 +85,7 @@ The Hub **Flight Recorder** widget shows recent kitchen activity (cooks, docks, 
 
 Ask Ration (Copilot) and MCP can read and act on nutrition when Flagship flags and `mcp:nutrition:read` / `mcp:nutrition:write` scopes allow:
 
-- **Reads:** `get_nutrition_summary`, `list_nutrition_intakes`; `get_meal_plan` includes `cookedAt`, the caller’s `personalIntake`, and `gramsPerServing` (recipe-ingredient mass per serving) when nutrition flags allow.
+- **Reads:** `get_nutrition_summary`, `list_nutrition_intakes`; `get_meal_plan` and `get_kitchen_summary` use household `status` `planned` or `cooked` (`cookedAt` or legacy `consumedAt`). Cooking is not eating. `loggedByYou` and, on `get_meal_plan`, the caller’s `personalIntake` plus `gramsPerServing` appear only when nutrition flags, `mcp:nutrition:read`, and intake consent allow.
 - **Cook (shared):** `cook_manifest_entries` or Galley `consume_meal` (Manifest bridge when **nutrition-cook-log-split** is on) — Cargo/Prepared only; never personal intake.
 - **Eat (private):** `log_manifest_intake` / `clear_manifest_intake`, each with a request-level operation key; consent must already be active in Ration. Portions are `servings` (0.01–100) or `amount` + `unit` (`serving` | `g` | `oz`). If mass is requested but `gramsPerServing` is missing, agents should ask for a serving fraction — they must not invent grams.
 - **Goals:** `set_nutrition_goal` / `clear_nutrition_goal`.

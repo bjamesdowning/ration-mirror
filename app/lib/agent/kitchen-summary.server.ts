@@ -9,7 +9,26 @@ import { getManifestPreview } from "../manifest.server";
 import { mapExpiryCargoItems } from "../mcp/expiry-map";
 import { getSupplyItemStats, getSupplyList } from "../supply.server";
 import { getAgentKitchenSnapshot } from "./kitchen-snapshot.server";
+import {
+	manifestKitchenStatus,
+	manifestTimestampIso,
+} from "./manifest-kitchen-status";
 import { buildAgentTemporalContext } from "./temporal-context.server";
+
+/**
+ * Person-in-context intake read for Manifest rows in this summary.
+ * Callers pass it only when `mcp:nutrition:read`, `nutrition-manifest`, and
+ * the consent gate are allowed to be asked. `null` means consent is missing,
+ * so `loggedByYou` is omitted. A map emits `loggedByYou` on every entry.
+ */
+export type LoggedByYouForEntries = (
+	entryIds: readonly string[],
+) => Promise<ReadonlyMap<string, boolean> | null>;
+
+export type BuildKitchenSummaryOptions = {
+	manifestDays?: number;
+	loggedByYouForEntries?: LoggedByYouForEntries;
+};
 
 export const KITCHEN_SUMMARY_EXPIRING_LIMIT = 10;
 export const KITCHEN_SUMMARY_EXPIRED_LIMIT = 10;
@@ -18,21 +37,11 @@ export const KITCHEN_SUMMARY_MANIFEST_DAYS_MIN = 1;
 export const KITCHEN_SUMMARY_MANIFEST_DAYS_MAX = 7;
 export const KITCHEN_SUMMARY_EXPIRED_LOOKBACK_DAYS = 30;
 
-function timestampIso(
-	value: Date | string | number | null | undefined,
-): string | null {
-	if (value == null) return null;
-	if (value instanceof Date) return value.toISOString();
-	if (typeof value === "number") return new Date(value).toISOString();
-	const parsed = Date.parse(value);
-	return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null;
-}
-
 export async function buildKitchenSummary(
 	env: Cloudflare.Env,
 	organizationId: string,
 	userId: string,
-	options?: { manifestDays?: number },
+	options?: BuildKitchenSummaryOptions,
 ) {
 	const db = env.DB;
 	const now = new Date();
@@ -89,10 +98,18 @@ export async function buildKitchenSummary(
 		expirationAlertDays,
 	};
 
-	const manifestEntries = (manifestPreview?.entries ?? []).map((entry) => {
-		const consumedAt = timestampIso(entry.consumedAt);
-		const cookedAt = timestampIso(entry.cookedAt);
-		const status = consumedAt ? "eaten" : cookedAt ? "cooked" : "planned";
+	const previewEntries = manifestPreview?.entries ?? [];
+	let loggedByYouByEntryId: ReadonlyMap<string, boolean> | null = null;
+	if (options?.loggedByYouForEntries && previewEntries.length > 0) {
+		loggedByYouByEntryId = await options.loggedByYouForEntries(
+			previewEntries.map((entry) => entry.entryId),
+		);
+	}
+
+	const manifestEntries = previewEntries.map((entry) => {
+		const consumedAt = manifestTimestampIso(entry.consumedAt);
+		const cookedAt = manifestTimestampIso(entry.cookedAt);
+		const status = manifestKitchenStatus(cookedAt, consumedAt);
 		return {
 			id: entry.entryId,
 			date: entry.date,
@@ -103,6 +120,11 @@ export async function buildKitchenSummary(
 			cookedAt,
 			consumedAt,
 			status,
+			...(loggedByYouByEntryId
+				? {
+						loggedByYou: loggedByYouByEntryId.get(entry.entryId) === true,
+					}
+				: {}),
 		};
 	});
 

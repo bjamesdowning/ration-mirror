@@ -7,6 +7,7 @@ import {
 	isTokenPhaseMatch,
 	normalizeForCargoDedup,
 	normalizeForMatch,
+	normalizeForNutritionIdentity,
 	passesCompoundGuard,
 	tokenize,
 	tokenMatchScore,
@@ -63,6 +64,120 @@ describe("normalizeForCargoDedup", () => {
 	it("handles plain ingredient with no modifications", () => {
 		expect(normalizeForCargoDedup("rice")).toBe("rice");
 		expect(normalizeForCargoDedup("pasta")).toBe("pasta");
+	});
+
+	it("keeps the persisted pantry key for state words, mince, and coriander", () => {
+		expect(normalizeForCargoDedup("cooked rice")).toBe("rice");
+		expect(normalizeForCargoDedup("raw rice")).toBe("rice");
+		expect(normalizeForCargoDedup("dried basil")).toBe("basil");
+		expect(normalizeForCargoDedup("fresh basil")).toBe("basil");
+		expect(normalizeForCargoDedup("frozen peas")).toBe("peas");
+		expect(normalizeForCargoDedup("beef mince")).toBe("beef ground");
+		expect(normalizeForCargoDedup("minced garlic")).toBe("ground garlic");
+		expect(normalizeForCargoDedup("minced beef")).toBe("ground beef");
+		expect(normalizeForCargoDedup("ground coriander")).toBe("ground cilantro");
+		expect(normalizeForCargoDedup("coriander seeds")).toBe("cilantro seeds");
+		expect(normalizeForCargoDedup("spring onion")).toBe("green onion");
+		expect(normalizeForCargoDedup("single cream")).toBe("light cream");
+		expect(normalizeForCargoDedup("double cream")).toBe("heavy cream");
+	});
+});
+
+describe("normalizeForNutritionIdentity", () => {
+	it("keeps cooked, raw, and dried distinct from each other and the plain name", () => {
+		expect(normalizeForNutritionIdentity("cooked rice")).toBe("cooked rice");
+		expect(normalizeForNutritionIdentity("raw rice")).toBe("raw rice");
+		expect(normalizeForNutritionIdentity("Cooked Rice")).toBe("cooked rice");
+		expect(normalizeForNutritionIdentity("rice")).toBe("rice");
+		expect(normalizeForNutritionIdentity("cooked rice")).not.toBe(
+			normalizeForNutritionIdentity("raw rice"),
+		);
+		expect(normalizeForNutritionIdentity("cooked rice")).not.toBe(
+			normalizeForNutritionIdentity("rice"),
+		);
+		expect(normalizeForNutritionIdentity("dried basil")).toBe("dried basil");
+		expect(normalizeForNutritionIdentity("dried herbs")).toBe("dried herbs");
+		expect(normalizeForNutritionIdentity("dried basil")).not.toBe(
+			normalizeForNutritionIdentity("basil"),
+		);
+		expect(normalizeForNutritionIdentity("dried basil")).not.toBe(
+			normalizeForNutritionIdentity("fresh basil"),
+		);
+	});
+
+	it("still strips fresh and frozen so the same food shares a key", () => {
+		expect(normalizeForNutritionIdentity("fresh basil")).toBe("basil");
+		expect(normalizeForNutritionIdentity("fresh basil")).toBe(
+			normalizeForNutritionIdentity("basil"),
+		);
+		expect(normalizeForNutritionIdentity("frozen peas")).toBe("peas");
+		expect(normalizeForNutritionIdentity("chopped onions")).toBe("onions");
+	});
+
+	it("does not map spice coriander onto leaf cilantro", () => {
+		expect(normalizeForNutritionIdentity("ground coriander")).toBe(
+			"ground coriander",
+		);
+		expect(normalizeForNutritionIdentity("coriander seeds")).toBe(
+			"coriander seeds",
+		);
+		expect(normalizeForNutritionIdentity("coriander seed")).toBe(
+			"coriander seed",
+		);
+		expect(normalizeForNutritionIdentity("coriander powder")).toBe(
+			"coriander powder",
+		);
+		expect(normalizeForNutritionIdentity("ground coriander")).not.toBe(
+			normalizeForNutritionIdentity("cilantro"),
+		);
+		expect(normalizeForNutritionIdentity("ground coriander")).not.toBe(
+			normalizeForNutritionIdentity("ground cilantro"),
+		);
+		expect(normalizeForNutritionIdentity("coriander seeds")).not.toBe(
+			normalizeForNutritionIdentity("cilantro"),
+		);
+		expect(normalizeForNutritionIdentity("coriander")).toBe("cilantro");
+		expect(normalizeForNutritionIdentity("fresh coriander")).toBe("cilantro");
+	});
+
+	it("reorders trailing mince and strips minced as prep", () => {
+		expect(normalizeForNutritionIdentity("beef mince")).toBe("ground beef");
+		expect(normalizeForNutritionIdentity("lamb mince")).toBe("ground lamb");
+		expect(normalizeForNutritionIdentity("beef mince")).toBe(
+			normalizeForNutritionIdentity("ground beef"),
+		);
+		expect(normalizeForNutritionIdentity("ground beef mince")).toBe(
+			"ground beef",
+		);
+		expect(normalizeForNutritionIdentity("mince")).toBe("ground");
+		expect(normalizeForNutritionIdentity("minced garlic")).toBe("garlic");
+		expect(normalizeForNutritionIdentity("minced garlic")).not.toBe(
+			normalizeForNutritionIdentity("ground garlic"),
+		);
+		expect(normalizeForNutritionIdentity("minced beef")).toBe("beef");
+		expect(normalizeForNutritionIdentity("minced")).toBe("");
+	});
+
+	it("keeps regional synonyms that are the same food", () => {
+		expect(normalizeForNutritionIdentity("tinned tomatoes")).toBe(
+			normalizeForNutritionIdentity("canned tomatoes"),
+		);
+		expect(normalizeForNutritionIdentity("courgette")).toBe("zucchini");
+		expect(normalizeForNutritionIdentity("spring onion")).toBe("green onion");
+		expect(normalizeForNutritionIdentity("single cream")).toBe("light cream");
+		expect(normalizeForNutritionIdentity("double cream")).toBe("heavy cream");
+	});
+
+	it("leaves pantry oil and peanut-butter matching on the dedup key", () => {
+		expect(isTokenPhaseMatch("oil", "olive oil")).toBe(true);
+		expect(isTokenPhaseMatch("oil", "sunflower oil")).toBe(true);
+		expect(isTokenPhaseMatch("butter", "peanut butter")).toBe(false);
+		expect(isTokenPhaseMatch("milk", "coconut milk")).toBe(false);
+		expect(normalizeForCargoDedup("dried herbs")).toBe("herbs");
+		expect(normalizeForNutritionIdentity("olive oil")).toBe("olive oil");
+		expect(normalizeForNutritionIdentity("peanut butter")).toBe(
+			"peanut butter",
+		);
 	});
 });
 

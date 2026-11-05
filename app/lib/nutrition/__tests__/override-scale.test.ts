@@ -187,6 +187,116 @@ describe("pickBestCargoOverrideForIngredient", () => {
 	});
 });
 
+describe("pickBestCargoOverrideForIngredient nutrition identity", () => {
+	const density: NutritionSnapshot = {
+		source: "user_override",
+		confidence: 1,
+		verified: true,
+		per100g: { ...milkPackageTotals, energyKcal: 130 },
+		perServing: null,
+		fdcId: null,
+		description: null,
+	};
+
+	function namedCargo(id: string, name: string) {
+		return {
+			id,
+			name,
+			quantity: 100,
+			unit: "g",
+			nutrition: density,
+			updatedAt: "2026-04-01T00:00:00.000Z",
+		};
+	}
+
+	it("does not apply cooked, raw, or dried cargo to a different state", () => {
+		const candidates = [
+			namedCargo("raw", "raw rice"),
+			namedCargo("plain", "rice"),
+			namedCargo("cooked", "cooked rice"),
+			namedCargo("dried", "dried basil"),
+			namedCargo("fresh", "fresh basil"),
+		];
+		expect(
+			pickBestCargoOverrideForIngredient("cooked rice", candidates)?.id,
+		).toBe("cooked");
+		expect(pickBestCargoOverrideForIngredient("raw rice", candidates)?.id).toBe(
+			"raw",
+		);
+		expect(pickBestCargoOverrideForIngredient("rice", candidates)?.id).toBe(
+			"plain",
+		);
+		expect(
+			pickBestCargoOverrideForIngredient("dried basil", candidates)?.id,
+		).toBe("dried");
+		expect(
+			pickBestCargoOverrideForIngredient("fresh basil", candidates)?.id,
+		).toBe("fresh");
+		expect(
+			pickBestCargoOverrideForIngredient("basil", [
+				namedCargo("dried", "dried basil"),
+			]),
+		).toBeNull();
+	});
+
+	it("does not apply leaf cilantro to spice coriander", () => {
+		const candidates = [
+			namedCargo("leaf", "cilantro"),
+			namedCargo("ground-leaf", "ground cilantro"),
+			namedCargo("spice", "ground coriander"),
+			namedCargo("seeds", "coriander seeds"),
+		];
+		expect(
+			pickBestCargoOverrideForIngredient("ground coriander", candidates)?.id,
+		).toBe("spice");
+		expect(
+			pickBestCargoOverrideForIngredient("coriander seeds", candidates)?.id,
+		).toBe("seeds");
+		expect(
+			pickBestCargoOverrideForIngredient("coriander", candidates)?.id,
+		).toBe("leaf");
+		expect(
+			pickBestCargoOverrideForIngredient("cilantro", [
+				namedCargo("spice", "ground coriander"),
+				namedCargo("seeds", "coriander seeds"),
+			]),
+		).toBeNull();
+	});
+
+	it("lines beef mince up with ground beef and keeps minced garlic as garlic", () => {
+		const candidates = [
+			namedCargo("ground-beef", "ground beef"),
+			namedCargo("beef", "beef"),
+			namedCargo("garlic", "garlic"),
+			namedCargo("ground-garlic", "ground garlic"),
+		];
+		expect(
+			pickBestCargoOverrideForIngredient("beef mince", candidates)?.id,
+		).toBe("ground-beef");
+		expect(
+			pickBestCargoOverrideForIngredient("minced garlic", candidates)?.id,
+		).toBe("garlic");
+		expect(
+			pickBestCargoOverrideForIngredient("minced beef", candidates)?.id,
+		).toBe("beef");
+		expect(
+			pickBestCargoOverrideForIngredient("minced garlic", [
+				namedCargo("ground-garlic", "ground garlic"),
+			]),
+		).toBeNull();
+	});
+
+	it("still prefers an explicit cargo link over a different food name", () => {
+		const linked = namedCargo("linked-raw", "raw rice");
+		const best = pickBestCargoOverrideForIngredient(
+			"cooked rice",
+			[linked, namedCargo("cooked", "cooked rice")],
+			"linked-raw",
+		);
+		expect(best?.id).toBe("linked-raw");
+	});
+});
+
 describe("estimateGramsFromPerServingDensity", () => {
 	it("scales household energy against per100g density", () => {
 		const grams = estimateGramsFromPerServingDensity(

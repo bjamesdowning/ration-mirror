@@ -88,6 +88,52 @@ export function normalizeForCargoDedup(name: string): string {
 	return filtered.join(" ");
 }
 
+/**
+ * State words that change nutrient density. Kept on the nutrition key only.
+ * `fresh` and `frozen` stay prep/storage words so "fresh basil" and "frozen
+ * peas" still share a key with the unqualified pantry name.
+ */
+const NUTRITION_KEPT_STATE_WORDS = new Set(["cooked", "raw", "dried"]);
+
+const NUTRITION_STRIP_WORDS = new Set(
+	[...STRIP_WORDS].filter((word) => !NUTRITION_KEPT_STATE_WORDS.has(word)),
+);
+
+/** Seed-spice forms. Leaf coriander still maps to cilantro. */
+const CORIANDER_SPICE_MARKERS = new Set(["ground", "seed", "seeds", "powder"]);
+
+/**
+ * Nutrition-only identity key for cargo-override matching.
+ *
+ * Stricter than `normalizeForCargoDedup`: keeps cooked/raw/dried, does not map
+ * ground coriander or coriander seeds onto cilantro, reorders "X mince" to
+ * "ground X", and strips `minced` instead of synonyming it to `ground`.
+ *
+ * Do not use this for pantry, Supply, cookability, or snooze keys. Those
+ * persist `normalizeForCargoDedup` (`supply_snooze.normalized_name`,
+ * `supplyStoreProfile.normalizedName`).
+ */
+export function normalizeForNutritionIdentity(name: string): string {
+	const base = normalizeForMatch(name);
+	let tokens = base.split(" ").filter((token) => token.length > 0);
+	if (tokens.length >= 2 && tokens[tokens.length - 1] === "mince") {
+		const food = tokens.slice(0, -1);
+		tokens = food[0] === "ground" ? food : ["ground", ...food];
+	}
+	const spiceCoriander = tokens.some((token) =>
+		CORIANDER_SPICE_MARKERS.has(token),
+	);
+	const expanded = tokens.flatMap((token) => {
+		if (token === "minced") return [token];
+		if (token === "coriander" && spiceCoriander) return [token];
+		const synonym = INGREDIENT_SYNONYMS[token];
+		return synonym ? synonym.split(" ") : [token];
+	});
+	return expanded
+		.filter((token) => token.length > 0 && !NUTRITION_STRIP_WORDS.has(token))
+		.join(" ");
+}
+
 const STOP_WORDS = new Set(["the", "a", "an", "of", "and", "or", "for"]);
 
 export function tokenize(name: string): Set<string> {

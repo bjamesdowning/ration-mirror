@@ -17,7 +17,7 @@ import {
 	type FlagshipEvaluationContext,
 } from "~/lib/feature-flags/context.server";
 import { isFeatureEnabled } from "~/lib/feature-flags/flags.server";
-import { normalizeForCargoDedup } from "~/lib/matching";
+import { normalizeForNutritionIdentity } from "~/lib/matching";
 import { chunkedQuery } from "~/lib/query-utils.server";
 import type { SupportedUnit } from "~/lib/units";
 import {
@@ -549,7 +549,8 @@ export async function recomputeAndStoreMealNutrition(
 
 /**
  * After cargo nutrition is set/cleared as user_override, refresh meals that
- * reference that cargo (direct link, exact name, or cargo-dedup key). Bounded.
+ * reference that cargo (direct link, exact name, or nutrition identity key).
+ * Bounded. Pantry dedup keys are not used here.
  */
 export async function recomputeMealsAffectedByCargoNutrition(
 	env: Env,
@@ -564,7 +565,7 @@ export async function recomputeMealsAffectedByCargoNutrition(
 
 	const d1 = drizzle(db, { schema });
 	const normalizedName = cargoName.trim().toLowerCase();
-	const cargoDedupKey = normalizeForCargoDedup(cargoName);
+	const nutritionKey = normalizeForNutritionIdentity(cargoName);
 
 	const [directRows, nameRows, unlinkedSample] = await d1.batch([
 		d1
@@ -588,7 +589,7 @@ export async function recomputeMealsAffectedByCargoNutrition(
 					sql`lower(${schema.mealIngredient.ingredientName}) = ${normalizedName}`,
 				),
 			),
-		// Bounded sample for synonym/prep-stripped dedup matches (courgette/zucchini).
+		// Bounded sample for nutrition-identity matches (courgette/zucchini, not cooked vs raw).
 		d1
 			.select({
 				mealId: schema.mealIngredient.mealId,
@@ -605,11 +606,12 @@ export async function recomputeMealsAffectedByCargoNutrition(
 			.limit(500),
 	]);
 
-	const dedupMealIds =
-		cargoDedupKey.length > 0
+	const identityMealIds =
+		nutritionKey.length > 0
 			? unlinkedSample
 					.filter(
-						(r) => normalizeForCargoDedup(r.ingredientName) === cargoDedupKey,
+						(r) =>
+							normalizeForNutritionIdentity(r.ingredientName) === nutritionKey,
 					)
 					.map((r) => r.mealId)
 			: [];
@@ -618,7 +620,7 @@ export async function recomputeMealsAffectedByCargoNutrition(
 		...new Set([
 			...directRows.map((r) => r.mealId),
 			...nameRows.map((r) => r.mealId),
-			...dedupMealIds,
+			...identityMealIds,
 		]),
 	].slice(0, MAX_MEALS_RECOMPUTE_ON_CARGO_NUTRITION);
 

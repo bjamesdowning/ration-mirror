@@ -1,4 +1,4 @@
-import { normalizeForCargoDedup } from "~/lib/matching";
+import { normalizeForNutritionIdentity } from "~/lib/matching";
 import {
 	getUnitFamily,
 	isDiscreteCountFamily,
@@ -297,8 +297,9 @@ function hasCargoDensity(c: CargoOverrideCandidate): boolean {
 
 /**
  * Pick the best org cargo density for a meal ingredient.
- * Prefer linked cargoId, then exact dedup-key match.
+ * Prefer linked cargoId, then the nutrition identity key.
  * Source order: user_override → usda → ai_estimate.
+ * Pantry stock matching stays on `normalizeForCargoDedup`.
  */
 export function pickBestCargoOverrideForIngredient(
 	ingredientName: string,
@@ -318,11 +319,11 @@ export function pickBestCargoOverrideForIngredient(
 		if (linked[0]) return linked[0];
 	}
 
-	const targetKey = normalizeForCargoDedup(ingredientName);
+	const targetKey = normalizeForNutritionIdentity(ingredientName);
 	if (!targetKey) return null;
 
 	const exact = usable.filter(
-		(c) => normalizeForCargoDedup(c.name) === targetKey,
+		(c) => normalizeForNutritionIdentity(c.name) === targetKey,
 	);
 	if (exact.length === 0) return null;
 

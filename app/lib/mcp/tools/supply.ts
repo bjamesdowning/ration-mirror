@@ -30,6 +30,7 @@ import {
 	transferSupplyItems,
 	upsertSupplyStaple,
 } from "../../supply-lists.server";
+import { formatSupplySyncCounts } from "../../supply-sync-diff";
 import { resolveUnitDisplayMode } from "../../unit-display-mode";
 import { resolveAgentFlagContext } from "../agent-flag-context";
 import type { McpToolContext } from "../auth";
@@ -242,7 +243,7 @@ export function createSupplyToolDefs(env: McpToolsEnv) {
 		defineSharedTool({
 			name: "sync_supply_from_selected_meals",
 			description:
-				"Rebuild the shopping list from this week's meal plan + Galley active selections (same as Supply → Update list). Uses semantic matching vs pantry; may call Vectorize. Rate-limited separately from regular writes.",
+				"Rebuild the shopping list from this week's meal plan + Galley active selections (same as Supply → Update list). summary.newLines, summary.removedLines, and summary.changedLines are net shopping lines. Rewritten unchanged lines count as zero. summary.addedItems is a deprecated alias of newLines. Uses semantic matching vs pantry; may call Vectorize. Rate-limited separately from regular writes.",
 			inputSchema: z.object({
 				unitMode: z.enum(["metric", "imperial"]).optional(),
 			}),
@@ -274,6 +275,7 @@ export function createSupplyToolDefs(env: McpToolsEnv) {
 				return ok("sync_supply_from_selected_meals", {
 					listId: list.id,
 					summary: result.summary,
+					message: formatSupplySyncCounts(result.summary),
 					itemCount: fullList?.items.length ?? 0,
 				});
 			},

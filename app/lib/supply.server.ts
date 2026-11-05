@@ -86,6 +86,11 @@ import {
 	SUPPLY_SAVED_ITEM_LIMIT,
 } from "./supply-list-kinds";
 import { loadSupplyListRow } from "./supply-list-target.server";
+import {
+	diffSupplyRows,
+	type SupplySyncLineCounts,
+	supplyItemToDiffLine,
+} from "./supply-sync-diff";
 import { withSupplySyncLock } from "./supply-sync-lock.server";
 import { type TagRecord, tagsToSlugs } from "./tags.server";
 import {
@@ -140,11 +145,33 @@ export type SupplyItemWithSource = typeof supplyItem.$inferSelect & {
 	sourceOrigins: SupplyItemOrigin[];
 };
 
-export interface GenerationSummary {
+export interface GenerationSummary extends SupplySyncLineCounts {
+	/**
+	 * Deprecated alias of `newLines` (net shopping lines added).
+	 * Kept for one version so older clients that decode `addedItems` keep working.
+	 */
 	addedItems: number;
 	skippedItems: number;
+	/** Meal lines the pantry already covers, so sync does not shop them. */
+	coveredByCargo: number;
 	mealsProcessed: number;
 	totalIngredients: number;
+}
+
+function emptyGenerationSummary(
+	mealsProcessed: number,
+	totalIngredients: number,
+): GenerationSummary {
+	return {
+		newLines: 0,
+		removedLines: 0,
+		changedLines: 0,
+		coveredByCargo: 0,
+		addedItems: 0,
+		skippedItems: 0,
+		mealsProcessed,
+		totalIngredients,
+	};
 }
 
 type MealSupplyOrigin = "manifest" | "galley";
@@ -1626,12 +1653,7 @@ export async function createSupplyListFromAllMeals(
 		if (!list) throw new Error("Failed to ensure supply list");
 		return {
 			list,
-			summary: {
-				addedItems: 0,
-				skippedItems: 0,
-				mealsProcessed: 0,
-				totalIngredients: 0,
-			},
+			summary: emptyGenerationSummary(0, 0),
 		};
 	}
 
@@ -1662,12 +1684,7 @@ export async function createSupplyListFromAllMeals(
 		if (!list) throw new Error("Failed to ensure supply list");
 		return {
 			list,
-			summary: {
-				addedItems: 0,
-				skippedItems: 0,
-				mealsProcessed: meals.length,
-				totalIngredients: 0,
-			},
+			summary: emptyGenerationSummary(meals.length, 0),
 		};
 	}
 
@@ -1969,8 +1986,10 @@ async function buildMealContributions(
 	existingItems: (typeof supplyItem.$inferSelect)[],
 	snoozeKeys: Set<string>,
 	unitMode: UnitDisplayMode,
-): Promise<SupplyContribution[]> {
-	if (allIngredients.length === 0) return [];
+): Promise<{ contributions: SupplyContribution[]; coveredByCargo: number }> {
+	if (allIngredients.length === 0) {
+		return { contributions: [], coveredByCargo: 0 };
+	}
 
 	const orgCargo = await fetchOrgCargoIndex(env.DB, organizationId);
 	const aggregatedIngredients = aggregateIngredients(allIngredients, unitMode);
@@ -1989,6 +2008,7 @@ async function buildMealContributions(
 	);
 
 	const contributions: SupplyContribution[] = [];
+	let coveredByCargo = 0;
 
 	for (const aggregated of aggregatedIngredients) {
 		const snoozeKey = `${aggregated.normalizedName}__${aggregated.domain}`;
@@ -2007,7 +2027,10 @@ async function buildMealContributions(
 			0,
 			aggregated.baseQuantity - availableInCargo,
 		);
-		if (missingAfterCargo <= 0) continue;
+		if (missingAfterCargo <= 0) {
+			coveredByCargo += 1;
+			continue;
+		}
 
 		const existingQuantityInList = getPersistedListQuantityForGapMath(
 			existingItems,
@@ -2034,7 +2057,7 @@ async function buildMealContributions(
 		});
 	}
 
-	return contributions;
+	return { contributions, coveredByCargo };
 }
 
 async function buildCargoContributions(
@@ -2189,7 +2212,7 @@ async function materializeSupplyFromSelections(
 
 	const snoozeKeys = await getActiveSnoozeKeys(d1, organizationId);
 
-	const [mealContributions, cargoContributions] = await Promise.all([
+	const [mealResult, cargoContributions] = await Promise.all([
 		buildMealContributions(
 			env,
 			organizationId,
@@ -2200,6 +2223,8 @@ async function materializeSupplyFromSelections(
 		),
 		buildCargoContributions(env, organizationId, snoozeKeys),
 	]);
+	const mealContributions = mealResult.contributions;
+	const coveredByCargo = mealResult.coveredByCargo;
 
 	const merged = mergeContributionsByKey([
 		...mealContributions,
@@ -2211,7 +2236,13 @@ async function materializeSupplyFromSelections(
 		unitMode,
 	);
 
-	const addedCount = itemsToInsert.length;
+	const lineDiff = diffSupplyRows(
+		(listBeforeSync.items ?? []).map(supplyItemToDiffLine),
+		[
+			...existingItems.map(supplyItemToDiffLine),
+			...itemsToInsert.map(supplyItemToDiffLine),
+		],
+	);
 	const aggregatedCount =
 		allIngredients.length > 0
 			? aggregateIngredients(allIngredients, unitMode).length
@@ -2280,7 +2311,11 @@ async function materializeSupplyFromSelections(
 		meal_contribution_count: mealContributions.length,
 		cargo_contribution_count: cargoContributions.length,
 		merged_row_count: merged.length,
-		added_items_count: addedCount,
+		added_items_count: lineDiff.newLines,
+		new_lines: lineDiff.newLines,
+		removed_lines: lineDiff.removedLines,
+		changed_lines: lineDiff.changedLines,
+		covered_by_cargo: coveredByCargo,
 		skipped_items_count: Math.max(0, skippedCount),
 	});
 
@@ -2293,7 +2328,11 @@ async function materializeSupplyFromSelections(
 	return {
 		list,
 		summary: {
-			addedItems: addedCount,
+			newLines: lineDiff.newLines,
+			removedLines: lineDiff.removedLines,
+			changedLines: lineDiff.changedLines,
+			coveredByCargo,
+			addedItems: lineDiff.newLines,
 			skippedItems: Math.max(0, skippedCount),
 			mealsProcessed,
 			totalIngredients: allIngredients.length,
@@ -2418,6 +2457,10 @@ export async function createSupplyListFromSelectedMeals(
 					manifest_occurrence_count: manifestOccurrences.length,
 					galley_selection_count: galleySelections.length,
 					added_items_count: syncResult.summary.addedItems,
+					new_lines: syncResult.summary.newLines,
+					removed_lines: syncResult.summary.removedLines,
+					changed_lines: syncResult.summary.changedLines,
+					covered_by_cargo: syncResult.summary.coveredByCargo,
 				},
 			);
 

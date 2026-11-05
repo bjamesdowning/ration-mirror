@@ -1,3 +1,4 @@
+import { copilotToolDoneLabel } from "./tool-labels";
 import { isStructuredCopilotToolFailure } from "./tool-result";
 
 export type AgentResponseFrame = {
@@ -20,6 +21,7 @@ export type AgentFrameAction =
 			toolName: string;
 			toolCallId?: string;
 			succeeded: boolean;
+			doneLabel?: string;
 	  }
 	| { kind: "approval_requested"; toolName: string; toolCallId?: string }
 	| { kind: "turn_end" }
@@ -89,13 +91,21 @@ export function decodeAgentResponseFrame(
 				toolName: chunk.toolName ?? "tool",
 				toolCallId: chunk.toolCallId ?? chunk.id,
 			};
-		case "tool-output-available":
+		case "tool-output-available": {
+			const toolName = chunk.toolName ?? "tool";
+			const succeeded = !isStructuredCopilotToolFailure(chunk.output);
+			const doneLabel = succeeded
+				? copilotToolDoneLabel(toolName, chunk.output)
+				: undefined;
+			const staticDone = copilotToolDoneLabel(toolName);
 			return {
 				kind: "tool_end",
-				toolName: chunk.toolName ?? "tool",
+				toolName,
 				toolCallId: chunk.toolCallId ?? chunk.id,
-				succeeded: !isStructuredCopilotToolFailure(chunk.output),
+				succeeded,
+				...(doneLabel && doneLabel !== staticDone ? { doneLabel } : {}),
 			};
+		}
 		case "tool-output-error":
 		case "tool-output-denied":
 			return {

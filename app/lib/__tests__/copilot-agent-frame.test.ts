@@ -80,6 +80,32 @@ describe("decodeAgentResponseFrame", () => {
 		});
 	});
 
+	it("labels a supply sync card with the net line change", () => {
+		expect(
+			decodeAgentResponseFrame(
+				responseFrame(
+					JSON.stringify({
+						type: "tool-output-available",
+						toolName: "sync_supply_from_selected_meals",
+						toolCallId: "tool-sync",
+						output: {
+							ok: true,
+							data: {
+								summary: { newLines: 3, removedLines: 1, changedLines: 2 },
+							},
+						},
+					}),
+				),
+			),
+		).toEqual({
+			kind: "tool_end",
+			toolName: "sync_supply_from_selected_meals",
+			toolCallId: "tool-sync",
+			succeeded: true,
+			doneLabel: "3 new, 1 removed, 2 changed",
+		});
+	});
+
 	it("maps finish and terminal done frames to turn end", () => {
 		expect(
 			decodeAgentResponseFrame(

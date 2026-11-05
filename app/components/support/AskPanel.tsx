@@ -238,6 +238,7 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 		null,
 	);
 	const [toolSucceeded, setToolSucceeded] = useState<boolean | null>(null);
+	const [toolDoneLabel, setToolDoneLabel] = useState<string | null>(null);
 	const [conversationId, setConversationId] = useState<string>(() =>
 		crypto.randomUUID(),
 	);
@@ -395,6 +396,7 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 				clearStopFallback();
 				setActiveToolName(null);
 				setCompletedToolName(null);
+				setToolDoneLabel(null);
 				setToolSucceeded(null);
 				setTurnPhase("idle");
 				if (options.persist !== false) {
@@ -415,6 +417,7 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 				clearStopFallback();
 				setActiveToolName(null);
 				setCompletedToolName(null);
+				setToolDoneLabel(null);
 				setToolSucceeded(null);
 				setTurnPhase("thinking");
 				return;
@@ -423,6 +426,7 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 			clearStopFallback();
 			setActiveToolName(null);
 			setCompletedToolName(null);
+			setToolDoneLabel(null);
 			setToolSucceeded(null);
 			toolNameByCallIdRef.current.clear();
 			replayTextRef.current.clear();
@@ -461,15 +465,17 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 	);
 
 	const scheduleToolDoneLinger = useCallback(
-		(toolName: string, succeeded: boolean) => {
+		(toolName: string, succeeded: boolean, doneLabel?: string) => {
 			clearToolLinger();
 			setActiveToolName(null);
 			setCompletedToolName(toolName);
 			setToolSucceeded(succeeded);
+			setToolDoneLabel(succeeded ? (doneLabel ?? null) : null);
 			setTurnPhase("tool_done");
 			toolLingerRef.current = setTimeout(() => {
 				setCompletedToolName(null);
 				setToolSucceeded(null);
+				setToolDoneLabel(null);
 				setTurnPhase((current) =>
 					current === "tool_done" ? "thinking" : current,
 				);
@@ -558,6 +564,7 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 			setTranscriptCopied(false);
 			setActiveToolName(null);
 			setCompletedToolName(null);
+			setToolDoneLabel(null);
 			setToolSucceeded(null);
 		} else {
 			setConversationId(crypto.randomUUID());
@@ -571,6 +578,7 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 			lastActivityAtRef.current = Date.now();
 			setActiveToolName(null);
 			setCompletedToolName(null);
+			setToolDoneLabel(null);
 			setToolSucceeded(null);
 		}
 		hydratedOrgRef.current = organizationId;
@@ -757,6 +765,7 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 						markPostApprovalActivity();
 						clearToolLinger();
 						setCompletedToolName(null);
+						setToolDoneLabel(null);
 						setToolSucceeded(null);
 						setActiveToolName(action.toolName);
 						if (action.toolCallId) {
@@ -769,7 +778,11 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 						break;
 					case "tool_end":
 						markPostApprovalActivity();
-						scheduleToolDoneLinger(action.toolName, action.succeeded);
+						scheduleToolDoneLinger(
+							action.toolName,
+							action.succeeded,
+							action.doneLabel,
+						);
 						break;
 					case "turn_end": {
 						const requestId =
@@ -857,6 +870,7 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 					markPostApprovalActivity();
 					clearToolLinger();
 					setCompletedToolName(null);
+					setToolDoneLabel(null);
 					setToolSucceeded(null);
 					if (event.status) {
 						toolNameByCallIdRef.current.set(
@@ -875,7 +889,11 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 						event,
 						toolNameByCallIdRef.current,
 					);
-					scheduleToolDoneLinger(result.toolName, result.succeeded);
+					scheduleToolDoneLinger(
+						result.toolName,
+						result.succeeded,
+						result.doneLabel,
+					);
 					break;
 				}
 				case "blocked_feature":
@@ -1112,6 +1130,7 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 			setApproval(null);
 			setActiveToolName(null);
 			setCompletedToolName(null);
+			setToolDoneLabel(null);
 			setToolSucceeded(null);
 			setIsConnecting(false);
 			connectionGenerationRef.current += 1;
@@ -1210,6 +1229,7 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 		setTurnPhase("connecting");
 		setActiveToolName(null);
 		setCompletedToolName(null);
+		setToolDoneLabel(null);
 		setToolSucceeded(null);
 		setBlocked(null);
 		setError(null);
@@ -1312,6 +1332,7 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 		setModelPreset("fast");
 		setActiveToolName(null);
 		setCompletedToolName(null);
+		setToolDoneLabel(null);
 		setToolSucceeded(null);
 		setTurnPhase("idle");
 		if (!options?.preserveDraft) {
@@ -1595,6 +1616,7 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 						turnPhase={turnPhase}
 						toolName={displayToolName}
 						toolSucceeded={toolSucceeded}
+						doneLabel={toolDoneLabel}
 					/>
 				)}
 				{blocked ? (

@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { MCP_TOOL_GROUPS } from "../agent-readiness";
-import { COPILOT_TOOL_LABELS, copilotToolLabel } from "../copilot/tool-labels";
+import {
+	COPILOT_TOOL_LABELS,
+	copilotToolDoneLabel,
+	copilotToolLabel,
+} from "../copilot/tool-labels";
 
 describe("copilot tool labels", () => {
 	it("maps known tools to human copy", () => {
@@ -8,6 +12,23 @@ describe("copilot tool labels", () => {
 			"Checking your Cargo…",
 		);
 		expect(copilotToolLabel("list_inventory", "done")).toBe("Checked Cargo");
+	});
+
+	it("names net Supply lines on the sync card when the result has counts", () => {
+		expect(copilotToolLabel("sync_supply_from_selected_meals", "done")).toBe(
+			"Synced Supply from meals",
+		);
+		expect(
+			copilotToolDoneLabel("sync_supply_from_selected_meals", {
+				ok: true,
+				data: {
+					summary: { newLines: 3, removedLines: 1, changedLines: 2 },
+				},
+			}),
+		).toBe("3 new, 1 removed, 2 changed");
+		expect(copilotToolDoneLabel("list_inventory", { items: [] })).toBe(
+			"Checked Cargo",
+		);
 	});
 
 	it("falls back for unknown tools", () => {

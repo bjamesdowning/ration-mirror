@@ -7,6 +7,7 @@ type CopilotActivityIndicatorProps = {
 	turnPhase: TurnPhase;
 	toolName: string | null;
 	toolSucceeded: boolean | null;
+	doneLabel?: string | null;
 };
 
 function ThinkingDots() {
@@ -23,11 +24,13 @@ export function CopilotActivityIndicator({
 	turnPhase,
 	toolName,
 	toolSucceeded,
+	doneLabel,
 }: CopilotActivityIndicatorProps) {
 	const display = resolveCopilotActivityDisplay(
 		turnPhase,
 		toolName,
 		toolSucceeded,
+		doneLabel,
 	);
 
 	if (display.kind === "hidden") return null;

@@ -1,3 +1,5 @@
+import { readSupplySyncChangeLabel } from "../supply-sync-diff";
+
 export type CopilotToolLabelSet = {
 	running: string;
 	done: string;
@@ -319,4 +321,16 @@ export function copilotToolLabel(
 ): string {
 	const labels = COPILOT_TOOL_LABELS[toolName] ?? DEFAULT_LABELS;
 	return labels[phase];
+}
+
+/** Done-state card copy. Supply sync names the net line change when the result has it. */
+export function copilotToolDoneLabel(
+	toolName: string,
+	result?: unknown,
+): string {
+	if (toolName === "sync_supply_from_selected_meals") {
+		const counts = readSupplySyncChangeLabel(result);
+		if (counts) return counts;
+	}
+	return copilotToolLabel(toolName, "done");
 }

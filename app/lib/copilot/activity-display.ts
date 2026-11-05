@@ -22,6 +22,7 @@ export function resolveCopilotActivityDisplay(
 	turnPhase: TurnPhase,
 	toolName: string | null,
 	toolSucceeded: boolean | null,
+	doneLabel?: string | null,
 ): CopilotActivityDisplay {
 	if (turnPhase === "idle" || turnPhase === "streaming") {
 		return { kind: "hidden" };
@@ -40,7 +41,10 @@ export function resolveCopilotActivityDisplay(
 				: "running";
 		return {
 			kind: "tool",
-			label: copilotToolLabel(toolName, phase),
+			label:
+				phase === "done" && doneLabel
+					? doneLabel
+					: copilotToolLabel(toolName, phase),
 			running: turnPhase === "tool_running",
 			succeeded: turnPhase === "tool_done" ? toolSucceeded : null,
 		};

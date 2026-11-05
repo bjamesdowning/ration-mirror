@@ -1535,6 +1535,10 @@ describe("MCP tools", () => {
 				list: { id: "l1" },
 				summary: {
 					addedItems: 3,
+					newLines: 3,
+					removedLines: 1,
+					changedLines: 2,
+					coveredByCargo: 4,
 					skippedItems: 1,
 					mealsProcessed: 2,
 					totalIngredients: 10,
@@ -1551,6 +1555,10 @@ describe("MCP tools", () => {
 			)({ unitMode: "metric" });
 			const data = parseOk(result);
 			expect(data.summary.addedItems).toBe(3);
+			expect(data.summary.newLines).toBe(3);
+			expect(data.summary.removedLines).toBe(1);
+			expect(data.summary.changedLines).toBe(2);
+			expect(data.message).toBe("3 new, 1 removed, 2 changed");
 			expect(data.itemCount).toBe(3);
 			expect(createSupplyListFromSelectedMeals).toHaveBeenCalledWith(
 				expect.anything(),

@@ -98,7 +98,7 @@ Gated by nutrition feature flags. Not medical advice. Cargo/meal read and write 
 | `update_supply_item` | `mcp:supply:write` | Patch a Live Supply line (name, quantity, or unit). No note field. |
 | `remove_supply_item` | `mcp:supply:write` | Remove a line. |
 | `mark_supply_purchased_bulk` | `mcp:supply:write` | Mark one or many lines purchased (max 50). |
-| `sync_supply_from_selected_meals` | `mcp:supply:write` | Rebuild supply from plan + selections. |
+| `sync_supply_from_selected_meals` | `mcp:supply:write` | Rebuild supply from plan + selections. Reports net new, removed, and changed lines. |
 | `complete_supply_list` | `mcp:supply:write` | Dock purchased Live Supply items → Cargo. Saved lists cannot be docked. |
 | `list_supply_lists` | `mcp:read` | Live, Saved, Template, and Archived lists (when saved lists are enabled for your account). |
 | `create_supply_list` | `mcp:supply:write` | Create a Saved or Template list (when saved lists are enabled). |

@@ -182,7 +182,7 @@ All tools are scoped to the authorized household. **MCP calls do not consume Rat
 | `update_supply_item` | `mcp:supply:write` | Update name, quantity, or unit on a Live Supply line. |
 | `remove_supply_item` | `mcp:supply:write` | Remove a supply list line. |
 | `mark_supply_purchased_bulk` | `mcp:supply:write` | Mark one or many supply lines purchased / unpurchased. |
-| `sync_supply_from_selected_meals` | `mcp:supply:write` | Rebuild list from meal plan + Galley selections (buy only the delta). |
+| `sync_supply_from_selected_meals` | `mcp:supply:write` | Rebuild list from meal plan + Galley selections (buy only the delta). Summary is net new, removed, and changed lines. |
 | `complete_supply_list` | `mcp:supply:write` + `mcp:inventory:write` | Dock purchased items from **Live Supply** into pantry. Saved lists cannot be docked. Requires **both** scopes. **Requires `confirm: true`.** |
 | `create_supply_list` | `mcp:supply:write` | Create a Saved or Template list. Flag-gated (`supply-multi-lists`). |
 | `duplicate_supply_list` | `mcp:supply:write` | Duplicate a list into an independent copy. Flag-gated. |

@@ -76,6 +76,7 @@ import {
 } from "~/lib/supply-list-kinds";
 import { loadSupplyListRow } from "~/lib/supply-list-target.server";
 import { getSupplyCatalog } from "~/lib/supply-lists.server";
+import { formatSupplySyncCounts } from "~/lib/supply-sync-diff";
 import { filterSupplyItemsByCargoTags } from "~/lib/supply-tags";
 import type { TagRecord } from "~/lib/tags";
 import { getDistinctCargoTags, getTagsForMealIds } from "~/lib/tags.server";
@@ -297,6 +298,10 @@ export async function action({ request, context }: Route.ActionArgs) {
 					intent: "update-list",
 					duration_ms: Date.now() - startedAtMs,
 					added_items_count: result.summary.addedItems,
+					new_lines: result.summary.newLines,
+					removed_lines: result.summary.removedLines,
+					changed_lines: result.summary.changedLines,
+					covered_by_cargo: result.summary.coveredByCargo,
 					skipped_items_count: result.summary.skippedItems,
 					meals_processed_count: result.summary.mealsProcessed,
 					ingredient_rows_count: result.summary.totalIngredients,
@@ -391,6 +396,10 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 		list?: typeof list;
 		summary?: {
 			addedItems: number;
+			newLines: number;
+			removedLines: number;
+			changedLines: number;
+			coveredByCargo: number;
 			skippedItems: number;
 			mealsProcessed: number;
 			totalIngredients: number;
@@ -884,12 +893,9 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 					position="top-right"
 					title="List Updated"
 					description={
-						<>
-							<span className="text-hyper-green font-bold">
-								+{fetcher.data.summary.addedItems}
-							</span>{" "}
-							supply rows refreshed from Cargo, Galley, and Manifest.
-						</>
+						<span className="text-hyper-green font-bold">
+							{formatSupplySyncCounts(fetcher.data.summary)}
+						</span>
 					}
 					onDismiss={summaryToast.hide}
 				/>

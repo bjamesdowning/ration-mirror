@@ -16,7 +16,11 @@ import {
 	assertNutritionFastLog,
 	assertNutritionSavedFood,
 } from "./fast-log-flag.server";
-import type { IntakeLoggedUnit } from "./intake-amount";
+import { listFdcPortions } from "./fdc-portion.server";
+import {
+	resolveHouseholdPortion,
+	storedPortionFromFdc,
+} from "./household-portion";
 import { copySavedFoodOntoWrite } from "./saved-food";
 import { loadOwnedSavedFood } from "./saved-food.server";
 import {
@@ -35,8 +39,6 @@ import {
 
 /** Typed and custom diary logs debit nothing. Photo debit is a later MR. */
 export const DIARY_TYPED_LOG_CREDITS = 0;
-
-const DIARY_UNITS = new Set<IntakeLoggedUnit>(["serving", "g", "oz"]);
 
 type Db = ReturnType<typeof drizzle<typeof schema>>;
 type IntakeInsert = typeof schema.nutritionIntake.$inferInsert;
@@ -136,16 +138,13 @@ function manifestDateForInstant(
 	return formatISODateInTimeZone(occurredAt, zone ?? "UTC");
 }
 
-function assertDiaryUnit(
-	unit: string | null | undefined,
-): IntakeLoggedUnit | null {
+function normalizeDiaryUnit(unit: string | null | undefined): string | null {
 	if (unit == null) return null;
-	if (!DIARY_UNITS.has(unit as IntakeLoggedUnit)) {
-		throw new AmountUnitUnavailableError(
-			"Personal food log accepts serving, g, or oz. Typed macros do not need another unit.",
-		);
+	const trimmed = unit.trim().toLowerCase();
+	if (!trimmed || trimmed.length > 40) {
+		throw new NutritionOperationValidationError("unit is not valid");
 	}
-	return unit as IntakeLoggedUnit;
+	return trimmed;
 }
 
 type ResolvedFood = {
@@ -155,7 +154,7 @@ type ResolvedFood = {
 	slotType: string | null;
 	servings: number;
 	loggedAmount: number | null;
-	loggedUnit: IntakeLoggedUnit | null;
+	loggedUnit: string | null;
 	energyKcal: number;
 	proteinG: number;
 	carbsG: number;
@@ -175,7 +174,7 @@ function resolveFood(
 	metadata: OrganizationMetadata | null,
 	now: Date,
 ): ResolvedFood {
-	const unit = assertDiaryUnit(input.unit ?? null);
+	const unit = normalizeDiaryUnit(input.unit ?? null);
 	const occurredAt = input.occurredAt ? new Date(input.occurredAt) : now;
 	if (Number.isNaN(occurredAt.getTime())) {
 		throw new NutritionOperationValidationError(
@@ -569,20 +568,61 @@ async function materializeFood(
 	now: Date,
 ): Promise<SavedFoodProvenance> {
 	if (!input.savedFoodId) {
-		if (!input.name || !input.macros) {
+		if (!input.name) {
 			throw new NutritionOperationValidationError(
 				"A personal food log needs a name and macros, or a saved food id.",
 			);
 		}
+		if (input.macros) {
+			return {
+				food: resolveFood(
+					{ ...input, name: input.name, macros: input.macros },
+					metadata,
+					now,
+				),
+				savedFoodId: null,
+				barcode: null,
+				fdcId: input.fdcId ?? null,
+			};
+		}
+		if (!input.per100g) {
+			throw new NutritionOperationValidationError(
+				"A personal food log needs a name and macros, or a saved food id.",
+			);
+		}
+		const fdcId = input.fdcId != null ? Number(input.fdcId) : null;
+		const rows =
+			fdcId != null && Number.isFinite(fdcId)
+				? await listFdcPortions(env, fdcId)
+				: [];
+		const portions = rows.flatMap((row) => {
+			const portion = storedPortionFromFdc(row);
+			return portion ? [portion] : [];
+		});
+		const scaled = resolveHouseholdPortion({
+			amount: input.amount,
+			unit: input.unit,
+			per100g: {
+				energyKcal: input.per100g.energyKcal,
+				proteinG: input.per100g.proteinG,
+				carbsG: input.per100g.carbsG,
+				fatG: input.per100g.fatG,
+				fiberG: input.per100g.fiberG ?? null,
+			},
+			portions,
+		});
+		if (!scaled.ok) {
+			throw new AmountUnitUnavailableError(scaled.message, scaled.allowedUnits);
+		}
 		return {
 			food: resolveFood(
-				{ ...input, name: input.name, macros: input.macros },
+				{ ...input, name: input.name, macros: scaled.macros },
 				metadata,
 				now,
 			),
 			savedFoodId: null,
 			barcode: null,
-			fdcId: null,
+			fdcId: input.fdcId ?? null,
 		};
 	}
 	await assertNutritionSavedFood(env, flags);

@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { INTAKE_LOGGED_UNITS } from "~/lib/nutrition/intake-amount";
 import { IntakeNotesSchema, SLOT_TYPES } from "./manifest";
 import { UuidSchema } from "./uuid";
 
@@ -23,8 +22,11 @@ export const DiaryFoodWriteSchema = z
 		occurredAt: z.string().datetime({ offset: true }).optional(),
 		slotType: z.enum(SLOT_TYPES).nullable().optional(),
 		amount: z.number().finite().positive().optional(),
-		unit: z.enum(INTAKE_LOGGED_UNITS).optional(),
+		unit: z.string().trim().min(1).max(40).optional(),
 		macros: DiaryMacrosSchema.optional(),
+		/** Density used only when macros are omitted. Never a gram-weight source. */
+		per100g: DiaryMacrosSchema.optional(),
+		fdcId: z.string().regex(/^\d+$/).optional(),
 		idempotencyKey: UuidSchema,
 		operationKey: UuidSchema,
 		notes: IntakeNotesSchema.optional(),
@@ -47,13 +49,22 @@ export const DiaryFoodWriteSchema = z
 				path: ["name"],
 			});
 		}
-		if (!value.macros) {
-			ctx.addIssue({
-				code: z.ZodIssueCode.custom,
-				message: "macros are required",
-				path: ["macros"],
-			});
+		if (value.macros) return;
+		if (value.per100g) {
+			if (value.amount == null || value.unit == null) {
+				ctx.addIssue({
+					code: z.ZodIssueCode.custom,
+					message: "amount and unit are required to scale per 100 g",
+					path: ["unit"],
+				});
+			}
+			return;
 		}
+		ctx.addIssue({
+			code: z.ZodIssueCode.custom,
+			message: "macros are required",
+			path: ["macros"],
+		});
 	});
 
 export type DiaryFoodWrite = z.infer<typeof DiaryFoodWriteSchema>;

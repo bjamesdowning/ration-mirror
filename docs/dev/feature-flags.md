@@ -149,7 +149,7 @@ All eight are `iosAlwaysOn`: on for iOS ≥ 1.5.0, Flagship-controlled elsewhere
 | `nutrition-async-recompute` | _(not clientVisible)_ | Queue stub for async nutrition recompute |
 | `nutrition-intake-notes` | `nutritionIntakeNotes` | Optional private Eat notes (≤280) on intake rows |
 | `nutrition-cross-org-diary` | `nutritionCrossOrgDiary` | Personal intake summary/history aggregates across kitchens (user-global diary) |
-| `nutrition-fast-log` | `nutritionFastLog` | Personal food log API, the capture choice (Add to Cargo / Log to Fuel), and the person-scoped day layout (timeline or slots). Daily Fuel opens that day only when on. Default off. Not `iosAlwaysOn`. iOS below 1.6.0 fails closed |
+| `nutrition-fast-log` | `nutritionFastLog` | Personal food log API, the capture choice (Add to Cargo / Log to Fuel), and the person-scoped day layout (timeline or slots). Household units scale per 100 g only from stored gram weights; typed macros are not converted; a unit without grams is `amount_unit_unavailable` and lists the units that food allows. Daily Fuel opens that day only when on. Default off. Not `iosAlwaysOn`. iOS below 1.6.0 fails closed |
 | `nutrition-saved-food` | `nutritionSavedFood` | Person-owned saved foods (star and custom macros, log by id). Child of `nutrition-fast-log`: off unless the parent is on. Default off. `iosAlwaysOn: false`. No organization id. iOS below 1.6.0 fails closed |
 
 ## Supply list library

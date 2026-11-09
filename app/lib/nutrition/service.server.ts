@@ -112,12 +112,15 @@ export class NutritionUnavailableError extends Error {
 export class AmountUnitUnavailableError extends Error {
 	readonly code = "amount_unit_unavailable" as const;
 	readonly status = 422;
+	readonly allowedUnits?: readonly string[];
 
 	constructor(
 		message = "This meal has no recipe mass to log in grams or ounces. Use servings instead.",
+		allowedUnits?: readonly string[],
 	) {
 		super(message);
 		this.name = "AmountUnitUnavailableError";
+		this.allowedUnits = allowedUnits;
 	}
 }
 

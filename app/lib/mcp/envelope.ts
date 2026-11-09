@@ -339,9 +339,16 @@ export function mapErrorToEnvelope(
 			code === "amount_unit_unavailable" ||
 			error.name === "AmountUnitUnavailableError"
 		) {
+			const allowedUnits =
+				"allowedUnits" in error &&
+				Array.isArray((error as { allowedUnits?: unknown }).allowedUnits)
+					? (error as { allowedUnits: readonly string[] }).allowedUnits
+					: undefined;
 			return err(tool, "amount_unit_unavailable", error.message, {
-				recoveryHint:
-					"Use portions[].servings (0.01–100) instead of grams or ounces for this meal.",
+				...(allowedUnits ? { details: { allowedUnits } } : {}),
+				recoveryHint: allowedUnits
+					? "Use one of the listed units, or send typed macros and skip conversion."
+					: "Use portions[].servings (0.01–100) instead of grams or ounces for this meal.",
 			});
 		}
 		if (

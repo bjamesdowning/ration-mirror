@@ -24,6 +24,17 @@ describe("DiaryFoodWriteSchema", () => {
 		expect(parsed.success).toBe(false);
 	});
 
+	it("accepts a saved food id without caller macros", () => {
+		const parsed = DiaryFoodWriteSchema.parse({
+			savedFoodId: "55555555-5555-4555-8555-555555555555",
+			idempotencyKey: valid.idempotencyKey,
+			operationKey: valid.operationKey,
+			occurredAt: valid.occurredAt,
+		});
+		expect(parsed.savedFoodId).toBe("55555555-5555-4555-8555-555555555555");
+		expect(parsed.macros).toBeUndefined();
+	});
+
 	it("rejects a cup, which this log cannot convert", () => {
 		const parsed = DiaryFoodWriteSchema.safeParse({ ...valid, unit: "cup" });
 		expect(parsed.success).toBe(false);

@@ -696,6 +696,42 @@ export function buildMobileOpenApiDocument(baseUrl: string) {
 					},
 				},
 			},
+			"/api/mobile/v1/nutrition/saved-food": {
+				get: {
+					summary: "List the caller's saved foods",
+					description:
+						"Person-owned. No kitchen id. Another member's list is empty. Requires nutrition-saved-food and nutrition-fast-log. iOS below 1.6.0 returns 403 FEATURE_DISABLED.",
+					security: [{ bearerAuth: [] }],
+					responses: {
+						"200": { description: "Caller saved foods" },
+						"403": { description: "FEATURE_DISABLED" },
+					},
+				},
+				post: {
+					summary: "Star a food or save custom macros",
+					description:
+						"Writes only this person's saved food. Does not write intake.",
+					security: [{ bearerAuth: [] }],
+					responses: {
+						"200": { description: "Saved food" },
+						"403": { description: "FEATURE_DISABLED" },
+					},
+				},
+			},
+			"/api/mobile/v1/nutrition/saved-food/{id}": {
+				delete: {
+					summary: "Delete one saved food",
+					description:
+						"Requires confirm:true. Does not void past intake. The intake keeps the copied nutrients and the link is cleared.",
+					security: [{ bearerAuth: [] }],
+					responses: {
+						"200": { description: "Deleted" },
+						"400": { description: "confirmation_required" },
+						"403": { description: "FEATURE_DISABLED" },
+						"404": { description: "Not the caller's food" },
+					},
+				},
+			},
 			"/api/mobile/v1/nutrition/diary": {
 				post: {
 					summary: "Log a personal food without Cargo or a plan entry",

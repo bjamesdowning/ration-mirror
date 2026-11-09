@@ -230,6 +230,11 @@ export default [
 		"routes/api/nutrition.diary.$id.save-to-kitchen.ts",
 	),
 	route("api/nutrition/diary/:id", "routes/api/nutrition.diary.$id.ts"),
+	route("api/nutrition/saved-food", "routes/api/nutrition.saved-food.ts"),
+	route(
+		"api/nutrition/saved-food/:id",
+		"routes/api/nutrition.saved-food.$id.ts",
+	),
 	route("api/privacy/nutrition", "routes/api/privacy.nutrition.ts"),
 	route("api/privacy/features", "routes/api/privacy.features.ts"),
 	route("api/undo", "routes/api/undo.ts"),
@@ -634,6 +639,14 @@ export default [
 	route(
 		"api/mobile/v1/nutrition/diary/:id",
 		"routes/api/mobile/v1.nutrition.diary.$id.ts",
+	),
+	route(
+		"api/mobile/v1/nutrition/saved-food",
+		"routes/api/mobile/v1.nutrition.saved-food.ts",
+	),
+	route(
+		"api/mobile/v1/nutrition/saved-food/:id",
+		"routes/api/mobile/v1.nutrition.saved-food.$id.ts",
 	),
 	route(
 		"api/mobile/v1/nutrition/resolve",

@@ -9,7 +9,10 @@ import {
 	voidDiaryFood,
 } from "../../nutrition/diary.server";
 import { normalizeDiaryLayout } from "../../nutrition/diary-layout";
-import { isNutritionFastLogEnabled } from "../../nutrition/fast-log-flag.server";
+import {
+	isNutritionFastLogEnabled,
+	isNutritionSavedFoodEnabled,
+} from "../../nutrition/fast-log-flag.server";
 import {
 	DiaryFoodWriteSchema,
 	DiaryKitchenSaveSchema,
@@ -48,7 +51,8 @@ function diaryPrincipal(ctx: McpToolContext) {
 }
 
 const diaryWriteFields = {
-	name: z.string().trim().min(1).max(120),
+	savedFoodId: UuidSchema.optional(),
+	name: z.string().trim().min(1).max(120).optional(),
 	manifestDate: z
 		.string()
 		.regex(/^\d{4}-\d{2}-\d{2}$/)
@@ -60,10 +64,10 @@ const diaryWriteFields = {
 		.optional(),
 	amount: z.number().finite().positive().optional(),
 	unit: z.enum(["serving", "g", "oz"]).optional(),
-	energyKcal: z.number().finite().nonnegative(),
-	proteinG: z.number().finite().nonnegative(),
-	carbsG: z.number().finite().nonnegative(),
-	fatG: z.number().finite().nonnegative(),
+	energyKcal: z.number().finite().nonnegative().optional(),
+	proteinG: z.number().finite().nonnegative().optional(),
+	carbsG: z.number().finite().nonnegative().optional(),
+	fatG: z.number().finite().nonnegative().optional(),
 	fiberG: z.number().finite().nonnegative().nullable().optional(),
 	idempotencyKey: UuidSchema,
 	operationKey: UuidSchema,
@@ -71,39 +75,48 @@ const diaryWriteFields = {
 };
 
 function toDiaryWrite(args: {
-	name: string;
+	savedFoodId?: string;
+	name?: string;
 	manifestDate?: string;
 	occurredAt?: string;
 	slotType?: "breakfast" | "lunch" | "dinner" | "snack" | null;
 	amount?: number;
 	unit?: "serving" | "g" | "oz";
-	energyKcal: number;
-	proteinG: number;
-	carbsG: number;
-	fatG: number;
+	energyKcal?: number;
+	proteinG?: number;
+	carbsG?: number;
+	fatG?: number;
 	fiberG?: number | null;
 	idempotencyKey: string;
 	operationKey: string;
 	notes?: string | null;
 }) {
-	return DiaryFoodWriteSchema.parse({
+	const hasMacros =
+		args.energyKcal != null &&
+		args.proteinG != null &&
+		args.carbsG != null &&
+		args.fatG != null;
+	return {
+		savedFoodId: args.savedFoodId,
 		name: args.name,
 		manifestDate: args.manifestDate,
 		occurredAt: args.occurredAt,
 		slotType: args.slotType,
 		amount: args.amount,
 		unit: args.unit,
-		macros: {
-			energyKcal: args.energyKcal,
-			proteinG: args.proteinG,
-			carbsG: args.carbsG,
-			fatG: args.fatG,
-			fiberG: args.fiberG,
-		},
+		macros: hasMacros
+			? {
+					energyKcal: args.energyKcal,
+					proteinG: args.proteinG,
+					carbsG: args.carbsG,
+					fatG: args.fatG,
+					fiberG: args.fiberG,
+				}
+			: undefined,
 		idempotencyKey: args.idempotencyKey,
 		operationKey: args.operationKey,
 		notes: args.notes,
-	});
+	};
 }
 
 export function createDiaryToolDefs(env: McpToolsEnv) {
@@ -133,7 +146,7 @@ export function createDiaryToolDefs(env: McpToolsEnv) {
 		defineSharedTool({
 			name: "log_diary_food",
 			description:
-				"Log one personal food the caller ate. Writes nutrition intake with a null plan entry and does not change Cargo, Galley, Manifest, or Supply. Requires approval even for one item, active intake consent, and agent-processing consent. Pass name, explicit energyKcal/proteinG/carbsG/fatG (fiberG optional), optional amount+unit (serving, g, or oz), manifestDate, occurredAt, slotType, notes, idempotencyKey, and operationKey. Costs 0 credits. Does not save to the kitchen; the result includes kitchenOffer only. Not medical advice.",
+				"Log one personal food the caller ate. Writes nutrition intake with a null plan entry and does not change Cargo, Galley, Manifest, or Supply. Requires approval even for one item, active intake consent, and agent-processing consent. Pass name and explicit energyKcal/proteinG/carbsG/fatG, or savedFoodId. A savedFoodId copies that person's stored name and nutrients onto the intake row and ignores any macros the caller substitutes. savedFoodId requires nutrition-saved-food as well as nutrition-fast-log. Optional amount+unit (serving, g, or oz) apply only to a typed log. Also pass manifestDate, occurredAt, slotType, notes, idempotencyKey, and operationKey. Costs 0 credits. Does not save to the kitchen; the result includes kitchenOffer only. Not medical advice.",
 			inputSchema: z.object(diaryWriteFields),
 			scopes: ["mcp:nutrition:write"],
 			rateLimitCategory: "mcp_write",
@@ -147,6 +160,16 @@ export function createDiaryToolDefs(env: McpToolsEnv) {
 						"log_diary_food",
 						"Personal food log is unavailable.",
 						"Enable nutrition-fast-log. Do not route a personal food through log_manifest_intake.",
+					);
+				}
+				if (
+					args.savedFoodId &&
+					!(await isNutritionSavedFoodEnabled(env, flagContext))
+				) {
+					return featureDisabled(
+						"log_diary_food",
+						"Saved foods are unavailable.",
+						"Enable nutrition-saved-food. The parent nutrition-fast-log must also be on. iOS below 1.6.0 stays disabled.",
 					);
 				}
 				const parsed = DiaryFoodWriteSchema.safeParse(toDiaryWrite(args));
@@ -187,6 +210,16 @@ export function createDiaryToolDefs(env: McpToolsEnv) {
 						"update_diary_food",
 						"Personal food log is unavailable.",
 						"Enable nutrition-fast-log.",
+					);
+				}
+				if (
+					args.savedFoodId &&
+					!(await isNutritionSavedFoodEnabled(env, flagContext))
+				) {
+					return featureDisabled(
+						"update_diary_food",
+						"Saved foods are unavailable.",
+						"Enable nutrition-saved-food. The parent nutrition-fast-log must also be on. iOS below 1.6.0 stays disabled.",
 					);
 				}
 				const parsed = DiaryFoodWriteSchema.safeParse(toDiaryWrite(args));

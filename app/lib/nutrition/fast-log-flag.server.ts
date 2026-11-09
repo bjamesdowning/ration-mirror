@@ -40,3 +40,46 @@ export async function assertNutritionFastLog(
 		"Personal food log is unavailable.",
 	);
 }
+
+/** Child of nutrition-fast-log. Off when the parent is off, and iOS below 1.6 fails closed. */
+export async function isNutritionSavedFoodEnabled(
+	env: Env,
+	context: FlagshipEvaluationContext,
+): Promise<boolean> {
+	if (!nutritionFastLogClientAllowed(context)) return false;
+	const [parent, child] = await Promise.all([
+		isFeatureEnabled(env, "nutrition-fast-log", context),
+		isFeatureEnabled(env, "nutrition-saved-food", context),
+	]);
+	return parent && child;
+}
+
+export async function assertNutritionSavedFood(
+	env: Env,
+	context: FlagshipEvaluationContext,
+): Promise<void> {
+	if (!nutritionFastLogClientAllowed(context)) {
+		throw data(
+			{
+				error: "Saved foods require iOS 1.6 or later.",
+				code: FEATURE_DISABLED_CODE,
+			},
+			{ status: 403 },
+		);
+	}
+	if (!(await isFeatureEnabled(env, "nutrition-fast-log", context))) {
+		throw data(
+			{
+				error: "Personal food log is unavailable.",
+				code: FEATURE_DISABLED_CODE,
+			},
+			{ status: 403 },
+		);
+	}
+	await assertFeatureEnabled(
+		env,
+		"nutrition-saved-food",
+		context,
+		"Saved foods are unavailable.",
+	);
+}

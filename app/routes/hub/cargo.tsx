@@ -493,12 +493,14 @@ export default function CargoPage({ loaderData }: Route.ComponentProps) {
 				clientFlags?: {
 					aiScanReceipt?: boolean;
 					nutritionFastLog?: boolean;
+					nutritionSavedFood?: boolean;
 				};
 		  }
 		| undefined;
 	const revalidator = useRevalidator();
 	const aiScanReceipt = rootData?.clientFlags?.aiScanReceipt === true;
 	const fuelCapture = rootData?.clientFlags?.nutritionFastLog === true;
+	const savedFoods = rootData?.clientFlags?.nutritionSavedFood === true;
 	const [showScanIntroModal, setShowScanIntroModal] = useState(false);
 	const [showCaptureChoice, setShowCaptureChoice] = useState(false);
 	const [showFuelLog, setShowFuelLog] = useState(false);
@@ -881,6 +883,7 @@ export default function CargoPage({ loaderData }: Route.ComponentProps) {
 			/>
 			<LogToFuelDialog
 				open={showFuelLog}
+				savedFoods={savedFoods}
 				onClose={() => setShowFuelLog(false)}
 				onSaved={() => revalidator.revalidate()}
 			/>

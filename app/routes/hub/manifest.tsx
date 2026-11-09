@@ -552,6 +552,7 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 					nutritionCookLogSplit?: boolean;
 					nutritionIntakeNotes?: boolean;
 					nutritionFastLog?: boolean;
+					nutritionSavedFood?: boolean;
 				};
 		  }
 		| undefined;
@@ -565,6 +566,7 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 	const nutritionIntakeNotesFlag =
 		rootData?.clientFlags?.nutritionIntakeNotes === true;
 	const fuelCapture = rootData?.clientFlags?.nutritionFastLog === true;
+	const savedFoods = rootData?.clientFlags?.nutritionSavedFood === true;
 	const diaryLayoutFetcher = useFetcher();
 	const submittedDiaryLayout = diaryLayoutFetcher.formData?.get("diaryLayout");
 	const diaryLayout =
@@ -1871,6 +1873,7 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 			<LogToFuelDialog
 				open={showFuelLog}
 				intake={editIntake}
+				savedFoods={savedFoods}
 				onClose={() => setShowFuelLog(false)}
 				onSaved={() => revalidator.revalidate()}
 			/>

@@ -44,7 +44,7 @@ Dashboard (Flagship) → propagated config → env.FLAGS binding → flags.serve
 
 ### Shipped on iOS (`iosAlwaysOn`)
 
-iOS 1.5.x ships every flagged iOS feature enabled. Entries marked `iosAlwaysOn` are on for iOS ≥ `IOS_FEATURE_FLOOR`; Flagship still decides web, MCP, and iOS builds below the floor. Copilot tools inherit the Ask client's identity (`originating-client.server.ts`), so Ask from iOS ≥ 1.5.0 gets the same answer as the iOS app. iOS builds below `IOS_MIN_SUPPORTED_VERSION` (`wrangler.jsonc`) get **426** `upgrade_required` from `workers/app.ts` on non-exempt mobile routes (see README → *Minimum iOS version*). Only `app-review-login`, `apple-web-login`, `nutrition-async-recompute`, and `nutrition-fast-log` are not `iosAlwaysOn`; `registry.test.ts` pins that list. `nutrition-fast-log` also fails closed for iOS clients below `1.6.0`.
+iOS 1.5.x ships every flagged iOS feature enabled. Entries marked `iosAlwaysOn` are on for iOS ≥ `IOS_FEATURE_FLOOR`; Flagship still decides web, MCP, and iOS builds below the floor. Copilot tools inherit the Ask client's identity (`originating-client.server.ts`), so Ask from iOS ≥ 1.5.0 gets the same answer as the iOS app. iOS builds below `IOS_MIN_SUPPORTED_VERSION` (`wrangler.jsonc`) get **426** `upgrade_required` from `workers/app.ts` on non-exempt mobile routes (see README → *Minimum iOS version*). Only `app-review-login`, `apple-web-login`, `nutrition-async-recompute`, `nutrition-fast-log`, and `nutrition-saved-food` are not `iosAlwaysOn`; `registry.test.ts` pins that list. `nutrition-fast-log` and its child `nutrition-saved-food` also fail closed for iOS clients below `1.6.0`. The child is on only when the parent is on.
 
 When a new iOS feature needs a flag, leave `iosAlwaysOn` off until the build that ships it is the floor, or gate it on a higher client version in the route.
 
@@ -150,6 +150,7 @@ All eight are `iosAlwaysOn`: on for iOS ≥ 1.5.0, Flagship-controlled elsewhere
 | `nutrition-intake-notes` | `nutritionIntakeNotes` | Optional private Eat notes (≤280) on intake rows |
 | `nutrition-cross-org-diary` | `nutritionCrossOrgDiary` | Personal intake summary/history aggregates across kitchens (user-global diary) |
 | `nutrition-fast-log` | `nutritionFastLog` | Personal food log API, the capture choice (Add to Cargo / Log to Fuel), and the person-scoped day layout (timeline or slots). Daily Fuel opens that day only when on. Default off. Not `iosAlwaysOn`. iOS below 1.6.0 fails closed |
+| `nutrition-saved-food` | `nutritionSavedFood` | Person-owned saved foods (star and custom macros, log by id). Child of `nutrition-fast-log`: off unless the parent is on. Default off. `iosAlwaysOn: false`. No organization id. iOS below 1.6.0 fails closed |
 
 ## Supply list library
 
@@ -165,7 +166,7 @@ Hub/SSR and web APIs evaluate Flagship with `buildWebFlagContext` (server-owned 
 
 ### Nutrition rollout
 
-iOS ≥ 1.5.0 gets every nutrition flag except `nutrition-async-recompute` through `iosAlwaysOn`; no Flagship rule is needed for iOS. For web and MCP, keep registry `defaultEnabled: false` and Flagship default variation **off**, and enable by platform (`clientPlatform` equals `web` / `mcp`). Do **not** use `FEATURE_FLAG_OVERRIDES` to turn nutrition flags **on** in production; that secret is for emergency **kill** (`false`) or local/dev overrides. Copilot Ask needs no extra rule: tools inherit the Ask client's `ios` or `web` identity. History of the 1.4.x platform/version rollout: [nutrition-rollout.md](nutrition-rollout.md).
+iOS ≥ 1.5.0 gets every nutrition flag except `nutrition-async-recompute`, `nutrition-fast-log`, and `nutrition-saved-food` through `iosAlwaysOn`. Those three stay off until Flagship enables them, and the two food-log flags also require iOS ≥ 1.6.0. No Flagship rule is needed for the `iosAlwaysOn` nutrition flags. For web and MCP, keep registry `defaultEnabled: false` and Flagship default variation **off**, and enable by platform (`clientPlatform` equals `web` / `mcp`). Do **not** use `FEATURE_FLAG_OVERRIDES` to turn nutrition flags **on** in production; that secret is for emergency **kill** (`false`) or local/dev overrides. Copilot Ask needs no extra rule: tools inherit the Ask client's `ios` or `web` identity. History of the 1.4.x platform/version rollout: [nutrition-rollout.md](nutrition-rollout.md).
 
 Consent / Art. 9 notes: [nutrition-dpia-notes.md](nutrition-dpia-notes.md). After help article changes, sync Copilot AI Search.
 

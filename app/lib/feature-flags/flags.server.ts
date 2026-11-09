@@ -118,6 +118,10 @@ export function applyClientFlagDependencies(
 		result.nutritionCrossOrgDiary =
 			result.nutritionCrossOrgDiary === true && (manifest || goals);
 	}
+	if ("nutritionSavedFood" in result) {
+		result.nutritionSavedFood =
+			result.nutritionFastLog === true && result.nutritionSavedFood === true;
+	}
 	return result;
 }
 
@@ -135,7 +139,7 @@ export async function getClientSafeFlags(
 			if (!entry?.clientVisible) return;
 			const clientKey = getClientFlagKey(flag, entry);
 			if (
-				flag === "nutrition-fast-log" &&
+				(flag === "nutrition-fast-log" || flag === "nutrition-saved-food") &&
 				!nutritionFastLogClientAllowed(context)
 			) {
 				result[clientKey] = false;

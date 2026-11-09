@@ -33,6 +33,22 @@ enum HubCapturePolicy {
     }
 }
 
+/// Star, custom macros, and log-by-id. Hidden unless the parent capture
+/// control is visible and the saved-food flag is on. A 1.5 binary stays closed.
+enum SavedFoodPolicy {
+    static func controlVisible(
+        fastLogEnabled: Bool,
+        savedFoodEnabled: Bool,
+        appVersion: String
+    ) -> Bool {
+        savedFoodEnabled
+            && HubCapturePolicy.choiceVisible(
+                fastLogEnabled: fastLogEnabled,
+                appVersion: appVersion
+            )
+    }
+}
+
 enum LogToFuelDraft {
     /// A failed send retries the same key. A new draft mints one.
     static func operationKey(existing: String?, mint: () -> String) -> String {

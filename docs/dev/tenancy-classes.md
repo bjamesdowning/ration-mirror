@@ -15,7 +15,7 @@ Bob logs breakfast at Shared Home, then switches the active group to his persona
 | Class | Ownership | Org role | Typical tables |
 |-------|-----------|----------|----------------|
 | **Kitchen** | Organization | Required; cascade delete with org | `cargo`, `meal`, `meal_plan`, `supply_*`, `kitchen_event`, credits |
-| **Person** | User | None (user-global) | `nutrition_goal`, `nutrition_consent` |
+| **Person** | User | None (user-global) | `nutrition_goal`, `nutrition_consent`, `nutrition_saved_food` |
 | **Person-in-context** | User | Provenance only; nullable after org delete | `nutrition_intake` |
 
 ### ER sketch

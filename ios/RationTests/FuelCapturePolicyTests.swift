@@ -28,6 +28,30 @@ final class FuelCapturePolicyTests: XCTestCase {
         XCTAssertFalse(HubCapturePolicy.dailyFuelOpensGoals(fastLogEnabled: true, appVersion: "1.6.0"))
     }
 
+    func testSavedFoodStaysClosedBelow16AndWithoutTheParent() {
+        XCTAssertFalse(
+            SavedFoodPolicy.controlVisible(
+                fastLogEnabled: true,
+                savedFoodEnabled: true,
+                appVersion: "1.5.18"
+            )
+        )
+        XCTAssertFalse(
+            SavedFoodPolicy.controlVisible(
+                fastLogEnabled: false,
+                savedFoodEnabled: true,
+                appVersion: "1.6.0"
+            )
+        )
+        XCTAssertTrue(
+            SavedFoodPolicy.controlVisible(
+                fastLogEnabled: true,
+                savedFoodEnabled: true,
+                appVersion: "1.6.0"
+            )
+        )
+    }
+
     func testRetryKeepsOneOperationKey() {
         XCTAssertEqual(LogToFuelDraft.operationKey(existing: "same", mint: { "new" }), "same")
         XCTAssertEqual(LogToFuelDraft.operationKey(existing: nil, mint: { "new" }), "new")

@@ -12,8 +12,13 @@ import type { DiaryFoodWrite } from "~/lib/schemas/diary";
 import type { OrganizationMetadata } from "~/lib/types";
 import { assertActiveNutritionConsent } from "./consent.server";
 import type { DiaryNutritionOperationType } from "./diary-operations";
-import { assertNutritionFastLog } from "./fast-log-flag.server";
+import {
+	assertNutritionFastLog,
+	assertNutritionSavedFood,
+} from "./fast-log-flag.server";
 import type { IntakeLoggedUnit } from "./intake-amount";
+import { copySavedFoodOntoWrite } from "./saved-food";
+import { loadOwnedSavedFood } from "./saved-food.server";
 import {
 	AmountUnitUnavailableError,
 	hashNutritionRequest,
@@ -160,8 +165,13 @@ type ResolvedFood = {
 	requestedNotes: string | null;
 };
 
+type CompleteFoodWrite = Omit<DiaryFoodWrite, "name" | "macros"> & {
+	name: string;
+	macros: NonNullable<DiaryFoodWrite["macros"]>;
+};
+
 function resolveFood(
-	input: DiaryFoodWrite,
+	input: CompleteFoodWrite,
 	metadata: OrganizationMetadata | null,
 	now: Date,
 ): ResolvedFood {
@@ -348,6 +358,9 @@ function intakeInsert(
 		replacesIntakeId: string | null;
 		healthSyncId: string;
 		healthSyncVersion: number;
+		savedFoodId: string | null;
+		barcode: string | null;
+		fdcId: string | null;
 	},
 ): IntakeInsert {
 	return {
@@ -396,9 +409,9 @@ function intakeInsert(
 		healthSyncVersion: input.healthSyncVersion,
 		compositionSource: "manual_macros",
 		compositionConfirmedAt: input.now,
-		fdcId: null,
-		barcode: null,
-		savedFoodId: null,
+		fdcId: input.fdcId,
+		barcode: input.barcode,
+		savedFoodId: input.savedFoodId,
 		createdAt: input.now,
 	};
 }
@@ -497,6 +510,107 @@ async function prepareWrite(
 	return { db, intakeConsent, notesEnabled, metadata };
 }
 
+type SavedFoodProvenance = {
+	food: ResolvedFood;
+	savedFoodId: string | null;
+	barcode: string | null;
+	fdcId: string | null;
+};
+
+function diaryClock(
+	input: DiaryFoodWrite,
+	metadata: OrganizationMetadata | null,
+	now: Date,
+): { occurredAt: Date; manifestDate: string } {
+	const occurredAt = input.occurredAt ? new Date(input.occurredAt) : now;
+	if (Number.isNaN(occurredAt.getTime())) {
+		throw new NutritionOperationValidationError(
+			"occurredAt must be a timestamp",
+		);
+	}
+	const manifestDate = input.occurredAt
+		? manifestDateForInstant(occurredAt, metadata)
+		: (input.manifestDate ?? manifestDateForInstant(occurredAt, metadata));
+	return { occurredAt, manifestDate };
+}
+
+/**
+ * A saved-food log is identified by the id, not the live nutrients, so a later
+ * edit or delete of the saved food does not change the hash of a replay.
+ */
+function savedFoodRequestIdentity(
+	input: DiaryFoodWrite & { savedFoodId: string },
+	metadata: OrganizationMetadata | null,
+	now: Date,
+	notesEnabled: boolean,
+	notes: string | null,
+	operationType: DiaryNutritionOperationType,
+	extra: Record<string, unknown> = {},
+) {
+	const clock = diaryClock(input, metadata, now);
+	return {
+		operationType,
+		savedFoodId: input.savedFoodId,
+		manifestDate: clock.manifestDate,
+		occurredAt: clock.occurredAt.toISOString(),
+		slotType: input.slotType ?? null,
+		idempotencyKey: input.idempotencyKey,
+		...intakeNotesForCanonicalHash(notesEnabled, notes),
+		...extra,
+	};
+}
+
+async function materializeFood(
+	env: Env,
+	principal: NutritionPrincipal,
+	flags: NutritionFlagContext,
+	input: DiaryFoodWrite,
+	metadata: OrganizationMetadata | null,
+	now: Date,
+): Promise<SavedFoodProvenance> {
+	if (!input.savedFoodId) {
+		if (!input.name || !input.macros) {
+			throw new NutritionOperationValidationError(
+				"A personal food log needs a name and macros, or a saved food id.",
+			);
+		}
+		return {
+			food: resolveFood(
+				{ ...input, name: input.name, macros: input.macros },
+				metadata,
+				now,
+			),
+			savedFoodId: null,
+			barcode: null,
+			fdcId: null,
+		};
+	}
+	await assertNutritionSavedFood(env, flags);
+	const saved = await loadOwnedSavedFood(
+		env.DB,
+		principal.userId,
+		input.savedFoodId,
+	);
+	if (!saved) throw new DiaryFoodNotFoundError();
+	const copied = copySavedFoodOntoWrite(saved);
+	return {
+		food: resolveFood(
+			{
+				...input,
+				name: copied.name,
+				macros: copied.macros,
+				amount: copied.amount,
+				unit: copied.unit,
+			},
+			metadata,
+			now,
+		),
+		savedFoodId: copied.savedFoodId,
+		barcode: copied.barcode,
+		fdcId: copied.fdcId,
+	};
+}
+
 export async function logDiaryFood(
 	env: Env,
 	principal: NutritionPrincipal,
@@ -511,15 +625,54 @@ export async function logDiaryFood(
 	);
 	const { db, intakeConsent, notesEnabled, metadata } = prepared;
 	const now = input.now ?? new Date();
-	const food = resolveFood(input, metadata, now);
+	const previewNotes = resolveIntakeNotesForWrite({
+		notesEnabled,
+		requestedNotes: input.notes ?? null,
+		priorNotes: null,
+	});
+	const savedIdentity = input.savedFoodId
+		? await hashNutritionRequest(
+				savedFoodRequestIdentity(
+					{ ...input, savedFoodId: input.savedFoodId },
+					metadata,
+					now,
+					notesEnabled,
+					previewNotes,
+					"log_diary_food",
+				),
+			)
+		: null;
+	if (savedIdentity) {
+		const existing = await loadOperation(db, principal, input.operationKey);
+		if (existing) {
+			assertReplay(existing, savedIdentity, "log_diary_food");
+			const storedId = existing.resultJson?.intakeId;
+			const row = storedId
+				? await loadOwned(db, principal.userId, storedId)
+				: null;
+			if (!row) throw new DiaryFoodNotFoundError();
+			return logResult(existing.id, row, true);
+		}
+	}
+	const materialized = await materializeFood(
+		env,
+		principal,
+		flags,
+		input,
+		metadata,
+		now,
+	);
+	const food = materialized.food;
 	const notes = resolveIntakeNotesForWrite({
 		notesEnabled,
 		requestedNotes: food.requestedNotes,
 		priorNotes: null,
 	});
-	const requestHash = await hashNutritionRequest(
-		canonicalBody(food, notesEnabled, "log_diary_food"),
-	);
+	const requestHash =
+		savedIdentity ??
+		(await hashNutritionRequest(
+			canonicalBody(food, notesEnabled, "log_diary_food"),
+		));
 	const existing = await loadOperation(db, principal, input.operationKey);
 	if (existing) {
 		assertReplay(existing, requestHash, "log_diary_food");
@@ -580,6 +733,9 @@ export async function logDiaryFood(
 		replacesIntakeId: null,
 		healthSyncId: crypto.randomUUID(),
 		healthSyncVersion: 1,
+		savedFoodId: materialized.savedFoodId,
+		barcode: materialized.barcode,
+		fdcId: materialized.fdcId,
 	});
 	try {
 		await db.batch([
@@ -647,15 +803,59 @@ export async function updateDiaryFood(
 	const now = input.now ?? new Date();
 	const current = await loadOwned(db, principal.userId, intakeId);
 	if (!current || current.voidedAt) throw new DiaryFoodNotFoundError();
-	const food = resolveFood(input, metadata, now);
+	const previewNotes = resolveIntakeNotesForWrite({
+		notesEnabled,
+		requestedNotes: input.notes ?? null,
+		priorNotes: current.notes,
+	});
+	const savedIdentity = input.savedFoodId
+		? await hashNutritionRequest(
+				savedFoodRequestIdentity(
+					{ ...input, savedFoodId: input.savedFoodId },
+					metadata,
+					now,
+					notesEnabled,
+					previewNotes,
+					"update_diary_food",
+					{ intakeId },
+				),
+			)
+		: null;
+	if (savedIdentity) {
+		const existingSaved = await loadOperation(
+			db,
+			principal,
+			input.operationKey,
+		);
+		if (existingSaved) {
+			assertReplay(existingSaved, savedIdentity, "update_diary_food");
+			const storedId = existingSaved.resultJson?.intakeId;
+			const row = storedId
+				? await loadOwned(db, principal.userId, storedId)
+				: null;
+			if (!row) throw new DiaryFoodNotFoundError();
+			return logResult(existingSaved.id, row, true);
+		}
+	}
+	const materialized = await materializeFood(
+		env,
+		principal,
+		flags,
+		input,
+		metadata,
+		now,
+	);
+	const food = materialized.food;
 	const notes = resolveIntakeNotesForWrite({
 		notesEnabled,
 		requestedNotes: food.requestedNotes,
 		priorNotes: current.notes,
 	});
-	const requestHash = await hashNutritionRequest(
-		canonicalBody(food, notesEnabled, "update_diary_food", { intakeId }),
-	);
+	const requestHash =
+		savedIdentity ??
+		(await hashNutritionRequest(
+			canonicalBody(food, notesEnabled, "update_diary_food", { intakeId }),
+		));
 	const existing = await loadOperation(db, principal, input.operationKey);
 	if (existing) {
 		assertReplay(existing, requestHash, "update_diary_food");
@@ -697,6 +897,9 @@ export async function updateDiaryFood(
 		healthSyncId: current.healthSyncId ?? crypto.randomUUID(),
 		healthSyncVersion:
 			(current.healthSyncVersion ?? 1) + (nutrientsChanged ? 1 : 0),
+		savedFoodId: materialized.savedFoodId,
+		barcode: materialized.barcode,
+		fdcId: materialized.fdcId,
 	});
 	try {
 		await db.batch([

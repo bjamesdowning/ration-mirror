@@ -385,6 +385,9 @@ export async function eraseNutritionData(
 	if (input.dataset === "intake" || input.dataset === "all") {
 		statements.push(
 			db
+				.prepare("DELETE FROM nutrition_saved_food WHERE user_id = ?")
+				.bind(input.userId),
+			db
 				.prepare("DELETE FROM nutrition_intake WHERE user_id = ?")
 				.bind(input.userId),
 			db

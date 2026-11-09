@@ -27,6 +27,7 @@ describe("getClientSafeFlags", () => {
 			nutritionIntakeNotes: false,
 			nutritionCrossOrgDiary: false,
 			nutritionFastLog: false,
+			nutritionSavedFood: false,
 			featureEnablementConsent: false,
 			supplyMultiLists: false,
 		});

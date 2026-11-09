@@ -96,7 +96,10 @@ import {
 	InsufficientCreditsError,
 } from "../app/lib/ledger.server";
 import { log, redactId } from "../app/lib/logging.server";
-import { isNutritionFastLogEnabled } from "../app/lib/nutrition/fast-log-flag.server";
+import {
+	isNutritionFastLogEnabled,
+	isNutritionSavedFoodEnabled,
+} from "../app/lib/nutrition/fast-log-flag.server";
 import { fetchLogContext, runWithOpsEnv } from "../app/lib/ops-context.server";
 import { checkRateLimit } from "../app/lib/rate-limiter.server";
 import { APP_VERSION } from "../app/lib/version";
@@ -321,6 +324,8 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 	private clientSource: NativeFeatureClientSource = "web";
 	/** Personal log tools stay hidden until the flag and iOS 1.6 gate pass. */
 	private diaryToolsEnabled = false;
+	/** Saved-food tools stay hidden until the child flag, parent flag, and iOS 1.6 gate pass. */
+	private savedFoodToolsEnabled = false;
 	/** Ask client's Flagship identity (web/ios). MCP never inherits this. */
 	private originatingClient: CopilotOriginatingClient = {
 		clientPlatform: "web",
@@ -596,7 +601,10 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 					);
 				},
 			},
-			{ includeDiaryTools: this.diaryToolsEnabled },
+			{
+				includeDiaryTools: this.diaryToolsEnabled,
+				includeSavedFoodTools: this.savedFoodToolsEnabled,
+			},
 		) as ToolSet;
 	}
 
@@ -608,14 +616,19 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 			identity.userId,
 			this.originatingClient,
 		);
+		const copilotFlags = buildAgentFlagContext(
+			this.env,
+			identity.userId,
+			"copilot",
+			this.originatingClient,
+		);
 		this.diaryToolsEnabled = await isNutritionFastLogEnabled(
 			this.env,
-			buildAgentFlagContext(
-				this.env,
-				identity.userId,
-				"copilot",
-				this.originatingClient,
-			),
+			copilotFlags,
+		);
+		this.savedFoodToolsEnabled = await isNutritionSavedFoodEnabled(
+			this.env,
+			copilotFlags,
 		);
 		this.sessionMessageCount = ctx.messages.length;
 		const charge = await this.hydrateCumulativeUsage(identity);

@@ -171,6 +171,14 @@ export const FLAG_REGISTRY: Record<string, FlagRegistryEntry> = {
 		clientVisible: true,
 		clientKey: "nutritionFastLog",
 	},
+	"nutrition-saved-food": {
+		defaultEnabled: false,
+		description:
+			"Person-owned saved foods for starring and custom macros. On only when nutrition-fast-log is on",
+		clientVisible: true,
+		clientKey: "nutritionSavedFood",
+		iosAlwaysOn: false,
+	},
 	"feature-enablement-consent": {
 		defaultEnabled: false,
 		description:

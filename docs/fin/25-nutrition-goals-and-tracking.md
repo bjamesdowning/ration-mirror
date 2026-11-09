@@ -88,7 +88,7 @@ Ask Ration (Copilot) and MCP can read and act on nutrition when Flagship flags a
 - **Reads:** `get_nutrition_summary`, `list_nutrition_intakes`; `get_meal_plan` and `get_kitchen_summary` use household `status` `planned` or `cooked` (`cookedAt` or legacy `consumedAt`). Cooking is not eating. `loggedByYou` and, on `get_meal_plan`, the caller’s `personalIntake` plus `gramsPerServing` appear only when nutrition flags, `mcp:nutrition:read`, and intake consent allow.
 - **Cook (shared):** `cook_manifest_entries` or Galley `consume_meal` (Manifest bridge when **nutrition-cook-log-split** is on) — Cargo/Prepared only; never personal intake.
 - **Eat (private):** `log_manifest_intake` / `clear_manifest_intake`, each with a request-level operation key; consent must already be active in Ration. Portions are `servings` (0.01–100) or `amount` + `unit` (`serving` | `g` | `oz`). If mass is requested but `gramsPerServing` is missing, agents should ask for a serving fraction — they must not invent grams.
-- **Goals:** `set_nutrition_goal` / `clear_nutrition_goal`.
+- **Goals:** `set_nutrition_goal` / `clear_nutrition_goal`. Store only numbers the person states. Do not suggest, calculate, or invent a target.
 
 When **nutrition-cook-log-split** is on, `consume_manifest_entries` is refused (`cook_eat_split_required`) — use Cook then Eat. External MCP Flagship context uses `clientPlatform` `mcp` + web `APP_VERSION` (never a faked iOS version). First-party Copilot Ask inherits the originating web/ios client. See *MCP tools reference*.
 

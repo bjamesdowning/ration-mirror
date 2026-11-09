@@ -1750,8 +1750,9 @@ function NutritionGoalsSection({
 		>
 			<h3 className="text-xs text-label text-muted mb-1">Nutrition goals</h3>
 			<p className="text-sm text-muted mb-2">
-				Set only the nutrients you care about. Manifest shows those targets as
-				consumed / goal (adherence-neutral). Leave a field empty to hide it.
+				Enter targets you already use. Draft, pending review. Set only the
+				nutrients you care about. Manifest shows those targets as consumed /
+				goal (adherence-neutral). Leave a field empty to hide it.
 			</p>
 			<p className="text-xs text-muted mb-4">
 				Not medical advice. Goals and totals are planning aids only. Requires

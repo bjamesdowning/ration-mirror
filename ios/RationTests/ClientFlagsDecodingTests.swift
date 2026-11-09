@@ -3,6 +3,8 @@ import XCTest
 
 final class ClientFlagsDecodingTests: XCTestCase {
     func testNutritionFastLogFailsClosedWhenMissing() throws {
+        XCTAssertFalse(try decode(#"{}"#).isNutritionGoalsEnabled)
+        XCTAssertTrue(try decode(#"{"nutritionGoals":true}"#).isNutritionGoalsEnabled)
         XCTAssertFalse(try decode(#"{}"#).isNutritionFastLogEnabled)
         XCTAssertTrue(try decode(#"{"nutritionFastLog":true}"#).isNutritionFastLogEnabled)
         XCTAssertFalse(try decode(#"{"nutritionFastLog":true}"#).isNutritionSavedFoodEnabled)

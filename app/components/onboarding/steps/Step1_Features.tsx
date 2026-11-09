@@ -1,7 +1,10 @@
-import { FeatureEnablementForm } from "~/components/feature-enablement/FeatureEnablementForm";
+import {
+	FeatureEnablementForm,
+	type FeatureEnablementStatusResponse,
+} from "~/components/feature-enablement/FeatureEnablementForm";
 
 interface Step1FeaturesProps {
-	onContinue: () => void;
+	onContinue: (status: FeatureEnablementStatusResponse) => void;
 	onSkip: () => void;
 }
 

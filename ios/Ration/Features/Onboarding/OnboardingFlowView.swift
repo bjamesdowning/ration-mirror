@@ -12,8 +12,23 @@ struct OnboardingFlowView: View {
                     env.onboarding.advanceFromWelcome()
                 }
             case .featureEnablement:
-                FeatureEnablementView(variant: .onboarding) { aiEnabled, _ in
-                    env.onboarding.advanceFromFeatureEnablement(aiEnabled: aiEnabled)
+                FeatureEnablementView(variant: .onboarding) { aiEnabled, macroEnabled in
+                    let offer = OptionalGoalsPolicy.stepVisible(
+                        macroTrackingOn: macroEnabled,
+                        fastLogEnabled: env.session.clientFlags.isNutritionFastLogEnabled,
+                        goalsEnabled: env.session.clientFlags.isNutritionGoalsEnabled,
+                        appVersion: AppMarketingVersion.current
+                    )
+                    env.onboarding.advanceFromFeatureEnablement(
+                        aiEnabled: aiEnabled,
+                        offerOptionalGoals: offer
+                    )
+                }
+            case .optionalGoals:
+                OptionalGoalsOnboardingView(
+                    goalsEnabled: env.session.clientFlags.isNutritionGoalsEnabled
+                ) {
+                    env.onboarding.advanceFromOptionalGoals()
                 }
             case .askBriefing, .inactive:
                 OnboardingBriefingView()

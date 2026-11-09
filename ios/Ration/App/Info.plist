@@ -42,6 +42,10 @@
 	</array>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<key>NSHealthShareUsageDescription</key>
+	<string>Draft, pending review. Ration reads the food samples it wrote so it can delete or replace them when you edit, void, or turn off Apple Health export. It does not read weight, steps, workouts, or calories burned.</string>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>Draft, pending review. Ration writes confirmed foods you logged as eaten — energy, protein, carbohydrates, fat, and fiber when known — to Apple Health. It does not write a daily total, and it does not import anything from Health.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Ration uses the camera to scan grocery receipts and pantry labels to add items to Cargo.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

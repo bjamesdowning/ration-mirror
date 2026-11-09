@@ -20,7 +20,7 @@ Short processing notes for personal nutrition goals and Manifest Eat intake (GDP
 - Goal and intake upserts require active ledger consent and reject legacy inline consent fields; clear/erase controls remain available separately.
 - Cook never writes personal intake. Nutrition mutations use request-level operation records for atomic, idempotent replay without storing nutrient values in audit rows.
 - Intake retention **~396 days** (aligned with kitchen events); purge on account erase. Shared org delete does not purge the user’s intake rows (nullable org + snapshots) — see [tenancy-classes.md](tenancy-classes.md).
-- No HealthKit / clinical claims; UI and help copy state estimates are not medical advice.
+- Draft, pending review. This note is not counsel-approved. Apple Health export, when the person opts in, copies confirmed eaten food to the device and can delete the samples Ration wrote. There is no import, no clinical advice, and no two-way sync. UI and help copy still state estimates are not medical advice.
 - Self-hosted USDA-shaped `NUTRITION_DB` is the hot path (curated `food_alias` + FTS). Optional live FDC API (`USDA_FDC_API_KEY`) is miss-only and name-only.
 ## Operator checklist before broaden
 

@@ -12,7 +12,7 @@ const EXPORTABLE_SOURCES = new Set([
  */
 export function healthExportAllowed(line: {
 	compositionSource: string | null | undefined;
-	compositionConfirmedAt?: Date | string | null;
+	compositionConfirmedAt?: Date | string | number | null;
 }): boolean {
 	if (line.compositionSource === "ai_estimate") return false;
 	if (

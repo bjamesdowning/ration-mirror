@@ -28,6 +28,7 @@ describe("FLAG_REGISTRY validation", () => {
 			"nutrition-async-recompute",
 			"nutrition-barcode-diary",
 			"nutrition-fast-log",
+			"nutrition-health-export",
 			"nutrition-photo-log",
 			"nutrition-saved-food",
 		]);

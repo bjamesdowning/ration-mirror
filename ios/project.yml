@@ -15,7 +15,7 @@ options:
 
 settings:
   base:
-    MARKETING_VERSION: "1.5.19"
+    MARKETING_VERSION: "1.5.20"
     CURRENT_PROJECT_VERSION: "149"
     SWIFT_VERSION: "5.9"
     # Set your Apple Developer Team ID here (must match App Store Connect / AASA).
@@ -61,6 +61,7 @@ targets:
           - Default
         com.apple.security.application-groups:
           - group.com.mayutic.ration
+        com.apple.developer.healthkit: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.mayutic.ration
@@ -75,6 +76,7 @@ targets:
           CODE_SIGN_STYLE: Automatic
           DEVELOPMENT_TEAM: M2KJH5GDGH
     dependencies:
+      - sdk: HealthKit.framework
       - package: RevenueCat
       - package: GoogleSignIn
         product: GoogleSignIn

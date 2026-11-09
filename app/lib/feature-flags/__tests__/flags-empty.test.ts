@@ -30,6 +30,7 @@ describe("getClientSafeFlags", () => {
 			nutritionSavedFood: false,
 			nutritionBarcodeDiary: false,
 			nutritionPhotoLog: false,
+			nutritionHealthExport: false,
 			featureEnablementConsent: false,
 			supplyMultiLists: false,
 		});

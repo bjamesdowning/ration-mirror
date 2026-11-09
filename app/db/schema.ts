@@ -1476,6 +1476,27 @@ export const nutritionIntake = sqliteTable(
 		loggedAmount: real("logged_amount"),
 		/** serving | g | oz; null on rows logged before amount+unit. */
 		loggedUnit: text("logged_unit"),
+		/**
+		 * Stable Health identity for one logical food. Null until the first
+		 * exportable save, then copied onto replacements. Not a HealthKit UUID.
+		 */
+		healthSyncId: text("health_sync_id"),
+		/** Monotonic export version for that healthSyncId. */
+		healthSyncVersion: integer("health_sync_version"),
+		/**
+		 * usda | user_override | manual_macros | barcode | ai_estimate | meal.
+		 * Health export must not treat `verified` or `source` as this signal.
+		 */
+		compositionSource: text("composition_source"),
+		/** Null means Health must skip the row. Typed macros are stamped at save. */
+		compositionConfirmedAt: integer("composition_confirmed_at", {
+			mode: "timestamp",
+		}),
+		/** Optional food provenance. Not a tenancy key. */
+		fdcId: text("fdc_id"),
+		barcode: text("barcode"),
+		/** Optional person saved-food id. No FK until that table exists. */
+		savedFoodId: text("saved_food_id"),
 		createdAt: integer("created_at", { mode: "timestamp" })
 			.notNull()
 			.default(sql`(unixepoch())`),
@@ -1567,7 +1588,7 @@ export const nutritionOperation = sqliteTable(
 			.notNull()
 			.default("in_progress"),
 		itemCount: integer("item_count").notNull(),
-		/** Stable committed response metadata (never arguments or free-form PII). */
+		/** Stable committed response metadata (never arguments, names, or nutrients). */
 		resultJson: text("result_json", { mode: "json" }).$type<{
 			summaryGeneratedAt?: string;
 			dayTotals?: Array<{
@@ -1580,6 +1601,11 @@ export const nutritionOperation = sqliteTable(
 				coverageAvg: number;
 				entryCount: number;
 			}>;
+			/** Diary replay id. No food name or nutrient bag. */
+			intakeId?: string;
+			credits?: number;
+			kitchenItemId?: string;
+			target?: "cargo" | "meal";
 		}>(),
 		createdAt: integer("created_at", { mode: "timestamp" })
 			.notNull()

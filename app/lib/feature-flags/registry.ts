@@ -164,6 +164,13 @@ export const FLAG_REGISTRY: Record<string, FlagRegistryEntry> = {
 		description:
 			"Async queue-backed meal nutrition recompute (requires NUTRITION_RECOMPUTE_QUEUE)",
 	},
+	"nutrition-fast-log": {
+		defaultEnabled: false,
+		description:
+			"Personal food log that writes intake without Cargo or a Manifest entry",
+		clientVisible: true,
+		clientKey: "nutritionFastLog",
+	},
 	"feature-enablement-consent": {
 		defaultEnabled: false,
 		description:

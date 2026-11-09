@@ -428,6 +428,7 @@ export function handleApiError(error: unknown) {
 			"undo_conflict",
 			"not_found",
 			"insufficient_scope",
+			"confirmation_required",
 		].includes((error as { code?: string }).code ?? "")
 	) {
 		const typed = error as Error & {

@@ -10,6 +10,7 @@ import {
 	type SharedToolDefinition,
 } from "../mcp/tool-runtime";
 import { createBillingToolDefs } from "../mcp/tools/billing";
+import { createDiaryToolDefs } from "../mcp/tools/diary";
 import { createKitchenEventToolDefs } from "../mcp/tools/events";
 import { createGalleyToolDefs } from "../mcp/tools/galley";
 import { createInventoryToolDefs } from "../mcp/tools/inventory";
@@ -154,6 +155,7 @@ function createSearchDocsToolDef(env: Cloudflare.Env): SharedToolDefinition {
 
 export function createCopilotToolDefs(
 	env: McpToolsEnv,
+	options?: { includeDiaryTools?: boolean },
 ): SharedToolDefinition[] {
 	return [
 		createSearchDocsToolDef(env),
@@ -166,6 +168,7 @@ export function createCopilotToolDefs(
 		...createSupplyToolDefs(env),
 		...createPreferencesToolDefs(env),
 		...createNutritionToolDefs(env),
+		...(options?.includeDiaryTools ? createDiaryToolDefs(env) : []),
 	];
 }
 
@@ -176,9 +179,10 @@ export function toAiSdkTools(
 		onApprovalRequested?: (toolName: string) => void;
 		onApprovalResolved?: (toolName: string) => void;
 	},
+	options?: { includeDiaryTools?: boolean },
 ): ToolSet {
 	const toolEnv = envWithCopilotContext(env, ctx);
-	const defs = createCopilotToolDefs(toolEnv);
+	const defs = createCopilotToolDefs(toolEnv, options);
 
 	return Object.fromEntries(
 		defs.map((def) => {
@@ -213,6 +217,8 @@ export function toAiSdkTools(
 							def.name === "complete_supply_list" ||
 							def.name === "clear_nutrition_goal" ||
 							def.name === "clear_manifest_intake" ||
+							def.name === "void_diary_food" ||
+							def.name === "save_diary_food_to_kitchen" ||
 							def.name === "import_inventory_csv" ||
 							def.name === "commit_manifest_plan"
 								? { ...args, confirm: true }

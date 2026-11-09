@@ -222,6 +222,14 @@ export default [
 	// API - Nutrition
 	route("api/nutrition/summary", "routes/api/nutrition.summary.ts"),
 	route("api/nutrition/goals", "routes/api/nutrition.goals.ts"),
+	route("api/nutrition/diary", "routes/api/nutrition.diary.ts"),
+	route("api/nutrition/diary/export", "routes/api/nutrition.diary.export.ts"),
+	route("api/nutrition/diary/quote", "routes/api/nutrition.diary.quote.ts"),
+	route(
+		"api/nutrition/diary/:id/save-to-kitchen",
+		"routes/api/nutrition.diary.$id.save-to-kitchen.ts",
+	),
+	route("api/nutrition/diary/:id", "routes/api/nutrition.diary.$id.ts"),
 	route("api/privacy/nutrition", "routes/api/privacy.nutrition.ts"),
 	route("api/privacy/features", "routes/api/privacy.features.ts"),
 	route("api/undo", "routes/api/undo.ts"),
@@ -606,6 +614,26 @@ export default [
 	route(
 		"api/mobile/v1/nutrition/goals",
 		"routes/api/mobile/v1.nutrition.goals.ts",
+	),
+	route(
+		"api/mobile/v1/nutrition/diary",
+		"routes/api/mobile/v1.nutrition.diary.ts",
+	),
+	route(
+		"api/mobile/v1/nutrition/diary/export",
+		"routes/api/mobile/v1.nutrition.diary.export.ts",
+	),
+	route(
+		"api/mobile/v1/nutrition/diary/quote",
+		"routes/api/mobile/v1.nutrition.diary.quote.ts",
+	),
+	route(
+		"api/mobile/v1/nutrition/diary/:id/save-to-kitchen",
+		"routes/api/mobile/v1.nutrition.diary.$id.save-to-kitchen.ts",
+	),
+	route(
+		"api/mobile/v1/nutrition/diary/:id",
+		"routes/api/mobile/v1.nutrition.diary.$id.ts",
 	),
 	route(
 		"api/mobile/v1/nutrition/resolve",

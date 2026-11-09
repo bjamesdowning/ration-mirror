@@ -3,6 +3,7 @@ import type { McpToolContext } from "./auth";
 import { registerResourcesAndPrompts } from "./resources";
 import type { McpToolsEnv } from "./tool-runtime";
 import { registerBillingTools } from "./tools/billing";
+import { registerDiaryNutritionTools } from "./tools/diary";
 import { registerKitchenEventTools } from "./tools/events";
 import { registerGalleyTools } from "./tools/galley";
 import { registerInventoryTools } from "./tools/inventory";
@@ -17,10 +18,10 @@ import { registerSupplyTools } from "./tools/supply";
  * Billed Gemini jobs (scan, URL import, Galley Generate, Plan Week) stay on
  * native web/iOS only — they are not MCP or Copilot tools.
  */
-export function registerTools(
+export async function registerTools(
 	server: McpServer,
 	env: Cloudflare.Env & { __mcp: McpToolContext },
-): void {
+): Promise<void> {
 	registerResourcesAndPrompts(server);
 
 	const toolsEnv = env as McpToolsEnv;
@@ -33,4 +34,5 @@ export function registerTools(
 	registerSupplyTools(server, toolsEnv);
 	registerPreferencesTools(server, toolsEnv);
 	registerNutritionTools(server, toolsEnv);
+	await registerDiaryNutritionTools(server, toolsEnv);
 }

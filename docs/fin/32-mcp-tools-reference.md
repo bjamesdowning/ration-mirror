@@ -72,7 +72,7 @@ Prefer resource `ration://schemas/inventory-import` for the item shape.
 | `add_meal_plan_entry` | `mcp:manifest:write` | Schedule one meal. |
 | `update_meal_plan_entry` | `mcp:manifest:write` | Patch an unconsumed entry. |
 | `cook_manifest_entries` | `mcp:manifest:write` + `mcp:inventory:write` | Shared Cook: deduct Cargo once and mark Prepared. Requires nutrition-cook-log-split. Never logs intake. |
-| `consume_manifest_entries` | `mcp:manifest:write` + `mcp:inventory:write` | Legacy combined consume. **Refused** when nutrition-cook-log-split is on (`cook_eat_split_required`). When split is off, optional `logNutrition` (default **false** for agents). |
+| `consume_manifest_entries` | `mcp:manifest:write` + `mcp:inventory:write` | Legacy combined consume. **Refused** when nutrition-cook-log-split is on (`cook_eat_split_required`). Does **not** write personal intake. `logNutrition` and `portions` are ignored. |
 | `remove_meal_plan_entry` | `mcp:manifest:write` | Remove a scheduled entry. |
 
 ## Nutrition

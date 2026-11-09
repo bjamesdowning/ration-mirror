@@ -478,7 +478,7 @@ export function buildMobileOpenApiDocument(baseUrl: string) {
 				post: {
 					summary: "Mark manifest entries as consumed (legacy combined)",
 					description:
-						"Optional portions[] and logNutrition when nutrition-manifest is enabled (additive; omit for legacy clients). Prefer /manifest/cook + entry intake when nutrition-cook-log-split is on.",
+						"Deducts Cargo and marks entries consumed. logNutrition and portions are ignored and do not write personal intake. Prefer /manifest/cook + entry intake when nutrition-cook-log-split is on.",
 					security: [{ bearerAuth: [] }],
 					responses: { "200": { description: "Consume result" } },
 				},
@@ -693,6 +693,85 @@ export function buildMobileOpenApiDocument(baseUrl: string) {
 					responses: {
 						"200": { description: "Cleared" },
 						"403": { description: "Feature disabled" },
+					},
+				},
+			},
+			"/api/mobile/v1/nutrition/diary": {
+				post: {
+					summary: "Log a personal food without Cargo or a plan entry",
+					description:
+						"Requires nutrition-fast-log, intake consent, and on iOS a client at least 1.6.0. Older or missing iOS versions return 403 FEATURE_DISABLED. Does not debit credits and does not change Cargo.",
+					security: [{ bearerAuth: [] }],
+					responses: {
+						"200": {
+							description: "Intake id and kitchenOffer. No kitchen write.",
+						},
+						"403": {
+							description: "FEATURE_DISABLED or nutrition_consent_required",
+						},
+						"409": { description: "idempotency_conflict" },
+					},
+				},
+			},
+			"/api/mobile/v1/nutrition/diary/quote": {
+				post: {
+					summary: "Quote a personal food log",
+					description: "Returns credits 0. Does not debit.",
+					security: [{ bearerAuth: [] }],
+					responses: {
+						"200": { description: "{ credits: 0 }" },
+						"403": { description: "FEATURE_DISABLED" },
+					},
+				},
+			},
+			"/api/mobile/v1/nutrition/diary/export": {
+				get: {
+					summary: "Export the caller's personal intake as JSON",
+					description:
+						"Session user only. Another member's rows are omitted. Requires nutrition-fast-log and intake consent.",
+					security: [{ bearerAuth: [] }],
+					responses: {
+						"200": { description: "Caller intake JSON" },
+						"403": {
+							description: "FEATURE_DISABLED or nutrition_consent_required",
+						},
+					},
+				},
+			},
+			"/api/mobile/v1/nutrition/diary/{id}": {
+				patch: {
+					summary: "Replace a personal food log",
+					security: [{ bearerAuth: [] }],
+					responses: {
+						"200": { description: "Replacement intake id" },
+						"403": {
+							description: "FEATURE_DISABLED or nutrition_consent_required",
+						},
+						"404": { description: "Not the caller's row" },
+					},
+				},
+				delete: {
+					summary: "Void a personal food log",
+					description: "Requires confirm:true. Does not change Cargo.",
+					security: [{ bearerAuth: [] }],
+					responses: {
+						"200": { description: "Voided" },
+						"400": { description: "confirmation_required" },
+						"404": { description: "Not the caller's row" },
+					},
+				},
+			},
+			"/api/mobile/v1/nutrition/diary/{id}/save-to-kitchen": {
+				post: {
+					summary: "Copy a personal food into Cargo or Galley",
+					description:
+						"Requires confirm:true. Without confirm, writes nothing. Does not run from the log call and does not change intake ownership.",
+					security: [{ bearerAuth: [] }],
+					responses: {
+						"200": { description: "Kitchen item id" },
+						"400": { description: "confirmation_required" },
+						"403": { description: "FEATURE_DISABLED or capacity_exceeded" },
+						"404": { description: "Not the caller's row" },
 					},
 				},
 			},

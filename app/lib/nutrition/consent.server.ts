@@ -6,6 +6,7 @@ import {
 	type NutritionConsentPurpose,
 	type NutritionConsentStatement,
 } from "./consent-policy";
+import { INTAKE_ERASE_OPERATION_TYPES } from "./diary-operations";
 
 export type NutritionConsentSource = "web" | "mobile" | "mcp" | "copilot";
 
@@ -388,7 +389,7 @@ export async function eraseNutritionData(
 				.bind(input.userId),
 			db
 				.prepare(
-					"DELETE FROM nutrition_operation WHERE user_id = ? AND operation_type IN ('log_manifest_intakes', 'clear_manifest_intakes')",
+					`DELETE FROM nutrition_operation WHERE user_id = ? AND operation_type IN (${INTAKE_ERASE_OPERATION_TYPES.map((type) => `'${type}'`).join(", ")})`,
 				)
 				.bind(input.userId),
 		);

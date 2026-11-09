@@ -407,7 +407,7 @@ export function createManifestToolDefs(env: McpToolsEnv) {
 		defineSharedTool({
 			name: "consume_manifest_entries",
 			description:
-				"Legacy: mark Manifest entries consumed and deduct Cargo. When nutrition-cook-log-split is on, this tool is refused — use cook_manifest_entries then log_manifest_intake. When split is off, optional logNutrition (default false for agents) may log intake if nutrition-manifest is on.",
+				"Legacy: mark Manifest entries consumed and deduct Cargo. Does not write personal intake. logNutrition and portions are ignored. When nutrition-cook-log-split is on, this tool is refused — use cook_manifest_entries then log_manifest_intake. When split is off, Consume still does not log intake.",
 			inputSchema: z.object({
 				entryIds: z.array(UuidSchema).min(1).max(50),
 				confirmInsufficient: z.boolean().optional(),

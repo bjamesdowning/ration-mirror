@@ -12,6 +12,8 @@ type RecentFood = {
 	fatG: number;
 };
 
+type SavedFood = RecentFood & { id: string };
+
 type LogDraft = {
 	name: string;
 	amount: string;
@@ -23,6 +25,7 @@ type LogDraft = {
 	occurredAt: string;
 	operationKey: string;
 	idempotencyKey: string;
+	savedFoodId: string | null;
 };
 
 function emptyDraft(now = new Date()): LogDraft {
@@ -37,6 +40,7 @@ function emptyDraft(now = new Date()): LogDraft {
 		occurredAt: now.toISOString(),
 		operationKey: diaryOperationKey(null, () => crypto.randomUUID()),
 		idempotencyKey: crypto.randomUUID(),
+		savedFoodId: null,
 	};
 }
 
@@ -52,6 +56,7 @@ function draftFromRow(row: DayIntakeRow): LogDraft {
 		occurredAt: row.occurredAt ?? new Date().toISOString(),
 		operationKey: diaryOperationKey(null, () => crypto.randomUUID()),
 		idempotencyKey: crypto.randomUUID(),
+		savedFoodId: null,
 	};
 }
 
@@ -71,16 +76,20 @@ async function readError(response: Response): Promise<string> {
 export function LogToFuelDialog({
 	open,
 	intake,
+	savedFoods = false,
 	onClose,
 	onSaved,
 }: {
 	open: boolean;
 	intake?: DayIntakeRow | null;
+	/** nutrition-saved-food. Hidden when the child or parent flag is off. */
+	savedFoods?: boolean;
 	onClose: () => void;
 	onSaved: () => void;
 }) {
 	const [draft, setDraft] = useState<LogDraft>(() => emptyDraft());
 	const [recent, setRecent] = useState<RecentFood[]>([]);
+	const [saved, setSaved] = useState<SavedFood[]>([]);
 	const [error, setError] = useState<string | null>(null);
 	const [saving, setSaving] = useState(false);
 
@@ -136,6 +145,50 @@ export function LogToFuelDialog({
 		};
 	}, [open]);
 
+	useEffect(() => {
+		if (!open || !savedFoods) {
+			setSaved([]);
+			return;
+		}
+		let cancelled = false;
+		void fetch("/api/nutrition/saved-food")
+			.then(async (response) => {
+				if (!response.ok) return;
+				const body = (await response.json()) as {
+					savedFoods?: Array<{
+						id: string;
+						name: string;
+						energyKcal: number;
+						proteinG: number;
+						carbsG: number;
+						fatG: number;
+						defaultAmount: number | null;
+						defaultUnit: "serving" | "g" | "oz" | null;
+					}>;
+				};
+				if (!cancelled) {
+					setSaved(
+						(body.savedFoods ?? []).map((food) => ({
+							id: food.id,
+							name: food.name,
+							amount: food.defaultAmount ?? 1,
+							unit: food.defaultUnit ?? "serving",
+							energyKcal: food.energyKcal,
+							proteinG: food.proteinG,
+							carbsG: food.carbsG,
+							fatG: food.fatG,
+						})),
+					);
+				}
+			})
+			.catch(() => {
+				if (!cancelled) setSaved([]);
+			});
+		return () => {
+			cancelled = true;
+		};
+	}, [open, savedFoods]);
+
 	if (!open) return null;
 
 	async function save() {
@@ -158,20 +211,27 @@ export function LogToFuelDialog({
 		}
 		setSaving(true);
 		setError(null);
-		const payload = {
-			name: draft.name.trim(),
-			occurredAt: draft.occurredAt,
-			amount,
-			unit: draft.unit,
-			macros: {
-				energyKcal: energy,
-				proteinG: protein,
-				carbsG: carbs,
-				fatG: fat,
-			},
-			idempotencyKey: draft.idempotencyKey,
-			operationKey: draft.operationKey,
-		};
+		const payload = draft.savedFoodId
+			? {
+					savedFoodId: draft.savedFoodId,
+					occurredAt: draft.occurredAt,
+					idempotencyKey: draft.idempotencyKey,
+					operationKey: draft.operationKey,
+				}
+			: {
+					name: draft.name.trim(),
+					occurredAt: draft.occurredAt,
+					amount,
+					unit: draft.unit,
+					macros: {
+						energyKcal: energy,
+						proteinG: protein,
+						carbsG: carbs,
+						fatG: fat,
+					},
+					idempotencyKey: draft.idempotencyKey,
+					operationKey: draft.operationKey,
+				};
 		try {
 			const response = await fetch(
 				intake ? `/api/nutrition/diary/${intake.id}` : "/api/nutrition/diary",
@@ -192,6 +252,76 @@ export function LogToFuelDialog({
 			onClose();
 		} catch {
 			setError("Could not save that log. The draft is still here.");
+		} finally {
+			setSaving(false);
+		}
+	}
+
+	function applyFood(food: RecentFood, savedFoodId: string | null) {
+		setDraft((current) => ({
+			...current,
+			name: food.name,
+			amount: String(food.amount),
+			unit: food.unit,
+			energy: String(food.energyKcal),
+			protein: String(food.proteinG),
+			carbs: String(food.carbsG),
+			fat: String(food.fatG),
+			savedFoodId,
+		}));
+	}
+
+	async function starFood(food: RecentFood) {
+		setSaving(true);
+		setError(null);
+		try {
+			const response = await fetch("/api/nutrition/saved-food", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					name: food.name,
+					amount: food.amount,
+					unit: food.unit,
+					macros: {
+						energyKcal: food.energyKcal,
+						proteinG: food.proteinG,
+						carbsG: food.carbsG,
+						fatG: food.fatG,
+					},
+				}),
+			});
+			if (!response.ok) {
+				setError(await readError(response));
+				return;
+			}
+			const savedFood = (await response.json()) as {
+				id: string;
+				name: string;
+				energyKcal: number;
+				proteinG: number;
+				carbsG: number;
+				fatG: number;
+				defaultAmount: number | null;
+				defaultUnit: "serving" | "g" | "oz" | null;
+			};
+			setSaved((current) => {
+				const next = current.filter((row) => row.id !== savedFood.id);
+				return [
+					{
+						id: savedFood.id,
+						name: savedFood.name,
+						amount: savedFood.defaultAmount ?? food.amount,
+						unit: savedFood.defaultUnit ?? food.unit,
+						energyKcal: savedFood.energyKcal,
+						proteinG: savedFood.proteinG,
+						carbsG: savedFood.carbsG,
+						fatG: savedFood.fatG,
+					},
+					...next,
+				];
+			});
+		} catch {
+			setError("Could not save that food.");
 		} finally {
 			setSaving(false);
 		}
@@ -254,28 +384,45 @@ export function LogToFuelDialog({
 						Barcode
 					</button>
 				</div>
+				{savedFoods && saved.length > 0 && (
+					<div className="space-y-2">
+						<p className="text-xs uppercase tracking-wide text-muted">Saved</p>
+						<div className="flex flex-wrap gap-2">
+							{saved.map((food) => (
+								<button
+									key={food.id}
+									type="button"
+									className="rounded-full border border-platinum px-3 py-1 text-xs"
+									onClick={() => applyFood(food, food.id)}
+								>
+									{food.name}
+								</button>
+							))}
+						</div>
+					</div>
+				)}
 				{recent.length > 0 && (
 					<div className="flex flex-wrap gap-2">
 						{recent.map((food) => (
-							<button
-								key={food.name}
-								type="button"
-								className="rounded-full border border-platinum px-3 py-1 text-xs"
-								onClick={() =>
-									setDraft((current) => ({
-										...current,
-										name: food.name,
-										amount: String(food.amount),
-										unit: food.unit,
-										energy: String(food.energyKcal),
-										protein: String(food.proteinG),
-										carbs: String(food.carbsG),
-										fat: String(food.fatG),
-									}))
-								}
-							>
-								{food.name}
-							</button>
+							<span key={food.name} className="inline-flex items-center gap-1">
+								<button
+									type="button"
+									className="rounded-full border border-platinum px-3 py-1 text-xs"
+									onClick={() => applyFood(food, null)}
+								>
+									{food.name}
+								</button>
+								{savedFoods ? (
+									<button
+										type="button"
+										className="rounded-full border border-platinum px-2 py-1 text-xs"
+										aria-label={`Star ${food.name}`}
+										onClick={() => void starFood(food)}
+									>
+										Star
+									</button>
+								) : null}
+							</span>
 						))}
 					</div>
 				)}
@@ -284,7 +431,11 @@ export function LogToFuelDialog({
 					<input
 						value={draft.name}
 						onChange={(event) =>
-							setDraft((current) => ({ ...current, name: event.target.value }))
+							setDraft((current) => ({
+								...current,
+								name: event.target.value,
+								savedFoodId: null,
+							}))
 						}
 						className="mt-1 w-full rounded-lg border border-platinum px-3 py-2"
 					/>
@@ -299,6 +450,7 @@ export function LogToFuelDialog({
 								setDraft((current) => ({
 									...current,
 									amount: event.target.value,
+									savedFoodId: null,
 								}))
 							}
 							className="mt-1 w-full rounded-lg border border-platinum px-3 py-2"
@@ -312,6 +464,7 @@ export function LogToFuelDialog({
 								setDraft((current) => ({
 									...current,
 									unit: event.target.value as LogDraft["unit"],
+									savedFoodId: null,
 								}))
 							}
 							className="mt-1 w-full rounded-lg border border-platinum px-3 py-2"
@@ -340,6 +493,7 @@ export function LogToFuelDialog({
 									setDraft((current) => ({
 										...current,
 										[key]: event.target.value,
+										savedFoodId: null,
 									}))
 								}
 								className="mt-1 w-full rounded-lg border border-platinum px-3 py-2"
@@ -349,6 +503,26 @@ export function LogToFuelDialog({
 				</div>
 				{error ? <p className="text-sm text-red-600">{error}</p> : null}
 				<div className="flex flex-wrap justify-end gap-2">
+					{savedFoods && !draft.savedFoodId ? (
+						<button
+							type="button"
+							onClick={() =>
+								void starFood({
+									name: draft.name.trim(),
+									amount: Number(draft.amount),
+									unit: draft.unit,
+									energyKcal: Number(draft.energy),
+									proteinG: Number(draft.protein),
+									carbsG: Number(draft.carbs),
+									fatG: Number(draft.fat),
+								})
+							}
+							disabled={saving}
+							className="px-3 py-2 text-sm"
+						>
+							Save this food
+						</button>
+					) : null}
 					{intake ? (
 						<button
 							type="button"

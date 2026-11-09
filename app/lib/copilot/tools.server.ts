@@ -18,6 +18,7 @@ import { createManifestToolDefs } from "../mcp/tools/manifest";
 import { createNutritionToolDefs } from "../mcp/tools/nutrition";
 import { createPreferencesToolDefs } from "../mcp/tools/preferences";
 import { createReadToolDefs } from "../mcp/tools/read";
+import { createSavedFoodToolDefs } from "../mcp/tools/saved-food";
 import { createSupplyToolDefs } from "../mcp/tools/supply";
 
 export type CopilotToolContext = Pick<
@@ -155,7 +156,7 @@ function createSearchDocsToolDef(env: Cloudflare.Env): SharedToolDefinition {
 
 export function createCopilotToolDefs(
 	env: McpToolsEnv,
-	options?: { includeDiaryTools?: boolean },
+	options?: { includeDiaryTools?: boolean; includeSavedFoodTools?: boolean },
 ): SharedToolDefinition[] {
 	return [
 		createSearchDocsToolDef(env),
@@ -169,6 +170,7 @@ export function createCopilotToolDefs(
 		...createPreferencesToolDefs(env),
 		...createNutritionToolDefs(env),
 		...(options?.includeDiaryTools ? createDiaryToolDefs(env) : []),
+		...(options?.includeSavedFoodTools ? createSavedFoodToolDefs(env) : []),
 	];
 }
 
@@ -179,7 +181,7 @@ export function toAiSdkTools(
 		onApprovalRequested?: (toolName: string) => void;
 		onApprovalResolved?: (toolName: string) => void;
 	},
-	options?: { includeDiaryTools?: boolean },
+	options?: { includeDiaryTools?: boolean; includeSavedFoodTools?: boolean },
 ): ToolSet {
 	const toolEnv = envWithCopilotContext(env, ctx);
 	const defs = createCopilotToolDefs(toolEnv, options);

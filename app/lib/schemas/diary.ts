@@ -17,13 +17,14 @@ export const DiaryMacrosSchema = z.object({
 
 export const DiaryFoodWriteSchema = z
 	.object({
-		name: z.string().trim().min(1).max(120),
+		savedFoodId: UuidSchema.optional(),
+		name: z.string().trim().min(1).max(120).optional(),
 		manifestDate: IsoDateSchema.optional(),
 		occurredAt: z.string().datetime({ offset: true }).optional(),
 		slotType: z.enum(SLOT_TYPES).nullable().optional(),
 		amount: z.number().finite().positive().optional(),
 		unit: z.enum(INTAKE_LOGGED_UNITS).optional(),
-		macros: DiaryMacrosSchema,
+		macros: DiaryMacrosSchema.optional(),
 		idempotencyKey: UuidSchema,
 		operationKey: UuidSchema,
 		notes: IntakeNotesSchema.optional(),
@@ -36,6 +37,21 @@ export const DiaryFoodWriteSchema = z
 				code: z.ZodIssueCode.custom,
 				message: "amount and unit must be provided together",
 				path: ["unit"],
+			});
+		}
+		if (value.savedFoodId) return;
+		if (!value.name) {
+			ctx.addIssue({
+				code: z.ZodIssueCode.custom,
+				message: "name is required",
+				path: ["name"],
+			});
+		}
+		if (!value.macros) {
+			ctx.addIssue({
+				code: z.ZodIssueCode.custom,
+				message: "macros are required",
+				path: ["macros"],
 			});
 		}
 	});

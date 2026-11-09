@@ -59,6 +59,7 @@ export const user = sqliteTable("user", {
 export const userRelations = relations(user, ({ many }) => ({
 	members: many(member),
 	sessions: many(session),
+	savedFoods: many(nutritionSavedFood),
 }));
 
 export const session = sqliteTable(
@@ -1401,6 +1402,58 @@ export const nutritionConsentRelations = relations(
 );
 
 /**
+ * Person-owned favourite or custom food.
+ * No organizationId. userId cascades with the account.
+ * Deleting a row does not void past intake: nutrition_intake.saved_food_id
+ * is set null, and the intake keeps the copied name and nutrients.
+ * @see docs/dev/tenancy-classes.md
+ */
+export const nutritionSavedFood = sqliteTable(
+	"nutrition_saved_food",
+	{
+		id: text("id")
+			.primaryKey()
+			.$defaultFn(() => crypto.randomUUID()),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		name: text("name").notNull(),
+		energyKcal: real("energy_kcal").notNull(),
+		proteinG: real("protein_g").notNull(),
+		carbsG: real("carbs_g").notNull(),
+		fatG: real("fat_g").notNull(),
+		fiberG: real("fiber_g"),
+		defaultAmount: real("default_amount"),
+		defaultUnit: text("default_unit"),
+		barcode: text("barcode"),
+		fdcId: text("fdc_id"),
+		createdAt: integer("created_at", { mode: "timestamp" })
+			.notNull()
+			.default(sql`(unixepoch())`),
+		updatedAt: integer("updated_at", { mode: "timestamp" })
+			.notNull()
+			.default(sql`(unixepoch())`),
+	},
+	(table) => [
+		index("nutrition_saved_food_user_idx").on(
+			table.userId,
+			table.updatedAt,
+			table.id,
+		),
+	],
+);
+
+export const nutritionSavedFoodRelations = relations(
+	nutritionSavedFood,
+	({ one }) => ({
+		user: one(user, {
+			fields: [nutritionSavedFood.userId],
+			references: [user.id],
+		}),
+	}),
+);
+
+/**
  * Personal nutrition intake (Person-in-context tenancy).
  * Owned by userId; organizationId is kitchen provenance (nullable after kitchen
  * delete — ON DELETE SET NULL). Writers always set a non-null org + name snapshots.
@@ -1495,8 +1548,10 @@ export const nutritionIntake = sqliteTable(
 		/** Optional food provenance. Not a tenancy key. */
 		fdcId: text("fdc_id"),
 		barcode: text("barcode"),
-		/** Optional person saved-food id. No FK until that table exists. */
-		savedFoodId: text("saved_food_id"),
+		/** Optional person saved-food id. Set null when that food is deleted. */
+		savedFoodId: text("saved_food_id").references(() => nutritionSavedFood.id, {
+			onDelete: "set null",
+		}),
 		createdAt: integer("created_at", { mode: "timestamp" })
 			.notNull()
 			.default(sql`(unixepoch())`),

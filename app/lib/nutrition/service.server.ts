@@ -323,7 +323,7 @@ export type SetNutritionGoalInput = {
 	effectiveFrom: string;
 };
 
-function requireScope(
+export function requireScope(
 	principal: NutritionPrincipal,
 	requiredScope: "nutrition:read" | "nutrition:write",
 ): void {

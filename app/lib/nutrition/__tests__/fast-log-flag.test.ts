@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { isFeatureEnabled } from "~/lib/feature-flags/flags.server";
 import {
 	isNutritionFastLogEnabled,
+	isNutritionSavedFoodEnabled,
 	NUTRITION_FAST_LOG_IOS_MIN,
 	nutritionFastLogClientAllowed,
 } from "../fast-log-flag.server";
@@ -47,5 +48,24 @@ describe("nutrition-fast-log client gate", () => {
 			}),
 		).resolves.toBe(false);
 		expect(isFeatureEnabled).not.toHaveBeenCalled();
+	});
+
+	it("keeps saved foods off unless the parent is on and iOS is at least 1.6", async () => {
+		vi.mocked(isFeatureEnabled).mockImplementation(
+			async (_env, key) => key === "nutrition-saved-food",
+		);
+		await expect(
+			isNutritionSavedFoodEnabled({} as Env, { clientPlatform: "web" }),
+		).resolves.toBe(false);
+		vi.mocked(isFeatureEnabled).mockResolvedValue(true);
+		await expect(
+			isNutritionSavedFoodEnabled({} as Env, {
+				clientPlatform: "ios",
+				clientVersion: "1.5.18",
+			}),
+		).resolves.toBe(false);
+		await expect(
+			isNutritionSavedFoodEnabled({} as Env, { clientPlatform: "web" }),
+		).resolves.toBe(true);
 	});
 });

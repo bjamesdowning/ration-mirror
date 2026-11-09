@@ -90,10 +90,12 @@ describe("fuel capture", () => {
 			clientVersion: "1.5.15",
 		});
 		expect(ios.nutritionFastLog).toBe(false);
+		expect(ios.nutritionSavedFood).toBe(false);
 		const web = await getClientSafeFlags(env, {
 			userId: "u1",
 			clientPlatform: "web",
 		});
 		expect(web.nutritionFastLog).toBe(true);
+		expect(web.nutritionSavedFood).toBe(true);
 	});
 });

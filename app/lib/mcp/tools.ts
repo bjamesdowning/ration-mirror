@@ -11,6 +11,7 @@ import { registerManifestTools } from "./tools/manifest";
 import { registerNutritionTools } from "./tools/nutrition";
 import { registerPreferencesTools } from "./tools/preferences";
 import { registerReadTools } from "./tools/read";
+import { registerSavedFoodTools } from "./tools/saved-food";
 import { registerSupplyTools } from "./tools/supply";
 
 /**
@@ -35,4 +36,5 @@ export async function registerTools(
 	registerPreferencesTools(server, toolsEnv);
 	registerNutritionTools(server, toolsEnv);
 	await registerDiaryNutritionTools(server, toolsEnv);
+	await registerSavedFoodTools(server, toolsEnv);
 }

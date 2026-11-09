@@ -2,11 +2,13 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { getNutritionConsentStatement } from "~/lib/nutrition/consent-policy";
 import { createSqliteD1 } from "~/test/helpers/sqlite-d1";
 import { action as mobileLog } from "../mobile/v1.nutrition.diary";
+import { action as mobileSaved } from "../mobile/v1.nutrition.saved-food";
 import { action as webLog } from "../nutrition.diary";
 import { action as webPatch } from "../nutrition.diary.$id";
 import { action as webKitchen } from "../nutrition.diary.$id.save-to-kitchen";
 import { loader as webExport } from "../nutrition.diary.export";
 import { action as webQuote } from "../nutrition.diary.quote";
+import { loader as webSavedList } from "../nutrition.saved-food";
 
 const auth = vi.hoisted(() => ({ userId: "user-a", groupId: "org-1" }));
 
@@ -143,6 +145,22 @@ function setup(metadata: string | null = null) {
 			barcode text,
 			saved_food_id text,
 			created_at integer not null
+		);
+		create table nutrition_saved_food (
+			id text primary key,
+			user_id text not null,
+			name text not null,
+			energy_kcal real not null,
+			protein_g real not null,
+			carbs_g real not null,
+			fat_g real not null,
+			fiber_g real,
+			default_amount real,
+			default_unit text,
+			barcode text,
+			fdc_id text,
+			created_at integer not null,
+			updated_at integer not null
 		);
 		create unique index nutrition_intake_user_idempotency_uidx
 			on nutrition_intake(user_id, idempotency_key)
@@ -477,5 +495,83 @@ describe("personal diary route contract", () => {
 		expect((logged as { manifestDate: string }).manifestDate).toBe(
 			"2026-06-21",
 		);
+	});
+
+	it("copies a saved food onto the intake row and hides another member", async () => {
+		const { database, sqlite } = setup();
+		await grantIntake(sqlite, "user-a");
+		await grantIntake(sqlite, "user-b");
+		const savedId = "55555555-5555-4555-8555-555555555555";
+		const now = Math.floor(Date.now() / 1000);
+		sqlite.exec(`
+			insert into nutrition_saved_food (
+				id, user_id, name, energy_kcal, protein_g, carbs_g, fat_g,
+				default_amount, default_unit, created_at, updated_at
+			) values (
+				'${savedId}', 'user-a', 'Yogurt', 90, 8, 6, 3, 1, 'serving', ${now}, ${now}
+			);
+		`);
+		const ctx = context(database, true);
+		const logged = await call(webLog, {
+			request: post(
+				"https://ration.test/api/nutrition/diary",
+				body({
+					savedFoodId: savedId,
+					name: "Not the saved name",
+					macros: {
+						energyKcal: 999,
+						proteinG: 1,
+						carbsG: 1,
+						fatG: 1,
+						fiberG: null,
+					},
+				}),
+			),
+			context: ctx,
+		});
+		expect(statusOf(logged)).toBeUndefined();
+		const row = await database
+			.prepare(
+				"select meal_name_snapshot as name, energy_kcal as kcal, saved_food_id as savedFoodId, voided_at as voidedAt from nutrition_intake",
+			)
+			.first<{
+				name: string;
+				kcal: number;
+				savedFoodId: string;
+				voidedAt: number | null;
+			}>();
+		expect(row).toEqual({
+			name: "Yogurt",
+			kcal: 90,
+			savedFoodId: savedId,
+			voidedAt: null,
+		});
+
+		auth.userId = "user-b";
+		const hidden = await call(webSavedList, {
+			request: new Request("https://ration.test/api/nutrition/saved-food"),
+			context: ctx,
+		});
+		expect(hidden).toEqual({ savedFoods: [] });
+
+		const ios = await call(mobileSaved, {
+			request: post(
+				"https://ration.test/api/mobile/v1/nutrition/saved-food",
+				{
+					name: "Stolen",
+					amount: 1,
+					unit: "serving",
+					macros: { energyKcal: 1, proteinG: 1, carbsG: 1, fatG: 1 },
+				},
+				{ "X-Ration-Client": "ios/1.5.18" },
+			),
+			context: context(database, true),
+		});
+		expect(statusOf(ios)).toBe(403);
+		expect(codeOf(ios)).toBe("FEATURE_DISABLED");
+		expect(
+			(await count(database, "select count(*) as n from nutrition_saved_food"))
+				?.n,
+		).toBe(1);
 	});
 });

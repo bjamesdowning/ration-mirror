@@ -41,8 +41,18 @@ struct LogToFuelSheet: View {
     @State private var operationKey = LogToFuelDraft.operationKey(existing: nil, mint: { UUID().uuidString })
     @State private var idempotencyKey = UUID().uuidString
     @State private var recent: [RecentFuelFood] = []
+    @State private var saved: [SavedFoodRow] = []
+    @State private var savedFoodId: String?
     @State private var errorMessage: String?
     @State private var saving = false
+
+    private var savedFoodsVisible: Bool {
+        SavedFoodPolicy.controlVisible(
+            fastLogEnabled: env.session.clientFlags.isNutritionFastLogEnabled,
+            savedFoodEnabled: env.session.clientFlags.isNutritionSavedFoodEnabled,
+            appVersion: AppMarketingVersion.current
+        )
+    }
 
     var body: some View {
         NavigationStack {
@@ -57,10 +67,23 @@ struct LogToFuelSheet: View {
                             .disabled(true)
                     }
                 }
+                if savedFoodsVisible && !saved.isEmpty {
+                    Section("Saved") {
+                        ForEach(saved) { food in
+                            Button(food.name) { applySaved(food) }
+                        }
+                    }
+                }
                 if !recent.isEmpty {
                     Section("Recent") {
                         ForEach(recent) { food in
-                            Button(food.name) { apply(food) }
+                            HStack {
+                                Button(food.name) { apply(food) }
+                                if savedFoodsVisible {
+                                    Button("Star") { Task { await star(food) } }
+                                        .accessibilityLabel("Star \(food.name)")
+                                }
+                            }
                         }
                     }
                 }
@@ -84,6 +107,10 @@ struct LogToFuelSheet: View {
                 if let errorMessage {
                     Text(errorMessage).foregroundStyle(.red)
                 }
+                if savedFoodsVisible && savedFoodId == nil {
+                    Button("Save this food") { Task { await starDraft() } }
+                        .disabled(saving)
+                }
                 if existing != nil {
                     Button("Remove my log", role: .destructive) {
                         Task { await voidLog() }
@@ -102,7 +129,10 @@ struct LogToFuelSheet: View {
                         .disabled(saving)
                 }
             }
-            .task { await loadRecent() }
+            .task {
+                await loadRecent()
+                await loadSaved()
+            }
             .onAppear(perform: prefill)
         }
     }
@@ -120,6 +150,7 @@ struct LogToFuelSheet: View {
     }
 
     private func apply(_ food: RecentFuelFood) {
+        savedFoodId = nil
         name = food.name
         amount = String(food.amount)
         unit = food.unit
@@ -127,6 +158,94 @@ struct LogToFuelSheet: View {
         protein = String(food.proteinG)
         carbs = String(food.carbsG)
         fat = String(food.fatG)
+    }
+
+    private func applySaved(_ food: SavedFoodRow) {
+        savedFoodId = food.id
+        name = food.name
+        amount = String(food.defaultAmount ?? 1)
+        unit = food.defaultUnit ?? "serving"
+        energy = String(food.energyKcal)
+        protein = String(food.proteinG)
+        carbs = String(food.carbsG)
+        fat = String(food.fatG)
+    }
+
+    private func loadSaved() async {
+        guard savedFoodsVisible else {
+            saved = []
+            return
+        }
+        saved = (try? await env.api.listSavedFoods())?.savedFoods ?? []
+    }
+
+    private func star(_ food: RecentFuelFood) async {
+        await storeFood(
+            name: food.name,
+            amount: food.amount,
+            unit: food.unit,
+            energy: food.energyKcal,
+            protein: food.proteinG,
+            carbs: food.carbsG,
+            fat: food.fatG
+        )
+    }
+
+    private func starDraft() async {
+        guard let amountValue = Double(amount),
+              let energyValue = Double(energy),
+              let proteinValue = Double(protein),
+              let carbsValue = Double(carbs),
+              let fatValue = Double(fat) else {
+            errorMessage = "Enter a name, amount, and macros before saving the food."
+            return
+        }
+        await storeFood(
+            name: name.trimmingCharacters(in: .whitespaces),
+            amount: amountValue,
+            unit: unit,
+            energy: energyValue,
+            protein: proteinValue,
+            carbs: carbsValue,
+            fat: fatValue
+        )
+    }
+
+    private func storeFood(
+        name: String,
+        amount: Double,
+        unit: String,
+        energy: Double,
+        protein: Double,
+        carbs: Double,
+        fat: Double
+    ) async {
+        guard !name.isEmpty, amount > 0 else {
+            errorMessage = "Add a name and an amount."
+            return
+        }
+        saving = true
+        errorMessage = nil
+        do {
+            _ = try await env.api.saveFood(
+                SaveFoodBody(
+                    name: name,
+                    amount: amount,
+                    unit: unit,
+                    macros: DiaryMacrosBody(
+                        energyKcal: energy,
+                        proteinG: protein,
+                        carbsG: carbs,
+                        fatG: fat
+                    )
+                )
+            )
+            await loadSaved()
+            saving = false
+        } catch {
+            saving = false
+            errorMessage = error.localizedDescription
+        }
     }
 
     private func loadRecent() async {
@@ -185,6 +304,15 @@ struct LogToFuelSheet: View {
         do {
             if let existing {
                 _ = try await env.api.updateDiaryFood(id: existing.id, body: body)
+            } else if let savedFoodId {
+                _ = try await env.api.logSavedFood(
+                    SavedFoodLogBody(
+                        savedFoodId: savedFoodId,
+                        occurredAt: FuelTime.isoString(occurredAt),
+                        idempotencyKey: idempotencyKey,
+                        operationKey: operationKey
+                    )
+                )
             } else {
                 _ = try await env.api.logDiaryFood(body)
             }

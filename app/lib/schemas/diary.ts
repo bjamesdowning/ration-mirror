@@ -27,6 +27,16 @@ export const DiaryFoodWriteSchema = z
 		/** Density used only when macros are omitted. Never a gram-weight source. */
 		per100g: DiaryMacrosSchema.optional(),
 		fdcId: z.string().regex(/^\d+$/).optional(),
+		compositionSource: z
+			.enum([
+				"usda",
+				"user_override",
+				"manual_macros",
+				"barcode",
+				"ai_estimate",
+				"meal",
+			])
+			.optional(),
 		idempotencyKey: UuidSchema,
 		operationKey: UuidSchema,
 		notes: IntakeNotesSchema.optional(),

@@ -553,6 +553,8 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 					nutritionIntakeNotes?: boolean;
 					nutritionFastLog?: boolean;
 					nutritionSavedFood?: boolean;
+					nutritionBarcodeDiary?: boolean;
+					nutritionPhotoLog?: boolean;
 				};
 		  }
 		| undefined;
@@ -567,6 +569,8 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 		rootData?.clientFlags?.nutritionIntakeNotes === true;
 	const fuelCapture = rootData?.clientFlags?.nutritionFastLog === true;
 	const savedFoods = rootData?.clientFlags?.nutritionSavedFood === true;
+	const barcodeDiary = rootData?.clientFlags?.nutritionBarcodeDiary === true;
+	const photoLog = rootData?.clientFlags?.nutritionPhotoLog === true;
 	const diaryLayoutFetcher = useFetcher();
 	const submittedDiaryLayout = diaryLayoutFetcher.formData?.get("diaryLayout");
 	const diaryLayout =
@@ -1874,6 +1878,8 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 				open={showFuelLog}
 				intake={editIntake}
 				savedFoods={savedFoods}
+				barcode={barcodeDiary}
+				photo={photoLog}
 				onClose={() => setShowFuelLog(false)}
 				onSaved={() => revalidator.revalidate()}
 			/>

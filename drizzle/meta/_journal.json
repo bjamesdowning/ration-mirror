@@ -435,6 +435,13 @@
       "when": 1794254111030,
       "tag": "0061_nutrition_saved_food",
       "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "6",
+      "when": 1794256858173,
+      "tag": "0062_familiar_blink",
+      "breakpoints": true
     }
   ]
 }

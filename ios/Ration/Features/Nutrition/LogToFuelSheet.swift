@@ -23,7 +23,7 @@ struct RecentFuelFood: Identifiable, Equatable {
     let fatG: Double
 }
 
-/// Type, recent, and amount. Shutter and barcode stay disabled.
+/// Type, recent, and amount. Shutter and barcode follow their child flags.
 struct LogToFuelSheet: View {
     @Environment(AppEnvironment.self) private var env
     var existing: LogToFuelExisting?
@@ -45,11 +45,32 @@ struct LogToFuelSheet: View {
     @State private var savedFoodId: String?
     @State private var errorMessage: String?
     @State private var saving = false
+    @State private var barcodeCode = ""
+    @State private var showBarcode = false
+    @State private var showPhoto = false
+    @State private var photoRef = ""
+    @State private var compositionSource: String?
 
     private var savedFoodsVisible: Bool {
         SavedFoodPolicy.controlVisible(
             fastLogEnabled: env.session.clientFlags.isNutritionFastLogEnabled,
             savedFoodEnabled: env.session.clientFlags.isNutritionSavedFoodEnabled,
+            appVersion: AppMarketingVersion.current
+        )
+    }
+
+    private var shutterEnabled: Bool {
+        FuelLogInputPolicy.shutterEnabled(
+            fastLogEnabled: env.session.clientFlags.isNutritionFastLogEnabled,
+            photoLogEnabled: env.session.clientFlags.isNutritionPhotoLogEnabled,
+            appVersion: AppMarketingVersion.current
+        )
+    }
+
+    private var barcodeEnabled: Bool {
+        FuelLogInputPolicy.barcodeEnabled(
+            fastLogEnabled: env.session.clientFlags.isNutritionFastLogEnabled,
+            barcodeLogEnabled: env.session.clientFlags.isNutritionBarcodeDiaryEnabled,
             appVersion: AppMarketingVersion.current
         )
     }
@@ -61,10 +82,10 @@ struct LogToFuelSheet: View {
                     Text("This records what you ate. It does not change Cargo.")
                         .rationCaption()
                     HStack {
-                        Button("Shutter") {}
-                            .disabled(true)
-                        Button("Barcode") {}
-                            .disabled(true)
+                        Button("Shutter") { showPhoto = true }
+                            .disabled(!shutterEnabled)
+                        Button("Barcode") { showBarcode = true }
+                            .disabled(!barcodeEnabled)
                     }
                 }
                 if savedFoodsVisible && !saved.isEmpty {
@@ -134,6 +155,16 @@ struct LogToFuelSheet: View {
                 await loadSaved()
             }
             .onAppear(perform: prefill)
+            .alert("Barcode", isPresented: $showBarcode) {
+                TextField("Code", text: $barcodeCode)
+                Button("Look up") { Task { await lookupBarcode() } }
+                Button("Cancel", role: .cancel) {}
+            }
+            .alert("Photo", isPresented: $showPhoto) {
+                TextField("Photo reference", text: $photoRef)
+                Button("Propose") { Task { await proposePhoto() } }
+                Button("Cancel", role: .cancel) {}
+            }
         }
     }
 
@@ -177,6 +208,47 @@ struct LogToFuelSheet: View {
             return
         }
         saved = (try? await env.api.listSavedFoods())?.savedFoods ?? []
+    }
+
+    private func lookupBarcode() async {
+        guard barcodeEnabled else { return }
+        do {
+            let result = try await env.api.lookupFoodBarcode(barcodeCode)
+            if result.found == true, let foundName = result.name {
+                name = foundName
+                if let macros = result.macros {
+                    energy = String(macros.energyKcal)
+                    protein = String(macros.proteinG)
+                    carbs = String(macros.carbsG)
+                    fat = String(macros.fatG)
+                }
+                compositionSource = "usda"
+            }
+        } catch {
+            errorMessage = "Could not look up that barcode."
+        }
+    }
+
+    private func proposePhoto() async {
+        guard shutterEnabled, !photoRef.isEmpty else { return }
+        do {
+            let result = try await env.api.proposeFoodLog(
+                photoRef: photoRef,
+                operationKey: operationKey,
+                subject: "custom",
+                barcode: nil
+            )
+            if let line = result.lines.first {
+                name = line.name
+                energy = String(line.energyKcal)
+                protein = String(line.proteinG)
+                carbs = String(line.carbsG)
+                fat = String(line.fatG)
+                compositionSource = "ai_estimate"
+            }
+        } catch {
+            errorMessage = "Could not read that photo."
+        }
     }
 
     private func star(_ food: RecentFuelFood) async {
@@ -299,7 +371,8 @@ struct LogToFuelSheet: View {
                 fatG: fatValue
             ),
             idempotencyKey: idempotencyKey,
-            operationKey: operationKey
+            operationKey: operationKey,
+            compositionSource: compositionSource
         )
         do {
             if let existing {

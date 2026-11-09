@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { getNutritionConsentStatement } from "~/lib/nutrition/consent-policy";
+import { healthExportAllowed } from "~/lib/nutrition/health-exportability";
 import { createSqliteD1 } from "~/test/helpers/sqlite-d1";
 import { action as mobileLog } from "../mobile/v1.nutrition.diary";
 import { action as mobileSaved } from "../mobile/v1.nutrition.saved-food";
@@ -714,5 +715,31 @@ describe("personal diary route contract", () => {
 			)
 			.first<{ kcal: number; protein: number; unit: string }>();
 		expect(row).toEqual({ kcal: 240, protein: 24, unit: "cup" });
+	});
+
+	it("stores an AI line as not Health-exportable", async () => {
+		const { database, sqlite } = setup();
+		await grantIntake(sqlite, "user-a");
+		const logged = await call(webLog, {
+			request: post(
+				"https://ration.test/api/nutrition/diary",
+				body({ compositionSource: "ai_estimate" }),
+			),
+			context: context(database, true),
+		});
+		expect(statusOf(logged)).toBeUndefined();
+		const row = sqlite
+			.prepare(
+				"select composition_source as source, composition_confirmed_at as confirmed from nutrition_intake",
+			)
+			.get() as { source: string; confirmed: number | null };
+		expect(row.source).toBe("ai_estimate");
+		expect(row.confirmed).toBeNull();
+		expect(
+			healthExportAllowed({
+				compositionSource: "ai_estimate",
+				compositionConfirmedAt: new Date("2026-08-01T12:00:00.000Z"),
+			}),
+		).toBe(false);
 	});
 });

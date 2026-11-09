@@ -5,6 +5,7 @@ import type { McpToolsEnv } from "./tool-runtime";
 import { registerBillingTools } from "./tools/billing";
 import { registerDiaryNutritionTools } from "./tools/diary";
 import { registerKitchenEventTools } from "./tools/events";
+import { registerFoodLogTools } from "./tools/food-log";
 import { registerGalleyTools } from "./tools/galley";
 import { registerInventoryTools } from "./tools/inventory";
 import { registerManifestTools } from "./tools/manifest";
@@ -37,4 +38,5 @@ export async function registerTools(
 	registerNutritionTools(server, toolsEnv);
 	await registerDiaryNutritionTools(server, toolsEnv);
 	await registerSavedFoodTools(server, toolsEnv);
+	await registerFoodLogTools(server, toolsEnv);
 }

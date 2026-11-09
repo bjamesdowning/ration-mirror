@@ -388,6 +388,9 @@ export async function eraseNutritionData(
 				.prepare("DELETE FROM nutrition_saved_food WHERE user_id = ?")
 				.bind(input.userId),
 			db
+				.prepare("DELETE FROM nutrition_food_draft WHERE user_id = ?")
+				.bind(input.userId),
+			db
 				.prepare("DELETE FROM nutrition_intake WHERE user_id = ?")
 				.bind(input.userId),
 			db

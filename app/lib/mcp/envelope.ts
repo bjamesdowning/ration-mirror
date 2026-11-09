@@ -87,7 +87,9 @@ export type ToolErrorCode =
 	| "validation_error"
 	| "cook_eat_split_required"
 	| "consent_required"
-	| "amount_unit_unavailable";
+	| "amount_unit_unavailable"
+	| "capability_unavailable"
+	| "insufficient_credits";
 
 export const ToolEnvelopeSchema = z.object({
 	ok: z.boolean(),
@@ -349,6 +351,17 @@ export function mapErrorToEnvelope(
 				recoveryHint: allowedUnits
 					? "Use one of the listed units, or send typed macros and skip conversion."
 					: "Use portions[].servings (0.01–100) instead of grams or ounces for this meal.",
+			});
+		}
+		if (code === "capability_unavailable") {
+			return err(tool, "capability_unavailable", error.message, {
+				recoveryHint:
+					"Attach a photo reference before propose_food_log. No debit was made.",
+			});
+		}
+		if (code === "insufficient_credits") {
+			return err(tool, "insufficient_credits", error.message, {
+				recoveryHint: "A model photo costs 2 credits. Typed logs cost 0.",
 			});
 		}
 		if (

@@ -28,6 +28,8 @@ describe("getClientSafeFlags", () => {
 			nutritionCrossOrgDiary: false,
 			nutritionFastLog: false,
 			nutritionSavedFood: false,
+			nutritionBarcodeDiary: false,
+			nutritionPhotoLog: false,
 			featureEnablementConsent: false,
 			supplyMultiLists: false,
 		});

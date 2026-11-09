@@ -17,6 +17,7 @@ import {
 	assertNutritionSavedFood,
 } from "./fast-log-flag.server";
 import { listFdcPortions } from "./fdc-portion.server";
+import { diaryCompositionStamp } from "./health-exportability";
 import {
 	resolveHouseholdPortion,
 	storedPortionFromFdc,
@@ -360,6 +361,8 @@ function intakeInsert(
 		savedFoodId: string | null;
 		barcode: string | null;
 		fdcId: string | null;
+		compositionSource?: string;
+		compositionConfirmedAt?: Date | null;
 	},
 ): IntakeInsert {
 	return {
@@ -406,8 +409,11 @@ function intakeInsert(
 		loggedUnit: food.loggedUnit,
 		healthSyncId: input.healthSyncId,
 		healthSyncVersion: input.healthSyncVersion,
-		compositionSource: "manual_macros",
-		compositionConfirmedAt: input.now,
+		compositionSource: input.compositionSource ?? "manual_macros",
+		compositionConfirmedAt:
+			input.compositionConfirmedAt === undefined
+				? input.now
+				: input.compositionConfirmedAt,
 		fdcId: input.fdcId,
 		barcode: input.barcode,
 		savedFoodId: input.savedFoodId,
@@ -776,6 +782,10 @@ export async function logDiaryFood(
 		savedFoodId: materialized.savedFoodId,
 		barcode: materialized.barcode,
 		fdcId: materialized.fdcId,
+		...diaryCompositionStamp(
+			input.savedFoodId ? "manual_macros" : input.compositionSource,
+			now,
+		),
 	});
 	try {
 		await db.batch([

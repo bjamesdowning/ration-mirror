@@ -179,6 +179,22 @@ export const FLAG_REGISTRY: Record<string, FlagRegistryEntry> = {
 		clientKey: "nutritionSavedFood",
 		iosAlwaysOn: false,
 	},
+	"nutrition-barcode-diary": {
+		defaultEnabled: false,
+		description:
+			"Log to Fuel barcode lookup. USDA Branded exact gtinUpc, then an editable custom add. On only when nutrition-fast-log is on",
+		clientVisible: true,
+		clientKey: "nutritionBarcodeDiary",
+		iosAlwaysOn: false,
+	},
+	"nutrition-photo-log": {
+		defaultEnabled: false,
+		description:
+			"Log to Fuel photo draft. On only when nutrition-fast-log is on. A model call debits the scan price",
+		clientVisible: true,
+		clientKey: "nutritionPhotoLog",
+		iosAlwaysOn: false,
+	},
 	"feature-enablement-consent": {
 		defaultEnabled: false,
 		description:

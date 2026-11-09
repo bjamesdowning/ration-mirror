@@ -49,6 +49,34 @@ enum SavedFoodPolicy {
     }
 }
 
+/// Shutter and barcode stay disabled unless the parent capture control and
+/// the matching child flag are on. A 1.5 binary stays closed.
+enum FuelLogInputPolicy {
+    static func shutterEnabled(
+        fastLogEnabled: Bool,
+        photoLogEnabled: Bool,
+        appVersion: String
+    ) -> Bool {
+        photoLogEnabled
+            && HubCapturePolicy.choiceVisible(
+                fastLogEnabled: fastLogEnabled,
+                appVersion: appVersion
+            )
+    }
+
+    static func barcodeEnabled(
+        fastLogEnabled: Bool,
+        barcodeLogEnabled: Bool,
+        appVersion: String
+    ) -> Bool {
+        barcodeLogEnabled
+            && HubCapturePolicy.choiceVisible(
+                fastLogEnabled: fastLogEnabled,
+                appVersion: appVersion
+            )
+    }
+}
+
 enum LogToFuelDraft {
     /// A failed send retries the same key. A new draft mints one.
     static func operationKey(existing: String?, mint: () -> String) -> String {

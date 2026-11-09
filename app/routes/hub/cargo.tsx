@@ -494,6 +494,8 @@ export default function CargoPage({ loaderData }: Route.ComponentProps) {
 					aiScanReceipt?: boolean;
 					nutritionFastLog?: boolean;
 					nutritionSavedFood?: boolean;
+					nutritionBarcodeDiary?: boolean;
+					nutritionPhotoLog?: boolean;
 				};
 		  }
 		| undefined;
@@ -501,6 +503,8 @@ export default function CargoPage({ loaderData }: Route.ComponentProps) {
 	const aiScanReceipt = rootData?.clientFlags?.aiScanReceipt === true;
 	const fuelCapture = rootData?.clientFlags?.nutritionFastLog === true;
 	const savedFoods = rootData?.clientFlags?.nutritionSavedFood === true;
+	const barcodeDiary = rootData?.clientFlags?.nutritionBarcodeDiary === true;
+	const photoLog = rootData?.clientFlags?.nutritionPhotoLog === true;
 	const [showScanIntroModal, setShowScanIntroModal] = useState(false);
 	const [showCaptureChoice, setShowCaptureChoice] = useState(false);
 	const [showFuelLog, setShowFuelLog] = useState(false);
@@ -884,6 +888,8 @@ export default function CargoPage({ loaderData }: Route.ComponentProps) {
 			<LogToFuelDialog
 				open={showFuelLog}
 				savedFoods={savedFoods}
+				barcode={barcodeDiary}
+				photo={photoLog}
 				onClose={() => setShowFuelLog(false)}
 				onSaved={() => revalidator.revalidate()}
 			/>

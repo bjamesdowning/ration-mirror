@@ -47,6 +47,23 @@ export function fuelCaptureChoiceVisible(input: {
 	return nutritionFastLogClientAllowed(input);
 }
 
+/** Shutter and barcode stay off unless their child flag and the parent capture control are on. */
+export function fuelLogControlEnabled(input: {
+	fastLogEnabled: boolean;
+	childEnabled: boolean;
+	clientPlatform?: string | number | boolean;
+	clientVersion?: string | number | boolean;
+}): boolean {
+	return (
+		input.childEnabled &&
+		fuelCaptureChoiceVisible({
+			fastLogEnabled: input.fastLogEnabled,
+			clientPlatform: input.clientPlatform,
+			clientVersion: input.clientVersion,
+		})
+	);
+}
+
 export function fuelCaptureChoiceLabels(
 	choiceVisible: boolean,
 ): readonly string[] {

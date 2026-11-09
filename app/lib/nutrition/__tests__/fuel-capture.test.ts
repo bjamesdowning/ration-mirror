@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { getClientSafeFlags } from "~/lib/feature-flags/flags.server";
 import { chargeDiaryFoodLog } from "~/lib/nutrition/diary.server";
 import { createMockEnv } from "~/test/helpers/mock-env";
+import { foodLogCreditCost } from "../food-log-cost";
 import {
 	captureLabelsAreExclusive,
 	dailyFuelOpensGoals,
@@ -9,6 +10,7 @@ import {
 	FUEL_CAPTURE_CHOICES,
 	fuelCaptureChoiceLabels,
 	fuelCaptureChoiceVisible,
+	fuelLogControlEnabled,
 	toManifestDayIntake,
 } from "../fuel-capture";
 
@@ -91,11 +93,53 @@ describe("fuel capture", () => {
 		});
 		expect(ios.nutritionFastLog).toBe(false);
 		expect(ios.nutritionSavedFood).toBe(false);
+		expect(ios.nutritionBarcodeDiary).toBe(false);
+		expect(ios.nutritionPhotoLog).toBe(false);
 		const web = await getClientSafeFlags(env, {
 			userId: "u1",
 			clientPlatform: "web",
 		});
 		expect(web.nutritionFastLog).toBe(true);
 		expect(web.nutritionSavedFood).toBe(true);
+		expect(web.nutritionBarcodeDiary).toBe(true);
+		expect(web.nutritionPhotoLog).toBe(true);
+	});
+
+	it("keeps shutter and barcode disabled unless their child flags are on", () => {
+		expect(
+			fuelLogControlEnabled({
+				fastLogEnabled: true,
+				childEnabled: false,
+				clientPlatform: "web",
+			}),
+		).toBe(false);
+		expect(
+			fuelLogControlEnabled({
+				fastLogEnabled: false,
+				childEnabled: true,
+				clientPlatform: "ios",
+				clientVersion: "1.6.0",
+			}),
+		).toBe(false);
+		expect(
+			fuelLogControlEnabled({
+				fastLogEnabled: true,
+				childEnabled: true,
+				clientPlatform: "ios",
+				clientVersion: "1.5.18",
+			}),
+		).toBe(false);
+		expect(
+			fuelLogControlEnabled({
+				fastLogEnabled: true,
+				childEnabled: true,
+				clientPlatform: "web",
+			}),
+		).toBe(true);
+		expect(foodLogCreditCost("typed")).toBe(0);
+		expect(foodLogCreditCost("recent")).toBe(0);
+		expect(foodLogCreditCost("custom_amount")).toBe(0);
+		expect(foodLogCreditCost("barcode")).toBe(0);
+		expect(foodLogCreditCost("photo_model")).toBe(2);
 	});
 });

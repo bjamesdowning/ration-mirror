@@ -26,6 +26,7 @@ type LogDraft = {
 	operationKey: string;
 	idempotencyKey: string;
 	savedFoodId: string | null;
+	compositionSource?: string;
 };
 
 function emptyDraft(now = new Date()): LogDraft {
@@ -77,6 +78,8 @@ export function LogToFuelDialog({
 	open,
 	intake,
 	savedFoods = false,
+	barcode = false,
+	photo = false,
 	onClose,
 	onSaved,
 }: {
@@ -84,6 +87,10 @@ export function LogToFuelDialog({
 	intake?: DayIntakeRow | null;
 	/** nutrition-saved-food. Hidden when the child or parent flag is off. */
 	savedFoods?: boolean;
+	/** nutrition-barcode-diary. Disabled when the child flag is off. */
+	barcode?: boolean;
+	/** nutrition-photo-log. Disabled when the child flag is off. */
+	photo?: boolean;
 	onClose: () => void;
 	onSaved: () => void;
 }) {
@@ -91,6 +98,8 @@ export function LogToFuelDialog({
 	const [recent, setRecent] = useState<RecentFood[]>([]);
 	const [saved, setSaved] = useState<SavedFood[]>([]);
 	const [error, setError] = useState<string | null>(null);
+	const [barcodeCode, setBarcodeCode] = useState("");
+	const [lookingUp, setLookingUp] = useState(false);
 	const [saving, setSaving] = useState(false);
 
 	useEffect(() => {
@@ -189,6 +198,108 @@ export function LogToFuelDialog({
 		};
 	}, [open, savedFoods]);
 
+	async function lookupBarcode() {
+		setLookingUp(true);
+		setError(null);
+		try {
+			const response = await fetch("/api/nutrition/diary/barcode", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ barcode: barcodeCode }),
+			});
+			if (!response.ok) {
+				setError(await readError(response));
+				return;
+			}
+			const body = (await response.json()) as {
+				found?: boolean;
+				name?: string;
+				macros?: {
+					energyKcal: number;
+					proteinG: number;
+					carbsG: number;
+					fatG: number;
+				} | null;
+			};
+			if (body.found && body.name) {
+				setDraft((current) => ({
+					...current,
+					name: body.name ?? current.name,
+					energy:
+						body.macros != null
+							? String(body.macros.energyKcal)
+							: current.energy,
+					protein:
+						body.macros != null
+							? String(body.macros.proteinG)
+							: current.protein,
+					carbs:
+						body.macros != null ? String(body.macros.carbsG) : current.carbs,
+					fat: body.macros != null ? String(body.macros.fatG) : current.fat,
+					compositionSource: "usda",
+				}));
+			}
+		} catch {
+			setError("Could not look up that barcode.");
+		} finally {
+			setLookingUp(false);
+		}
+	}
+
+	async function proposePhoto(file: File) {
+		setLookingUp(true);
+		setError(null);
+		try {
+			const photoRef = await new Promise<string>((resolve, reject) => {
+				const reader = new FileReader();
+				reader.onload = () => {
+					const value = String(reader.result ?? "");
+					const comma = value.indexOf(",");
+					resolve(comma >= 0 ? value.slice(comma + 1) : value);
+				};
+				reader.onerror = () => reject(reader.error);
+				reader.readAsDataURL(file);
+			});
+			const response = await fetch("/api/nutrition/diary/propose", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					operationKey: draft.operationKey,
+					photoRef,
+					subject: "custom",
+				}),
+			});
+			if (!response.ok) {
+				setError(await readError(response));
+				return;
+			}
+			const body = (await response.json()) as {
+				lines?: Array<{
+					name: string;
+					energyKcal: number;
+					proteinG: number;
+					carbsG: number;
+					fatG: number;
+				}>;
+			};
+			const line = body.lines?.[0];
+			if (!line) return;
+			setDraft((current) => ({
+				...current,
+				name: line.name,
+				energy: String(line.energyKcal),
+				protein: String(line.proteinG),
+				carbs: String(line.carbsG),
+				fat: String(line.fatG),
+				compositionSource: "ai_estimate",
+			}));
+		} catch {
+			setError("Could not read that photo.");
+		} finally {
+			setLookingUp(false);
+		}
+	}
+
 	if (!open) return null;
 
 	async function save() {
@@ -231,6 +342,9 @@ export function LogToFuelDialog({
 					},
 					idempotencyKey: draft.idempotencyKey,
 					operationKey: draft.operationKey,
+					...(draft.compositionSource
+						? { compositionSource: draft.compositionSource }
+						: {}),
 				};
 		try {
 			const response = await fetch(
@@ -368,21 +482,44 @@ export function LogToFuelDialog({
 						This records what you ate. It does not change Cargo.
 					</p>
 				</div>
-				<div className="flex gap-2">
-					<button
-						type="button"
-						disabled
-						className="btn-secondary px-3 py-2 text-sm opacity-50"
-					>
-						Shutter
-					</button>
-					<button
-						type="button"
-						disabled
-						className="btn-secondary px-3 py-2 text-sm opacity-50"
-					>
-						Barcode
-					</button>
+				<div className="flex flex-col gap-2">
+					<div className="flex gap-2">
+						<label
+							className={`btn-secondary px-3 py-2 text-sm ${photo ? "" : "pointer-events-none opacity-50"}`}
+						>
+							Shutter
+							<input
+								type="file"
+								accept="image/*"
+								capture="environment"
+								className="sr-only"
+								disabled={!photo || lookingUp}
+								onChange={(event) => {
+									const file = event.target.files?.[0];
+									if (!file || !photo) return;
+									void proposePhoto(file);
+								}}
+							/>
+						</label>
+						<button
+							type="button"
+							disabled={!barcode || lookingUp}
+							className="btn-secondary px-3 py-2 text-sm disabled:opacity-50"
+							onClick={() => {
+								if (barcode) void lookupBarcode();
+							}}
+						>
+							Barcode
+						</button>
+					</div>
+					{barcode ? (
+						<input
+							value={barcodeCode}
+							onChange={(event) => setBarcodeCode(event.target.value)}
+							placeholder="Barcode"
+							className="w-full rounded-lg border border-platinum px-3 py-2 text-sm"
+						/>
+					) : null}
 				</div>
 				{savedFoods && saved.length > 0 && (
 					<div className="space-y-2">

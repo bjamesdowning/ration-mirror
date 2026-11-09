@@ -225,6 +225,8 @@ export default [
 	route("api/nutrition/diary", "routes/api/nutrition.diary.ts"),
 	route("api/nutrition/diary/export", "routes/api/nutrition.diary.export.ts"),
 	route("api/nutrition/diary/quote", "routes/api/nutrition.diary.quote.ts"),
+	route("api/nutrition/diary/barcode", "routes/api/nutrition.diary.barcode.ts"),
+	route("api/nutrition/diary/propose", "routes/api/nutrition.diary.propose.ts"),
 	route(
 		"api/nutrition/diary/:id/save-to-kitchen",
 		"routes/api/nutrition.diary.$id.save-to-kitchen.ts",
@@ -631,6 +633,14 @@ export default [
 	route(
 		"api/mobile/v1/nutrition/diary/quote",
 		"routes/api/mobile/v1.nutrition.diary.quote.ts",
+	),
+	route(
+		"api/mobile/v1/nutrition/diary/barcode",
+		"routes/api/mobile/v1.nutrition.diary.barcode.ts",
+	),
+	route(
+		"api/mobile/v1/nutrition/diary/propose",
+		"routes/api/mobile/v1.nutrition.diary.propose.ts",
 	),
 	route(
 		"api/mobile/v1/nutrition/diary/:id/save-to-kitchen",

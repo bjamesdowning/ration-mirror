@@ -63,12 +63,18 @@ const diaryWriteFields = {
 		.nullable()
 		.optional(),
 	amount: z.number().finite().positive().optional(),
-	unit: z.enum(["serving", "g", "oz"]).optional(),
+	unit: z.string().trim().min(1).max(40).optional(),
 	energyKcal: z.number().finite().nonnegative().optional(),
 	proteinG: z.number().finite().nonnegative().optional(),
 	carbsG: z.number().finite().nonnegative().optional(),
 	fatG: z.number().finite().nonnegative().optional(),
 	fiberG: z.number().finite().nonnegative().nullable().optional(),
+	per100gEnergyKcal: z.number().finite().nonnegative().optional(),
+	per100gProteinG: z.number().finite().nonnegative().optional(),
+	per100gCarbsG: z.number().finite().nonnegative().optional(),
+	per100gFatG: z.number().finite().nonnegative().optional(),
+	per100gFiberG: z.number().finite().nonnegative().nullable().optional(),
+	fdcId: z.number().int().positive().optional(),
 	idempotencyKey: UuidSchema,
 	operationKey: UuidSchema,
 	notes: z.string().trim().max(280).nullable().optional(),
@@ -81,12 +87,18 @@ function toDiaryWrite(args: {
 	occurredAt?: string;
 	slotType?: "breakfast" | "lunch" | "dinner" | "snack" | null;
 	amount?: number;
-	unit?: "serving" | "g" | "oz";
+	unit?: string;
 	energyKcal?: number;
 	proteinG?: number;
 	carbsG?: number;
 	fatG?: number;
 	fiberG?: number | null;
+	per100gEnergyKcal?: number;
+	per100gProteinG?: number;
+	per100gCarbsG?: number;
+	per100gFatG?: number;
+	per100gFiberG?: number | null;
+	fdcId?: number;
 	idempotencyKey: string;
 	operationKey: string;
 	notes?: string | null;
@@ -96,6 +108,11 @@ function toDiaryWrite(args: {
 		args.proteinG != null &&
 		args.carbsG != null &&
 		args.fatG != null;
+	const hasPer100g =
+		args.per100gEnergyKcal != null &&
+		args.per100gProteinG != null &&
+		args.per100gCarbsG != null &&
+		args.per100gFatG != null;
 	return {
 		savedFoodId: args.savedFoodId,
 		name: args.name,
@@ -113,6 +130,17 @@ function toDiaryWrite(args: {
 					fiberG: args.fiberG,
 				}
 			: undefined,
+		per100g:
+			hasMacros || !hasPer100g
+				? undefined
+				: {
+						energyKcal: args.per100gEnergyKcal,
+						proteinG: args.per100gProteinG,
+						carbsG: args.per100gCarbsG,
+						fatG: args.per100gFatG,
+						fiberG: args.per100gFiberG,
+					},
+		fdcId: args.fdcId != null ? String(args.fdcId) : undefined,
 		idempotencyKey: args.idempotencyKey,
 		operationKey: args.operationKey,
 		notes: args.notes,
@@ -146,7 +174,7 @@ export function createDiaryToolDefs(env: McpToolsEnv) {
 		defineSharedTool({
 			name: "log_diary_food",
 			description:
-				"Log one personal food the caller ate. Writes nutrition intake with a null plan entry and does not change Cargo, Galley, Manifest, or Supply. Requires approval even for one item, active intake consent, and agent-processing consent. Pass name and explicit energyKcal/proteinG/carbsG/fatG, or savedFoodId. A savedFoodId copies that person's stored name and nutrients onto the intake row and ignores any macros the caller substitutes. savedFoodId requires nutrition-saved-food as well as nutrition-fast-log. Optional amount+unit (serving, g, or oz) apply only to a typed log. Also pass manifestDate, occurredAt, slotType, notes, idempotencyKey, and operationKey. Costs 0 credits. Does not save to the kitchen; the result includes kitchenOffer only. Not medical advice.",
+				"Log one personal food the caller ate. Writes nutrition intake with a null plan entry and does not change Cargo, Galley, Manifest, or Supply. Requires approval even for one item, active intake consent, and agent-processing consent. Pass name and explicit energyKcal/proteinG/carbsG/fatG, or savedFoodId. Typed macros are stored as given and are not converted. A savedFoodId copies that person's stored name and nutrients onto the intake row and ignores any macros the caller substitutes. savedFoodId requires nutrition-saved-food as well as nutrition-fast-log. Optional amount+unit label a typed log. To scale per 100 g, omit the typed macros and pass per100gEnergyKcal/per100gProteinG/per100gCarbsG/per100gFatG plus amount and unit. Household units scale only from gram weights already stored for fdcId. An unknown unit returns amount_unit_unavailable and the units that food allows. Do not invent a gram weight, and do not turn a handful into grams. Also pass manifestDate, occurredAt, slotType, notes, idempotencyKey, and operationKey. Costs 0 credits. Does not save to the kitchen; the result includes kitchenOffer only. Not medical advice.",
 			inputSchema: z.object(diaryWriteFields),
 			scopes: ["mcp:nutrition:write"],
 			rateLimitCategory: "mcp_write",

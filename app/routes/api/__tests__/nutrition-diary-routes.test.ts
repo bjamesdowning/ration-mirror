@@ -213,11 +213,12 @@ function setup(metadata: string | null = null) {
 	return { database, sqlite };
 }
 
-function context(database: D1Database, flagOn: boolean) {
+function context(database: D1Database, flagOn: boolean, nutritionDb?: unknown) {
 	return {
 		cloudflare: {
 			env: {
 				DB: database,
+				...(nutritionDb ? { NUTRITION_DB: nutritionDb } : {}),
 				RATION_KV: {} as KVNamespace,
 				RATION_ENV: "test",
 				FLAGS: { getBooleanValue: async () => flagOn },
@@ -573,5 +574,145 @@ describe("personal diary route contract", () => {
 			(await count(database, "select count(*) as n from nutrition_saved_food"))
 				?.n,
 		).toBe(1);
+	});
+
+	it("stores a typed cup without converting it", async () => {
+		const { database, sqlite } = setup();
+		await grantIntake(sqlite, "user-a");
+		const logged = await call(webLog, {
+			request: post(
+				"https://ration.test/api/nutrition/diary",
+				body({
+					unit: "cup",
+					amount: 1,
+					per100g: {
+						energyKcal: 100,
+						proteinG: 10,
+						carbsG: 12,
+						fatG: 4,
+						fiberG: 1,
+					},
+				}),
+			),
+			context: context(database, true),
+		});
+		expect(statusOf(logged)).toBeUndefined();
+		const row = await database
+			.prepare(
+				"select energy_kcal as kcal, logged_unit as unit, logged_amount as amount from nutrition_intake",
+			)
+			.first<{ kcal: number; unit: string; amount: number }>();
+		expect(row).toEqual({ kcal: 120, unit: "cup", amount: 1 });
+	});
+
+	it("rejects 1 cup when no stored gram weight exists", async () => {
+		const { database, sqlite } = setup();
+		await grantIntake(sqlite, "user-a");
+		const rejected = await call(webLog, {
+			request: post(
+				"https://ration.test/api/nutrition/diary",
+				body({
+					macros: undefined,
+					amount: 1,
+					unit: "cup",
+					per100g: {
+						energyKcal: 100,
+						proteinG: 10,
+						carbsG: 12,
+						fatG: 4,
+						fiberG: 1,
+					},
+				}),
+			),
+			context: context(database, true),
+		});
+		expect(statusOf(rejected)).toBe(422);
+		expect(codeOf(rejected)).toBe("amount_unit_unavailable");
+		const payload = rejected as {
+			data?: { allowedUnits?: string[] };
+		};
+		expect(payload.data?.allowedUnits).toEqual(["g", "oz"]);
+		expect(
+			(await count(database, "select count(*) as n from nutrition_intake"))?.n,
+		).toBe(0);
+	});
+
+	it("scales grams per 100 g without inventing a household weight", async () => {
+		const { database, sqlite } = setup();
+		await grantIntake(sqlite, "user-a");
+		const logged = await call(webLog, {
+			request: post(
+				"https://ration.test/api/nutrition/diary",
+				body({
+					macros: undefined,
+					amount: 50,
+					unit: "g",
+					per100g: {
+						energyKcal: 100,
+						proteinG: 10,
+						carbsG: 12,
+						fatG: 4,
+						fiberG: null,
+					},
+				}),
+			),
+			context: context(database, true),
+		});
+		expect(statusOf(logged)).toBeUndefined();
+		const row = await database
+			.prepare(
+				"select energy_kcal as kcal, logged_unit as unit from nutrition_intake",
+			)
+			.first<{ kcal: number; unit: string }>();
+		expect(row).toEqual({ kcal: 50, unit: "g" });
+	});
+
+	it("scales 1 cup from the gram weight stored for that food", async () => {
+		const { database, sqlite } = setup();
+		await grantIntake(sqlite, "user-a");
+		const nutritionDb = {
+			prepare: () => ({
+				bind: () => ({
+					all: async () => ({
+						results: [
+							{
+								id: 1,
+								fdcId: 171287,
+								portionDescription: null,
+								gramWeight: 240,
+								amount: 1,
+								measureUnit: "cup",
+							},
+						],
+					}),
+				}),
+			}),
+		};
+		const logged = await call(webLog, {
+			request: post(
+				"https://ration.test/api/nutrition/diary",
+				body({
+					macros: undefined,
+					amount: 1,
+					unit: "cup",
+					fdcId: "171287",
+					per100g: {
+						energyKcal: 100,
+						proteinG: 10,
+						carbsG: 12,
+						fatG: 4,
+						fiberG: 1,
+					},
+				}),
+			),
+			context: context(database, true, nutritionDb),
+		});
+		expect(statusOf(logged)).toBeUndefined();
+		const row = await database
+			.prepare(
+				"select energy_kcal as kcal, protein_g as protein, logged_unit as unit from nutrition_intake",
+			)
+			.first<{ kcal: number; protein: number; unit: string }>();
+		expect(row).toEqual({ kcal: 240, protein: 24, unit: "cup" });
 	});
 });

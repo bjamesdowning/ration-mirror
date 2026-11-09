@@ -436,6 +436,7 @@ export function handleApiError(error: unknown) {
 			status: number;
 			requiredScope?: string;
 			retryable?: boolean;
+			allowedUnits?: readonly string[];
 		};
 		return data(
 			{
@@ -443,6 +444,7 @@ export function handleApiError(error: unknown) {
 				code: typed.code,
 				...(typed.retryable != null ? { retryable: typed.retryable } : {}),
 				...(typed.requiredScope ? { requiredScope: typed.requiredScope } : {}),
+				...(typed.allowedUnits ? { allowedUnits: typed.allowedUnits } : {}),
 			},
 			{ status: typed.status },
 		);

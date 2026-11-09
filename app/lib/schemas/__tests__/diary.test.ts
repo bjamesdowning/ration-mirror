@@ -35,9 +35,23 @@ describe("DiaryFoodWriteSchema", () => {
 		expect(parsed.macros).toBeUndefined();
 	});
 
-	it("rejects a cup, which this log cannot convert", () => {
-		const parsed = DiaryFoodWriteSchema.safeParse({ ...valid, unit: "cup" });
-		expect(parsed.success).toBe(false);
+	it("accepts a cup label; conversion is decided from stored gram weights", () => {
+		expect(DiaryFoodWriteSchema.parse({ ...valid, unit: "cup" }).unit).toBe(
+			"cup",
+		);
+	});
+
+	it("accepts per 100 g density without typed macros", () => {
+		const { macros: _macros, ...rest } = valid;
+		const parsed = DiaryFoodWriteSchema.parse({
+			...rest,
+			unit: "cup",
+			amount: 1,
+			per100g: valid.macros,
+			fdcId: "171287",
+		});
+		expect(parsed.macros).toBeUndefined();
+		expect(parsed.per100g?.energyKcal).toBe(120);
 	});
 
 	it("requires confirm on a kitchen save", () => {

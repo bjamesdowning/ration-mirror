@@ -232,6 +232,28 @@ function pickBestPortion(
 	return best.row;
 }
 
+/** Every stored portion for a food. Callers decide which gram weights are usable. */
+export async function listFdcPortions(
+	env: Env,
+	fdcId: number,
+): Promise<FdcPortionRow[]> {
+	if (!env.NUTRITION_DB || !Number.isFinite(fdcId)) return [];
+	try {
+		const result = await env.NUTRITION_DB.prepare(
+			`SELECT id, fdc_id AS fdcId, modifier AS portionDescription,
+        gram_weight AS gramWeight, amount, measure_unit AS measureUnit
+       FROM food_portion
+       WHERE fdc_id = ?
+       LIMIT 40`,
+		)
+			.bind(fdcId)
+			.all<FdcPortionRow>();
+		return result.results ?? [];
+	} catch {
+		return [];
+	}
+}
+
 /** @deprecated Prefer {@link nutritionPortionCacheKey}. */
 export function fdcPortionCacheKey(
 	fdcId: number,

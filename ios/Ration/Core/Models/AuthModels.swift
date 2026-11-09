@@ -74,6 +74,7 @@ struct ClientFlags: Codable, Sendable, Equatable {
     var aiDockFromReceipt: Bool?
     var aiGenerateMeal: Bool?
     var aiPlanWeek: Bool?
+    var nutritionGoals: Bool?
     var nutritionFastLog: Bool?
     var nutritionSavedFood: Bool?
     var nutritionBarcodeDiary: Bool?
@@ -93,6 +94,7 @@ struct ClientFlags: Codable, Sendable, Equatable {
     }
     var isAiGenerateMealEnabled: Bool { aiGenerateMeal == true }
     var isAiPlanWeekEnabled: Bool { aiPlanWeek == true }
+    var isNutritionGoalsEnabled: Bool { nutritionGoals == true }
     var isNutritionFastLogEnabled: Bool { nutritionFastLog == true }
     var isNutritionSavedFoodEnabled: Bool { nutritionSavedFood == true }
     var isNutritionBarcodeDiaryEnabled: Bool { nutritionBarcodeDiary == true }

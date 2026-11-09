@@ -20,7 +20,7 @@ type FeatureEnablementFormProps = {
 	variant?: "onboarding" | "settings";
 	onSaved?: (status: FeatureEnablementStatusResponse) => void;
 	/** Onboarding: called after successful Agree/Continue */
-	onContinue?: () => void;
+	onContinue?: (status: FeatureEnablementStatusResponse) => void;
 	/** Show Continue even when saving opt-outs */
 	continueLabel?: string;
 };
@@ -74,7 +74,7 @@ export function FeatureEnablementForm({
 			setAiFeatures(saveFetcher.data.aiFeatures);
 			setMacroTracking(Boolean(saveFetcher.data.macroTracking));
 			onSaved?.(saveFetcher.data);
-			onContinue?.();
+			onContinue?.(saveFetcher.data);
 		}
 	}, [saveFetcher.state, saveFetcher.data, onSaved, onContinue]);
 

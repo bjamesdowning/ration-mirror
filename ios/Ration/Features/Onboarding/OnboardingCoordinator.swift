@@ -5,6 +5,7 @@ enum OnboardingPhase: Equatable {
     case inactive
     case welcome
     case featureEnablement
+    case optionalGoals
     case askBriefing
 }
 
@@ -74,12 +75,19 @@ final class OnboardingCoordinator {
     }
 
     /// After feature enablement Agree. `aiEnabled` controls live vs static Copilot.
-    func advanceFromFeatureEnablement(aiEnabled: Bool) {
+    /// The optional goals step is offered only when the caller already checked the flag.
+    func advanceFromFeatureEnablement(aiEnabled: Bool, offerOptionalGoals: Bool = false) {
         guard isActive, phase == .featureEnablement else { return }
         preferStaticAfterFeatures = !aiEnabled
         if !aiEnabled {
             isStaticReplay = true
         }
+        phase = offerOptionalGoals ? .optionalGoals : .askBriefing
+    }
+
+    /// Skip and Save both leave the optional step. Skip does not write a goal.
+    func advanceFromOptionalGoals() {
+        guard isActive, phase == .optionalGoals else { return }
         phase = .askBriefing
     }
 

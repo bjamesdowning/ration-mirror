@@ -195,7 +195,9 @@ struct NutritionGoalsView: View {
     private var form: some View {
         Form {
             Section {
-                Text("Not medical advice. Goals and totals are planning aids only.")
+                Text("Enter targets you already use")
+                    .rationCaption()
+                Text("Draft, pending review. Not medical advice. Goals and totals are planning aids only.")
                     .rationCaption()
             }
 

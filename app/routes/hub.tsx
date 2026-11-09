@@ -55,6 +55,8 @@ type RootLoaderHeaderSlice = {
 	clientFlags?: {
 		rationCopilot?: boolean;
 		featureEnablementConsent?: boolean;
+		nutritionFastLog?: boolean;
+		nutritionGoals?: boolean;
 	};
 };
 
@@ -335,6 +337,8 @@ export default function DashboardLayout({ loaderData }: Route.ComponentProps) {
 					featureEnablementEnabled={
 						root?.clientFlags?.featureEnablementConsent === true
 					}
+					fastLogEnabled={root?.clientFlags?.nutritionFastLog === true}
+					goalsEnabled={root?.clientFlags?.nutritionGoals === true}
 				/>
 				{hasAskMounted ? (
 					<Suspense fallback={null}>

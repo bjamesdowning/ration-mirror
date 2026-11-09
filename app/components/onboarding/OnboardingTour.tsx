@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useFetcher, useNavigate } from "react-router";
+import type { FeatureEnablementStatusResponse } from "~/components/feature-enablement/FeatureEnablementForm";
+import { optionalGoalsStepVisible } from "~/lib/nutrition/optional-goals";
+import { OptionalGoalsStep } from "./steps/OptionalGoalsStep";
 import { Step0_Welcome } from "./steps/Step0_Welcome";
 import { Step1_Features } from "./steps/Step1_Features";
 import { Step1_Groups } from "./steps/Step1_Groups";
@@ -17,6 +20,10 @@ interface OnboardingTourProps {
 	initialStep: number;
 	/** When false, skip Feature enablement (Flagship off). */
 	featureEnablementEnabled?: boolean;
+	/** Parent food-log flag. Off for iOS below 1.6. */
+	fastLogEnabled?: boolean;
+	/** Existing personal goals flag. */
+	goalsEnabled?: boolean;
 }
 
 /** Spotlight routes after Welcome (0) + Features (1). */
@@ -38,9 +45,12 @@ export function OnboardingTour({
 	isCompleted,
 	initialStep,
 	featureEnablementEnabled = false,
+	fastLogEnabled = false,
+	goalsEnabled = false,
 }: OnboardingTourProps) {
 	const [open, setOpen] = useState(!isCompleted);
 	const [step, setStep] = useState(() => Math.min(initialStep, LAST_STEP));
+	const [offerGoals, setOfferGoals] = useState(false);
 	const navigate = useNavigate();
 	const fetcher = useFetcher();
 	const featuresFetcher = useFetcher();
@@ -106,6 +116,29 @@ export function OnboardingTour({
 	const afterWelcome = useCallback(() => {
 		goTo(featureEnablementEnabled ? 1 : 2);
 	}, [featureEnablementEnabled, goTo]);
+
+	const afterFeatures = useCallback(
+		(status: FeatureEnablementStatusResponse) => {
+			if (
+				optionalGoalsStepVisible({
+					macroTrackingOn: status.macroTracking === true,
+					fastLogEnabled,
+					goalsEnabled,
+					clientPlatform: "web",
+				})
+			) {
+				setOfferGoals(true);
+				return;
+			}
+			goTo(2);
+		},
+		[fastLogEnabled, goalsEnabled, goTo],
+	);
+
+	const finishGoals = useCallback(() => {
+		setOfferGoals(false);
+		goTo(2);
+	}, [goTo]);
 
 	const handleNext = useCallback(() => {
 		if (step < LAST_STEP) goTo(step + 1);
@@ -180,6 +213,7 @@ export function OnboardingTour({
 	const isFullscreen =
 		step === 0 ||
 		(step === 1 && featureEnablementEnabled) ||
+		offerGoals ||
 		step === LAST_STEP;
 
 	return (
@@ -187,8 +221,11 @@ export function OnboardingTour({
 			{step === 0 && (
 				<Step0_Welcome onBegin={afterWelcome} onSkip={handleSkip} />
 			)}
-			{step === 1 && featureEnablementEnabled && (
-				<Step1_Features onContinue={() => goTo(2)} onSkip={handleSkip} />
+			{offerGoals ? (
+				<OptionalGoalsStep goalsEnabled={goalsEnabled} onDone={finishGoals} />
+			) : null}
+			{step === 1 && featureEnablementEnabled && !offerGoals && (
+				<Step1_Features onContinue={afterFeatures} onSkip={handleSkip} />
 			)}
 			{step === 2 && <Step1_Groups {...stepProps} />}
 			{step === 3 && <Step2_Cargo {...stepProps} />}

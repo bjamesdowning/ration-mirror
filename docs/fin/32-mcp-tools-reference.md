@@ -83,7 +83,7 @@ Gated by nutrition feature flags. Not medical advice. Cargo/meal read and write 
 |------|-------|---------|
 | `get_nutrition_summary` | `mcp:nutrition:read` | Daily intake totals (energy + macros + optional fiber) for a UTC date range, plus active goal and additive `vsGoal` remaining/overage for the last day. `from`/`to` default to today UTC. Requires nutrition-goals or nutrition-manifest. |
 | `list_nutrition_intakes` | `mcp:nutrition:read` | Row-level personal intake history for a UTC range (cursor-paginated). |
-| `set_nutrition_goal` | `mcp:nutrition:write` | Idempotently upsert a personal daily goal using `operationKey` (active consent required). Requires nutrition-goals. |
+| `set_nutrition_goal` | `mcp:nutrition:write` | Idempotently upsert a personal daily goal using `operationKey` (active consent required). Requires nutrition-goals. Store only numbers the person states. Do not suggest, calculate, or invent a target. |
 | `clear_nutrition_goal` | `mcp:nutrition:write` | Idempotently clear the active goal as of a date using `operationKey`. Requires nutrition-goals. **`confirm: true`.** |
 | `log_manifest_intake` | `mcp:nutrition:write` | Atomic private Eat / plate-up for prepared entries (`operationKey` + `portions[]` with per-item keys). `servings` is 0.01–100, or `amount`+`unit` (`serving` \| `g` \| `oz`) when `get_meal_plan` `gramsPerServing` is present. Consent must already be active in Ration. Never deducts Cargo. Optional `notes` (≤280) persist only when nutrition-intake-notes is on. |
 | `clear_manifest_intake` | `mcp:nutrition:write` | Atomically soft-void personal intake using `operationKey`. **`confirm: true`.** Does not uncook. |

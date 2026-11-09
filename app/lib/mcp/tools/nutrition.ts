@@ -221,7 +221,7 @@ export function createNutritionToolDefs(env: McpToolsEnv) {
 		defineSharedTool({
 			name: "set_nutrition_goal",
 			description:
-				"Idempotently upsert the caller's personal daily nutrition goal (any subset of energy/macros/fiber; at least one required) using operationKey. carbG is an alias of carbsG and is stored as carbsG. An identical open goal does not insert another row. Requires active goals and agent-processing consent established in Ration. Not medical advice — do not prescribe diets.",
+				"Idempotently upsert the caller's personal daily nutrition goal (any subset of energy/macros/fiber; at least one required) using operationKey. carbG is an alias of carbsG and is stored as carbsG. An identical open goal does not insert another row. Requires active goals and agent-processing consent established in Ration. Store only numbers the person states. Do not suggest, calculate, or invent a target. Not medical advice — do not prescribe diets.",
 			inputSchema: z.object({
 				dailyEnergyKcal: z
 					.number()

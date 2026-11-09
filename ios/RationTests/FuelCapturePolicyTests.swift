@@ -52,6 +52,44 @@ final class FuelCapturePolicyTests: XCTestCase {
         )
     }
 
+    func testShutterAndBarcodeStayDisabledUntilTheirFlagsAreOn() {
+        XCTAssertFalse(
+            FuelLogInputPolicy.shutterEnabled(
+                fastLogEnabled: true,
+                photoLogEnabled: false,
+                appVersion: "1.6.0"
+            )
+        )
+        XCTAssertFalse(
+            FuelLogInputPolicy.barcodeEnabled(
+                fastLogEnabled: true,
+                barcodeLogEnabled: true,
+                appVersion: "1.5.18"
+            )
+        )
+        XCTAssertFalse(
+            FuelLogInputPolicy.barcodeEnabled(
+                fastLogEnabled: false,
+                barcodeLogEnabled: true,
+                appVersion: "1.6.0"
+            )
+        )
+        XCTAssertTrue(
+            FuelLogInputPolicy.shutterEnabled(
+                fastLogEnabled: true,
+                photoLogEnabled: true,
+                appVersion: "1.6.0"
+            )
+        )
+        XCTAssertTrue(
+            FuelLogInputPolicy.barcodeEnabled(
+                fastLogEnabled: true,
+                barcodeLogEnabled: true,
+                appVersion: "1.6.0"
+            )
+        )
+    }
+
     func testRetryKeepsOneOperationKey() {
         XCTAssertEqual(LogToFuelDraft.operationKey(existing: "same", mint: { "new" }), "same")
         XCTAssertEqual(LogToFuelDraft.operationKey(existing: nil, mint: { "new" }), "new")

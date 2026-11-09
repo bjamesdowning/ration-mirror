@@ -4,6 +4,7 @@ export const DIARY_NUTRITION_OPERATION_TYPES = [
 	"update_diary_food",
 	"void_diary_food",
 	"save_diary_food_to_kitchen",
+	"propose_food_log",
 ] as const;
 
 export type DiaryNutritionOperationType =

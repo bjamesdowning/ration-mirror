@@ -7,6 +7,10 @@ final class ClientFlagsDecodingTests: XCTestCase {
         XCTAssertTrue(try decode(#"{"nutritionFastLog":true}"#).isNutritionFastLogEnabled)
         XCTAssertFalse(try decode(#"{"nutritionFastLog":true}"#).isNutritionSavedFoodEnabled)
         XCTAssertTrue(try decode(#"{"nutritionSavedFood":true}"#).isNutritionSavedFoodEnabled)
+        XCTAssertFalse(try decode(#"{"nutritionFastLog":true}"#).isNutritionBarcodeDiaryEnabled)
+        XCTAssertFalse(try decode(#"{"nutritionFastLog":true}"#).isNutritionPhotoLogEnabled)
+        XCTAssertTrue(try decode(#"{"nutritionBarcodeDiary":true}"#).isNutritionBarcodeDiaryEnabled)
+        XCTAssertTrue(try decode(#"{"nutritionPhotoLog":true}"#).isNutritionPhotoLogEnabled)
     }
 
     func testMissingKeysFailClosed() throws {

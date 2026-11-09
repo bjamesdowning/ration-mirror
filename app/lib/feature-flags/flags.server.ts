@@ -122,6 +122,14 @@ export function applyClientFlagDependencies(
 		result.nutritionSavedFood =
 			result.nutritionFastLog === true && result.nutritionSavedFood === true;
 	}
+	if ("nutritionBarcodeDiary" in result) {
+		result.nutritionBarcodeDiary =
+			result.nutritionFastLog === true && result.nutritionBarcodeDiary === true;
+	}
+	if ("nutritionPhotoLog" in result) {
+		result.nutritionPhotoLog =
+			result.nutritionFastLog === true && result.nutritionPhotoLog === true;
+	}
 	return result;
 }
 
@@ -139,7 +147,10 @@ export async function getClientSafeFlags(
 			if (!entry?.clientVisible) return;
 			const clientKey = getClientFlagKey(flag, entry);
 			if (
-				(flag === "nutrition-fast-log" || flag === "nutrition-saved-food") &&
+				(flag === "nutrition-fast-log" ||
+					flag === "nutrition-saved-food" ||
+					flag === "nutrition-barcode-diary" ||
+					flag === "nutrition-photo-log") &&
 				!nutritionFastLogClientAllowed(context)
 			) {
 				result[clientKey] = false;

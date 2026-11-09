@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import { isFeatureEnabled } from "~/lib/feature-flags/flags.server";
 import {
+	isNutritionBarcodeDiaryEnabled,
 	isNutritionFastLogEnabled,
+	isNutritionPhotoLogEnabled,
 	isNutritionSavedFoodEnabled,
 	NUTRITION_FAST_LOG_IOS_MIN,
 	nutritionFastLogClientAllowed,
@@ -66,6 +68,38 @@ describe("nutrition-fast-log client gate", () => {
 		).resolves.toBe(false);
 		await expect(
 			isNutritionSavedFoodEnabled({} as Env, { clientPlatform: "web" }),
+		).resolves.toBe(true);
+	});
+
+	it("keeps barcode and photo off unless the parent is on and iOS is at least 1.6", async () => {
+		vi.mocked(isFeatureEnabled).mockImplementation(
+			async (_env, key) =>
+				key === "nutrition-barcode-diary" || key === "nutrition-photo-log",
+		);
+		await expect(
+			isNutritionBarcodeDiaryEnabled({} as Env, { clientPlatform: "web" }),
+		).resolves.toBe(false);
+		await expect(
+			isNutritionPhotoLogEnabled({} as Env, { clientPlatform: "web" }),
+		).resolves.toBe(false);
+		vi.mocked(isFeatureEnabled).mockResolvedValue(true);
+		await expect(
+			isNutritionBarcodeDiaryEnabled({} as Env, {
+				clientPlatform: "ios",
+				clientVersion: "1.5.18",
+			}),
+		).resolves.toBe(false);
+		await expect(
+			isNutritionPhotoLogEnabled({} as Env, {
+				clientPlatform: "ios",
+				clientVersion: "1.5.18",
+			}),
+		).resolves.toBe(false);
+		await expect(
+			isNutritionBarcodeDiaryEnabled({} as Env, { clientPlatform: "web" }),
+		).resolves.toBe(true);
+		await expect(
+			isNutritionPhotoLogEnabled({} as Env, { clientPlatform: "web" }),
 		).resolves.toBe(true);
 	});
 });

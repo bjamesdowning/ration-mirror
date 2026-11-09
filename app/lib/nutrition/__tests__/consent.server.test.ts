@@ -153,9 +153,10 @@ describe("nutrition consent service", () => {
 				expect.stringContaining("DELETE FROM nutrition_goal"),
 				expect.stringContaining("operation_type IN ('set_goal', 'clear_goal')"),
 				expect.stringContaining("DELETE FROM nutrition_saved_food"),
+				expect.stringContaining("DELETE FROM nutrition_food_draft"),
 				expect.stringContaining("DELETE FROM nutrition_intake"),
 				expect.stringContaining(
-					"operation_type IN ('log_manifest_intakes', 'clear_manifest_intakes', 'log_diary_food', 'update_diary_food', 'void_diary_food', 'save_diary_food_to_kitchen')",
+					"operation_type IN ('log_manifest_intakes', 'clear_manifest_intakes', 'log_diary_food', 'update_diary_food', 'void_diary_food', 'save_diary_food_to_kitchen', 'propose_food_log')",
 				),
 			]),
 		);

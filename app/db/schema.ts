@@ -1454,6 +1454,50 @@ export const nutritionSavedFoodRelations = relations(
 );
 
 /**
+ * Editable food-log draft (Person-in-context). Not intake.
+ * Commit goes through log_diary_food. Owned by userId; organizationId is provenance.
+ */
+export const nutritionFoodDraft = sqliteTable(
+	"nutrition_food_draft",
+	{
+		id: text("id")
+			.primaryKey()
+			.$defaultFn(() => crypto.randomUUID()),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		organizationId: text("organization_id").references(() => organization.id, {
+			onDelete: "set null",
+		}),
+		organizationNameSnapshot: text("organization_name_snapshot"),
+		operationId: text("operation_id").notNull(),
+		subject: text("subject").notNull(),
+		linesJson: text("lines_json", { mode: "json" }).$type<
+			Array<{
+				name: string;
+				energyKcal: number;
+				proteinG: number;
+				carbsG: number;
+				fatG: number;
+				fiberG: number | null;
+				amount: number | null;
+				unit: string | null;
+				barcode: string | null;
+				fdcId: string | null;
+				compositionSource: string;
+			}>
+		>(),
+		credits: integer("credits").notNull().default(0),
+		createdAt: integer("created_at", { mode: "timestamp" })
+			.notNull()
+			.default(sql`(unixepoch())`),
+	},
+	(table) => [
+		index("nutrition_food_draft_user_idx").on(table.userId, table.createdAt),
+	],
+);
+
+/**
  * Personal nutrition intake (Person-in-context tenancy).
  * Owned by userId; organizationId is kitchen provenance (nullable after kitchen
  * delete — ON DELETE SET NULL). Writers always set a non-null org + name snapshots.
@@ -1658,6 +1702,8 @@ export const nutritionOperation = sqliteTable(
 			}>;
 			/** Diary replay id. No food name or nutrient bag. */
 			intakeId?: string;
+			/** Draft replay id. No food name or nutrient bag. */
+			draftId?: string;
 			credits?: number;
 			kitchenItemId?: string;
 			target?: "cargo" | "meal";

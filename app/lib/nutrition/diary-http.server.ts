@@ -1,4 +1,5 @@
 import { type AppLoadContext, data } from "react-router";
+import { z } from "zod";
 import {
 	buildMobileFlagContext,
 	buildWebFlagContext,
@@ -9,6 +10,7 @@ import {
 	DiaryKitchenSaveSchema,
 	DiaryVoidSchema,
 } from "~/lib/schemas/diary";
+import { UuidSchema } from "~/lib/schemas/uuid";
 import {
 	exportDiaryFood,
 	logDiaryFood,
@@ -17,6 +19,9 @@ import {
 	updateDiaryFood,
 	voidDiaryFood,
 } from "./diary.server";
+import { assertNutritionBarcodeDiary } from "./fast-log-flag.server";
+import { lookupFoodBarcode } from "./food-barcode.server";
+import { proposeFoodLog } from "./propose-food-log.server";
 import type {
 	NutritionFlagContext,
 	NutritionPrincipal,
@@ -84,6 +89,50 @@ export async function postDiaryLog(
 		parsed.data.operationKey,
 	);
 	return logDiaryFood(env, principal, flags, {
+		...parsed.data,
+		operationKey,
+	});
+}
+
+const FoodBarcodeSchema = z.object({
+	barcode: z.string().trim().min(4).max(32),
+});
+
+const ProposeFoodLogSchema = z.object({
+	operationKey: UuidSchema,
+	photoRef: z.string().trim().min(1).max(8_000_000).optional(),
+	subject: z.enum(["packaged", "meal", "loose_produce", "custom"]).optional(),
+	barcode: z.string().trim().min(4).max(32).optional(),
+});
+
+export async function postFoodBarcode(
+	request: Request,
+	env: Env,
+	flags: NutritionFlagContext,
+) {
+	await assertNutritionBarcodeDiary(env, flags);
+	const parsed = FoodBarcodeSchema.safeParse(await readBody(request));
+	if (!parsed.success) {
+		throw data({ error: "Invalid request" }, { status: 400 });
+	}
+	return lookupFoodBarcode(env, parsed.data.barcode);
+}
+
+export async function postProposeFoodLog(
+	request: Request,
+	env: Env,
+	principal: NutritionPrincipal,
+	flags: NutritionFlagContext,
+) {
+	const parsed = ProposeFoodLogSchema.safeParse(await readBody(request));
+	if (!parsed.success) {
+		throw data({ error: "Invalid request" }, { status: 400 });
+	}
+	const operationKey = resolveHttpOperationKey(
+		request.headers,
+		parsed.data.operationKey,
+	);
+	return proposeFoodLog(env, principal, flags, {
 		...parsed.data,
 		operationKey,
 	});

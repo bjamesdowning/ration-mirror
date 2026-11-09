@@ -83,3 +83,81 @@ export async function assertNutritionSavedFood(
 		"Saved foods are unavailable.",
 	);
 }
+
+async function isNutritionChildEnabled(
+	env: Env,
+	context: FlagshipEvaluationContext,
+	flag: "nutrition-barcode-diary" | "nutrition-photo-log",
+): Promise<boolean> {
+	if (!nutritionFastLogClientAllowed(context)) return false;
+	const [parent, child] = await Promise.all([
+		isFeatureEnabled(env, "nutrition-fast-log", context),
+		isFeatureEnabled(env, flag, context),
+	]);
+	return parent && child;
+}
+
+async function assertNutritionChild(
+	env: Env,
+	context: FlagshipEvaluationContext,
+	flag: "nutrition-barcode-diary" | "nutrition-photo-log",
+	unavailable: string,
+): Promise<void> {
+	if (!nutritionFastLogClientAllowed(context)) {
+		throw data(
+			{
+				error: "Personal food log requires iOS 1.6 or later.",
+				code: FEATURE_DISABLED_CODE,
+			},
+			{ status: 403 },
+		);
+	}
+	if (!(await isFeatureEnabled(env, "nutrition-fast-log", context))) {
+		throw data(
+			{
+				error: "Personal food log is unavailable.",
+				code: FEATURE_DISABLED_CODE,
+			},
+			{ status: 403 },
+		);
+	}
+	await assertFeatureEnabled(env, flag, context, unavailable);
+}
+
+export function isNutritionBarcodeDiaryEnabled(
+	env: Env,
+	context: FlagshipEvaluationContext,
+): Promise<boolean> {
+	return isNutritionChildEnabled(env, context, "nutrition-barcode-diary");
+}
+
+export function assertNutritionBarcodeDiary(
+	env: Env,
+	context: FlagshipEvaluationContext,
+): Promise<void> {
+	return assertNutritionChild(
+		env,
+		context,
+		"nutrition-barcode-diary",
+		"Barcode food log is unavailable.",
+	);
+}
+
+export function isNutritionPhotoLogEnabled(
+	env: Env,
+	context: FlagshipEvaluationContext,
+): Promise<boolean> {
+	return isNutritionChildEnabled(env, context, "nutrition-photo-log");
+}
+
+export function assertNutritionPhotoLog(
+	env: Env,
+	context: FlagshipEvaluationContext,
+): Promise<void> {
+	return assertNutritionChild(
+		env,
+		context,
+		"nutrition-photo-log",
+		"Photo food log is unavailable.",
+	);
+}

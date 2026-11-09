@@ -5,7 +5,9 @@ import {
 	writeUserSettings,
 } from "~/lib/auth.server";
 import { handleApiError } from "~/lib/error-handler";
+import { buildMobileFlagContext } from "~/lib/feature-flags/context.server";
 import { requireMobileActiveGroup } from "~/lib/mobile/auth.server";
+import { assertNutritionFastLog } from "~/lib/nutrition/fast-log-flag.server";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import {
 	MobileSettingsPatchSchema,
@@ -45,6 +47,15 @@ export async function action({ request, context }: Route.ActionArgs) {
 
 		const body = await request.json();
 		const patch = MobileSettingsPatchSchema.parse(body);
+
+		if (patch.diaryLayout !== undefined) {
+			const flagContext = buildMobileFlagContext(
+				request,
+				context.cloudflare.env,
+				{ user: { id: userId } },
+			);
+			await assertNutritionFastLog(context.cloudflare.env, flagContext);
+		}
 
 		if (patch.restartOnboarding) {
 			const db = context.cloudflare.env.DB;

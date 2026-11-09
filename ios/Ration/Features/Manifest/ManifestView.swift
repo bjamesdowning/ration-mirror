@@ -494,7 +494,7 @@ struct ManifestView: View {
             }
 
             // Personal diary (incl. cross-kitchen rows) — independent of planned meals today.
-            let intakeRows: [(id: String, name: String, organizationName: String?, intake: ManifestPersonalIntake, personalLog: Bool, loggedAmount: Double?, loggedUnit: String?, occurredAt: Date)] = {
+            let intakeRows: [(id: String, name: String, organizationName: String?, intake: ManifestPersonalIntake, personalLog: Bool, loggedAmount: Double?, loggedUnit: String?, occurredAt: Date, slotType: String?)] = {
                 let diary = (manifest.dayIntakeRows ?? []).filter { $0.manifestDate == model.selectedDay }
                 if !diary.isEmpty {
                     return diary.map { row in
@@ -516,24 +516,59 @@ struct ManifestView: View {
                             row.personalLog == true,
                             row.loggedAmount,
                             row.loggedUnit,
-                            when
+                            when,
+                            row.slotType
                         )
                     }
                 }
-                return dayEntries.compactMap { entry -> (id: String, name: String, organizationName: String?, intake: ManifestPersonalIntake, personalLog: Bool, loggedAmount: Double?, loggedUnit: String?, occurredAt: Date)? in
+                return dayEntries.compactMap { entry -> (id: String, name: String, organizationName: String?, intake: ManifestPersonalIntake, personalLog: Bool, loggedAmount: Double?, loggedUnit: String?, occurredAt: Date, slotType: String?)? in
                     guard let intake = entry.personalIntake else { return nil }
-                    return (entry.id, entry.mealName, nil, intake, false, intake.loggedAmount, intake.loggedUnit?.rawValue, intake.occurredAt)
+                    return (entry.id, entry.mealName, nil, intake, false, intake.loggedAmount, intake.loggedUnit?.rawValue, intake.occurredAt, entry.slotType)
                 }
             }()
+            let diaryGroups = DiaryLayout.present(
+                rows: intakeRows,
+                controlVisible: fuelCapture,
+                layout: DiaryLayoutMode.normalize(env.launch.userSettings?.diaryLayout),
+                id: { $0.id },
+                slot: { $0.slotType },
+                time: { $0.occurredAt }
+            )
             if !intakeRows.isEmpty || fuelCapture {
                 Section {
+                    if fuelCapture {
+                        Picker(
+                            "Diary layout",
+                            selection: Binding(
+                                get: {
+                                    DiaryLayoutMode.normalize(env.launch.userSettings?.diaryLayout)
+                                },
+                                set: { mode in
+                                    Task { await setDiaryLayout(mode) }
+                                }
+                            )
+                        ) {
+                            Text("Timeline").tag(DiaryLayoutMode.timeline)
+                            Text("Slots").tag(DiaryLayoutMode.slots)
+                        }
+                        .pickerStyle(.segmented)
+                        .accessibilityLabel("Diary layout")
+                    }
                     if intakeRows.isEmpty {
                         Button("Log to Fuel") {
                             fuelExisting = nil
                             showFuelLog = true
                         }
                     }
-                    ForEach(intakeRows, id: \.id) { row in
+                    ForEach(diaryGroups) { group in
+                        if let label = group.label {
+                            Text(label)
+                                .rationCaption()
+                                .textCase(.uppercase)
+                                .foregroundStyle(Theme.muted)
+                                .accessibilityAddTraits(.isHeader)
+                        }
+                        ForEach(group.rows, id: \.id) { row in
                         let line = VStack(alignment: .leading, spacing: 4) {
                             HStack(alignment: .firstTextBaseline, spacing: 6) {
                                 Text(row.name)
@@ -589,6 +624,7 @@ struct ManifestView: View {
                             line
                         }
                     }
+                    }
                 } header: {
                     Text("Intake log")
                         .rationCaption()
@@ -602,6 +638,15 @@ struct ManifestView: View {
         .scrollDismissesKeyboard(.interactively)
         .copilotDockScrollMargins()
         .copilotScrollTracked(tab: .manifest, isActive: isTabActive)
+    }
+
+    private func setDiaryLayout(_ mode: DiaryLayoutMode) async {
+        do {
+            let response = try await env.api.patchSettings(SettingsPatch(diaryLayout: mode.rawValue))
+            env.launch.updateUserSettings(response.settings)
+        } catch {
+            // The picker reads the stored value, so a failed write stays on the previous layout.
+        }
     }
 
     /// Cook — deducts Cargo and marks the entry prepared.

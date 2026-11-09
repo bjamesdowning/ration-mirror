@@ -1,5 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import { getUserSettings, patchUserSettings } from "../../auth.server";
 import {
 	logDiaryFood,
 	quoteFoodLog,
@@ -7,6 +8,7 @@ import {
 	updateDiaryFood,
 	voidDiaryFood,
 } from "../../nutrition/diary.server";
+import { normalizeDiaryLayout } from "../../nutrition/diary-layout";
 import { isNutritionFastLogEnabled } from "../../nutrition/fast-log-flag.server";
 import {
 	DiaryFoodWriteSchema,
@@ -288,6 +290,36 @@ export function createDiaryToolDefs(env: McpToolsEnv) {
 				return ok("save_diary_food_to_kitchen", result, {
 					outcome: result.replayed ? "replayed" : "committed",
 					operationId: result.operationId,
+				});
+			},
+		}),
+		defineSharedTool({
+			name: "set_diary_layout",
+			description:
+				"Set how this person sees their own day list: timeline (default, ordered by time) or slots (breakfast, lunch, dinner, snack; a row with no slot stays in Other). Person setting only. Does not change another household member, Cargo, or the plan. Requires approval. Requires nutrition-fast-log. iOS below 1.6.0 stays disabled.",
+			inputSchema: z.object({
+				layout: z.enum(["timeline", "slots"]),
+			}),
+			scopes: ["mcp:preferences:write"],
+			rateLimitCategory: "mcp_write",
+			audit: true,
+			needsApproval: true,
+			idempotentHint: true,
+			handler: async (ctx, args) => {
+				const flagContext = resolveAgentFlagContext(env, ctx);
+				if (!(await isNutritionFastLogEnabled(env, flagContext))) {
+					return featureDisabled(
+						"set_diary_layout",
+						"Personal food log is unavailable.",
+						"Enable nutrition-fast-log. iOS clients below 1.6.0 stay disabled.",
+					);
+				}
+				await patchUserSettings(env.DB, ctx.userId, {
+					diaryLayout: args.layout,
+				});
+				const settings = await getUserSettings(env.DB, ctx.userId);
+				return ok("set_diary_layout", {
+					diaryLayout: normalizeDiaryLayout(settings.diaryLayout),
 				});
 			},
 		}),

@@ -63,6 +63,7 @@ enum CopilotToolLabels {
         "get_billing_summary": LabelSet(running: "Loading billing summary…", done: "Loaded billing summary", error: "Billing lookup failed"),
         "get_user_preferences": LabelSet(running: "Loading preferences…", done: "Loaded preferences", error: "Could not load preferences"),
         "update_user_preferences": LabelSet(running: "Updating preferences…", done: "Updated preferences", error: "Could not update preferences"),
+        "set_diary_layout": LabelSet(running: "Updating day layout…", done: "Updated day layout", error: "Could not update day layout"),
         "get_nutrition_summary": LabelSet(running: "Loading nutrition summary…", done: "Loaded nutrition summary", error: "Could not load nutrition summary"),
         "set_nutrition_goal": LabelSet(running: "Saving nutrition goal…", done: "Saved nutrition goal", error: "Could not save nutrition goal"),
         "clear_nutrition_goal": LabelSet(running: "Clearing nutrition goal…", done: "Cleared nutrition goal", error: "Could not clear nutrition goal"),

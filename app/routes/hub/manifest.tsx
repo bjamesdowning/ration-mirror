@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+	data,
 	useFetcher,
 	useNavigate,
 	useRevalidator,
@@ -40,6 +41,7 @@ import { useToast } from "~/hooks/useToast";
 import { parseAllergens } from "~/lib/allergens";
 import {
 	getUserSettings,
+	patchUserSettings,
 	requireActiveGroup,
 	writeUserSettings,
 } from "~/lib/auth.server";
@@ -63,6 +65,8 @@ import { getExcludedManifestDates } from "~/lib/manifest-supply.server";
 import { checkMealReadiness } from "~/lib/matching.server";
 import { getNutritionConsentStatus } from "~/lib/nutrition/consent.server";
 import { aggregateManifestDayNutrition } from "~/lib/nutrition/day-totals";
+import { normalizeDiaryLayout } from "~/lib/nutrition/diary-layout";
+import { isNutritionFastLogEnabled } from "~/lib/nutrition/fast-log-flag.server";
 import { toManifestDayIntake } from "~/lib/nutrition/fuel-capture";
 import { goalTargetsFromRow } from "~/lib/nutrition/goal-progress";
 import { getActiveNutritionGoal } from "~/lib/nutrition/persist.server";
@@ -312,6 +316,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		goalTargets,
 		dayIntakeRows,
 		intakeConsentGranted,
+		diaryLayout: normalizeDiaryLayout(settings.diaryLayout),
 	};
 }
 
@@ -357,6 +362,24 @@ export async function action({ request, context }: Route.ActionArgs) {
 		return { success: true };
 	}
 
+	if (intent === "update-diary-layout") {
+		const env = context.cloudflare.env;
+		const layout = formData.get("diaryLayout");
+		if (layout !== "timeline" && layout !== "slots") return { success: false };
+		const flagContext = buildWebFlagContext(request, env, { user });
+		if (!(await isNutritionFastLogEnabled(env, flagContext))) {
+			throw data(
+				{
+					error: "Personal food log is unavailable.",
+					code: "FEATURE_DISABLED",
+				},
+				{ status: 403 },
+			);
+		}
+		await patchUserSettings(env.DB, user.id, { diaryLayout: layout });
+		return { success: true };
+	}
+
 	return null;
 }
 
@@ -390,6 +413,7 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 		goalTargets = null,
 		dayIntakeRows = [],
 		intakeConsentGranted = false,
+		diaryLayout: loaderDiaryLayout = "timeline",
 	} = loaderData;
 
 	const supplyToggleFetcher = useFetcher<{
@@ -541,6 +565,18 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 	const nutritionIntakeNotesFlag =
 		rootData?.clientFlags?.nutritionIntakeNotes === true;
 	const fuelCapture = rootData?.clientFlags?.nutritionFastLog === true;
+	const diaryLayoutFetcher = useFetcher();
+	const submittedDiaryLayout = diaryLayoutFetcher.formData?.get("diaryLayout");
+	const diaryLayout =
+		submittedDiaryLayout === "timeline" || submittedDiaryLayout === "slots"
+			? submittedDiaryLayout
+			: loaderDiaryLayout;
+	function setDiaryLayout(layout: "timeline" | "slots") {
+		diaryLayoutFetcher.submit(
+			{ intent: "update-diary-layout", diaryLayout: layout },
+			{ method: "post" },
+		);
+	}
 	const [showFuelLog, setShowFuelLog] = useState(false);
 	const [editIntake, setEditIntake] = useState<DayIntakeRow | null>(null);
 	const showDayNutritionTotals = nutritionManifestFlag && nutritionGoalsFlag;
@@ -1397,6 +1433,8 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 								goalTargets={showDayNutritionTotals ? goalTargets : null}
 								intakeRows={nutritionManifestFlag ? activeDayIntakes : []}
 								fuelCapture={fuelCapture}
+								diaryLayout={diaryLayout}
+								onDiaryLayout={fuelCapture ? setDiaryLayout : undefined}
 								onLogToFuel={() => {
 									setEditIntake(null);
 									setShowFuelLog(true);
@@ -1424,6 +1462,8 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 								onAdd={handleAdd}
 								logOnly
 								fuelCapture
+								diaryLayout={diaryLayout}
+								onDiaryLayout={setDiaryLayout}
 								intakeRows={dayIntakeRows.filter(
 									(row) => row.manifestDate === selectedDay,
 								)}

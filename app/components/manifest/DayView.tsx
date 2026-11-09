@@ -10,6 +10,10 @@ import {
 	selectGoalProgressLines,
 	type UserGoalTargets,
 } from "~/lib/nutrition/day-totals";
+import {
+	type DiaryLayout,
+	presentDiaryRows,
+} from "~/lib/nutrition/diary-layout";
 import type { SlotType } from "~/lib/schemas/manifest";
 import { SLOT_LABELS, SLOT_TYPES } from "~/lib/schemas/manifest";
 import { ManifestDaySupplyToggle } from "./ManifestDaySupplyToggle";
@@ -60,6 +64,9 @@ interface DayViewProps {
 	onEditIntake?: (row: DayIntakeRow) => void;
 	/** Intake log only, without meal slots. */
 	logOnly?: boolean;
+	/** nutrition-fast-log. Absent or timeline is the timed list. */
+	diaryLayout?: DiaryLayout;
+	onDiaryLayout?: (layout: DiaryLayout) => void;
 	/** split mode — label for the Cook button (e.g. "Cook"). */
 	consumeLabel?: string;
 	/** split mode — opens the private "Log my serving" dialog. */
@@ -107,6 +114,8 @@ export function DayView({
 	onLogToFuel,
 	onEditIntake,
 	logOnly = false,
+	diaryLayout = "timeline",
+	onDiaryLayout,
 	consumeLabel,
 	onEat,
 	onEditServing,
@@ -194,9 +203,31 @@ export function DayView({
 
 			{(dayIntakes.length > 0 || fuelCapture) && (
 				<div className="rounded-xl border border-platinum bg-platinum/30 px-3 py-2 space-y-1.5">
-					<p className="text-[10px] font-mono font-semibold uppercase tracking-widest text-muted">
-						Intake log
-					</p>
+					<div className="flex items-center justify-between gap-2">
+						<p className="text-[10px] font-mono font-semibold uppercase tracking-widest text-muted">
+							Intake log
+						</p>
+						{fuelCapture && onDiaryLayout ? (
+							<fieldset className="flex gap-1 border-0 p-0">
+								<legend className="sr-only">Diary layout</legend>
+								{(["timeline", "slots"] as const).map((layout) => (
+									<button
+										key={layout}
+										type="button"
+										aria-pressed={diaryLayout === layout}
+										onClick={() => onDiaryLayout(layout)}
+										className={`rounded-full px-2 py-0.5 text-[10px] font-mono uppercase tracking-widest ${
+											diaryLayout === layout
+												? "bg-carbon text-ceramic"
+												: "text-muted"
+										}`}
+									>
+										{layout === "timeline" ? "Timeline" : "Slots"}
+									</button>
+								))}
+							</fieldset>
+						) : null}
+					</div>
 					{dayIntakes.length === 0 ? (
 						<button
 							type="button"
@@ -206,63 +237,79 @@ export function DayView({
 							Log to Fuel
 						</button>
 					) : (
-						<ul className="space-y-1">
-							{dayIntakes.map((row) => {
-								const slotLabel =
-									row.slotType && SLOT_TYPES.includes(row.slotType as SlotType)
-										? SLOT_LABELS[row.slotType as SlotType]
-										: null;
-								const servingsLabel =
-									row.servings % 1 === 0
-										? String(row.servings)
-										: row.servings.toFixed(1);
-								const timeLabel =
-									fuelCapture && row.occurredAt
-										? fuelTimeLabel(row.occurredAt)
-										: "";
-								const editable =
-									fuelCapture && row.personalLog === true && onEditIntake;
-								const body = (
-									<>
-										<span className="text-carbon truncate min-w-0">
-											{row.mealName ?? "Meal"}
-											{row.organizationName ? (
-												<span className="text-muted">
-													{" "}
-													· {row.organizationName}
-												</span>
-											) : null}
-											{slotLabel ? (
-												<span className="text-muted"> · {slotLabel}</span>
-											) : null}
-										</span>
-										<span className="text-muted whitespace-nowrap">
-											{timeLabel ? `${timeLabel} · ` : ""}
-											{Math.round(row.energyKcal).toLocaleString("en-US")} kcal
-											{" · "}
-											{servingsLabel} sv
-										</span>
-									</>
-								);
-								return (
-									<li key={row.id} className="text-xs font-mono">
-										{editable ? (
-											<button
-												type="button"
-												onClick={() => onEditIntake(row)}
-												className="flex w-full items-baseline justify-between gap-3 text-left"
-											>
-												{body}
-											</button>
-										) : (
-											<div className="flex items-baseline justify-between gap-3">
-												{body}
-											</div>
-										)}
-									</li>
-								);
-							})}
-						</ul>
+						<div className="space-y-2">
+							{presentDiaryRows(dayIntakes, {
+								controlVisible: fuelCapture,
+								layout: diaryLayout,
+							}).map((group) => (
+								<div key={group.id} className="space-y-1">
+									{group.label ? (
+										<p className="text-[10px] font-mono uppercase tracking-widest text-muted">
+											{group.label}
+										</p>
+									) : null}
+									<ul className="space-y-1">
+										{group.rows.map((row) => {
+											const slotLabel =
+												row.slotType &&
+												SLOT_TYPES.includes(row.slotType as SlotType)
+													? SLOT_LABELS[row.slotType as SlotType]
+													: null;
+											const servingsLabel =
+												row.servings % 1 === 0
+													? String(row.servings)
+													: row.servings.toFixed(1);
+											const timeLabel =
+												fuelCapture && row.occurredAt
+													? fuelTimeLabel(row.occurredAt)
+													: "";
+											const editable =
+												fuelCapture && row.personalLog === true && onEditIntake;
+											const body = (
+												<>
+													<span className="text-carbon truncate min-w-0">
+														{row.mealName ?? "Meal"}
+														{row.organizationName ? (
+															<span className="text-muted">
+																{" "}
+																· {row.organizationName}
+															</span>
+														) : null}
+														{slotLabel ? (
+															<span className="text-muted"> · {slotLabel}</span>
+														) : null}
+													</span>
+													<span className="text-muted whitespace-nowrap">
+														{timeLabel ? `${timeLabel} · ` : ""}
+														{Math.round(row.energyKcal).toLocaleString("en-US")}{" "}
+														kcal
+														{" · "}
+														{servingsLabel} sv
+													</span>
+												</>
+											);
+											return (
+												<li key={row.id} className="text-xs font-mono">
+													{editable ? (
+														<button
+															type="button"
+															onClick={() => onEditIntake(row)}
+															className="flex w-full items-baseline justify-between gap-3 text-left"
+														>
+															{body}
+														</button>
+													) : (
+														<div className="flex items-baseline justify-between gap-3">
+															{body}
+														</div>
+													)}
+												</li>
+											);
+										})}
+									</ul>
+								</div>
+							))}
+						</div>
 					)}
 				</div>
 			)}

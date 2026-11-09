@@ -22,4 +22,8 @@ final class SettingsSessionViewModel {
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
         }
     }
+
+    func applySettings(_ settings: UserSettings) {
+        self.settings = settings
+    }
 }

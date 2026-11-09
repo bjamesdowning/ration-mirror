@@ -498,9 +498,14 @@ async function loadOperation(
 	if (
 		operation &&
 		operation.organizationId !== principal.organizationId &&
-		["log_manifest_intakes", "clear_manifest_intakes"].includes(
-			operation.operationType,
-		)
+		[
+			"log_manifest_intakes",
+			"clear_manifest_intakes",
+			"log_diary_food",
+			"update_diary_food",
+			"void_diary_food",
+			"save_diary_food_to_kitchen",
+		].includes(operation.operationType)
 	) {
 		// Intake ops are org-bound; reusing the key in another household is a conflict.
 		throw new NutritionOperationConflictError();
@@ -1160,6 +1165,13 @@ export async function logManifestIntakes(
 				notes,
 				loggedAmount: item.loggedAmount,
 				loggedUnit: item.loggedUnit,
+				healthSyncId: null,
+				healthSyncVersion: null,
+				compositionSource: null,
+				compositionConfirmedAt: null,
+				fdcId: null,
+				barcode: null,
+				savedFoodId: null,
 				createdAt: committedAt,
 			};
 			newRows.push(row);

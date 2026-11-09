@@ -22,7 +22,7 @@ Flags off: Manifest nutrition chrome is unchanged (no preference strip).
 
 ## Manifest Eat (plate-up)
 
-**Legacy (Cook/Log split off):** On Manifest, **Eat** / consume can open a **plate-up** step when Manifest nutrition is on — choose servings, optionally log nutrition, and deduct pantry stock as usual.
+**Legacy Consume:** Marking Manifest entries consumed deducts pantry stock. It does **not** write personal intake. `logNutrition` and `portions` on that call are ignored. Personal intake is **Log my serving** on a prepared entry when Cook/Log split is on, or Quick Eat. There is no plate-up on Consume.
 
 **Cook / Log split (when enabled for your account):**
 

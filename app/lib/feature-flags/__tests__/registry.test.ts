@@ -26,6 +26,7 @@ describe("FLAG_REGISTRY validation", () => {
 			"app-review-login",
 			"apple-web-login",
 			"nutrition-async-recompute",
+			"nutrition-fast-log",
 		]);
 	});
 });

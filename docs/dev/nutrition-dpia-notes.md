@@ -2,6 +2,8 @@
 
 Short processing notes for personal nutrition goals and Manifest Eat intake (GDPR Art. 9 special-category risk). Not a substitute for a formal DPIA when broadening rollout beyond dogfood.
 
+`nutrition-fast-log` (default off) can write a personal intake row with a null plan entry. It uses the existing intake-consent check and does not change the consent sentence. Do not enable it broadly until counsel accepts that sentence or a new statement version.
+
 ## Data processed
 
 | Data | Storage | Purpose | Legal basis |

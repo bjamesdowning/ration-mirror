@@ -172,7 +172,7 @@ All tools are scoped to the authorized household. **MCP calls do not consume Rat
 | `update_meal_plan_entry` | `mcp:manifest:write` | Patch date, slot, servings, or notes. Cannot edit consumed entries. |
 | `remove_meal_plan_entry` | `mcp:manifest:write` | Remove a scheduled plan entry. |
 | `cook_manifest_entries` | `mcp:manifest:write` + `mcp:inventory:write` | Shared Cook (Cargo + Prepared). Requires `nutrition-cook-log-split`. Never logs intake. |
-| `consume_manifest_entries` | `mcp:manifest:write` + `mcp:inventory:write` | Legacy combined consume. Refused when cook-log-split is on — use cook then `log_manifest_intake`. Requires **both** scopes. |
+| `consume_manifest_entries` | `mcp:manifest:write` + `mcp:inventory:write` | Legacy combined consume. Refused when cook-log-split is on — use cook then `log_manifest_intake`. Does not write personal intake (`logNutrition` is ignored). Requires **both** scopes. |
 
 ### Supply (shopping list)
 

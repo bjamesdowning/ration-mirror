@@ -210,7 +210,7 @@ export function buildNutritionCapabilityNotes(
 		notes.push(
 			flags.cookLogSplit
 				? "nutrition-manifest: log_manifest_intake / clear_manifest_intake for private plate-up; list_nutrition_intakes + get_nutrition_summary for history."
-				: "nutrition-manifest: legacy consume_manifest_entries may log intake only when logNutrition:true (opt-in for agents).",
+				: "nutrition-manifest: legacy consume_manifest_entries deducts Cargo and does not log intake. logNutrition is ignored. Personal intake uses log_manifest_intake when cook-log-split is on.",
 		);
 	}
 	if (flags.goals) {

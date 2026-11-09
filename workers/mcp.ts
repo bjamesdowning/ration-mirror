@@ -65,14 +65,14 @@ function assertCompatibleMcpServer(
 	}
 }
 
-function createServer(env: Cloudflare.Env & { __mcp: McpToolContext }) {
+async function createServer(env: Cloudflare.Env & { __mcp: McpToolContext }) {
 	const server = new McpServer({
 		name: "Ration MCP",
 		version: MCP_SERVER_VERSION,
 	});
 
 	assertCompatibleMcpServer(server);
-	registerTools(server, env);
+	await registerTools(server, env);
 
 	return server;
 }
@@ -166,7 +166,7 @@ export default {
 					};
 
 					// Create a new strict server instance per request (CVE requirement)
-					const server = createServer(envWithCtx);
+					const server = await createServer(envWithCtx);
 
 					// Standard stateless MCP handler. Cast needed: agents bundles its own
 					// @modelcontextprotocol/sdk; our McpServer is from the project's SDK —

@@ -44,7 +44,7 @@ Dashboard (Flagship) → propagated config → env.FLAGS binding → flags.serve
 
 ### Shipped on iOS (`iosAlwaysOn`)
 
-iOS 1.5.x ships every flagged iOS feature enabled. Entries marked `iosAlwaysOn` are on for iOS ≥ `IOS_FEATURE_FLOOR`; Flagship still decides web, MCP, and iOS builds below the floor. Copilot tools inherit the Ask client's identity (`originating-client.server.ts`), so Ask from iOS ≥ 1.5.0 gets the same answer as the iOS app. iOS builds below `IOS_MIN_SUPPORTED_VERSION` (`wrangler.jsonc`) get **426** `upgrade_required` from `workers/app.ts` on non-exempt mobile routes (see README → *Minimum iOS version*). Only `app-review-login`, `apple-web-login`, and `nutrition-async-recompute` are not `iosAlwaysOn`; `registry.test.ts` pins that list.
+iOS 1.5.x ships every flagged iOS feature enabled. Entries marked `iosAlwaysOn` are on for iOS ≥ `IOS_FEATURE_FLOOR`; Flagship still decides web, MCP, and iOS builds below the floor. Copilot tools inherit the Ask client's identity (`originating-client.server.ts`), so Ask from iOS ≥ 1.5.0 gets the same answer as the iOS app. iOS builds below `IOS_MIN_SUPPORTED_VERSION` (`wrangler.jsonc`) get **426** `upgrade_required` from `workers/app.ts` on non-exempt mobile routes (see README → *Minimum iOS version*). Only `app-review-login`, `apple-web-login`, `nutrition-async-recompute`, and `nutrition-fast-log` are not `iosAlwaysOn`; `registry.test.ts` pins that list. `nutrition-fast-log` also fails closed for iOS clients below `1.6.0`.
 
 When a new iOS feature needs a flag, leave `iosAlwaysOn` off until the build that ships it is the floor, or gate it on a higher client version in the route.
 
@@ -149,6 +149,7 @@ All eight are `iosAlwaysOn`: on for iOS ≥ 1.5.0, Flagship-controlled elsewhere
 | `nutrition-async-recompute` | _(not clientVisible)_ | Queue stub for async nutrition recompute |
 | `nutrition-intake-notes` | `nutritionIntakeNotes` | Optional private Eat notes (≤280) on intake rows |
 | `nutrition-cross-org-diary` | `nutritionCrossOrgDiary` | Personal intake summary/history aggregates across kitchens (user-global diary) |
+| `nutrition-fast-log` | `nutritionFastLog` | Personal food log API (null plan entry). Default off. Not `iosAlwaysOn`. iOS below 1.6.0 fails closed |
 
 ## Supply list library
 

@@ -421,6 +421,13 @@
       "when": 1792279571364,
       "tag": "0059_needy_starhawk",
       "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "6",
+      "when": 1794249673034,
+      "tag": "0060_spotty_garia",
+      "breakpoints": true
     }
   ]
 }

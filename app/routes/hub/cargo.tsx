@@ -1,5 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useActionData, useFetcher, useRouteLoaderData } from "react-router";
+import {
+	useActionData,
+	useFetcher,
+	useRevalidator,
+	useRouteLoaderData,
+} from "react-router";
 import { z } from "zod";
 import {
 	CsvImportButton,
@@ -19,6 +24,10 @@ import {
 	PlusIcon,
 	SearchIcon,
 } from "~/components/icons/PageIcons";
+import {
+	FuelCaptureChoiceDialog,
+	LogToFuelDialog,
+} from "~/components/nutrition/FuelCaptureDialogs";
 import {
 	CameraInput,
 	type CameraInputHandle,
@@ -480,10 +489,19 @@ export default function CargoPage({ loaderData }: Route.ComponentProps) {
 		};
 	} | null;
 	const rootData = useRouteLoaderData("root") as
-		| { clientFlags?: { aiScanReceipt?: boolean } }
+		| {
+				clientFlags?: {
+					aiScanReceipt?: boolean;
+					nutritionFastLog?: boolean;
+				};
+		  }
 		| undefined;
+	const revalidator = useRevalidator();
 	const aiScanReceipt = rootData?.clientFlags?.aiScanReceipt === true;
+	const fuelCapture = rootData?.clientFlags?.nutritionFastLog === true;
 	const [showScanIntroModal, setShowScanIntroModal] = useState(false);
+	const [showCaptureChoice, setShowCaptureChoice] = useState(false);
+	const [showFuelLog, setShowFuelLog] = useState(false);
 	const cameraRef = useRef<CameraInputHandle>(null);
 	const importRef = useRef<CsvImportButtonHandle>(null);
 	const {
@@ -558,7 +576,12 @@ export default function CargoPage({ loaderData }: Route.ComponentProps) {
 		}
 	}, [actionData]);
 
-	// FAB actions for mobile
+	// FAB actions for mobile. One scan control: the flag opens the choice sheet.
+	function openCapture() {
+		if (fuelCapture) setShowCaptureChoice(true);
+		else setShowScanIntroModal(true);
+	}
+
 	const fabActions: FloatingAction[] = [
 		{
 			id: showQuickAdd ? "cancel" : "add",
@@ -574,7 +597,7 @@ export default function CargoPage({ loaderData }: Route.ComponentProps) {
 						icon: <CameraIcon />,
 						label: "Scan",
 						primary: true,
-						onClick: () => setShowScanIntroModal(true),
+						onClick: () => openCapture(),
 					},
 				]
 			: []),
@@ -714,7 +737,7 @@ export default function CargoPage({ loaderData }: Route.ComponentProps) {
 							aiScanReceipt ? (
 								<button
 									type="button"
-									onClick={() => setShowScanIntroModal(true)}
+									onClick={openCapture}
 									className="flex items-center gap-2 px-4 py-3 bg-hyper-green text-on-hyper-green font-semibold rounded-lg shadow-glow-sm hover:shadow-glow transition-all active:scale-95"
 								>
 									<CameraIcon className="w-4 h-4" />
@@ -781,7 +804,7 @@ export default function CargoPage({ loaderData }: Route.ComponentProps) {
 								{aiScanReceipt && (
 									<button
 										type="button"
-										onClick={() => setShowScanIntroModal(true)}
+										onClick={openCapture}
 										className="px-6 py-3 bg-hyper-green text-on-hyper-green font-bold rounded-xl shadow-glow-sm hover:shadow-glow transition-all"
 									>
 										Scan items
@@ -844,6 +867,23 @@ export default function CargoPage({ loaderData }: Route.ComponentProps) {
 			</div>
 			{/* Floating Action Bar (mobile only) */}
 			<FloatingActionBar actions={fabActions} hidden={isFilterSheetOpen} />
+			<FuelCaptureChoiceDialog
+				open={showCaptureChoice}
+				onClose={() => setShowCaptureChoice(false)}
+				onAddToCargo={() => {
+					setShowCaptureChoice(false);
+					setShowScanIntroModal(true);
+				}}
+				onLogToFuel={() => {
+					setShowCaptureChoice(false);
+					setShowFuelLog(true);
+				}}
+			/>
+			<LogToFuelDialog
+				open={showFuelLog}
+				onClose={() => setShowFuelLog(false)}
+				onSaved={() => revalidator.revalidate()}
+			/>
 		</>
 	);
 }

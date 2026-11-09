@@ -348,6 +348,7 @@ export function serializeNutritionIntake(
 		fatG: row.fatG,
 		mealId: row.mealId,
 		mealName: row.mealName,
+		entryId: row.entryId,
 		organizationId: row.organizationId,
 		organizationName: row.organizationName,
 		verified: row.verified === 1,

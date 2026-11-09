@@ -724,22 +724,48 @@ struct DailyFuelWidget: View {
     var size: String = "md"
     var filters: HubWidgetFilters?
     var onOpenGoals: (() -> Void)?
+    var opensDay: Bool = false
+    var onOpenDay: (() -> Void)?
 
     var body: some View {
-        Button {
-            onOpenGoals?()
-        } label: {
+        if opensDay {
             GlassCard {
                 VStack(alignment: .leading, spacing: 12) {
-                    HubWidgetHeader(title: "Daily Fuel", systemImage: "flame.fill", trailing: "Goals")
-                    content
-                    Text("Not medical advice. Goals and totals are planning aids only.")
-                        .rationCaption()
+                    HStack {
+                        Label("Daily Fuel", systemImage: "flame.fill")
+                        Spacer()
+                        Button("Goals") { onOpenGoals?() }
+                            .accessibilityLabel("Goals")
+                    }
+                    Button {
+                        onOpenDay?()
+                    } label: {
+                        VStack(alignment: .leading, spacing: 12) {
+                            content
+                            Text("Not medical advice. Goals and totals are planning aids only.")
+                                .rationCaption()
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Daily Fuel, open today's intake")
                 }
             }
+        } else {
+            Button {
+                onOpenGoals?()
+            } label: {
+                GlassCard {
+                    VStack(alignment: .leading, spacing: 12) {
+                        HubWidgetHeader(title: "Daily Fuel", systemImage: "flame.fill", trailing: "Goals")
+                        content
+                        Text("Not medical advice. Goals and totals are planning aids only.")
+                            .rationCaption()
+                    }
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Daily Fuel, open nutrition goals")
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Daily Fuel, open nutrition goals")
     }
 
     @ViewBuilder

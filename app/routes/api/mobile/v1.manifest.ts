@@ -17,6 +17,7 @@ import {
 } from "~/lib/manifest-wire.server";
 import { requireMobileActiveGroup } from "~/lib/mobile/auth.server";
 import { getNutritionConsentStatus } from "~/lib/nutrition/consent.server";
+import { toManifestDayIntake } from "~/lib/nutrition/fuel-capture";
 import {
 	attachPersonalIntakeToEntries,
 	getHistory,
@@ -145,19 +146,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 					),
 				]);
 				entries = withIntake;
-				dayIntakeRows = history.items.map((r) => ({
-					id: r.id,
-					manifestDate: r.manifestDate,
-					slotType: r.slotType,
-					servings: r.servings,
-					energyKcal: r.energyKcal,
-					proteinG: r.proteinG,
-					carbsG: r.carbsG,
-					fatG: r.fatG,
-					mealName: r.mealName,
-					organizationName: r.organizationName,
-					notes: r.notes,
-				}));
+				dayIntakeRows = history.items.map((r) => toManifestDayIntake(r));
 			}
 		}
 

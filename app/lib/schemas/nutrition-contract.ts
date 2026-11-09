@@ -141,6 +141,8 @@ export const NutritionIntakeDTOSchema = z.object({
 	loggedUnit: z.enum(["serving", "g", "oz"]).nullable().optional(),
 	mealId: z.string().nullable(),
 	mealName: z.string().nullable(),
+	/** Null on a personal log. Omitted by older readers. */
+	entryId: z.string().nullable().optional(),
 	organizationId: z.string().nullable().optional(),
 	organizationName: z.string().nullable().optional(),
 	verified: z.boolean(),

@@ -165,11 +165,46 @@ function WidgetShell({
 	title,
 	subtitle,
 	children,
+	bodyHref,
 }: {
 	title: string;
 	subtitle?: string;
 	children: ReactNode;
+	/** When set, the card body opens this href and Goals stays its own control. */
+	bodyHref?: string;
 }) {
+	if (bodyHref) {
+		return (
+			<div className="glass-panel rounded-xl p-6 h-full">
+				<div className="flex items-start justify-between mb-4 gap-2">
+					<div>
+						<Link
+							to={bodyHref}
+							className="text-label text-carbon dark:text-white font-bold"
+							aria-label="Daily Fuel, open today's intake"
+						>
+							{title}
+						</Link>
+						{subtitle ? (
+							<p className="text-xs text-muted mt-1">{subtitle}</p>
+						) : null}
+					</div>
+					<Link
+						to={NUTRITION_GOALS_HREF}
+						className="text-[10px] uppercase tracking-widest text-muted"
+					>
+						Goals
+					</Link>
+				</div>
+				<Link to={bodyHref} className="block">
+					{children}
+				</Link>
+				<p className="mt-4 text-[10px] text-muted">
+					Not medical advice. Goals and totals are planning aids only.
+				</p>
+			</div>
+		);
+	}
 	return (
 		<Link
 			to={NUTRITION_GOALS_HREF}
@@ -223,6 +258,30 @@ export function NutritionTodayWidget({ data, size, filters }: HubWidgetProps) {
 	const macros = nutrients.filter((n) => n !== primary).slice(0, 3);
 
 	if (!amounts) {
+		if (data.fuelCapture) {
+			return (
+				<div className="glass-panel rounded-xl p-6 h-full">
+					<div className="flex items-start justify-between mb-4 gap-2">
+						<Link
+							to="/hub/manifest"
+							className="text-label text-carbon dark:text-white font-bold"
+							aria-label="Daily Fuel, open today's intake"
+						>
+							Daily Fuel
+						</Link>
+						<Link
+							to={NUTRITION_GOALS_HREF}
+							className="text-[10px] uppercase tracking-widest text-muted"
+						>
+							Goals
+						</Link>
+					</div>
+					<p className="text-sm text-muted">
+						No intakes logged today. Tap to set or review your goals.
+					</p>
+				</div>
+			);
+		}
 		return (
 			<WidgetShell title="Daily Fuel" subtitle="Nutrition goals">
 				<p className="text-sm text-muted">
@@ -253,6 +312,7 @@ export function NutritionTodayWidget({ data, size, filters }: HubWidgetProps) {
 	return (
 		<WidgetShell
 			title="Daily Fuel"
+			bodyHref={data.fuelCapture ? "/hub/manifest" : undefined}
 			subtitle={
 				amounts.entryCount
 					? `${amounts.entryCount} logged`

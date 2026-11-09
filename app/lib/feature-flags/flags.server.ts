@@ -1,4 +1,5 @@
 import { isVersionAtLeast } from "~/lib/client-version";
+import { nutritionFastLogClientAllowed } from "~/lib/nutrition/fuel-capture";
 import type { FlagshipEvaluationContext } from "./context.server";
 import { FLAG_REGISTRY, type FlagKey, getClientFlagKey } from "./registry";
 
@@ -133,6 +134,13 @@ export async function getClientSafeFlags(
 			const entry = FLAG_REGISTRY[flag];
 			if (!entry?.clientVisible) return;
 			const clientKey = getClientFlagKey(flag, entry);
+			if (
+				flag === "nutrition-fast-log" &&
+				!nutritionFastLogClientAllowed(context)
+			) {
+				result[clientKey] = false;
+				return;
+			}
 			result[clientKey] = await isFeatureEnabled(env, flag, context);
 		}),
 	);

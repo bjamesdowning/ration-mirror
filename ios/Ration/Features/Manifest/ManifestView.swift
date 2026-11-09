@@ -23,6 +23,15 @@ struct ManifestView: View {
     @State private var prepareConfirmationMessage: String?
     @State private var showPrepareConfirmation = false
     @State private var pendingEatEntry: ManifestEntry?
+    @State private var showFuelLog = false
+    @State private var fuelExisting: LogToFuelExisting?
+
+    private var fuelCapture: Bool {
+        HubCapturePolicy.choiceVisible(
+            fastLogEnabled: env.session.clientFlags.isNutritionFastLogEnabled,
+            appVersion: AppMarketingVersion.current
+        )
+    }
 
     private var organizationId: String? {
         env.session.activeOrganizationId
@@ -155,6 +164,13 @@ struct ManifestView: View {
                     onRemove: entry.personalIntake != nil
                         ? { await handleClearServing(entry) }
                         : nil
+                )
+            }
+            .sheet(isPresented: $showFuelLog) {
+                LogToFuelSheet(
+                    existing: fuelExisting,
+                    onClose: { showFuelLog = false },
+                    onSaved: { Task { await reload() } }
                 )
             }
     }
@@ -478,11 +494,12 @@ struct ManifestView: View {
             }
 
             // Personal diary (incl. cross-kitchen rows) — independent of planned meals today.
-            let intakeRows: [(id: String, name: String, organizationName: String?, intake: ManifestPersonalIntake)] = {
+            let intakeRows: [(id: String, name: String, organizationName: String?, intake: ManifestPersonalIntake, personalLog: Bool, loggedAmount: Double?, loggedUnit: String?, occurredAt: Date)] = {
                 let diary = (manifest.dayIntakeRows ?? []).filter { $0.manifestDate == model.selectedDay }
                 if !diary.isEmpty {
                     return diary.map { row in
-                        (
+                        let when = FuelTime.date(from: row.occurredAt)
+                        return (
                             row.id,
                             row.mealName ?? "Meal",
                             row.organizationName,
@@ -493,21 +510,31 @@ struct ManifestView: View {
                                 proteinG: row.proteinG,
                                 carbsG: row.carbsG,
                                 fatG: row.fatG,
-                                occurredAt: Date(),
+                                occurredAt: when,
                                 notes: row.notes
-                            )
+                            ),
+                            row.personalLog == true,
+                            row.loggedAmount,
+                            row.loggedUnit,
+                            when
                         )
                     }
                 }
-                return dayEntries.compactMap { entry -> (id: String, name: String, organizationName: String?, intake: ManifestPersonalIntake)? in
+                return dayEntries.compactMap { entry -> (id: String, name: String, organizationName: String?, intake: ManifestPersonalIntake, personalLog: Bool, loggedAmount: Double?, loggedUnit: String?, occurredAt: Date)? in
                     guard let intake = entry.personalIntake else { return nil }
-                    return (entry.id, entry.mealName, nil, intake)
+                    return (entry.id, entry.mealName, nil, intake, false, intake.loggedAmount, intake.loggedUnit?.rawValue, intake.occurredAt)
                 }
             }()
-            if !intakeRows.isEmpty {
+            if !intakeRows.isEmpty || fuelCapture {
                 Section {
+                    if intakeRows.isEmpty {
+                        Button("Log to Fuel") {
+                            fuelExisting = nil
+                            showFuelLog = true
+                        }
+                    }
                     ForEach(intakeRows, id: \.id) { row in
-                        VStack(alignment: .leading, spacing: 4) {
+                        let line = VStack(alignment: .leading, spacing: 4) {
                             HStack(alignment: .firstTextBaseline, spacing: 6) {
                                 Text(row.name)
                                     .rationBody()
@@ -520,7 +547,8 @@ struct ManifestView: View {
                             }
                             Text(
                                 String(
-                                    format: "%.1f serving%@ · %.0f kcal · P %.0fg · C %.0fg · F %.0fg",
+                                    format: "%@%.1f serving%@ · %.0f kcal · P %.0fg · C %.0fg · F %.0fg",
+                                    fuelCapture ? "\(FuelTime.clock(row.occurredAt)) · " : "",
                                     row.intake.servings,
                                     row.intake.servings == 1 ? "" : "s",
                                     row.intake.energyKcal,
@@ -539,7 +567,27 @@ struct ManifestView: View {
                                     .lineLimit(2)
                             }
                         }
-                        .listRowBackground(Theme.surface)
+                        if fuelCapture && row.personalLog {
+                            Button {
+                                fuelExisting = LogToFuelExisting(
+                                    id: row.intake.id,
+                                    name: row.name,
+                                    amount: row.loggedAmount ?? row.intake.servings,
+                                    unit: row.loggedUnit ?? "serving",
+                                    energyKcal: row.intake.energyKcal,
+                                    proteinG: row.intake.proteinG,
+                                    carbsG: row.intake.carbsG,
+                                    fatG: row.intake.fatG,
+                                    occurredAt: row.occurredAt
+                                )
+                                showFuelLog = true
+                            } label: {
+                                line
+                            }
+                            .buttonStyle(.plain)
+                        } else {
+                            line
+                        }
                     }
                 } header: {
                     Text("Intake log")

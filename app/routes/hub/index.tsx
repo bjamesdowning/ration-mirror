@@ -23,6 +23,7 @@ import { getKitchenEvents, getKitchenStats } from "~/lib/kitchen-events.server";
 import { kitchenTodayISO, resolveKitchenTimeZone } from "~/lib/kitchen-time";
 import { getDistinctMealTags, getManifestPreview } from "~/lib/manifest.server";
 import { MOBILE_SUPPLY_ITEMS_SLICE } from "~/lib/mobile/hub.server";
+import { isNutritionFastLogEnabled } from "~/lib/nutrition/fast-log-flag.server";
 import { resolveNutritionCapabilities } from "~/lib/nutrition/feature-policy.server";
 import { loadHubNutritionData } from "~/lib/nutrition/hub-data.server";
 import {
@@ -199,6 +200,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		nutritionToday: nutritionPayload.nutritionToday,
 		nutritionTrends: nutritionPayload.nutritionTrends,
 		nutritionWidgetsEnabled,
+		fuelCapture: await isNutritionFastLogEnabled(env, flagContext),
 		kitchenTimeZone,
 	};
 }
@@ -243,6 +245,7 @@ export default function DashboardHub({ loaderData }: Route.ComponentProps) {
 		nutritionToday,
 		nutritionTrends,
 		nutritionWidgetsEnabled,
+		fuelCapture,
 	} = loaderData;
 
 	const [searchParams] = useSearchParams();
@@ -274,6 +277,7 @@ export default function DashboardHub({ loaderData }: Route.ComponentProps) {
 		flightRecorderActivity,
 		nutritionToday,
 		nutritionTrends,
+		fuelCapture,
 	};
 
 	useEffect(() => {

@@ -16,6 +16,15 @@ struct DashboardView: View {
     var onOpenManifest: () -> Void = {}
     var onOpenNutritionGoals: () -> Void = {}
     @State private var model = HubViewModel()
+    @State private var showCaptureChoice = false
+    @State private var showLogToFuel = false
+
+    private var fuelCapture: Bool {
+        HubCapturePolicy.choiceVisible(
+            fastLogEnabled: env.session.clientFlags.isNutritionFastLogEnabled,
+            appVersion: AppMarketingVersion.current
+        )
+    }
 
     private var organizationId: String? {
         env.session.activeOrganizationId
@@ -145,8 +154,26 @@ struct DashboardView: View {
                 systemImage: "camera.viewfinder",
                 accessibilityLabel: "Scan items",
                 isAI: true,
-                action: onScan
+                action: {
+                    if fuelCapture {
+                        showCaptureChoice = true
+                    } else {
+                        onScan()
+                    }
+                }
             )
+        }
+        .confirmationDialog("Capture", isPresented: $showCaptureChoice, titleVisibility: .visible) {
+            Button(HubCapturePolicy.addToCargo) { onScan() }
+            Button(HubCapturePolicy.logToFuel) { showLogToFuel = true }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Add to Cargo saves a photo as kitchen stock. Log to Fuel records what you ate and does not change Cargo.")
+        }
+        .sheet(isPresented: $showLogToFuel) {
+            LogToFuelSheet(onClose: { showLogToFuel = false }, onSaved: {
+                Task { await reload() }
+            })
         }
     }
 
@@ -298,7 +325,9 @@ struct DashboardView: View {
                 summary: data.nutritionToday,
                 size: size,
                 filters: widget.filters,
-                onOpenGoals: onOpenNutritionGoals
+                onOpenGoals: onOpenNutritionGoals,
+                opensDay: fuelCapture,
+                onOpenDay: onOpenManifest
             )
         case .nutritionTrends:
             FuelTrendsWidget(

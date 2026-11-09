@@ -149,7 +149,7 @@ All eight are `iosAlwaysOn`: on for iOS ≥ 1.5.0, Flagship-controlled elsewhere
 | `nutrition-async-recompute` | _(not clientVisible)_ | Queue stub for async nutrition recompute |
 | `nutrition-intake-notes` | `nutritionIntakeNotes` | Optional private Eat notes (≤280) on intake rows |
 | `nutrition-cross-org-diary` | `nutritionCrossOrgDiary` | Personal intake summary/history aggregates across kitchens (user-global diary) |
-| `nutrition-fast-log` | `nutritionFastLog` | Personal food log API (null plan entry). Default off. Not `iosAlwaysOn`. iOS below 1.6.0 fails closed |
+| `nutrition-fast-log` | `nutritionFastLog` | Personal food log API and the capture choice (Add to Cargo / Log to Fuel). Daily Fuel opens that day only when on. Default off. Not `iosAlwaysOn`. iOS below 1.6.0 fails closed |
 
 ## Supply list library
 

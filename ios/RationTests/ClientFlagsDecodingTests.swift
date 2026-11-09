@@ -2,6 +2,11 @@ import XCTest
 @testable import Ration
 
 final class ClientFlagsDecodingTests: XCTestCase {
+    func testNutritionFastLogFailsClosedWhenMissing() throws {
+        XCTAssertFalse(try decode(#"{}"#).isNutritionFastLogEnabled)
+        XCTAssertTrue(try decode(#"{"nutritionFastLog":true}"#).isNutritionFastLogEnabled)
+    }
+
     func testMissingKeysFailClosed() throws {
         let flags = try decode(#"{}"#)
         XCTAssertFalse(flags.isRationCopilotEnabled)

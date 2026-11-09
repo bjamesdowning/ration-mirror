@@ -207,6 +207,8 @@ export interface HubLoaderData {
 	nutritionToday?: import("~/lib/schemas/nutrition").NutritionSummary | null;
 	/** Fuel Trends — range summary (null when flags/consent block). */
 	nutritionTrends?: import("~/lib/schemas/nutrition").NutritionSummary | null;
+	/** nutrition-fast-log. Daily Fuel opens the day instead of Goals. */
+	fuelCapture?: boolean;
 }
 
 /** Props passed to each Hub widget component. */

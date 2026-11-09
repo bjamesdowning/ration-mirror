@@ -20,8 +20,15 @@ export type DayIntakeRow = {
 	slotType: string | null;
 	servings: number;
 	energyKcal: number;
+	proteinG?: number;
+	carbsG?: number;
+	fatG?: number;
 	mealName: string | null;
 	organizationName?: string | null;
+	occurredAt?: string | null;
+	personalLog?: boolean;
+	loggedAmount?: number | null;
+	loggedUnit?: "serving" | "g" | "oz" | null;
 };
 
 interface DayViewProps {
@@ -47,6 +54,12 @@ interface DayViewProps {
 	consumedNutrients?: DayNutrientTotals | null;
 	/** Logged intake rows for this day (nutrition-manifest). */
 	intakeRows?: DayIntakeRow[];
+	/** nutrition-fast-log. Flag off leaves the log untappable. */
+	fuelCapture?: boolean;
+	onLogToFuel?: () => void;
+	onEditIntake?: (row: DayIntakeRow) => void;
+	/** Intake log only, without meal slots. */
+	logOnly?: boolean;
 	/** split mode — label for the Cook button (e.g. "Cook"). */
 	consumeLabel?: string;
 	/** split mode — opens the private "Log my serving" dialog. */
@@ -90,6 +103,10 @@ export function DayView({
 	goalTargets = null,
 	consumedNutrients = null,
 	intakeRows = [],
+	fuelCapture = false,
+	onLogToFuel,
+	onEditIntake,
+	logOnly = false,
 	consumeLabel,
 	onEat,
 	onEditServing,
@@ -121,123 +138,165 @@ export function DayView({
 
 	return (
 		<div className="space-y-5">
-			{/* Day heading with summary stats */}
-			<div className="flex items-center gap-2 flex-wrap">
-				<p className="text-xs text-muted font-mono">
-					{dayName}, {formattedDate}
-				</p>
-				{onToggleSupplyInclusion && (
-					<ManifestDaySupplyToggle
-						date={date}
-						includedInSupply={includedInSupply}
-						onToggle={onToggleSupplyInclusion}
-						disabled={togglingSupplyDate === date}
-					/>
-				)}
-				{totalCount > 0 && (
-					<>
-						<span className="text-xs text-muted/40 font-mono">·</span>
-						<p className="text-xs text-muted font-mono">
-							{totalCount} {totalCount === 1 ? "meal" : "meals"}
-						</p>
-						<span className="text-xs text-muted/40 font-mono">·</span>
-						<p
-							className={`text-xs font-mono ${
-								consumedCount === totalCount && totalCount > 0
-									? "text-hyper-green"
-									: "text-muted"
-							}`}
-						>
-							{consumedCount} {isSplit ? "prepared" : "consumed"}
-						</p>
-					</>
-				)}
-				{progressStrip ? (
-					<>
-						<span className="text-xs text-muted/40 font-mono">·</span>
-						<p className="text-xs text-muted font-mono">{progressStrip}</p>
-					</>
-				) : null}
-				{showNoGoals ? (
-					<>
-						<span className="text-xs text-muted/40 font-mono">·</span>
-						<p className="text-xs text-muted font-mono">
-							No goals ·{" "}
-							<Link
-								to="/hub/settings"
-								className="text-hyper-green underline-offset-2 hover:underline"
+			{!logOnly && (
+				<div className="flex items-center gap-2 flex-wrap">
+					<p className="text-xs text-muted font-mono">
+						{dayName}, {formattedDate}
+					</p>
+					{onToggleSupplyInclusion && (
+						<ManifestDaySupplyToggle
+							date={date}
+							includedInSupply={includedInSupply}
+							onToggle={onToggleSupplyInclusion}
+							disabled={togglingSupplyDate === date}
+						/>
+					)}
+					{totalCount > 0 && (
+						<>
+							<span className="text-xs text-muted/40 font-mono">·</span>
+							<p className="text-xs text-muted font-mono">
+								{totalCount} {totalCount === 1 ? "meal" : "meals"}
+							</p>
+							<span className="text-xs text-muted/40 font-mono">·</span>
+							<p
+								className={`text-xs font-mono ${
+									consumedCount === totalCount && totalCount > 0
+										? "text-hyper-green"
+										: "text-muted"
+								}`}
 							>
-								Set preferences
-							</Link>
-						</p>
-					</>
-				) : null}
-			</div>
+								{consumedCount} {isSplit ? "prepared" : "consumed"}
+							</p>
+						</>
+					)}
+					{progressStrip ? (
+						<>
+							<span className="text-xs text-muted/40 font-mono">·</span>
+							<p className="text-xs text-muted font-mono">{progressStrip}</p>
+						</>
+					) : null}
+					{showNoGoals ? (
+						<>
+							<span className="text-xs text-muted/40 font-mono">·</span>
+							<p className="text-xs text-muted font-mono">
+								No goals ·{" "}
+								<Link
+									to="/hub/settings"
+									className="text-hyper-green underline-offset-2 hover:underline"
+								>
+									Set preferences
+								</Link>
+							</p>
+						</>
+					) : null}
+				</div>
+			)}
 
-			{dayIntakes.length > 0 && (
+			{(dayIntakes.length > 0 || fuelCapture) && (
 				<div className="rounded-xl border border-platinum bg-platinum/30 px-3 py-2 space-y-1.5">
 					<p className="text-[10px] font-mono font-semibold uppercase tracking-widest text-muted">
 						Intake log
 					</p>
-					<ul className="space-y-1">
-						{dayIntakes.map((row) => {
-							const slotLabel =
-								row.slotType && SLOT_TYPES.includes(row.slotType as SlotType)
-									? SLOT_LABELS[row.slotType as SlotType]
-									: null;
-							const servingsLabel =
-								row.servings % 1 === 0
-									? String(row.servings)
-									: row.servings.toFixed(1);
-							return (
-								<li
-									key={row.id}
-									className="flex items-baseline justify-between gap-3 text-xs font-mono"
-								>
-									<span className="text-carbon truncate min-w-0">
-										{row.mealName ?? "Meal"}
-										{row.organizationName ? (
-											<span className="text-muted">
-												{" "}
-												· {row.organizationName}
-											</span>
-										) : null}
-										{slotLabel ? (
-											<span className="text-muted"> · {slotLabel}</span>
-										) : null}
-									</span>
-									<span className="text-muted whitespace-nowrap">
-										{Math.round(row.energyKcal).toLocaleString("en-US")} kcal
-										{" · "}
-										{servingsLabel} sv
-									</span>
-								</li>
-							);
-						})}
-					</ul>
+					{dayIntakes.length === 0 ? (
+						<button
+							type="button"
+							onClick={onLogToFuel}
+							className="text-xs font-mono font-semibold text-hyper-green"
+						>
+							Log to Fuel
+						</button>
+					) : (
+						<ul className="space-y-1">
+							{dayIntakes.map((row) => {
+								const slotLabel =
+									row.slotType && SLOT_TYPES.includes(row.slotType as SlotType)
+										? SLOT_LABELS[row.slotType as SlotType]
+										: null;
+								const servingsLabel =
+									row.servings % 1 === 0
+										? String(row.servings)
+										: row.servings.toFixed(1);
+								const timeLabel =
+									fuelCapture && row.occurredAt
+										? fuelTimeLabel(row.occurredAt)
+										: "";
+								const editable =
+									fuelCapture && row.personalLog === true && onEditIntake;
+								const body = (
+									<>
+										<span className="text-carbon truncate min-w-0">
+											{row.mealName ?? "Meal"}
+											{row.organizationName ? (
+												<span className="text-muted">
+													{" "}
+													· {row.organizationName}
+												</span>
+											) : null}
+											{slotLabel ? (
+												<span className="text-muted"> · {slotLabel}</span>
+											) : null}
+										</span>
+										<span className="text-muted whitespace-nowrap">
+											{timeLabel ? `${timeLabel} · ` : ""}
+											{Math.round(row.energyKcal).toLocaleString("en-US")} kcal
+											{" · "}
+											{servingsLabel} sv
+										</span>
+									</>
+								);
+								return (
+									<li key={row.id} className="text-xs font-mono">
+										{editable ? (
+											<button
+												type="button"
+												onClick={() => onEditIntake(row)}
+												className="flex w-full items-baseline justify-between gap-3 text-left"
+											>
+												{body}
+											</button>
+										) : (
+											<div className="flex items-baseline justify-between gap-3">
+												{body}
+											</div>
+										)}
+									</li>
+								);
+							})}
+						</ul>
+					)}
 				</div>
 			)}
 
-			{slots.map((slot) => (
-				<MealSlot
-					key={slot}
-					slot={slot}
-					date={date}
-					entries={dayEntries}
-					planId={planId}
-					onAdd={onAdd}
-					mode={mode}
-					onConsume={onConsume}
-					onCopy={onCopy}
-					isConsuming={isConsuming}
-					readOnly={readOnly}
-					triggeredAllergensByMealId={triggeredAllergensByMealId}
-					readyMealIds={readyMealIds}
-					consumeLabel={consumeLabel}
-					onEat={onEat}
-					onEditServing={onEditServing}
-				/>
-			))}
+			{!logOnly &&
+				slots.map((slot) => (
+					<MealSlot
+						key={slot}
+						slot={slot}
+						date={date}
+						entries={dayEntries}
+						planId={planId}
+						onAdd={onAdd}
+						mode={mode}
+						onConsume={onConsume}
+						onCopy={onCopy}
+						isConsuming={isConsuming}
+						readOnly={readOnly}
+						triggeredAllergensByMealId={triggeredAllergensByMealId}
+						readyMealIds={readyMealIds}
+						consumeLabel={consumeLabel}
+						onEat={onEat}
+						onEditServing={onEditServing}
+					/>
+				))}
 		</div>
 	);
+}
+
+function fuelTimeLabel(iso: string): string {
+	const date = new Date(iso);
+	if (Number.isNaN(date.getTime())) return "";
+	return date.toLocaleTimeString(undefined, {
+		hour: "numeric",
+		minute: "2-digit",
+	});
 }

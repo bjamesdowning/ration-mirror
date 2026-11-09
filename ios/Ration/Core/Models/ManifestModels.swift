@@ -161,6 +161,53 @@ struct ManifestDayIntakeRow: Codable, Sendable, Equatable, Identifiable {
     let mealName: String?
     let organizationName: String?
     let notes: String?
+    let occurredAt: String?
+    let personalLog: Bool?
+    let loggedAmount: Double?
+    let loggedUnit: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id, manifestDate, slotType, servings, energyKcal, proteinG, carbsG, fatG
+        case mealName, organizationName, notes, occurredAt, personalLog, loggedAmount, loggedUnit
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        manifestDate = try c.decode(String.self, forKey: .manifestDate)
+        slotType = try c.decodeIfPresent(String.self, forKey: .slotType)
+        servings = try c.decodeTolerantDouble(forKey: .servings)
+        energyKcal = try c.decodeTolerantDouble(forKey: .energyKcal)
+        proteinG = try c.decodeTolerantDouble(forKey: .proteinG)
+        carbsG = try c.decodeTolerantDouble(forKey: .carbsG)
+        fatG = try c.decodeTolerantDouble(forKey: .fatG)
+        mealName = try c.decodeIfPresent(String.self, forKey: .mealName)
+        organizationName = try c.decodeIfPresent(String.self, forKey: .organizationName)
+        notes = try c.decodeIfPresent(String.self, forKey: .notes)
+        occurredAt = try c.decodeIfPresent(String.self, forKey: .occurredAt)
+        personalLog = try c.decodeIfPresent(Bool.self, forKey: .personalLog)
+        loggedAmount = try c.decodeTolerantOptionalDouble(forKey: .loggedAmount)
+        loggedUnit = try c.decodeIfPresent(String.self, forKey: .loggedUnit)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(manifestDate, forKey: .manifestDate)
+        try c.encodeIfPresent(slotType, forKey: .slotType)
+        try c.encode(servings, forKey: .servings)
+        try c.encode(energyKcal, forKey: .energyKcal)
+        try c.encode(proteinG, forKey: .proteinG)
+        try c.encode(carbsG, forKey: .carbsG)
+        try c.encode(fatG, forKey: .fatG)
+        try c.encodeIfPresent(mealName, forKey: .mealName)
+        try c.encodeIfPresent(organizationName, forKey: .organizationName)
+        try c.encodeIfPresent(notes, forKey: .notes)
+        try c.encodeIfPresent(occurredAt, forKey: .occurredAt)
+        try c.encodeIfPresent(personalLog, forKey: .personalLog)
+        try c.encodeIfPresent(loggedAmount, forKey: .loggedAmount)
+        try c.encodeIfPresent(loggedUnit, forKey: .loggedUnit)
+    }
 }
 
 struct ManifestResponse: Codable, Sendable {

@@ -18,7 +18,7 @@ import { CalendarSpanSelector } from "~/components/manifest/CalendarSpanSelector
 import { CopyDayModal } from "~/components/manifest/CopyDayModal";
 import { CopyEntryModal } from "~/components/manifest/CopyEntryModal";
 import { DayTab } from "~/components/manifest/DayTab";
-import { DayView } from "~/components/manifest/DayView";
+import { type DayIntakeRow, DayView } from "~/components/manifest/DayView";
 import { EmptyManifest } from "~/components/manifest/EmptyManifest";
 import { ManifestCalendarOverlay } from "~/components/manifest/ManifestCalendarOverlay";
 import { MealPicker } from "~/components/manifest/MealPicker";
@@ -31,6 +31,7 @@ import {
 } from "~/components/manifest/WeekNavigator";
 import { WeekSummary } from "~/components/manifest/WeekSummary";
 import { WeekView } from "~/components/manifest/WeekView";
+import { LogToFuelDialog } from "~/components/nutrition/FuelCaptureDialogs";
 import { FloatingActionBar } from "~/components/shell/FloatingActionBar";
 import { PageHeader } from "~/components/shell/PageHeader";
 import { Toast } from "~/components/shell/Toast";
@@ -62,6 +63,7 @@ import { getExcludedManifestDates } from "~/lib/manifest-supply.server";
 import { checkMealReadiness } from "~/lib/matching.server";
 import { getNutritionConsentStatus } from "~/lib/nutrition/consent.server";
 import { aggregateManifestDayNutrition } from "~/lib/nutrition/day-totals";
+import { toManifestDayIntake } from "~/lib/nutrition/fuel-capture";
 import { goalTargetsFromRow } from "~/lib/nutrition/goal-progress";
 import { getActiveNutritionGoal } from "~/lib/nutrition/persist.server";
 import {
@@ -231,15 +233,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		fatG: number | null;
 		fiberG: number | null;
 	} | null = null;
-	let dayIntakeRows: Array<{
-		id: string;
-		manifestDate: string;
-		slotType: string | null;
-		servings: number;
-		energyKcal: number;
-		mealName: string | null;
-		organizationName: string | null;
-	}> = [];
+	let dayIntakeRows: ReturnType<typeof toManifestDayIntake>[] = [];
 
 	if (nutritionManifest && intakeConsentGranted) {
 		const principal = {
@@ -266,15 +260,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 				currentRangeEnd,
 			),
 		]);
-		dayIntakeRows = intakePage.items.map((r) => ({
-			id: r.id,
-			manifestDate: r.manifestDate,
-			slotType: r.slotType,
-			servings: r.servings,
-			energyKcal: r.energyKcal,
-			mealName: r.mealName,
-			organizationName: r.organizationName,
-		}));
+		dayIntakeRows = intakePage.items.map((r) => toManifestDayIntake(r));
 		const intakes = summary.days.map((d) => ({
 			date: d.date,
 			energyKcal: d.energyKcal,
@@ -541,6 +527,7 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 					nutritionGoals?: boolean;
 					nutritionCookLogSplit?: boolean;
 					nutritionIntakeNotes?: boolean;
+					nutritionFastLog?: boolean;
 				};
 		  }
 		| undefined;
@@ -553,6 +540,9 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 		rootData?.clientFlags?.nutritionCookLogSplit === true;
 	const nutritionIntakeNotesFlag =
 		rootData?.clientFlags?.nutritionIntakeNotes === true;
+	const fuelCapture = rootData?.clientFlags?.nutritionFastLog === true;
+	const [showFuelLog, setShowFuelLog] = useState(false);
+	const [editIntake, setEditIntake] = useState<DayIntakeRow | null>(null);
 	const showDayNutritionTotals = nutritionManifestFlag && nutritionGoalsFlag;
 	/** nutrition-cook-log-split — shared Cook replaces Consume; private Eat opens separately. */
 	const cookSplit = nutritionCookLogSplitFlag;
@@ -1192,17 +1182,7 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 	);
 
 	const activeDayIntakes = useMemo(
-		() =>
-			dayIntakeRows
-				.filter((r) => r.manifestDate === activeDay)
-				.map((r) => ({
-					id: r.id,
-					slotType: r.slotType,
-					servings: r.servings,
-					energyKcal: r.energyKcal,
-					mealName: r.mealName,
-					organizationName: r.organizationName,
-				})),
+		() => dayIntakeRows.filter((r) => r.manifestDate === activeDay),
 		[dayIntakeRows, activeDay],
 	);
 
@@ -1373,7 +1353,21 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 					/>
 					<div className="mt-4">
 						{!showDayView ? (
-							<EmptyManifest onAdd={handleAdd} activeDate={activeDay} />
+							<div className="space-y-3">
+								<EmptyManifest onAdd={handleAdd} activeDate={activeDay} />
+								{fuelCapture && (
+									<button
+										type="button"
+										onClick={() => {
+											setEditIntake(null);
+											setShowFuelLog(true);
+										}}
+										className="text-sm font-semibold text-hyper-green"
+									>
+										Log to Fuel
+									</button>
+								)}
+							</div>
 						) : (
 							<DayView
 								date={activeDay}
@@ -1402,6 +1396,15 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 								goalsChrome={showDayNutritionTotals}
 								goalTargets={showDayNutritionTotals ? goalTargets : null}
 								intakeRows={nutritionManifestFlag ? activeDayIntakes : []}
+								fuelCapture={fuelCapture}
+								onLogToFuel={() => {
+									setEditIntake(null);
+									setShowFuelLog(true);
+								}}
+								onEditIntake={(row) => {
+									setEditIntake(row);
+									setShowFuelLog(true);
+								}}
 								consumeLabel={consumePrimaryLabel}
 								onEat={eatEnabled ? handleOpenEat : undefined}
 								onEditServing={eatEnabled ? handleOpenEat : undefined}
@@ -1412,6 +1415,29 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 
 				{/* Desktop: Full week grid */}
 				<div className="hidden md:block">
+					{fuelCapture && (
+						<div className="mb-4">
+							<DayView
+								date={selectedDay}
+								entries={[]}
+								planId={plan.id}
+								onAdd={handleAdd}
+								logOnly
+								fuelCapture
+								intakeRows={dayIntakeRows.filter(
+									(row) => row.manifestDate === selectedDay,
+								)}
+								onLogToFuel={() => {
+									setEditIntake(null);
+									setShowFuelLog(true);
+								}}
+								onEditIntake={(row) => {
+									setEditIntake(row);
+									setShowFuelLog(true);
+								}}
+							/>
+						</div>
+					)}
 					{!hasEntries && (
 						<p className="text-sm text-muted mb-4">
 							Add meals from your Galley using the + on any slot below.
@@ -1801,6 +1827,12 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 				onClose={() => setShowUpgradePrompt(false)}
 				title="Crew Member required"
 				description="Sharing meal plans is a Crew Member feature. Upgrade to unlock sharing, member invites, and unlimited capacity."
+			/>
+			<LogToFuelDialog
+				open={showFuelLog}
+				intake={editIntake}
+				onClose={() => setShowFuelLog(false)}
+				onSaved={() => revalidator.revalidate()}
 			/>
 		</>
 	);

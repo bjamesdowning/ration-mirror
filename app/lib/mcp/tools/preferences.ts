@@ -2,6 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { ALLERGEN_SLUGS } from "../../allergens";
 import { getUserSettings, patchUserSettings } from "../../auth.server";
+import { normalizeDiaryLayout } from "../../nutrition/diary-layout";
 import type { UserSettings } from "../../types";
 import { err, ok } from "../envelope";
 import {
@@ -20,6 +21,7 @@ export function materializeUserPreferences(
 		...settings,
 		expirationAlertDays:
 			settings.expirationAlertDays ?? DEFAULT_EXPIRATION_ALERT_DAYS,
+		diaryLayout: normalizeDiaryLayout(settings.diaryLayout),
 	};
 }
 

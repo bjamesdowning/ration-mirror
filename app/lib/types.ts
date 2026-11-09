@@ -60,6 +60,8 @@ export interface UserSettings {
 	reengagementEmailSentAt?: string;
 	/** Hub welcome tips card dismissed (auto-granted credits messaging). */
 	welcomeTipsDismissed?: boolean;
+	/** Personal day-list layout. Absent means timeline. Not shared with the kitchen. */
+	diaryLayout?: "timeline" | "slots";
 	/** Saved filter views for Cargo/Galley (schema stub — UI coming soon). */
 	savedViews?: SavedView[];
 	[key: string]: unknown; // Index signature for database compatibility

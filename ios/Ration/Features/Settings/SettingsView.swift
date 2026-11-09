@@ -123,6 +123,34 @@ struct SettingsView: View {
 
             Section("Nutrition") {
                 Button("Nutrition Goals") { showingNutritionGoals = true }
+                if DiaryLayout.controlVisible(
+                    fastLogEnabled: env.session.clientFlags.isNutritionFastLogEnabled,
+                    appVersion: AppMarketingVersion.current
+                ) {
+                    Picker(
+                        "Day layout",
+                        selection: Binding(
+                            get: {
+                                DiaryLayoutMode.normalize(model.settings?.diaryLayout)
+                            },
+                            set: { mode in
+                                Task {
+                                    let response = try? await env.api.patchSettings(
+                                        SettingsPatch(diaryLayout: mode.rawValue)
+                                    )
+                                    if let response {
+                                        env.launch.updateUserSettings(response.settings)
+                                        model.applySettings(response.settings)
+                                    }
+                                }
+                            }
+                        )
+                    ) {
+                        Text("Timeline").tag(DiaryLayoutMode.timeline)
+                        Text("Slots").tag(DiaryLayoutMode.slots)
+                    }
+                    .accessibilityLabel("Diary layout")
+                }
             }
 
             if let settings = model.settings {

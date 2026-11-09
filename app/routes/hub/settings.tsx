@@ -63,6 +63,8 @@ import {
 	resolveKitchenTimeZone,
 } from "~/lib/kitchen-time";
 import { getTodayISO } from "~/lib/manifest-dates";
+import { normalizeDiaryLayout } from "~/lib/nutrition/diary-layout";
+import { isNutritionFastLogEnabled } from "~/lib/nutrition/fast-log-flag.server";
 import { getActiveNutritionGoal } from "~/lib/nutrition/persist.server";
 import { listConnectedAgentGrants } from "~/lib/oauth.server";
 import {
@@ -483,6 +485,27 @@ export async function action(args: Route.ActionArgs) {
 				},
 			},
 		);
+	}
+
+	if (intent === "update-diary-layout") {
+		const layout = formData.get("diaryLayout");
+		if (layout !== "timeline" && layout !== "slots") {
+			return data({ error: "Invalid diary layout" }, { status: 400 });
+		}
+		const flagContext = buildWebFlagContext(args.request, env, {
+			user: authUser,
+		});
+		if (!(await isNutritionFastLogEnabled(env, flagContext))) {
+			throw data(
+				{
+					error: "Personal food log is unavailable.",
+					code: "FEATURE_DISABLED",
+				},
+				{ status: 403 },
+			);
+		}
+		await patchUserSettings(env.DB, userId, { diaryLayout: layout });
+		return { success: true };
 	}
 
 	if (intent === "update-expiration-alert") {
@@ -1841,10 +1864,23 @@ function PreferencesSection({
 	} | null;
 }) {
 	const rootData = useRouteLoaderData("root") as
-		| { clientFlags?: { nutritionGoals?: boolean } }
+		| {
+				clientFlags?: {
+					nutritionGoals?: boolean;
+					nutritionFastLog?: boolean;
+				};
+		  }
 		| undefined;
 	/** Match cargo/Galley: gate on root clientFlags, not route loader alone. */
 	const nutritionGoalsEnabled = rootData?.clientFlags?.nutritionGoals === true;
+	const diaryLayoutVisible = rootData?.clientFlags?.nutritionFastLog === true;
+	const diaryLayout = normalizeDiaryLayout(settings.diaryLayout);
+	const diaryFetcher = useFetcher();
+	const submittedLayout = diaryFetcher.formData?.get("diaryLayout");
+	const selectedDiaryLayout =
+		submittedLayout === "timeline" || submittedLayout === "slots"
+			? submittedLayout
+			: diaryLayout;
 	const navigation = useNavigation();
 	const isUpdatingTheme =
 		navigation.state === "submitting" &&
@@ -1861,6 +1897,36 @@ function PreferencesSection({
 			<AllergenSection settings={settings} />
 
 			<FeatureEnablementSection />
+
+			{diaryLayoutVisible && (
+				<div className="glass-panel rounded-xl p-6">
+					<h3 className="text-xs text-label text-muted mb-1">Day layout</h3>
+					<p className="text-sm text-muted mb-4">
+						Timeline is one list by time. Slots group the same foods into
+						breakfast, lunch, dinner, and snack. A food with no slot stays in
+						Other. This is only your view.
+					</p>
+					<diaryFetcher.Form method="post" className="flex gap-2">
+						<input type="hidden" name="intent" value="update-diary-layout" />
+						{(["timeline", "slots"] as const).map((layout) => (
+							<button
+								key={layout}
+								type="submit"
+								name="diaryLayout"
+								value={layout}
+								aria-pressed={selectedDiaryLayout === layout}
+								className={`rounded-full px-3 py-1 text-xs font-mono uppercase tracking-widest ${
+									selectedDiaryLayout === layout
+										? "bg-carbon text-ceramic"
+										: "border border-platinum text-muted"
+								}`}
+							>
+								{layout === "timeline" ? "Timeline" : "Slots"}
+							</button>
+						))}
+					</diaryFetcher.Form>
+				</div>
+			)}
 
 			{nutritionGoalsEnabled && (
 				<NutritionGoalsSection

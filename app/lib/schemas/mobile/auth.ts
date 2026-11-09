@@ -122,6 +122,8 @@ export const MobileSettingsPatchSchema = z
 					.optional(),
 			})
 			.optional(),
+		/** Person-scoped day list. nutrition-fast-log. iOS below 1.6 is rejected. */
+		diaryLayout: z.enum(["timeline", "slots"]).optional(),
 		/** Clears onboarding completion and resets step to 0 (Restart Tutorial). */
 		restartOnboarding: z.literal(true).optional(),
 	})

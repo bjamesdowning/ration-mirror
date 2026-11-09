@@ -57,6 +57,7 @@ struct UserSettings: Codable, Sendable {
     var hubProfile: HubProfile?
     var hubLayout: HubLayoutPayload?
     var manifestSettings: ManifestSettings?
+    var diaryLayout: String? = nil
 }
 
 struct SettingsResponse: Codable, Sendable {
@@ -78,6 +79,7 @@ struct SettingsPatch: Encodable, Sendable {
     var hubProfile: HubProfile?
     var hubLayout: HubLayoutPayload?
     var manifestSettings: ManifestSettings?
+    var diaryLayout: String? = nil
 
     enum CodingKeys: String, CodingKey {
         case theme
@@ -92,6 +94,7 @@ struct SettingsPatch: Encodable, Sendable {
         case hubProfile
         case hubLayout
         case manifestSettings
+        case diaryLayout
     }
 
     func encode(to encoder: Encoder) throws {
@@ -112,5 +115,6 @@ struct SettingsPatch: Encodable, Sendable {
         try container.encodeIfPresent(hubProfile, forKey: .hubProfile)
         try container.encodeIfPresent(hubLayout, forKey: .hubLayout)
         try container.encodeIfPresent(manifestSettings, forKey: .manifestSettings)
+        try container.encodeIfPresent(diaryLayout, forKey: .diaryLayout)
     }
 }

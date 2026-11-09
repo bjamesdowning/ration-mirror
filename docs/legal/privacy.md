@@ -47,6 +47,8 @@ When nutrition features are enabled for your account, you may optionally set **p
 
 You may withdraw Macro Tracking (or any underlying nutrition purpose) in Settings → Feature enablement. Withdrawal blocks future processing but does not by itself erase previously stored data; goals and intake can be erased separately. Goals remain until you clear or erase them or delete your account. Intake history is retained for approximately **396 days (~13 months)** and then deleted automatically unless you erase it sooner. Deleting a shared household/kitchen does **not** by itself erase your personal intake history; those rows remain associated with your account (with remembered kitchen/meal labels where available) until retention or account purge. Nutrition goals and intake records are also erased when you purge your account (see Section 11).
 
+**Draft, pending review.** If you turn on Apple Health export, the Ration app on your iPhone can copy confirmed foods you logged as eaten into Apple Health, and it can delete the food samples Ration wrote. Ration does not import from Apple Health. Copies that remain in Apple Health stay on the device until you remove them in Health or use the clear control before the account is gone; the server cannot reach Apple Health after the account is deleted.
+
 ### AI Features
 
 **AI Features** (scan, generate, Ask Ration, and related cloud processing, including optional Copilot credit auto-deduct) are enabled through Feature enablement during onboarding or in Settings. Turning AI Features off clears processing consent and stops new AI use until you enable them again.

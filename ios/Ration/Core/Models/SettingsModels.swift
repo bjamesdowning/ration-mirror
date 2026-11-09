@@ -45,6 +45,12 @@ struct ManifestSettings: Codable, Sendable {
     var calendarSpan: Int?
 }
 
+struct HealthExportPreference: Codable, Sendable {
+    var enabled: Bool?
+    var deviceStatus: String?
+    var clearRequested: Bool?
+}
+
 struct UserSettings: Codable, Sendable {
     var theme: String?
     var supplyUnitMode: String?
@@ -58,6 +64,7 @@ struct UserSettings: Codable, Sendable {
     var hubLayout: HubLayoutPayload?
     var manifestSettings: ManifestSettings?
     var diaryLayout: String? = nil
+    var healthExport: HealthExportPreference?
 }
 
 struct SettingsResponse: Codable, Sendable {

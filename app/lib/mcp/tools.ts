@@ -7,6 +7,7 @@ import { registerDiaryNutritionTools } from "./tools/diary";
 import { registerKitchenEventTools } from "./tools/events";
 import { registerFoodLogTools } from "./tools/food-log";
 import { registerGalleyTools } from "./tools/galley";
+import { registerHealthExportTools } from "./tools/health-export";
 import { registerInventoryTools } from "./tools/inventory";
 import { registerManifestTools } from "./tools/manifest";
 import { registerNutritionTools } from "./tools/nutrition";
@@ -39,4 +40,5 @@ export async function registerTools(
 	await registerDiaryNutritionTools(server, toolsEnv);
 	await registerSavedFoodTools(server, toolsEnv);
 	await registerFoodLogTools(server, toolsEnv);
+	await registerHealthExportTools(server, toolsEnv);
 }

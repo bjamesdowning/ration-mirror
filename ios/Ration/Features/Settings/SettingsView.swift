@@ -151,6 +151,22 @@ struct SettingsView: View {
                     }
                     .accessibilityLabel("Diary layout")
                 }
+                if HealthExportPolicy.switchVisible(
+                    flagEnabled: env.session.clientFlags.isNutritionHealthExportEnabled,
+                    appVersion: AppMarketingVersion.current
+                ) {
+                    Toggle(
+                        "Apple Health",
+                        isOn: Binding(
+                            get: { model.settings?.healthExport?.enabled == true },
+                            set: { enabled in
+                                Task { await setHealthExport(enabled) }
+                            }
+                        )
+                    )
+                    Text("Draft, pending review. Copies confirmed foods you logged as eaten, and can delete the samples Ration wrote. Nothing is imported.")
+                        .rationCaption()
+                }
             }
 
             if let settings = model.settings {
@@ -208,5 +224,23 @@ struct SettingsView: View {
         let short = info?["CFBundleShortVersionString"] as? String ?? "—"
         let build = info?["CFBundleVersion"] as? String ?? "—"
         return "Version \(short) (\(build))"
+    }
+
+    /// Consent is checked by the preference request. A failure returns before HealthKit.
+    private func setHealthExport(_ enabled: Bool) async {
+        do {
+            _ = try await env.api.setHealthExport(enabled: enabled, confirm: true)
+        } catch {
+            return
+        }
+        guard enabled else { return }
+        do {
+            try await HealthKitExporter.requestAuthorization()
+            guard HealthKitExporter.sharingAuthorized() else { return }
+            let pending = try await env.api.pendingHealthExport()
+            try await HealthKitExporter.apply(pending)
+        } catch {
+            return
+        }
     }
 }

@@ -140,6 +140,53 @@ extension RationAPI {
             )
         )
     }
+
+    func setHealthExport(enabled: Bool, confirm: Bool) async throws -> HealthExportStatusResponse {
+        try await client.put(
+            "nutrition/health-export",
+            body: HealthExportPreferenceBody(
+                enabled: enabled,
+                confirm: confirm,
+                deviceStatus: enabled ? "needs_device_permission" : "off"
+            )
+        )
+    }
+
+    func pendingHealthExport() async throws -> HealthExportPendingResponse {
+        try await client.get("nutrition/health-export/pending")
+    }
+}
+
+struct HealthExportPreferenceBody: Encodable, Sendable {
+    let enabled: Bool
+    let confirm: Bool
+    let deviceStatus: String
+}
+
+struct HealthExportStatusResponse: Decodable, Sendable {
+    let status: String?
+    let enabled: Bool?
+}
+
+struct HealthExportPendingResponse: Decodable, Sendable {
+    struct Sample: Decodable, Sendable {
+        let syncIdentifier: String
+        let syncVersion: Int
+        let quantityType: String
+        let value: Double
+        let unit: String
+        let healthSyncId: String
+        let occurredAt: String
+        let foodName: String
+    }
+
+    struct Delete: Decodable, Sendable {
+        let healthSyncId: String
+        let syncIdentifiers: [String]
+    }
+
+    let samples: [Sample]
+    let deletes: [Delete]
 }
 
 struct FoodBarcodeBody: Encodable, Sendable {

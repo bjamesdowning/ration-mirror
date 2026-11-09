@@ -56,7 +56,7 @@ Never take `organizationId` or `userId` from client input as the tenancy anchor.
 
 - Merging Cargo, Galley, Manifest plans, Supply, or credits across organizations.
 - Showing personal intake or goals to other kitchen members.
-- Implying medical/clinical advice or HealthKit sync.
+- Implying medical or clinical advice, importing from Apple Health, or a two-way Health sync. One-way export of the signed-in person's confirmed eaten food is the Health design: the device writes those samples and can delete the samples Ration wrote. Draft copy, pending review.
 - Using Flagship alone without server-side capability checks (`resolveNutritionCapabilities` / `isFeatureEnabled`).
 
 ## Feature checklist

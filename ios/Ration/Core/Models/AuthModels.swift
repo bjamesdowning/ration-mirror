@@ -78,6 +78,7 @@ struct ClientFlags: Codable, Sendable, Equatable {
     var nutritionSavedFood: Bool?
     var nutritionBarcodeDiary: Bool?
     var nutritionPhotoLog: Bool?
+    var nutritionHealthExport: Bool?
 
     static let disabled = ClientFlags()
 
@@ -96,6 +97,7 @@ struct ClientFlags: Codable, Sendable, Equatable {
     var isNutritionSavedFoodEnabled: Bool { nutritionSavedFood == true }
     var isNutritionBarcodeDiaryEnabled: Bool { nutritionBarcodeDiary == true }
     var isNutritionPhotoLogEnabled: Bool { nutritionPhotoLog == true }
+    var isNutritionHealthExportEnabled: Bool { nutritionHealthExport == true }
 }
 
 /// `GET /api/mobile/v1/session`

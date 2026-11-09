@@ -95,6 +95,7 @@ describe("fuel capture", () => {
 		expect(ios.nutritionSavedFood).toBe(false);
 		expect(ios.nutritionBarcodeDiary).toBe(false);
 		expect(ios.nutritionPhotoLog).toBe(false);
+		expect(ios.nutritionHealthExport).toBe(false);
 		const web = await getClientSafeFlags(env, {
 			userId: "u1",
 			clientPlatform: "web",
@@ -103,6 +104,7 @@ describe("fuel capture", () => {
 		expect(web.nutritionSavedFood).toBe(true);
 		expect(web.nutritionBarcodeDiary).toBe(true);
 		expect(web.nutritionPhotoLog).toBe(true);
+		expect(web.nutritionHealthExport).toBe(true);
 	});
 
 	it("keeps shutter and barcode disabled unless their child flags are on", () => {

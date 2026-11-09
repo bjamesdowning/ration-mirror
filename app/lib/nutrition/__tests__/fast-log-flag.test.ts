@@ -3,6 +3,7 @@ import { isFeatureEnabled } from "~/lib/feature-flags/flags.server";
 import {
 	isNutritionBarcodeDiaryEnabled,
 	isNutritionFastLogEnabled,
+	isNutritionHealthExportEnabled,
 	isNutritionPhotoLogEnabled,
 	isNutritionSavedFoodEnabled,
 	NUTRITION_FAST_LOG_IOS_MIN,
@@ -100,6 +101,25 @@ describe("nutrition-fast-log client gate", () => {
 		).resolves.toBe(true);
 		await expect(
 			isNutritionPhotoLogEnabled({} as Env, { clientPlatform: "web" }),
+		).resolves.toBe(true);
+	});
+
+	it("keeps Health export off unless the parent is on and iOS is at least 1.6", async () => {
+		vi.mocked(isFeatureEnabled).mockImplementation(
+			async (_env, key) => key === "nutrition-health-export",
+		);
+		await expect(
+			isNutritionHealthExportEnabled({} as Env, { clientPlatform: "web" }),
+		).resolves.toBe(false);
+		vi.mocked(isFeatureEnabled).mockResolvedValue(true);
+		await expect(
+			isNutritionHealthExportEnabled({} as Env, {
+				clientPlatform: "ios",
+				clientVersion: "1.5.18",
+			}),
+		).resolves.toBe(false);
+		await expect(
+			isNutritionHealthExportEnabled({} as Env, { clientPlatform: "web" }),
 		).resolves.toBe(true);
 	});
 });

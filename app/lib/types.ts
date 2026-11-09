@@ -62,6 +62,15 @@ export interface UserSettings {
 	welcomeTipsDismissed?: boolean;
 	/** Personal day-list layout. Absent means timeline. Not shared with the kitchen. */
 	diaryLayout?: "timeline" | "slots";
+	/**
+	 * Person-scoped Apple Health export preference. The device writes HealthKit.
+	 * Absent means off.
+	 */
+	healthExport?: {
+		enabled: boolean;
+		deviceStatus?: "off" | "needs_device_permission" | "denied" | "on";
+		clearRequested?: boolean;
+	};
 	/** Saved filter views for Cargo/Galley (schema stub — UI coming soon). */
 	savedViews?: SavedView[];
 	[key: string]: unknown; // Index signature for database compatibility

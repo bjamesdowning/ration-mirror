@@ -87,7 +87,10 @@ export async function assertNutritionSavedFood(
 async function isNutritionChildEnabled(
 	env: Env,
 	context: FlagshipEvaluationContext,
-	flag: "nutrition-barcode-diary" | "nutrition-photo-log",
+	flag:
+		| "nutrition-barcode-diary"
+		| "nutrition-photo-log"
+		| "nutrition-health-export",
 ): Promise<boolean> {
 	if (!nutritionFastLogClientAllowed(context)) return false;
 	const [parent, child] = await Promise.all([
@@ -100,7 +103,10 @@ async function isNutritionChildEnabled(
 async function assertNutritionChild(
 	env: Env,
 	context: FlagshipEvaluationContext,
-	flag: "nutrition-barcode-diary" | "nutrition-photo-log",
+	flag:
+		| "nutrition-barcode-diary"
+		| "nutrition-photo-log"
+		| "nutrition-health-export",
 	unavailable: string,
 ): Promise<void> {
 	if (!nutritionFastLogClientAllowed(context)) {
@@ -159,5 +165,24 @@ export function assertNutritionPhotoLog(
 		context,
 		"nutrition-photo-log",
 		"Photo food log is unavailable.",
+	);
+}
+
+export function isNutritionHealthExportEnabled(
+	env: Env,
+	context: FlagshipEvaluationContext,
+): Promise<boolean> {
+	return isNutritionChildEnabled(env, context, "nutrition-health-export");
+}
+
+export function assertNutritionHealthExport(
+	env: Env,
+	context: FlagshipEvaluationContext,
+): Promise<void> {
+	return assertNutritionChild(
+		env,
+		context,
+		"nutrition-health-export",
+		"Apple Health export is unavailable.",
 	);
 }

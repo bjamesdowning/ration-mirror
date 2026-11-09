@@ -64,7 +64,11 @@ import {
 } from "~/lib/kitchen-time";
 import { getTodayISO } from "~/lib/manifest-dates";
 import { normalizeDiaryLayout } from "~/lib/nutrition/diary-layout";
-import { isNutritionFastLogEnabled } from "~/lib/nutrition/fast-log-flag.server";
+import {
+	isNutritionFastLogEnabled,
+	isNutritionHealthExportEnabled,
+} from "~/lib/nutrition/fast-log-flag.server";
+import { setHealthExportPreference } from "~/lib/nutrition/health-export.server";
 import { getActiveNutritionGoal } from "~/lib/nutrition/persist.server";
 import { listConnectedAgentGrants } from "~/lib/oauth.server";
 import {
@@ -454,6 +458,7 @@ export async function loader(args: Route.LoaderArgs) {
 
 export async function action(args: Route.ActionArgs) {
 	const {
+		groupId,
 		session: { user: authUser },
 	} = await requireActiveGroup(args.context, args.request);
 	const userId = authUser.id;
@@ -505,6 +510,40 @@ export async function action(args: Route.ActionArgs) {
 			);
 		}
 		await patchUserSettings(env.DB, userId, { diaryLayout: layout });
+		return { success: true };
+	}
+
+	if (intent === "update-health-export") {
+		const flagContext = buildWebFlagContext(args.request, env, {
+			user: authUser,
+		});
+		if (!(await isNutritionHealthExportEnabled(env, flagContext))) {
+			throw data(
+				{
+					error: "Apple Health export is unavailable.",
+					code: "FEATURE_DISABLED",
+				},
+				{ status: 403 },
+			);
+		}
+		await setHealthExportPreference(
+			env,
+			{
+				userId,
+				organizationId: groupId,
+				surface: "web",
+				authMethod: "session",
+			},
+			flagContext,
+			{
+				enabled: formData.get("enabled") === "true",
+				confirm: true,
+				deviceStatus:
+					formData.get("enabled") === "true"
+						? "needs_device_permission"
+						: "off",
+			},
+		);
 		return { success: true };
 	}
 
@@ -1868,14 +1907,18 @@ function PreferencesSection({
 				clientFlags?: {
 					nutritionGoals?: boolean;
 					nutritionFastLog?: boolean;
+					nutritionHealthExport?: boolean;
 				};
 		  }
 		| undefined;
 	/** Match cargo/Galley: gate on root clientFlags, not route loader alone. */
 	const nutritionGoalsEnabled = rootData?.clientFlags?.nutritionGoals === true;
 	const diaryLayoutVisible = rootData?.clientFlags?.nutritionFastLog === true;
+	const healthExportVisible =
+		rootData?.clientFlags?.nutritionHealthExport === true;
 	const diaryLayout = normalizeDiaryLayout(settings.diaryLayout);
 	const diaryFetcher = useFetcher();
+	const healthFetcher = useFetcher();
 	const submittedLayout = diaryFetcher.formData?.get("diaryLayout");
 	const selectedDiaryLayout =
 		submittedLayout === "timeline" || submittedLayout === "slots"
@@ -1897,6 +1940,29 @@ function PreferencesSection({
 			<AllergenSection settings={settings} />
 
 			<FeatureEnablementSection />
+
+			{healthExportVisible && (
+				<div className="glass-panel rounded-xl p-6">
+					<h3 className="text-xs text-label text-muted mb-1">Apple Health</h3>
+					<p className="text-sm text-muted mb-4">
+						Draft, pending review. When this is on, the iPhone can copy
+						confirmed foods you logged as eaten into Apple Health, and it can
+						delete the samples Ration wrote. The browser does not write
+						HealthKit. Nothing is imported.
+					</p>
+					<healthFetcher.Form method="post">
+						<input type="hidden" name="intent" value="update-health-export" />
+						<input
+							type="hidden"
+							name="enabled"
+							value={settings.healthExport?.enabled === true ? "false" : "true"}
+						/>
+						<button type="submit" className="btn-secondary px-3 py-2 text-sm">
+							{settings.healthExport?.enabled === true ? "On" : "Off"}
+						</button>
+					</healthFetcher.Form>
+				</div>
+			)}
 
 			{diaryLayoutVisible && (
 				<div className="glass-panel rounded-xl p-6">

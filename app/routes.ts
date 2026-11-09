@@ -232,6 +232,15 @@ export default [
 		"routes/api/nutrition.diary.$id.save-to-kitchen.ts",
 	),
 	route("api/nutrition/diary/:id", "routes/api/nutrition.diary.$id.ts"),
+	route(
+		"api/nutrition/health-export/pending",
+		"routes/api/nutrition.health-export.pending.ts",
+	),
+	route(
+		"api/nutrition/health-export/clear",
+		"routes/api/nutrition.health-export.clear.ts",
+	),
+	route("api/nutrition/health-export", "routes/api/nutrition.health-export.ts"),
 	route("api/nutrition/saved-food", "routes/api/nutrition.saved-food.ts"),
 	route(
 		"api/nutrition/saved-food/:id",
@@ -649,6 +658,18 @@ export default [
 	route(
 		"api/mobile/v1/nutrition/diary/:id",
 		"routes/api/mobile/v1.nutrition.diary.$id.ts",
+	),
+	route(
+		"api/mobile/v1/nutrition/health-export/pending",
+		"routes/api/mobile/v1.nutrition.health-export.pending.ts",
+	),
+	route(
+		"api/mobile/v1/nutrition/health-export/clear",
+		"routes/api/mobile/v1.nutrition.health-export.clear.ts",
+	),
+	route(
+		"api/mobile/v1/nutrition/health-export",
+		"routes/api/mobile/v1.nutrition.health-export.ts",
 	),
 	route(
 		"api/mobile/v1/nutrition/saved-food",

@@ -195,6 +195,14 @@ export const FLAG_REGISTRY: Record<string, FlagRegistryEntry> = {
 		clientKey: "nutritionPhotoLog",
 		iosAlwaysOn: false,
 	},
+	"nutrition-health-export": {
+		defaultEnabled: false,
+		description:
+			"One-way Apple Health export of confirmed eaten food. On only when nutrition-fast-log is on. The device writes HealthKit. No plan check",
+		clientVisible: true,
+		clientKey: "nutritionHealthExport",
+		iosAlwaysOn: false,
+	},
 	"feature-enablement-consent": {
 		defaultEnabled: false,
 		description:

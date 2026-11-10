@@ -191,6 +191,13 @@ describe("saved food tenancy", () => {
 		});
 		expect(edited.id).toBe(saved.id);
 		expect(edited.energyKcal).toBe(110);
+		const wire = JSON.parse(JSON.stringify(edited)) as Record<string, unknown>;
+		expect(typeof wire.id).toBe("string");
+		expect(typeof wire.name).toBe("string");
+		for (const key of ["energyKcal", "proteinG", "carbsG", "fatG"] as const) {
+			expect(typeof wire[key]).toBe("number");
+			expect(Number.isFinite(wire[key] as number)).toBe(true);
+		}
 		expect(
 			sqlite.prepare("select energy_kcal as kcal from nutrition_intake").get(),
 		).toEqual({ kcal: 90 });

@@ -152,14 +152,20 @@ struct MacrosHistoryView: View {
         .background(Theme.ceramic)
         .navigationTitle("Macros")
         .navigationBarTitleDisplayMode(.large)
-        .safeAreaInset(edge: .bottom) {
-            Text("Not medical advice. Goals and totals are planning aids only.")
-                .rationCaption()
-                .foregroundStyle(Theme.muted)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 20)
-                .padding(.vertical, 8)
-                .background(Theme.ceramic)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            VStack(spacing: 0) {
+                Text("Not medical advice. Goals and totals are planning aids only.")
+                    .rationCaption()
+                    .foregroundStyle(Theme.muted)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 8)
+                    .background(Theme.surface)
+                Color.clear
+                    .frame(height: CopilotDockLayout.fixedScrollContentMargin(hasTabAction: true))
+                    .accessibilityHidden(true)
+            }
+            .background(Color.clear)
         }
         .sheet(isPresented: $showingCustom) {
             MacrosCustomRangeSheet(from: customBound(customFrom), to: customBound(customTo)) { from, to in

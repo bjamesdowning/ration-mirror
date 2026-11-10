@@ -16,7 +16,6 @@ struct DashboardView: View {
     var onOpenManifest: () -> Void = {}
     var onOpenNutritionGoals: () -> Void = {}
     @State private var model = HubViewModel()
-    @State private var showCaptureChoice = false
     @State private var showLogToFuel = false
 
     private var fuelCapture: Bool {
@@ -148,27 +147,24 @@ struct DashboardView: View {
         }
         .tabDockAction(
             tag: .hub,
-            isActive: !model.isEditMode && env.session.clientFlags.isAiScanReceiptEnabled
+            isActive: !model.isEditMode
+                && (env.session.clientFlags.isAiScanReceiptEnabled || fuelCapture)
         ) {
-            IconFABButtonCore(
-                systemImage: "camera.viewfinder",
-                accessibilityLabel: "Scan items",
-                isAI: true,
-                action: {
-                    if fuelCapture {
-                        showCaptureChoice = true
-                    } else {
-                        onScan()
+            IconFABMenuCore(systemImage: "plus.circle.fill", accessibilityLabel: "Hub actions") {
+                if env.session.clientFlags.isAiScanReceiptEnabled {
+                    Button(action: onScan) {
+                        Label(
+                            fuelCapture ? HubCapturePolicy.addToCargo : "Scan items",
+                            systemImage: "camera.viewfinder"
+                        )
                     }
                 }
-            )
-        }
-        .confirmationDialog("Capture", isPresented: $showCaptureChoice, titleVisibility: .visible) {
-            Button(HubCapturePolicy.addToCargo) { onScan() }
-            Button(HubCapturePolicy.logToFuel) { showLogToFuel = true }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("Add to Cargo saves a photo as kitchen stock. Log to Fuel records what you ate and does not change Cargo.")
+                if fuelCapture {
+                    Button { showLogToFuel = true } label: {
+                        Label(HubCapturePolicy.logToFuel, systemImage: "fork.knife")
+                    }
+                }
+            }
         }
         .sheet(isPresented: $showLogToFuel) {
             LogToFuelSheet(onClose: { showLogToFuel = false }, onSaved: {

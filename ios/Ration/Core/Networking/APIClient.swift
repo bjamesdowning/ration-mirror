@@ -216,6 +216,15 @@ final class APIClient {
         do {
             return try JSON.decoder.decode(T.self, from: data)
         } catch {
+            if let message = Self.serverMessage(in: data) {
+                let errBody = try? JSON.decoder.decode(APIErrorBody.self, from: data)
+                throw APIError.server(
+                    status: http.statusCode,
+                    message: message,
+                    code: errBody?.code,
+                    errorCode: errBody?.error
+                )
+            }
             #if DEBUG
             // Coding path only — never log response bodies (may contain PII).
             NSLog("[RationAPI] decode failed for %@: %@", path, "\(error)")
@@ -233,6 +242,16 @@ final class APIClient {
             #endif
             throw APIError.decoding("\(error)")
         }
+    }
+
+    /// Error text from a JSON envelope, when the success type does not match the body.
+    nonisolated static func serverMessage(in data: Data) -> String? {
+        guard let body = try? JSON.decoder.decode(APIErrorBody.self, from: data) else {
+            return nil
+        }
+        let message = body.message ?? body.error
+        guard let message, !message.isEmpty else { return nil }
+        return message
     }
 
     #if DEBUG

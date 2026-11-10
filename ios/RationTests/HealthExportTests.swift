@@ -34,6 +34,21 @@ final class HealthExportTests: XCTestCase {
         )
     }
 
+    func testTogglePersistsOnOnlyAfterTheSystemAllowsSharing() {
+        XCTAssertEqual(
+            HealthExportToggle.deviceStatus(enabled: false, sharingAuthorized: true),
+            "off"
+        )
+        XCTAssertEqual(
+            HealthExportToggle.deviceStatus(enabled: true, sharingAuthorized: false),
+            "denied"
+        )
+        XCTAssertEqual(
+            HealthExportToggle.deviceStatus(enabled: true, sharingAuthorized: true),
+            "on"
+        )
+    }
+
     func testMissingConsentDoesNotCallHealthStore() async {
         let store = HealthStoreSpy()
         let result = await HealthExportSession.turnOn(

@@ -33,6 +33,14 @@ enum HealthExportPolicy {
     }
 }
 
+/// Device status stored after the system permission sheet. This does not write samples.
+enum HealthExportToggle {
+    static func deviceStatus(enabled: Bool, sharingAuthorized: Bool) -> String {
+        if !enabled { return "off" }
+        return sharingAuthorized ? "on" : "denied"
+    }
+}
+
 struct HealthQuantitySample: Equatable, Sendable {
     var syncIdentifier: String
     var syncVersion: Int

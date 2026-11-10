@@ -24,7 +24,7 @@ Set your **Apple Developer Team ID** in `project.yml` (`DEVELOPMENT_TEAM`) befor
 building to a device, then re-run `xcodegen generate`.
 
 **Versioning:** User-facing app version is `MARKETING_VERSION` in `project.yml`
-(must stay above `LAST_APPROVED_VERSION`, which `ci_scripts/ci_post_clone.sh` checks; currently **1.6.0**, build **150**). `CURRENT_PROJECT_VERSION` is the monotonic build number for
+(must stay above `LAST_APPROVED_VERSION`, which `ci_scripts/ci_post_clone.sh` checks; currently **1.6.0**, build **151**). `CURRENT_PROJECT_VERSION` is the monotonic build number for
 TestFlight / App Store uploads. Follow the same patch/minor rules as the web app
 (`1.X.1`–`1.X.49`, then `1.(X+1).0`); see `.cursor/rules/ration-master.mdc`.
 After editing `project.yml`, run `bun run ios:generate`.

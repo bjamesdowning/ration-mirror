@@ -304,6 +304,12 @@ describe("personal diary route contract", () => {
 		});
 		expect(statusOf(denied)).toBe(403);
 		expect(codeOf(denied)).toBe("nutrition_consent_required");
+		const deniedBody = (
+			denied as { data?: { error?: unknown; code?: unknown } }
+		).data;
+		expect(typeof deniedBody?.error).toBe("string");
+		expect(String(deniedBody?.error ?? "").length).toBeGreaterThan(0);
+		expect(deniedBody).not.toHaveProperty("intakeId");
 
 		await grantIntake(sqlite, "user-a");
 		const flagged = await call(webLog, {
@@ -340,6 +346,22 @@ describe("personal diary route contract", () => {
 		expect(statusOf(first)).toBeUndefined();
 		const intakeId = (first as { intakeId: string; entryId: null }).intakeId;
 		expect((first as { entryId: null }).entryId).toBeNull();
+		const wire = JSON.parse(JSON.stringify(first)) as {
+			intakeId: unknown;
+			replayed: unknown;
+			credits: unknown;
+			entryId: unknown;
+			manifestDate: unknown;
+		};
+		expect(typeof wire.intakeId).toBe("string");
+		expect(wire.intakeId).not.toBe("");
+		expect(wire.replayed).toBe(false);
+		expect(wire.credits).toBe(0);
+		expect(Number.isInteger(wire.credits)).toBe(true);
+		expect(wire.entryId).toBeNull();
+		expect(wire.manifestDate).toEqual(
+			expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+		);
 
 		const replay = await call(webLog, {
 			request: post("https://ration.test/api/nutrition/diary", body()),

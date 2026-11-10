@@ -47,7 +47,7 @@
 	<key>NSHealthUpdateUsageDescription</key>
 	<string>Draft, pending review. Ration writes confirmed foods you logged as eaten — energy, protein, carbohydrates, fat, and fiber when known — to Apple Health. It does not write a daily total, and it does not import anything from Health.</string>
 	<key>NSCameraUsageDescription</key>
-	<string>Ration uses the camera to scan grocery receipts and pantry labels to add items to Cargo.</string>
+	<string>Ration uses the camera to scan grocery receipts and pantry labels, and to photograph a meal when you log what you ate.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Ration uses your photo library for receipt and pantry photos, Supply imports, and profile or group images.</string>
 	<key>UIAppFonts</key>

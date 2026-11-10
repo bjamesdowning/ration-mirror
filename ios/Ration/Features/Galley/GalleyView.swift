@@ -189,7 +189,7 @@ struct GalleyView: View {
         .tabDockAction(tag: .galley, layer: .root) {
             IconFABMenuCore(systemImage: "plus.circle.fill", accessibilityLabel: "Galley actions") {
                 Button { showingAddTypeChoice = true } label: {
-                    Label("Add", systemImage: "plus")
+                    Label("Add Meal", systemImage: "plus")
                 }
                 if env.session.clientFlags.isAiGenerateMealEnabled {
                     Button { showingGenerate = true } label: {

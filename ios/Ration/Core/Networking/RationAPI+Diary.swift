@@ -44,6 +44,46 @@ struct DiaryWriteResponse: Decodable, Sendable {
     let replayed: Bool?
     let credits: Int?
     let voided: Bool?
+    let error: String?
+    let code: String?
+
+    enum CodingKeys: String, CodingKey {
+        case intakeId, replayed, credits, voided, error, code
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        intakeId = try container.decodeIfPresent(String.self, forKey: .intakeId)
+        replayed = try container.decodeIfPresent(Bool.self, forKey: .replayed)
+        voided = try container.decodeIfPresent(Bool.self, forKey: .voided)
+        error = try container.decodeIfPresent(String.self, forKey: .error)
+        code = try container.decodeIfPresent(String.self, forKey: .code)
+        if let whole = try? container.decodeIfPresent(Int.self, forKey: .credits) {
+            credits = whole
+        } else if let fractional = try? container.decodeIfPresent(Double.self, forKey: .credits),
+                  fractional.isFinite {
+            credits = Int(fractional.rounded())
+        } else {
+            credits = nil
+        }
+    }
+
+    /// A write saved only when the body names an intake. An error envelope is not a save.
+    var outcome: DiaryWriteOutcome {
+        if let intakeId, !intakeId.isEmpty {
+            return .saved(intakeId)
+        }
+        if let error, !error.isEmpty {
+            return .rejected(error)
+        }
+        return .unreadable
+    }
+}
+
+enum DiaryWriteOutcome: Equatable, Sendable {
+    case saved(String)
+    case rejected(String)
+    case unreadable
 }
 
 struct DiaryExportResponse: Decodable, Sendable {
@@ -85,6 +125,48 @@ struct SavedFoodRow: Decodable, Identifiable, Sendable {
     let fatG: Double
     let defaultAmount: Double?
     let defaultUnit: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, energyKcal, proteinG, carbsG, fatG, defaultAmount, defaultUnit
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        energyKcal = try Self.number(container, .energyKcal)
+        proteinG = try Self.number(container, .proteinG)
+        carbsG = try Self.number(container, .carbsG)
+        fatG = try Self.number(container, .fatG)
+        defaultAmount = Self.optionalNumber(container, .defaultAmount)
+        defaultUnit = try container.decodeIfPresent(String.self, forKey: .defaultUnit)
+    }
+
+    private static func number(
+        _ container: KeyedDecodingContainer<CodingKeys>,
+        _ key: CodingKeys
+    ) throws -> Double {
+        if let value = try? container.decode(Double.self, forKey: key) { return value }
+        if let raw = try? container.decode(String.self, forKey: key), let value = Double(raw) {
+            return value
+        }
+        throw DecodingError.dataCorruptedError(
+            forKey: key,
+            in: container,
+            debugDescription: "Expected a number"
+        )
+    }
+
+    private static func optionalNumber(
+        _ container: KeyedDecodingContainer<CodingKeys>,
+        _ key: CodingKeys
+    ) -> Double? {
+        guard container.contains(key) else { return nil }
+        if (try? container.decodeNil(forKey: key)) == true { return nil }
+        if let value = try? container.decode(Double.self, forKey: key) { return value }
+        if let raw = try? container.decode(String.self, forKey: key) { return Double(raw) }
+        return nil
+    }
 }
 
 struct SavedFoodListResponse: Decodable, Sendable {
@@ -93,15 +175,15 @@ struct SavedFoodListResponse: Decodable, Sendable {
 
 extension RationAPI {
     func logDiaryFood(_ body: DiaryFoodBody) async throws -> DiaryWriteResponse {
-        try await client.post("nutrition/diary", body: body)
+        try requireDiaryWrite(try await client.post("nutrition/diary", body: body))
     }
 
     func updateDiaryFood(id: String, body: DiaryFoodBody) async throws -> DiaryWriteResponse {
-        try await client.patch("nutrition/diary/\(id)", body: body)
+        try requireDiaryWrite(try await client.patch("nutrition/diary/\(id)", body: body))
     }
 
     func voidDiaryFood(id: String, body: DiaryVoidBody) async throws -> DiaryWriteResponse {
-        try await client.delete("nutrition/diary/\(id)", body: body)
+        try requireDiaryWrite(try await client.delete("nutrition/diary/\(id)", body: body))
     }
 
     func exportDiaryFood() async throws -> DiaryExportResponse {
@@ -109,7 +191,23 @@ extension RationAPI {
     }
 
     func logSavedFood(_ body: SavedFoodLogBody) async throws -> DiaryWriteResponse {
-        try await client.post("nutrition/diary", body: body)
+        try requireDiaryWrite(try await client.post("nutrition/diary", body: body))
+    }
+
+    private func requireDiaryWrite(_ response: DiaryWriteResponse) throws -> DiaryWriteResponse {
+        switch response.outcome {
+        case .saved:
+            return response
+        case .rejected(let message):
+            throw APIError.server(
+                status: 200,
+                message: message,
+                code: response.code,
+                errorCode: response.error
+            )
+        case .unreadable:
+            throw APIError.decoding("diary write missing intakeId")
+        }
     }
 
     func listSavedFoods() async throws -> SavedFoodListResponse {
@@ -141,13 +239,17 @@ extension RationAPI {
         )
     }
 
-    func setHealthExport(enabled: Bool, confirm: Bool) async throws -> HealthExportStatusResponse {
+    func setHealthExport(
+        enabled: Bool,
+        confirm: Bool,
+        deviceStatus: String
+    ) async throws -> HealthExportStatusResponse {
         try await client.put(
             "nutrition/health-export",
             body: HealthExportPreferenceBody(
                 enabled: enabled,
                 confirm: confirm,
-                deviceStatus: enabled ? "needs_device_permission" : "off"
+                deviceStatus: deviceStatus
             )
         )
     }

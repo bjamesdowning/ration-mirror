@@ -5,6 +5,7 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
     @State private var model = SettingsSessionViewModel()
+    @State private var healthExportMessage: String?
     @State private var showingPaywall = false
     @State private var showingPrivacy = false
     @State private var showingNutritionGoals = false
@@ -166,6 +167,11 @@ struct SettingsView: View {
                     )
                     Text("Draft, pending review. Copies confirmed foods you logged as eaten, and can delete the samples Ration wrote. Nothing is imported.")
                         .rationCaption()
+                    if let healthExportMessage {
+                        Text(healthExportMessage)
+                            .rationCaption()
+                            .foregroundStyle(Theme.danger)
+                    }
                 }
             }
 
@@ -226,21 +232,47 @@ struct SettingsView: View {
         return "Version \(short) (\(build))"
     }
 
-    /// Consent is checked by the preference request. A failure returns before HealthKit.
+    /// Ask HealthKit first, then store the preference. Sample writes wait for that save,
+    /// which the server rejects until intake consent exists.
     private func setHealthExport(_ enabled: Bool) async {
-        do {
-            _ = try await env.api.setHealthExport(enabled: enabled, confirm: true)
-        } catch {
-            return
+        healthExportMessage = nil
+        if enabled {
+            do {
+                try await HealthKitExporter.requestAuthorization()
+            } catch {
+                healthExportMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                return
+            }
         }
-        guard enabled else { return }
+        let sharing = enabled && HealthKitExporter.sharingAuthorized()
+        let deviceStatus = HealthExportToggle.deviceStatus(
+            enabled: enabled,
+            sharingAuthorized: sharing
+        )
         do {
-            try await HealthKitExporter.requestAuthorization()
-            guard HealthKitExporter.sharingAuthorized() else { return }
+            let response = try await env.api.setHealthExport(
+                enabled: enabled,
+                confirm: true,
+                deviceStatus: deviceStatus
+            )
+            if var settings = model.settings {
+                settings.healthExport = HealthExportPreference(
+                    enabled: response.enabled ?? enabled,
+                    deviceStatus: response.status ?? deviceStatus,
+                    clearRequested: settings.healthExport?.clearRequested
+                )
+                model.applySettings(settings)
+            }
+            guard enabled, sharing else {
+                if enabled {
+                    healthExportMessage = "Apple Health access is off for Ration."
+                }
+                return
+            }
             let pending = try await env.api.pendingHealthExport()
             try await HealthKitExporter.apply(pending)
         } catch {
-            return
+            healthExportMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
         }
     }
 }

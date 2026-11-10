@@ -87,6 +87,15 @@ struct ManifestView: View {
                         Label("Add entry", systemImage: "plus")
                     }
                     .disabled(!env.network.isOnline)
+                    if fuelCapture {
+                        Button {
+                            fuelExisting = nil
+                            showFuelLog = true
+                        } label: {
+                            Label("Log to Fuel", systemImage: "fork.knife")
+                        }
+                        .disabled(!env.network.isOnline)
+                    }
                     if env.session.clientFlags.isAiPlanWeekEnabled {
                         Button { showingPlanWeek = true } label: {
                             Label("Plan week", systemImage: "sparkles")

@@ -1,4 +1,6 @@
 import SwiftUI
+import UIKit
+import VisionKit
 
 struct LogToFuelExisting: Identifiable, Equatable {
     let id: String
@@ -46,8 +48,8 @@ struct LogToFuelSheet: View {
     @State private var errorMessage: String?
     @State private var saving = false
     @State private var barcodeCode = ""
-    @State private var showBarcode = false
-    @State private var showPhoto = false
+    @State private var showScanner = false
+    @State private var showCamera = false
     @State private var photoRef = ""
     @State private var compositionSource: String?
 
@@ -81,11 +83,18 @@ struct LogToFuelSheet: View {
                 Section {
                     Text("This records what you ate. It does not change Cargo.")
                         .rationCaption()
-                    HStack {
-                        Button("Shutter") { showPhoto = true }
-                            .disabled(!shutterEnabled)
-                        Button("Barcode") { showBarcode = true }
-                            .disabled(!barcodeEnabled)
+                    if shutterEnabled {
+                        Button("Photo") { showCamera = true }
+                            .disabled(saving)
+                    }
+                    if barcodeEnabled {
+                        Button("Barcode") { showScanner = true }
+                            .disabled(saving)
+                    }
+                    if shutterEnabled || barcodeEnabled {
+                        Text("A photo or barcode fills this draft. It is not logged until you save.")
+                            .rationCaption()
+                            .foregroundStyle(Theme.muted)
                     }
                 }
                 if savedFoodsVisible && !saved.isEmpty {
@@ -155,15 +164,21 @@ struct LogToFuelSheet: View {
                 await loadSaved()
             }
             .onAppear(perform: prefill)
-            .alert("Barcode", isPresented: $showBarcode) {
-                TextField("Code", text: $barcodeCode)
-                Button("Look up") { Task { await lookupBarcode() } }
-                Button("Cancel", role: .cancel) {}
+            .fullScreenCover(isPresented: $showCamera) {
+                CameraPicker { image in
+                    showCamera = false
+                    guard let image, let encoded = FuelPhoto.jpegBase64(image) else { return }
+                    photoRef = encoded
+                    Task { await proposePhoto() }
+                }
+                .ignoresSafeArea()
             }
-            .alert("Photo", isPresented: $showPhoto) {
-                TextField("Photo reference", text: $photoRef)
-                Button("Propose") { Task { await proposePhoto() } }
-                Button("Cancel", role: .cancel) {}
+            .sheet(isPresented: $showScanner) {
+                FoodBarcodeCapture(code: $barcodeCode) { code in
+                    showScanner = false
+                    barcodeCode = code
+                    Task { await lookupBarcode() }
+                }
             }
         }
     }
@@ -435,5 +450,111 @@ enum FuelTime {
 
     static func clock(_ date: Date) -> String {
         date.formatted(date: .omitted, time: .shortened)
+    }
+}
+
+/// JPEG bytes for a food-log draft. No data-URL prefix. Not an intake until Save.
+enum FuelPhoto {
+    static func jpegBase64(_ image: UIImage, maxSide: CGFloat = 1280, quality: CGFloat = 0.7) -> String? {
+        let size = image.size
+        guard size.width > 0, size.height > 0 else { return nil }
+        let scale = min(1, maxSide / max(size.width, size.height))
+        let target = CGSize(width: size.width * scale, height: size.height * scale)
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        let rendered = UIGraphicsImageRenderer(size: target, format: format).image { _ in
+            image.draw(in: CGRect(origin: .zero, size: target))
+        }
+        return rendered.jpegData(compressionQuality: quality)?.base64EncodedString()
+    }
+}
+
+/// Camera barcode scan, with a typed code when the scanner is unavailable.
+private struct FoodBarcodeCapture: View {
+    @Binding var code: String
+    var onCode: (String) -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if DataScannerViewController.isSupported && DataScannerViewController.isAvailable {
+                    FoodBarcodeScanner { value in
+                        onCode(value)
+                    }
+                } else {
+                    Form {
+                        TextField("Code", text: $code)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                    }
+                }
+            }
+            .navigationTitle("Barcode")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                if !(DataScannerViewController.isSupported && DataScannerViewController.isAvailable) {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Look up") { onCode(code) }
+                            .disabled(code.trimmingCharacters(in: .whitespaces).count < 4)
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct FoodBarcodeScanner: UIViewControllerRepresentable {
+    var onCode: (String) -> Void
+
+    func makeUIViewController(context: Context) -> DataScannerViewController {
+        let scanner = DataScannerViewController(
+            recognizedDataTypes: [.barcode()],
+            qualityLevel: .balanced,
+            recognizesMultipleItems: false,
+            isHighlightingEnabled: true
+        )
+        scanner.delegate = context.coordinator
+        return scanner
+    }
+
+    func updateUIViewController(_ scanner: DataScannerViewController, context: Context) {
+        guard DataScannerViewController.isSupported, DataScannerViewController.isAvailable else { return }
+        if !scanner.isScanning {
+            try? scanner.startScanning()
+        }
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onCode: onCode)
+    }
+
+    final class Coordinator: NSObject, DataScannerViewControllerDelegate {
+        let onCode: (String) -> Void
+        private var delivered = false
+
+        init(onCode: @escaping (String) -> Void) {
+            self.onCode = onCode
+        }
+
+        func dataScanner(
+            _ dataScanner: DataScannerViewController,
+            didAdd addedItems: [RecognizedItem],
+            allItems: [RecognizedItem]
+        ) {
+            guard !delivered else { return }
+            for item in addedItems {
+                guard case .barcode(let barcode) = item,
+                      let value = barcode.payloadStringValue,
+                      !value.isEmpty
+                else { continue }
+                delivered = true
+                onCode(value)
+                return
+            }
+        }
     }
 }

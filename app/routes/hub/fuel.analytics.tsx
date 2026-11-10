@@ -1,4 +1,5 @@
 import { Link, redirect } from "react-router";
+import { Sparkline } from "~/components/hub/widgets/NutritionFuelWidgets";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { buildWebFlagContext } from "~/lib/feature-flags/flags.server";
 import { isNutritionFuelPageEnabled } from "~/lib/nutrition/fast-log-flag.server";
@@ -120,6 +121,9 @@ export default function FuelAnalyticsPage({
 			<p className="text-sm">
 				Average {average} kcal. Previous period {priorAverage} kcal.
 			</p>
+			{days.length > 0 ? (
+				<Sparkline values={days.map((day) => day.energyKcal)} />
+			) : null}
 			<ul className="space-y-2">
 				{days.map((day) => (
 					<li key={day.date}>

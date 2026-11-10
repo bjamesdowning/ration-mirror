@@ -470,7 +470,7 @@ enum FuelPhoto {
 }
 
 /// Camera barcode scan, with a typed code when the scanner is unavailable.
-private struct FoodBarcodeCapture: View {
+struct FoodBarcodeCapture: View {
     @Binding var code: String
     var onCode: (String) -> Void
     @Environment(\.dismiss) private var dismiss

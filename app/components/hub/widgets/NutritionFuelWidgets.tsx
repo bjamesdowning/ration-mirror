@@ -152,7 +152,7 @@ function MacroBar({
 	);
 }
 
-function Sparkline({ values }: { values: number[] }) {
+export function Sparkline({ values }: { values: number[] }) {
 	const max = Math.max(...values, 1);
 	const bars = values.map((value, offset) => ({
 		id: `bar-${offset}-${Math.round(value * 10)}`,

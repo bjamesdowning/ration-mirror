@@ -222,6 +222,24 @@ extension RationAPI {
         try await client.post("nutrition/diary/barcode", body: FoodBarcodeBody(barcode: barcode))
     }
 
+    func fuelDay(date: String) async throws -> FuelDayResponse {
+        try await client.get("nutrition/fuel?date=\(date)")
+    }
+
+    func submitFuelPhoto(_ body: FuelPhotoSubmitBody) async throws -> FuelPhotoQueuedResponse {
+        try await client.post("nutrition/diary/photo", body: body)
+    }
+
+    func fuelPhotoStatus(_ requestId: String) async throws -> FuelPhotoStatusResponse {
+        try await client.get("nutrition/diary/photo/\(requestId)")
+    }
+
+    func confirmFuelPhoto(requestId: String, body: DiaryFoodBody) async throws -> DiaryWriteResponse {
+        try requireDiaryWrite(
+            try await client.post("nutrition/diary/photo/\(requestId)/confirm", body: body)
+        )
+    }
+
     func proposeFoodLog(
         photoRef: String,
         operationKey: String,
@@ -325,6 +343,72 @@ struct ProposeFoodLogBody: Encodable, Sendable {
         try container.encode(subject, forKey: .subject)
         try container.encodeIfPresent(barcode, forKey: .barcode)
     }
+}
+
+struct FuelDayResponse: Decodable, Sendable {
+    struct Goal: Decodable, Sendable {
+        let dailyEnergyKcal: Double?
+        let proteinG: Double?
+        let carbsG: Double?
+        let fatG: Double?
+        let fiberG: Double?
+    }
+
+    struct Totals: Decodable, Sendable {
+        let energyKcal: Double
+        let proteinG: Double
+        let carbsG: Double
+        let fatG: Double
+    }
+
+    struct Item: Decodable, Identifiable, Sendable {
+        let id: String
+        let name: String
+        let energyKcal: Double
+        let proteinG: Double
+        let carbsG: Double
+        let fatG: Double
+        let occurredAt: String
+        let slotType: String?
+    }
+
+    let date: String
+    let week: [String]
+    let weekStart: String
+    let loggedDates: [String]
+    let used: Int
+    let limit: Int?
+    let crew: Bool
+    let diaryLayout: String
+    let fuelTimeZone: String?
+    let goal: Goal?
+    let totals: Totals?
+    let items: [Item]
+}
+
+struct FuelPhotoSubmitBody: Encodable, Sendable {
+    let operationKey: String
+    let contentType: String
+    let imageBase64: String
+}
+
+struct FuelPhotoQueuedResponse: Decodable, Sendable {
+    let requestId: String
+    let status: String
+}
+
+struct FuelPhotoStatusResponse: Decodable, Sendable {
+    struct Line: Decodable, Sendable {
+        let name: String?
+        let energyKcal: Double?
+        let proteinG: Double?
+        let carbsG: Double?
+        let fatG: Double?
+    }
+
+    let requestId: String
+    let status: String
+    let lines: [Line]?
 }
 
 struct FoodLogDraftResponse: Decodable, Sendable {

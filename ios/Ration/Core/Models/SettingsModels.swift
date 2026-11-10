@@ -87,6 +87,7 @@ struct SettingsPatch: Encodable, Sendable {
     var hubLayout: HubLayoutPayload?
     var manifestSettings: ManifestSettings?
     var diaryLayout: String? = nil
+    var fuelTimeZone: String? = nil
 
     enum CodingKeys: String, CodingKey {
         case theme
@@ -102,6 +103,7 @@ struct SettingsPatch: Encodable, Sendable {
         case hubLayout
         case manifestSettings
         case diaryLayout
+        case fuelTimeZone
     }
 
     func encode(to encoder: Encoder) throws {
@@ -123,5 +125,6 @@ struct SettingsPatch: Encodable, Sendable {
         try container.encodeIfPresent(hubLayout, forKey: .hubLayout)
         try container.encodeIfPresent(manifestSettings, forKey: .manifestSettings)
         try container.encodeIfPresent(diaryLayout, forKey: .diaryLayout)
+        try container.encodeIfPresent(fuelTimeZone, forKey: .fuelTimeZone)
     }
 }

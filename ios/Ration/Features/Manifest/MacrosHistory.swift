@@ -79,6 +79,8 @@ enum MacrosHistoryMath {
 struct MacrosHistoryView: View {
     @Environment(AppEnvironment.self) private var env
     var onOpenGoals: () -> Void = {}
+    /// Fuel analytics shows aggregates only. Manifest keeps the notes list.
+    var showsNotes = true
 
     @State private var preset: Preset = .week
     @State private var includeToday = true
@@ -145,7 +147,9 @@ struct MacrosHistoryView: View {
                 averagesSection(page)
                 comparisonSection(page)
                 daysSection(page)
-                notesSection(page)
+                if showsNotes {
+                    notesSection(page)
+                }
             }
         }
         .scrollContentBackground(.hidden)

@@ -111,6 +111,52 @@ describe("isFeatureEnabled", () => {
 		vi.clearAllMocks();
 	});
 
+	it("honors a development test header and ignores it in production", async () => {
+		const request = new Request("http://127.0.0.1/", {
+			headers: {
+				"x-ration-test-flags": JSON.stringify({ "smoke-test": true }),
+			},
+		});
+		const devContext = buildWebFlagContext(request, {
+			RATION_ENV: "development",
+		});
+		const dev = await isFeatureEnabled(
+			{ ...createMockEnv(), RATION_ENV: "development" },
+			"smoke-test" as never,
+			devContext,
+		);
+		expect(dev).toBe(true);
+		const remote = new Request("https://ration.test/", {
+			headers: request.headers,
+		});
+		const remoteContext = buildWebFlagContext(remote, {
+			RATION_ENV: "development",
+		});
+		const remoteEnabled = await isFeatureEnabled(
+			{
+				...createMockEnv(),
+				RATION_ENV: "development",
+				FLAGS: { getBooleanValue: async () => false } as never,
+			},
+			"smoke-test" as never,
+			remoteContext,
+		);
+		expect(remoteEnabled).toBe(false);
+		const prodContext = buildWebFlagContext(request, {
+			RATION_ENV: "production",
+		});
+		const prod = await isFeatureEnabled(
+			{
+				...createMockEnv(),
+				RATION_ENV: "production",
+				FLAGS: { getBooleanValue: async () => false } as never,
+			},
+			"smoke-test" as never,
+			prodContext,
+		);
+		expect(prod).toBe(false);
+	});
+
 	it("respects FEATURE_FLAG_OVERRIDES over binding", async () => {
 		const getBooleanValue = vi.fn().mockResolvedValue(true);
 		const env = {

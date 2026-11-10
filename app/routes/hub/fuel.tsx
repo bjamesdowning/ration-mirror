@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
+	data,
 	Link,
 	redirect,
 	useFetcher,
@@ -7,10 +8,15 @@ import {
 	useRevalidator,
 	useSearchParams,
 } from "react-router";
-import { requireActiveGroup } from "~/lib/auth.server";
+import { patchUserSettings, requireActiveGroup } from "~/lib/auth.server";
 import { buildWebFlagContext } from "~/lib/feature-flags/flags.server";
-import { isNutritionFuelPageEnabled } from "~/lib/nutrition/fast-log-flag.server";
+import {
+	isNutritionFastLogEnabled,
+	isNutritionFuelPageEnabled,
+} from "~/lib/nutrition/fast-log-flag.server";
+import { pollFuelPhoto } from "~/lib/nutrition/fuel-photo-client";
 import { loadFuelDay } from "~/lib/nutrition/fuel-read.server";
+import { FUEL_PHOTO_MAX_BYTES } from "~/lib/schemas/fuel";
 import type { Route } from "./+types/fuel";
 
 const APPLE_HEALTH_REMAINS =
@@ -35,6 +41,30 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 	return { day, healthNote: APPLE_HEALTH_REMAINS };
 }
 
+export async function action({ request, context }: Route.ActionArgs) {
+	const {
+		session: { user },
+	} = await requireActiveGroup(context, request);
+	const env = context.cloudflare.env;
+	const flags = buildWebFlagContext(request, env, { user });
+	if (!(await isNutritionFuelPageEnabled(env, flags))) {
+		throw data({ code: "FEATURE_DISABLED" }, { status: 403 });
+	}
+	const form = await request.formData();
+	if (form.get("intent") !== "update-diary-layout") {
+		throw data({ code: "invalid_request" }, { status: 400 });
+	}
+	const layout = form.get("diaryLayout");
+	if (layout !== "timeline" && layout !== "slots") {
+		throw data({ code: "invalid_request" }, { status: 400 });
+	}
+	if (!(await isNutritionFastLogEnabled(env, flags))) {
+		throw data({ code: "FEATURE_DISABLED" }, { status: 403 });
+	}
+	await patchUserSettings(env.DB, user.id, { diaryLayout: layout });
+	return { diaryLayout: layout };
+}
+
 export default function FuelPage({ loaderData }: Route.ComponentProps) {
 	const { day } = loaderData;
 	const [params] = useSearchParams();
@@ -46,7 +76,16 @@ export default function FuelPage({ loaderData }: Route.ComponentProps) {
 	const [error, setError] = useState<string | null>(null);
 	const [showAdd, setShowAdd] = useState(false);
 	const [showGoals, setShowGoals] = useState(editor);
+	const [showBarcode, setShowBarcode] = useState(false);
+	const [showScan, setShowScan] = useState(false);
 	const capped = day.limit != null && day.used >= day.limit;
+	const pollAbort = useRef<AbortController | null>(null);
+
+	useEffect(() => {
+		return () => {
+			pollAbort.current?.abort();
+		};
+	}, []);
 
 	useEffect(() => {
 		const sync = () => setOnline(navigator.onLine);
@@ -69,11 +108,28 @@ export default function FuelPage({ loaderData }: Route.ComponentProps) {
 			navigate("/hub/pricing");
 			return;
 		}
+		setError(null);
 		if (kind === "add") setShowAdd(true);
-		if (kind === "scan")
-			setError("Choose a photo. The scan queue confirms one meal.");
-		if (kind === "barcode")
-			setError("Enter a barcode of 8, 12, 13, or 14 digits.");
+		if (kind === "scan") setShowScan(true);
+		if (kind === "barcode") setShowBarcode(true);
+	}
+
+	async function voidRow(id: string) {
+		if (!online) return;
+		const response = await fetch(`/api/nutrition/diary/${id}`, {
+			method: "DELETE",
+			headers: { "content-type": "application/json" },
+			body: JSON.stringify({
+				confirm: true,
+				operationKey: crypto.randomUUID(),
+			}),
+		});
+		if (!response.ok) {
+			setError("That log was not removed.");
+			return;
+		}
+		setError(null);
+		revalidator.revalidate();
 	}
 
 	async function submitAdd(form: FormData) {
@@ -242,6 +298,48 @@ export default function FuelPage({ loaderData }: Route.ComponentProps) {
 				</button>
 			</div>
 
+			<form method="post" className="flex gap-2">
+				<input type="hidden" name="intent" value="update-diary-layout" />
+				{(["timeline", "slots"] as const).map((layout) => (
+					<button
+						key={layout}
+						type="submit"
+						name="diaryLayout"
+						value={layout}
+						aria-pressed={day.diaryLayout === layout}
+						className="min-h-11 rounded-xl border border-platinum px-3 text-sm capitalize"
+					>
+						{layout}
+					</button>
+				))}
+			</form>
+
+			{showScan && !capped ? (
+				<ScanToFuel
+					online={online}
+					onClose={() => setShowScan(false)}
+					onLimit={() => navigate("/hub/pricing")}
+					onSaved={() => {
+						setShowScan(false);
+						revalidator.revalidate();
+					}}
+					onError={setError}
+					pollAbort={pollAbort}
+				/>
+			) : null}
+			{showBarcode && !capped ? (
+				<BarcodeToFuel
+					online={online}
+					onClose={() => setShowBarcode(false)}
+					onLimit={() => navigate("/hub/pricing")}
+					onSaved={() => {
+						setShowBarcode(false);
+						revalidator.revalidate();
+					}}
+					onError={setError}
+				/>
+			) : null}
+
 			<section aria-label={day.diaryLayout === "slots" ? "Slots" : "Timeline"}>
 				<h2 className="text-xs uppercase tracking-widest text-muted mb-2">
 					{day.diaryLayout === "slots" ? "Slots" : "Timeline"}
@@ -259,6 +357,14 @@ export default function FuelPage({ loaderData }: Route.ComponentProps) {
 							<span className="text-xs text-muted">
 								{Math.round(item.energyKcal)} kcal
 							</span>
+							<button
+								type="button"
+								className="min-h-11 px-3 text-sm"
+								aria-label={`Void ${item.mealName ?? "food"}`}
+								onClick={() => void voidRow(item.id)}
+							>
+								Void
+							</button>
 						</li>
 					))}
 					{day.items.length === 0 && !pendingName ? (
@@ -394,12 +500,399 @@ function GoalEditor({ date }: { date: string }) {
 					/>
 				</label>
 			))}
-			<button
-				type="submit"
-				className="min-h-11 rounded-xl bg-carbon px-4 text-ceramic"
-			>
-				Save
-			</button>
+			<div className="flex gap-2">
+				<button
+					type="submit"
+					className="min-h-11 rounded-xl bg-carbon px-4 text-ceramic"
+				>
+					Save
+				</button>
+				<button
+					type="button"
+					className="min-h-11 rounded-xl border border-platinum px-4 text-sm"
+					onClick={() => {
+						fetcher.submit(null, {
+							method: "DELETE",
+							action: `/api/nutrition/goals?operationKey=${crypto.randomUUID()}&asOf=${date}`,
+						});
+					}}
+				>
+					Clear
+				</button>
+			</div>
 		</fetcher.Form>
+	);
+}
+
+function ScanToFuel({
+	online,
+	onClose,
+	onLimit,
+	onSaved,
+	onError,
+	pollAbort,
+}: {
+	online: boolean;
+	onClose: () => void;
+	onLimit: () => void;
+	onSaved: () => void;
+	onError: (message: string) => void;
+	pollAbort: { current: AbortController | null };
+}) {
+	const [review, setReview] = useState<{
+		requestId: string;
+		name: string;
+		energy: number;
+		protein: number;
+		carbs: number;
+		fat: number;
+	} | null>(null);
+	const [busy, setBusy] = useState(false);
+
+	async function upload(file: File) {
+		if (!online) return;
+		if (file.size > FUEL_PHOTO_MAX_BYTES) {
+			onError("That photo is over 3 MB.");
+			return;
+		}
+		const contentType = file.type;
+		if (
+			contentType !== "image/jpeg" &&
+			contentType !== "image/png" &&
+			contentType !== "image/webp"
+		) {
+			onError("Use a JPEG, PNG, or WebP photo.");
+			return;
+		}
+		setBusy(true);
+		onError("");
+		const bytes = new Uint8Array(await file.arrayBuffer());
+		let binary = "";
+		for (const byte of bytes) binary += String.fromCharCode(byte);
+		const controller = new AbortController();
+		pollAbort.current?.abort();
+		pollAbort.current = controller;
+		try {
+			const response = await fetch("/api/nutrition/diary/photo", {
+				method: "POST",
+				credentials: "same-origin",
+				headers: { "Content-Type": "application/json" },
+				signal: controller.signal,
+				body: JSON.stringify({
+					operationKey: crypto.randomUUID(),
+					contentType,
+					imageBase64: btoa(binary),
+				}),
+			});
+			const body = (await response.json().catch(() => null)) as {
+				code?: string;
+				requestId?: string;
+			} | null;
+			if (body?.code === "fuel_daily_limit") {
+				onLimit();
+				return;
+			}
+			if (!response.ok || !body?.requestId) {
+				onError("That photo was not queued.");
+				return;
+			}
+			const polled = await pollFuelPhoto(body.requestId, {
+				signal: controller.signal,
+			});
+			if (polled.status !== "ready_to_review" || !polled.lines?.length) {
+				onError(`Photo status: ${polled.status}.`);
+				return;
+			}
+			const lines = polled.lines;
+			setReview({
+				requestId: body.requestId,
+				name: lines.map((line) => line.name || "Food").join(", "),
+				energy: lines.reduce(
+					(sum, line) => sum + Number(line.energyKcal ?? 0),
+					0,
+				),
+				protein: lines.reduce(
+					(sum, line) => sum + Number(line.proteinG ?? 0),
+					0,
+				),
+				carbs: lines.reduce((sum, line) => sum + Number(line.carbsG ?? 0), 0),
+				fat: lines.reduce((sum, line) => sum + Number(line.fatG ?? 0), 0),
+			});
+		} catch (error) {
+			if (error instanceof DOMException && error.name === "AbortError") return;
+			onError("That photo was not queued.");
+		} finally {
+			setBusy(false);
+		}
+	}
+
+	async function confirm() {
+		if (!review) return;
+		setBusy(true);
+		const response = await fetch(
+			`/api/nutrition/diary/photo/${review.requestId}/confirm`,
+			{
+				method: "POST",
+				credentials: "same-origin",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					name: review.name,
+					occurredAt: new Date().toISOString(),
+					amount: 1,
+					unit: "serving",
+					macros: {
+						energyKcal: review.energy,
+						proteinG: review.protein,
+						carbsG: review.carbs,
+						fatG: review.fat,
+					},
+					idempotencyKey: crypto.randomUUID(),
+					operationKey: crypto.randomUUID(),
+					compositionSource: "ai_estimate",
+				}),
+			},
+		);
+		const body = (await response.json().catch(() => null)) as {
+			code?: string;
+		} | null;
+		setBusy(false);
+		if (body?.code === "fuel_daily_limit") {
+			onLimit();
+			return;
+		}
+		if (!response.ok) {
+			onError("That meal was not saved.");
+			return;
+		}
+		onSaved();
+	}
+
+	return (
+		<div className="space-y-3 rounded-xl border border-platinum p-4">
+			<p className="text-sm">
+				Scan to Fuel takes one photo, then one meal. The camera or a file both
+				work.
+			</p>
+			<input
+				type="file"
+				accept="image/jpeg,image/png,image/webp"
+				capture="environment"
+				aria-label="Fuel photo"
+				className="min-h-11"
+				disabled={!online || busy}
+				onChange={(event) => {
+					const file = event.target.files?.[0];
+					if (file) void upload(file);
+				}}
+			/>
+			{busy ? <p className="text-sm">Working on that photo.</p> : null}
+			{review ? (
+				<form
+					className="space-y-2"
+					onSubmit={(event) => {
+						event.preventDefault();
+						void confirm();
+					}}
+				>
+					<p className="text-sm">{review.name}</p>
+					<p className="text-sm">{Math.round(review.energy)} kcal</p>
+					<button
+						type="submit"
+						className="min-h-11 rounded-xl bg-carbon px-4 text-ceramic"
+					>
+						Confirm meal
+					</button>
+				</form>
+			) : null}
+			<button
+				type="button"
+				className="min-h-11 text-sm underline"
+				onClick={onClose}
+			>
+				Close
+			</button>
+		</div>
+	);
+}
+
+function BarcodeToFuel({
+	online,
+	onClose,
+	onLimit,
+	onSaved,
+	onError,
+}: {
+	online: boolean;
+	onClose: () => void;
+	onLimit: () => void;
+	onSaved: () => void;
+	onError: (message: string) => void;
+}) {
+	const [code, setCode] = useState("");
+	const [hit, setHit] = useState<{
+		name: string;
+		energy: number;
+		protein: number;
+		carbs: number;
+		fat: number;
+	} | null>(null);
+	const started = useRef(false);
+
+	useEffect(() => {
+		if (started.current || !online) return;
+		started.current = true;
+		const Detector = (
+			window as Window & {
+				BarcodeDetector?: new (options: {
+					formats: string[];
+				}) => {
+					detect: (
+						source: ImageBitmapSource,
+					) => Promise<Array<{ rawValue: string }>>;
+				};
+			}
+		).BarcodeDetector;
+		if (!Detector || !navigator.mediaDevices?.getUserMedia) return;
+		const video = document.createElement("video");
+		let stream: MediaStream | null = null;
+		let stopped = false;
+		void (async () => {
+			try {
+				stream = await navigator.mediaDevices.getUserMedia({
+					video: { facingMode: "environment" },
+				});
+				if (stopped) {
+					for (const track of stream.getTracks()) track.stop();
+					return;
+				}
+				video.srcObject = stream;
+				await video.play();
+				const detector = new Detector({
+					formats: ["ean_13", "ean_8", "upc_a", "upc_e"],
+				});
+				const found = await detector.detect(video);
+				const value = found[0]?.rawValue?.replace(/\D/g, "") ?? "";
+				if (value) setCode(value);
+			} catch {
+				onError("The camera is off. Type the barcode.");
+			} finally {
+				if (stream) for (const track of stream.getTracks()) track.stop();
+			}
+		})();
+		return () => {
+			stopped = true;
+			if (stream) for (const track of stream.getTracks()) track.stop();
+		};
+	}, [online, onError]);
+
+	async function lookup() {
+		if (!online) return;
+		const response = await fetch("/api/nutrition/diary/barcode", {
+			method: "POST",
+			credentials: "same-origin",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ barcode: code }),
+		});
+		const body = (await response.json().catch(() => null)) as {
+			code?: string;
+			found?: boolean;
+			name?: string;
+			macros?: {
+				energyKcal: number;
+				proteinG: number;
+				carbsG: number;
+				fatG: number;
+			};
+		} | null;
+		if (body?.code === "fuel_daily_limit") {
+			onLimit();
+			return;
+		}
+		if (!response.ok || !body?.found || !body.name || !body.macros) {
+			onError("No food matched that barcode.");
+			return;
+		}
+		setHit({
+			name: body.name,
+			energy: body.macros.energyKcal,
+			protein: body.macros.proteinG,
+			carbs: body.macros.carbsG,
+			fat: body.macros.fatG,
+		});
+	}
+
+	async function confirm() {
+		if (!hit) return;
+		const response = await fetch("/api/nutrition/diary", {
+			method: "POST",
+			credentials: "same-origin",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({
+				name: hit.name,
+				occurredAt: new Date().toISOString(),
+				amount: 1,
+				unit: "serving",
+				macros: {
+					energyKcal: hit.energy,
+					proteinG: hit.protein,
+					carbsG: hit.carbs,
+					fatG: hit.fat,
+				},
+				idempotencyKey: crypto.randomUUID(),
+				operationKey: crypto.randomUUID(),
+				compositionSource: "usda",
+			}),
+		});
+		const body = (await response.json().catch(() => null)) as {
+			code?: string;
+		} | null;
+		if (body?.code === "fuel_daily_limit") {
+			onLimit();
+			return;
+		}
+		if (!response.ok) {
+			onError("That barcode was not logged.");
+			return;
+		}
+		onSaved();
+	}
+
+	return (
+		<div className="space-y-3 rounded-xl border border-platinum p-4">
+			<label className="block text-sm">
+				Barcode
+				<input
+					value={code}
+					inputMode="numeric"
+					aria-label="Barcode"
+					className="mt-1 block min-h-11 w-full"
+					onChange={(event) => setCode(event.target.value.replace(/\D/g, ""))}
+				/>
+			</label>
+			<button
+				type="button"
+				className="min-h-11 rounded-xl bg-carbon px-4 text-ceramic"
+				disabled={!online || code.length < 8}
+				onClick={() => void lookup()}
+			>
+				Look up
+			</button>
+			{hit ? (
+				<button
+					type="button"
+					className="min-h-11 rounded-xl border border-platinum px-4 text-sm"
+					onClick={() => void confirm()}
+				>
+					Confirm {hit.name}
+				</button>
+			) : null}
+			<button
+				type="button"
+				className="min-h-11 text-sm underline"
+				onClick={onClose}
+			>
+				Close
+			</button>
+		</div>
 	);
 }

@@ -52,7 +52,12 @@ async function evaluateFlagBinding(
 	context: FlagshipEvaluationContext,
 ): Promise<boolean> {
 	try {
-		return await flags.getBooleanValue(flag, defaultEnabled, context);
+		const flagshipContext: FlagshipEvaluationContext = {};
+		for (const [key, value] of Object.entries(context)) {
+			if (key.startsWith("testFlag:")) continue;
+			flagshipContext[key] = value;
+		}
+		return await flags.getBooleanValue(flag, defaultEnabled, flagshipContext);
 	} catch {
 		// Local Vite dev / Miniflare may expose FLAGS but require remote execution.
 		return defaultEnabled;
@@ -72,6 +77,11 @@ export async function isFeatureEnabled(
 	const override = getEnvOverride(env, flag);
 	if (override !== undefined) {
 		return override;
+	}
+
+	if (env.RATION_ENV !== "production") {
+		const testValue = context[`testFlag:${flag}`];
+		if (typeof testValue === "boolean") return testValue;
 	}
 
 	if (entry.iosAlwaysOn && isShippedIosClient(context)) {

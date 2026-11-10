@@ -109,6 +109,7 @@ export function buildWebFlagContext(
 	const context = baseContext(request, env, session, options);
 	context.clientPlatform = "web";
 	context.clientVersion = APP_VERSION;
+	applyDevelopmentTestFlags(request, env, context);
 	return context;
 }
 
@@ -140,7 +141,36 @@ export function buildMobileFlagContext(
 	if (reported.clientVersion) {
 		context.clientVersion = reported.clientVersion;
 	}
+	applyDevelopmentTestFlags(request, env, context);
 	return context;
+}
+
+/**
+ * A local Worker can turn flags on for one request via
+ * `x-ration-test-flags`. Production and any host other than localhost ignore
+ * the header. The values stay off the Flagship context.
+ */
+export function applyDevelopmentTestFlags(
+	request: Request,
+	env: { RATION_ENV?: string },
+	context: FlagshipEvaluationContext,
+): void {
+	if (env.RATION_ENV === "production") return;
+	const host = new URL(request.url).hostname;
+	if (host !== "localhost" && host !== "127.0.0.1") return;
+	const raw = request.headers.get("x-ration-test-flags");
+	if (!raw) return;
+	try {
+		const parsed = JSON.parse(raw) as unknown;
+		if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return;
+		for (const [key, value] of Object.entries(parsed)) {
+			if (typeof value !== "boolean" || !/^[a-z0-9-]{1,64}$/.test(key))
+				continue;
+			context[`testFlag:${key}`] = value;
+		}
+	} catch {
+		/* A bad test header does not change flags. */
+	}
 }
 
 /**

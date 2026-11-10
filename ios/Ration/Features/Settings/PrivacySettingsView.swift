@@ -10,6 +10,9 @@ struct PrivacySettingsView: View {
             FeatureEnablementView(variant: .settings)
                 .safeAreaInset(edge: .bottom) {
                     HStack(spacing: 16) {
+                        Text(FuelAccountDeletion.healthSamplesRemain)
+                            .font(Typography.caption())
+                            .foregroundStyle(Theme.muted)
                         Button("Privacy Policy") { openURL(AppConfig.privacyURL) }
                         Button("Terms of Service") { openURL(AppConfig.termsURL) }
                     }

@@ -10,6 +10,11 @@ import {
 	DiaryKitchenSaveSchema,
 	DiaryVoidSchema,
 } from "~/lib/schemas/diary";
+import {
+	FUEL_PHOTO_MAX_BYTES,
+	FuelBarcodeSchema,
+	FuelPhotoContentTypeSchema,
+} from "~/lib/schemas/fuel";
 import { UuidSchema } from "~/lib/schemas/uuid";
 import {
 	exportDiaryFood,
@@ -19,8 +24,17 @@ import {
 	updateDiaryFood,
 	voidDiaryFood,
 } from "./diary.server";
-import { assertNutritionBarcodeDiary } from "./fast-log-flag.server";
+import {
+	assertNutritionBarcodeDiary,
+	isNutritionFuelPageEnabled,
+} from "./fast-log-flag.server";
 import { lookupFoodBarcode } from "./food-barcode.server";
+import { assertFuelCreateRoom } from "./fuel-cap.server";
+import {
+	confirmFuelPhoto,
+	readFuelPhoto,
+	submitFuelPhoto,
+} from "./fuel-photo.server";
 import { proposeFoodLog } from "./propose-food-log.server";
 import type {
 	NutritionFlagContext,
@@ -33,7 +47,7 @@ export async function beginDiaryRequest(
 	context: AppLoadContext,
 	auth: { groupId: string; userId: string },
 	surface: "web" | "mobile",
-	bucket: "settings_mutation" | "api_export",
+	bucket: "settings_mutation" | "api_export" | "scan" | "barcode_lookup",
 ) {
 	const env = context.cloudflare.env;
 	const rateLimitResult = await checkRateLimit(
@@ -71,6 +85,20 @@ async function readBody(request: Request): Promise<unknown> {
 	}
 }
 
+async function rejectInvalidDiary(
+	env: Env,
+	flags: NutritionFlagContext,
+	parsed: { error: { flatten: () => unknown } },
+): Promise<never> {
+	if (await isNutritionFuelPageEnabled(env, flags)) {
+		throw data({ code: "invalid_request" }, { status: 400 });
+	}
+	throw data(
+		{ error: "Invalid request", details: parsed.error.flatten() },
+		{ status: 400 },
+	);
+}
+
 export async function postDiaryLog(
 	request: Request,
 	env: Env,
@@ -78,12 +106,7 @@ export async function postDiaryLog(
 	flags: NutritionFlagContext,
 ) {
 	const parsed = DiaryFoodWriteSchema.safeParse(await readBody(request));
-	if (!parsed.success) {
-		throw data(
-			{ error: "Invalid request", details: parsed.error.flatten() },
-			{ status: 400 },
-		);
-	}
+	if (!parsed.success) return rejectInvalidDiary(env, flags, parsed);
 	const operationKey = resolveHttpOperationKey(
 		request.headers,
 		parsed.data.operationKey,
@@ -95,25 +118,45 @@ export async function postDiaryLog(
 }
 
 const FoodBarcodeSchema = z.object({
-	barcode: z.string().trim().min(4).max(32),
+	barcode: FuelBarcodeSchema,
 });
 
 const ProposeFoodLogSchema = z.object({
 	operationKey: UuidSchema,
 	photoRef: z.string().trim().min(1).max(8_000_000).optional(),
 	subject: z.enum(["packaged", "meal", "loose_produce", "custom"]).optional(),
-	barcode: z.string().trim().min(4).max(32).optional(),
+	barcode: FuelBarcodeSchema.optional(),
 });
+
+function clientIp(request: Request): string {
+	return request.headers.get("cf-connecting-ip")?.trim() || "unknown";
+}
 
 export async function postFoodBarcode(
 	request: Request,
 	env: Env,
+	principal: NutritionPrincipal,
 	flags: NutritionFlagContext,
 ) {
 	await assertNutritionBarcodeDiary(env, flags);
+	const userLimit = await checkRateLimit(
+		env.RATION_KV,
+		"barcode_lookup",
+		principal.userId,
+	);
+	if (!userLimit.allowed) throw rateLimitResponse(userLimit);
+	const ipLimit = await checkRateLimit(
+		env.RATION_KV,
+		"barcode_lookup",
+		`ip:${clientIp(request)}`,
+	);
+	if (!ipLimit.allowed) throw rateLimitResponse(ipLimit);
 	const parsed = FoodBarcodeSchema.safeParse(await readBody(request));
 	if (!parsed.success) {
-		throw data({ error: "Invalid request" }, { status: 400 });
+		throw data({ code: "invalid_request" }, { status: 400 });
+	}
+	if (await isNutritionFuelPageEnabled(env, flags)) {
+		await assertFuelCreateRoom(env.DB, principal.userId, new Date());
 	}
 	return lookupFoodBarcode(env, parsed.data.barcode);
 }
@@ -124,6 +167,15 @@ export async function postProposeFoodLog(
 	principal: NutritionPrincipal,
 	flags: NutritionFlagContext,
 ) {
+	if (await isNutritionFuelPageEnabled(env, flags)) {
+		throw data(
+			{
+				error: "Scan to Fuel uses the photo queue.",
+				code: "FEATURE_DISABLED",
+			},
+			{ status: 403 },
+		);
+	}
 	const parsed = ProposeFoodLogSchema.safeParse(await readBody(request));
 	if (!parsed.success) {
 		throw data({ error: "Invalid request" }, { status: 400 });
@@ -146,12 +198,7 @@ export async function patchDiaryLog(
 	intakeId: string,
 ) {
 	const parsed = DiaryFoodWriteSchema.safeParse(await readBody(request));
-	if (!parsed.success) {
-		throw data(
-			{ error: "Invalid request", details: parsed.error.flatten() },
-			{ status: 400 },
-		);
-	}
+	if (!parsed.success) return rejectInvalidDiary(env, flags, parsed);
 	const operationKey = resolveHttpOperationKey(
 		request.headers,
 		parsed.data.operationKey,
@@ -170,12 +217,7 @@ export async function deleteDiaryLog(
 	intakeId: string,
 ) {
 	const parsed = DiaryVoidSchema.safeParse(await readBody(request));
-	if (!parsed.success) {
-		throw data(
-			{ error: "Invalid request", details: parsed.error.flatten() },
-			{ status: 400 },
-		);
-	}
+	if (!parsed.success) return rejectInvalidDiary(env, flags, parsed);
 	const operationKey = resolveHttpOperationKey(
 		request.headers,
 		parsed.data.operationKey,
@@ -225,4 +267,101 @@ export async function postDiaryQuote(
 	flags: NutritionFlagContext,
 ) {
 	return quoteFoodLog(env, principal, flags);
+}
+
+function mapFuelPhotoConsent(error: unknown): never {
+	const code =
+		error && typeof error === "object" && "code" in error
+			? String((error as { code: unknown }).code)
+			: "";
+	if (
+		code === "nutrition_consent_required" ||
+		code === "nutrition_reconsent_required" ||
+		code === "ai_consent_required"
+	) {
+		throw data({ code: "consent_required" }, { status: 403 });
+	}
+	throw error;
+}
+
+function decodePhoto(imageBase64: string): ArrayBuffer {
+	const binary = atob(imageBase64);
+	const bytes = new Uint8Array(binary.length);
+	for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+	return bytes.buffer;
+}
+
+const FuelPhotoSubmitSchema = z.object({
+	operationKey: UuidSchema,
+	contentType: FuelPhotoContentTypeSchema,
+	imageBase64: z.string().min(1),
+});
+
+export async function postFuelPhoto(
+	request: Request,
+	env: Env,
+	principal: NutritionPrincipal,
+	flags: NutritionFlagContext,
+) {
+	const scanLimit = await checkRateLimit(
+		env.RATION_KV,
+		"scan",
+		principal.userId,
+	);
+	if (!scanLimit.allowed) throw rateLimitResponse(scanLimit);
+	const contentLength = Number(request.headers.get("content-length") ?? "0");
+	if (contentLength > FUEL_PHOTO_MAX_BYTES * 2) {
+		throw data({ code: "photo_too_large" }, { status: 400 });
+	}
+	const parsed = FuelPhotoSubmitSchema.safeParse(await readBody(request));
+	if (!parsed.success) throw data({ code: "invalid_request" }, { status: 400 });
+	let bytes: ArrayBuffer;
+	try {
+		bytes = decodePhoto(parsed.data.imageBase64);
+	} catch {
+		throw data({ code: "invalid_request" }, { status: 400 });
+	}
+	try {
+		return await submitFuelPhoto(env, principal, flags, {
+			operationKey: parsed.data.operationKey,
+			contentType: parsed.data.contentType,
+			bytes,
+		});
+	} catch (error) {
+		mapFuelPhotoConsent(error);
+	}
+}
+
+export async function getFuelPhoto(
+	env: Env,
+	principal: NutritionPrincipal,
+	requestId: string,
+) {
+	try {
+		return await readFuelPhoto(env, principal.userId, requestId);
+	} catch (error) {
+		mapFuelPhotoConsent(error);
+	}
+}
+
+export async function postFuelPhotoConfirm(
+	request: Request,
+	env: Env,
+	principal: NutritionPrincipal,
+	flags: NutritionFlagContext,
+	requestId: string,
+) {
+	const parsed = DiaryFoodWriteSchema.safeParse(await readBody(request));
+	if (!parsed.success) throw data({ code: "invalid_request" }, { status: 400 });
+	try {
+		return await confirmFuelPhoto(
+			env,
+			principal,
+			flags,
+			requestId,
+			parsed.data,
+		);
+	} catch (error) {
+		mapFuelPhotoConsent(error);
+	}
 }

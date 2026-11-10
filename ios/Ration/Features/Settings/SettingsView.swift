@@ -123,7 +123,13 @@ struct SettingsView: View {
             }
 
             Section("Nutrition") {
-                Button("Nutrition Goals") { showingNutritionGoals = true }
+                Button("Nutrition Goals") {
+                    if env.session.clientFlags.isNutritionFuelPageEnabled {
+                        env.openDeepLink(.fuelGoals)
+                    } else {
+                        showingNutritionGoals = true
+                    }
+                }
                 if DiaryLayout.controlVisible(
                     fastLogEnabled: env.session.clientFlags.isNutritionFastLogEnabled,
                     appVersion: AppMarketingVersion.current

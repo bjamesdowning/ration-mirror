@@ -78,6 +78,7 @@ import {
 } from "~/lib/org-supply-settings.server";
 import { isPersonalOrganization } from "~/lib/personal-group";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
+import { FuelTimeZoneSchema } from "~/lib/schemas/fuel";
 import { HubLayoutSchema } from "~/lib/schemas/hub";
 import { UnitDisplayModeSchema } from "~/lib/schemas/supply";
 import type { TagWithCounts } from "~/lib/tags";
@@ -492,6 +493,16 @@ export async function action(args: Route.ActionArgs) {
 		);
 	}
 
+	if (intent === "update-fuel-timezone") {
+		const zone = formData.get("fuelTimeZone");
+		const parsed = FuelTimeZoneSchema.safeParse(zone);
+		if (!parsed.success) {
+			return data({ code: "fuel_timezone_required" }, { status: 400 });
+		}
+		await patchUserSettings(env.DB, userId, { fuelTimeZone: parsed.data });
+		return { success: true };
+	}
+
 	if (intent === "update-diary-layout") {
 		const layout = formData.get("diaryLayout");
 		if (layout !== "timeline" && layout !== "slots") {
@@ -746,13 +757,23 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 	const [activeSection, setActiveSection] =
 		useState<SectionId>(getInitialSection);
 
+	const fuelPageOn =
+		(
+			useRouteLoaderData("root") as
+				| { clientFlags?: { nutritionFuelPage?: boolean } }
+				| undefined
+		)?.clientFlags?.nutritionFuelPage === true;
 	useEffect(() => {
 		if (typeof window === "undefined") return;
+		if (fuelPageOn && window.location.hash === "#nutrition-goals") {
+			window.location.replace("/hub/fuel?editor=goals");
+			return;
+		}
 		const hash = window.location.hash;
 		if (hash !== "#nutrition-goals" && hash !== "#feature-enablement") return;
 		const el = document.getElementById(hash.slice(1));
 		el?.scrollIntoView({ behavior: "smooth", block: "start" });
-	}, []);
+	}, [fuelPageOn]);
 
 	const navItems = isAdmin
 		? [
@@ -1908,13 +1929,16 @@ function PreferencesSection({
 				clientFlags?: {
 					nutritionGoals?: boolean;
 					nutritionFastLog?: boolean;
+					nutritionFuelPage?: boolean;
 					nutritionHealthExport?: boolean;
 				};
 		  }
 		| undefined;
 	/** Match cargo/Galley: gate on root clientFlags, not route loader alone. */
 	const nutritionGoalsEnabled = rootData?.clientFlags?.nutritionGoals === true;
-	const diaryLayoutVisible = rootData?.clientFlags?.nutritionFastLog === true;
+	const fuelPage = rootData?.clientFlags?.nutritionFuelPage === true;
+	const diaryLayoutVisible =
+		rootData?.clientFlags?.nutritionFastLog === true && !fuelPage;
 	const healthExportVisible =
 		rootData?.clientFlags?.nutritionHealthExport === true;
 	const diaryLayout = normalizeDiaryLayout(settings.diaryLayout);
@@ -1995,7 +2019,7 @@ function PreferencesSection({
 				</div>
 			)}
 
-			{nutritionGoalsEnabled && (
+			{nutritionGoalsEnabled && !fuelPage && (
 				<NutritionGoalsSection
 					initialGoal={nutritionGoal}
 					kitchenTimeZone={kitchenTimeZone}
@@ -2780,11 +2804,13 @@ function DangerSection({
 							if (
 								!(await confirm({
 									title: "Delete your account permanently?",
-									message: accountDeletion.cancelAtPeriodEnd
-										? "You will lose access to all services immediately, including any remaining days on your cancelled subscription. Or wait until the period ends, then delete. There is no recovery path."
-										: ownedGroupsWithNoOtherMembers.length > 0
-											? "You own group(s) with no other members. These will be permanently deleted. If you invited people who haven't joined yet, consider waiting for them to accept or transferring ownership first."
-											: "There is no recovery path. This cannot be reversed by support.",
+									message: `${
+										accountDeletion.cancelAtPeriodEnd
+											? "You will lose access to all services immediately, including any remaining days on your cancelled subscription. Or wait until the period ends, then delete. There is no recovery path."
+											: ownedGroupsWithNoOtherMembers.length > 0
+												? "You own group(s) with no other members. These will be permanently deleted. If you invited people who haven't joined yet, consider waiting for them to accept or transferring ownership first."
+												: "There is no recovery path. This cannot be reversed by support."
+									} Apple Health samples Ration already wrote stay in the Health app until you delete them there. A deletion started on another device cannot remove them.`,
 									consequences,
 									requireTyped: "delete",
 									confirmLabel: "Delete My Account",

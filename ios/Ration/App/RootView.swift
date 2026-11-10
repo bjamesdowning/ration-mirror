@@ -127,7 +127,11 @@ struct MainTabView: View {
 
     var body: some View {
         TabView(selection: $selectedTab) {
-            DashboardView(
+            Group {
+                if env.session.clientFlags.isNutritionFuelPageEnabled {
+                    FuelView()
+                } else {
+                    DashboardView(
                 isTabActive: activatedTabs.contains(.hub),
                 hubTabReselectToken: hubTabReselectToken,
                 isHubEditMode: $isHubEditMode,
@@ -143,10 +147,23 @@ struct MainTabView: View {
                 onOpenManifest: { selectedTab = .manifest },
                 onOpenNutritionGoals: { showingNutritionGoals = true }
             )
+                }
+            }
                 .id(orgGeneration)
-                .tabItem { Label(String(localized: "Hub"), systemImage: "square.grid.2x2") }
+                .tabItem {
+                    Label(
+                        env.session.clientFlags.isNutritionFuelPageEnabled
+                            ? String(localized: "Fuel")
+                            : String(localized: "Hub"),
+                        systemImage: env.session.clientFlags.isNutritionFuelPageEnabled
+                            ? "flame.fill"
+                            : "square.grid.2x2"
+                    )
+                }
                 .tag(MainTab.hub)
-                .accessibilityIdentifier("tab.hub")
+                .accessibilityIdentifier(
+                    env.session.clientFlags.isNutritionFuelPageEnabled ? "tab.fuel" : "tab.hub"
+                )
 
             CargoListView(
                 isTabActive: activatedTabs.contains(.cargo),
@@ -254,6 +271,35 @@ struct MainTabView: View {
             env.lifecycle.bumpRefresh(forTab: .manifest)
         }) {
             NutritionGoalsView()
+        }
+        .fullScreenCover(isPresented: Binding(
+            get: { env.hubCoverPresented },
+            set: { env.hubCoverPresented = $0 }
+        )) {
+            NavigationStack {
+                DashboardView(
+                    isTabActive: true,
+                    hubTabReselectToken: hubTabReselectToken,
+                    isHubEditMode: $isHubEditMode,
+                    onScan: {
+                        guard canOpenScan else { return }
+                        showingScan = true
+                    },
+                    onOpenSettings: { showingSettings = true },
+                    onOpenGroupSettings: { showingGroupSettings = true },
+                    onOpenSupply: { selectedTab = .supply },
+                    onOpenCargo: { selectedTab = .cargo },
+                    onOpenGalley: { selectedTab = .galley },
+                    onOpenManifest: { selectedTab = .manifest },
+                    onOpenNutritionGoals: { showingNutritionGoals = true }
+                )
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Done") { env.hubCoverPresented = false }
+                            .accessibilityLabel("Hub")
+                    }
+                }
+            }
         }
         .sheet(isPresented: Binding(
             get: { askConsent.isPresenting },

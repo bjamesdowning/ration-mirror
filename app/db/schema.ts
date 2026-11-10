@@ -1,6 +1,7 @@
 import { relations, sql } from "drizzle-orm";
 import {
 	type AnySQLiteColumn,
+	check,
 	index,
 	integer,
 	primaryKey,
@@ -1081,9 +1082,14 @@ export const queueJob = sqliteTable(
 	{
 		requestId: text("request_id").primaryKey(),
 		jobType: text("job_type", {
-			enum: ["scan", "meal_generate", "plan_week", "import_url"],
+			enum: ["scan", "meal_generate", "plan_week", "import_url", "fuel_photo"],
 		}).notNull(),
 		organizationId: text("organization_id").notNull(),
+		/**
+		 * Fuel photo owner. Scan rows leave this null. Poll and the consumer
+		 * authorize with this column, not organization_id.
+		 */
+		userId: text("user_id").references(() => user.id, { onDelete: "cascade" }),
 		status: text("status", {
 			enum: ["pending", "processing", "completed", "failed"],
 		}).notNull(),
@@ -1101,6 +1107,11 @@ export const queueJob = sqliteTable(
 	(table) => [
 		index("queue_job_expires_idx").on(table.expiresAt),
 		index("queue_job_org_status_idx").on(table.organizationId, table.status),
+		index("queue_job_user_status_expires_idx").on(
+			table.userId,
+			table.status,
+			table.expiresAt,
+		),
 	],
 );
 
@@ -1528,6 +1539,12 @@ export const nutritionIntake = sqliteTable(
 		mealNameSnapshot: text("meal_name_snapshot"),
 		/** UTC calendar date YYYY-MM-DD. */
 		manifestDate: text("manifest_date").notNull(),
+		/**
+		 * Person calendar day YYYY-MM-DD in fuelTimeZone at insert.
+		 * Nullable so the backfill can copy manifest_date without a zone.
+		 * Not the same value as manifest_date for new writes.
+		 */
+		fuelDate: text("fuel_date"),
 		slotType: text("slot_type"),
 		servings: real("servings").notNull(),
 		energyKcal: real("energy_kcal").notNull(),
@@ -1622,6 +1639,9 @@ export const nutritionIntake = sqliteTable(
 		index("nutrition_intake_user_diary_history_idx")
 			.on(table.userId, table.manifestDate, table.occurredAt, table.id)
 			.where(sql`${table.voidedAt} IS NULL`),
+		index("nutrition_intake_user_fuel_date_idx")
+			.on(table.userId, table.fuelDate, table.occurredAt, table.id)
+			.where(sql`${table.voidedAt} IS NULL`),
 		index("nutrition_intake_retention_idx").on(table.occurredAt),
 		index("nutrition_intake_operation_idx").on(
 			table.userId,
@@ -1637,6 +1657,26 @@ export const nutritionIntake = sqliteTable(
 			.where(
 				sql`${table.entryId} IS NOT NULL AND ${table.organizationId} IS NOT NULL AND ${table.voidedAt} IS NULL`,
 			),
+	],
+);
+
+/**
+ * One counter row per person per fuel_date. Crew increments too.
+ * `used` has no upper bound so a same-day downgrade keeps the real count.
+ * Tenancy: Person.
+ */
+export const nutritionFuelDay = sqliteTable(
+	"nutrition_fuel_day",
+	{
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		fuelDate: text("fuel_date").notNull(),
+		used: integer("used").notNull().default(0),
+	},
+	(table) => [
+		primaryKey({ columns: [table.userId, table.fuelDate] }),
+		check("nutrition_fuel_day_used_nonnegative", sql`${table.used} >= 0`),
 	],
 );
 
@@ -1704,6 +1744,8 @@ export const nutritionOperation = sqliteTable(
 			intakeId?: string;
 			/** Draft replay id. No food name or nutrient bag. */
 			draftId?: string;
+			/** Fuel photo job id. No image bytes or food name. */
+			requestId?: string;
 			credits?: number;
 			kitchenItemId?: string;
 			target?: "cargo" | "meal";

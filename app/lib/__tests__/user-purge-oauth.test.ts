@@ -218,6 +218,10 @@ CREATE TABLE oauthConsent (
   created_at INTEGER,
   updated_at INTEGER
 );
+CREATE TABLE queue_job (
+  id TEXT PRIMARY KEY,
+  user_id TEXT
+);
 CREATE TABLE oauthClient (
   id TEXT PRIMARY KEY,
   client_id TEXT,
@@ -277,6 +281,7 @@ CREATE TABLE ingredient_nutrition_match (
   reviewed_by_user_id TEXT
 );
 CREATE TABLE nutrition_intake (
+	fuel_date text,
   id TEXT PRIMARY KEY,
   user_id TEXT,
   voided_by_user_id TEXT

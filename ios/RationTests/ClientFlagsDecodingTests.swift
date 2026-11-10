@@ -7,6 +7,10 @@ final class ClientFlagsDecodingTests: XCTestCase {
         XCTAssertTrue(try decode(#"{"nutritionGoals":true}"#).isNutritionGoalsEnabled)
         XCTAssertFalse(try decode(#"{}"#).isNutritionFastLogEnabled)
         XCTAssertTrue(try decode(#"{"nutritionFastLog":true}"#).isNutritionFastLogEnabled)
+        XCTAssertFalse(try decode(#"{"nutritionFuelPage":true}"#).isNutritionFuelPageEnabled)
+        XCTAssertTrue(
+            try decode(#"{"nutritionFastLog":true,"nutritionFuelPage":true}"#).isNutritionFuelPageEnabled
+        )
         XCTAssertFalse(try decode(#"{"nutritionFastLog":true}"#).isNutritionSavedFoodEnabled)
         XCTAssertTrue(try decode(#"{"nutritionSavedFood":true}"#).isNutritionSavedFoodEnabled)
         XCTAssertFalse(try decode(#"{"nutritionFastLog":true}"#).isNutritionBarcodeDiaryEnabled)

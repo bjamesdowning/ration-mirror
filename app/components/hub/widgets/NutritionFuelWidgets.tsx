@@ -24,6 +24,16 @@ import type { HubWidgetFilters, HubWidgetProps } from "~/lib/types";
 
 export const NUTRITION_GOALS_HREF = "/hub/settings#nutrition-goals";
 
+function fuelBodyHref(data: { fuelPage?: boolean; fuelCapture?: boolean }) {
+	if (data.fuelPage) return "/hub/fuel";
+	if (data.fuelCapture) return "/hub/manifest";
+	return undefined;
+}
+
+function fuelGoalsHref(data: { fuelPage?: boolean }) {
+	return data.fuelPage ? "/hub/fuel?editor=goals" : NUTRITION_GOALS_HREF;
+}
+
 function FuelRing({
 	ratio,
 	label,
@@ -166,13 +176,16 @@ function WidgetShell({
 	subtitle,
 	children,
 	bodyHref,
+	goalsHref,
 }: {
 	title: string;
 	subtitle?: string;
 	children: ReactNode;
 	/** When set, the card body opens this href and Goals stays its own control. */
 	bodyHref?: string;
+	goalsHref?: string;
 }) {
+	const goals = goalsHref ?? NUTRITION_GOALS_HREF;
 	if (bodyHref) {
 		return (
 			<div className="glass-panel rounded-xl p-6 h-full">
@@ -190,7 +203,7 @@ function WidgetShell({
 						) : null}
 					</div>
 					<Link
-						to={NUTRITION_GOALS_HREF}
+						to={goals}
 						className="text-[10px] uppercase tracking-widest text-muted"
 					>
 						Goals
@@ -258,19 +271,19 @@ export function NutritionTodayWidget({ data, size, filters }: HubWidgetProps) {
 	const macros = nutrients.filter((n) => n !== primary).slice(0, 3);
 
 	if (!amounts) {
-		if (data.fuelCapture) {
+		if (data.fuelCapture || data.fuelPage) {
 			return (
 				<div className="glass-panel rounded-xl p-6 h-full">
 					<div className="flex items-start justify-between mb-4 gap-2">
 						<Link
-							to="/hub/manifest"
+							to={fuelBodyHref(data) ?? "/hub/manifest"}
 							className="text-label text-carbon dark:text-white font-bold"
 							aria-label="Daily Fuel, open today's intake"
 						>
 							Daily Fuel
 						</Link>
 						<Link
-							to={NUTRITION_GOALS_HREF}
+							to={fuelGoalsHref(data)}
 							className="text-[10px] uppercase tracking-widest text-muted"
 						>
 							Goals
@@ -312,7 +325,8 @@ export function NutritionTodayWidget({ data, size, filters }: HubWidgetProps) {
 	return (
 		<WidgetShell
 			title="Daily Fuel"
-			bodyHref={data.fuelCapture ? "/hub/manifest" : undefined}
+			bodyHref={fuelBodyHref(data)}
+			goalsHref={fuelGoalsHref(data)}
 			subtitle={
 				amounts.entryCount
 					? `${amounts.entryCount} logged`
@@ -372,7 +386,12 @@ export function NutritionTrendsWidget({ data, size, filters }: HubWidgetProps) {
 
 	if (!averages || !hasLoggedIntake) {
 		return (
-			<WidgetShell title="Fuel Trends" subtitle={`Last ${range} days`}>
+			<WidgetShell
+				title="Fuel Trends"
+				subtitle={`Last ${range} days`}
+				bodyHref={fuelBodyHref(data)}
+				goalsHref={fuelGoalsHref(data)}
+			>
 				<p className="text-sm text-muted">
 					Log intakes from Manifest to see averages. Tap to manage goals.
 				</p>
@@ -383,7 +402,12 @@ export function NutritionTrendsWidget({ data, size, filters }: HubWidgetProps) {
 	const rows = (size === "sm" ? nutrients.slice(0, 1) : nutrients).slice(0, 4);
 
 	return (
-		<WidgetShell title="Fuel Trends" subtitle={`Avg · last ${range} days`}>
+		<WidgetShell
+			title="Fuel Trends"
+			subtitle={`Avg · last ${range} days`}
+			bodyHref={fuelBodyHref(data)}
+			goalsHref={fuelGoalsHref(data)}
+		>
 			{size !== "sm" && sparkValues.length > 0 ? (
 				<div className="mb-4">
 					<Sparkline values={sparkValues} />

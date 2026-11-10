@@ -34,6 +34,8 @@ final class DeepLinkRouter {
     private(set) var cargoEatPending: String?
     private(set) var cargoTagPending: String?
     private(set) var mealPending: String?
+    private(set) var fuelGoalsPending = false
+    private(set) var fuelCreatePending: FuelCreateAction?
 
     var pending: AppEnvironment.DeepLinkDestination? {
         queue.first
@@ -66,6 +68,8 @@ final class DeepLinkRouter {
         cargoEatPending = nil
         cargoTagPending = nil
         mealPending = nil
+        fuelGoalsPending = false
+        fuelCreatePending = nil
     }
 
     /// Applies the pending destination once startup and org context are ready.
@@ -119,8 +123,22 @@ final class DeepLinkRouter {
         case .cargoEat(let id):
             selectedTab = .cargo
             cargoEatPending = id
+        case .fuel, .fuelGoals, .fuelAdd, .fuelScan, .fuelBarcode:
+            selectedTab = .hub
+            fuelGoalsPending = destination == .fuelGoals
+            switch destination {
+            case .fuelAdd: fuelCreatePending = .add
+            case .fuelScan: fuelCreatePending = .scan
+            case .fuelBarcode: fuelCreatePending = .barcode
+            default: fuelCreatePending = nil
+            }
         }
         queue.removeFirst()
+    }
+
+    func acknowledgeFuel() {
+        fuelGoalsPending = false
+        fuelCreatePending = nil
     }
 
     func acknowledgeGalleyGenerate() { galleyGeneratePending = false }

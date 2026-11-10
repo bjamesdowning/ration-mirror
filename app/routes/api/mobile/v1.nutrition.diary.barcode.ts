@@ -9,6 +9,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 		{ request, context },
 		"mobile",
 		"settings_mutation",
-		(started) => postFoodBarcode(request, started.env, started.flags),
+		(started) =>
+			postFoodBarcode(request, started.env, started.principal, started.flags),
 	);
 }

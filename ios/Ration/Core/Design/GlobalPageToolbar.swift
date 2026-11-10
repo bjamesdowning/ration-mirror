@@ -47,6 +47,15 @@ struct GlobalPageToolbar: ToolbarContent {
                 if let onOptions {
                     PageOptionsButton(hasActiveFilters: hasActiveFilters, action: onOptions)
                 }
+                if env.session.clientFlags.isNutritionFuelPageEnabled {
+                    Button {
+                        env.openHubCover()
+                    } label: {
+                        Image(systemName: "square.grid.2x2")
+                            .frame(minWidth: 44, minHeight: 44)
+                    }
+                    .accessibilityLabel("Hub")
+                }
                 ProfileAvatarButton(imageURL: env.session.userImageURL, action: onOpenSettings)
             }
         }

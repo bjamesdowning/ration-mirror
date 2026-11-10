@@ -24,6 +24,11 @@ final class AppEnvironment {
         /// Opens Supply's existing Dock from Receipt sheet.
         case supplyDockReceipt
         case cargoEat(id: String)
+        case fuel
+        case fuelGoals
+        case fuelAdd
+        case fuelScan
+        case fuelBarcode
     }
 
     let auth: AuthManager
@@ -137,8 +142,14 @@ final class AppEnvironment {
         cargoDataRevision += 1
     }
 
+    var hubCoverPresented = false
+
     func openDeepLink(_ destination: DeepLinkDestination) {
         deepLinkRouter.enqueue(destination)
+    }
+
+    func openHubCover() {
+        hubCoverPresented = true
     }
 
     func loadSnapshot(

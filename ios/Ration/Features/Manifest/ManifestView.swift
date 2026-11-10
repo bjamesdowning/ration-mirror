@@ -217,13 +217,15 @@ struct ManifestView: View {
                     onOpenGroupSettings: onOpenGroupSettings,
                     onOpenSettings: onOpenSettings
                 )
-                ToolbarItem(placement: .topBarLeading) {
-                    Button {
-                        showingMacros = true
-                    } label: {
-                        Image(systemName: "chart.bar.fill")
+                if !env.session.clientFlags.isNutritionFuelPageEnabled {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button {
+                            showingMacros = true
+                        } label: {
+                            Image(systemName: "chart.bar.fill")
+                        }
+                        .accessibilityLabel("Macros")
                     }
-                    .accessibilityLabel("Macros")
                 }
             }
             .dataSyncBanner(
@@ -543,7 +545,8 @@ struct ManifestView: View {
                 slot: { $0.slotType },
                 time: { $0.occurredAt }
             )
-            if !intakeRows.isEmpty || fuelCapture {
+            if (!intakeRows.isEmpty || fuelCapture)
+                && !env.session.clientFlags.isNutritionFuelPageEnabled {
                 Section {
                     if fuelCapture {
                         Picker(

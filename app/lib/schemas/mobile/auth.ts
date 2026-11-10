@@ -5,6 +5,7 @@ import {
 	PKCE_MAX_LENGTH,
 	PKCE_MIN_LENGTH,
 } from "~/lib/mobile/pkce";
+import { FuelTimeZoneSchema } from "~/lib/schemas/fuel";
 import { HubLayoutSchema } from "~/lib/schemas/hub";
 
 /** RFC 7636 base64url verifier: 43–128 unreserved characters. */
@@ -124,6 +125,8 @@ export const MobileSettingsPatchSchema = z
 			.optional(),
 		/** Person-scoped day list. nutrition-fast-log. iOS below 1.6 is rejected. */
 		diaryLayout: z.enum(["timeline", "slots"]).optional(),
+		/** IANA name for the personal Fuel day. Offsets and abbreviations are rejected. */
+		fuelTimeZone: FuelTimeZoneSchema.optional(),
 		/** Clears onboarding completion and resets step to 0 (Restart Tutorial). */
 		restartOnboarding: z.literal(true).optional(),
 	})

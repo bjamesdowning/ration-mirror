@@ -706,8 +706,29 @@ export function ChevronRightIcon({ className = "w-5 h-5" }: IconProps) {
 	);
 }
 
+export function FlameIcon({ className = "w-5 h-5" }: IconProps) {
+	return (
+		<svg
+			className={className}
+			fill="none"
+			stroke="currentColor"
+			viewBox="0 0 24 24"
+			aria-label="Fuel"
+		>
+			<title>Fuel</title>
+			<path
+				strokeLinecap="round"
+				strokeLinejoin="round"
+				strokeWidth={2}
+				d="M12 3s6 6 6 10a6 6 0 11-12 0c0-2 1-3 2-4 0 2 1 3 2 3 0-3 2-6 2-9z"
+			/>
+		</svg>
+	);
+}
+
 export const NAV_ICONS: Record<string, ComponentType<IconProps>> = {
 	home: HomeIcon,
+	flame: FlameIcon,
 	package: PackageIcon,
 	"chef-hat": ChefHatIcon,
 	"shopping-cart": ShoppingCartIcon,

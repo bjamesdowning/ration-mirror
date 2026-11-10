@@ -203,6 +203,14 @@ export const FLAG_REGISTRY: Record<string, FlagRegistryEntry> = {
 		clientKey: "nutritionHealthExport",
 		iosAlwaysOn: false,
 	},
+	"nutrition-fuel-page": {
+		defaultEnabled: false,
+		description:
+			"Fuel page, personal daily log cap, and the Fuel photo queue. On only when nutrition-fast-log is on",
+		clientVisible: true,
+		clientKey: "nutritionFuelPage",
+		iosAlwaysOn: false,
+	},
 	"feature-enablement-consent": {
 		defaultEnabled: false,
 		description:

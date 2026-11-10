@@ -833,11 +833,15 @@ export type ListNutritionIntakesOptions = {
 	cursor?: string;
 	/** When true, aggregate the caller's intakes across all kitchens. */
 	crossOrgDiary?: boolean;
+	/** Fuel page reads the person calendar day and ignores kitchen provenance. */
+	dateField?: "manifest" | "fuel";
 };
 
 export type NutritionDiaryReadOptions = {
 	/** When true, aggregate the caller's intakes across all kitchens. */
 	crossOrgDiary?: boolean;
+	/** Fuel page reads the person calendar day and ignores kitchen provenance. */
+	dateField?: "manifest" | "fuel";
 };
 
 const MAX_INTAKE_LIST_LIMIT = 500;
@@ -890,27 +894,32 @@ export async function listNutritionIntakesForRange(
 		? decodeNutritionIntakeCursor(options.cursor)
 		: null;
 
-	const orgFilter = options.crossOrgDiary
-		? undefined
-		: eq(schema.nutritionIntake.organizationId, orgId);
+	const dateColumn =
+		options.dateField === "fuel"
+			? schema.nutritionIntake.fuelDate
+			: schema.nutritionIntake.manifestDate;
+	const orgFilter =
+		options.crossOrgDiary || options.dateField === "fuel"
+			? undefined
+			: eq(schema.nutritionIntake.organizationId, orgId);
 
 	const baseWhere = and(
 		eq(schema.nutritionIntake.userId, userId),
 		orgFilter,
-		gte(schema.nutritionIntake.manifestDate, from),
-		lte(schema.nutritionIntake.manifestDate, to),
+		gte(dateColumn, from),
+		lte(dateColumn, to),
 		isNull(schema.nutritionIntake.voidedAt),
 	);
 
 	const cursorWhere = decoded
 		? or(
-				gt(schema.nutritionIntake.manifestDate, decoded.manifestDate),
+				gt(dateColumn, decoded.manifestDate),
 				and(
-					eq(schema.nutritionIntake.manifestDate, decoded.manifestDate),
+					eq(dateColumn, decoded.manifestDate),
 					gt(schema.nutritionIntake.occurredAt, decoded.occurredAt),
 				),
 				and(
-					eq(schema.nutritionIntake.manifestDate, decoded.manifestDate),
+					eq(dateColumn, decoded.manifestDate),
 					eq(schema.nutritionIntake.occurredAt, decoded.occurredAt),
 					gt(schema.nutritionIntake.id, decoded.id),
 				),
@@ -922,6 +931,7 @@ export async function listNutritionIntakesForRange(
 			id: schema.nutritionIntake.id,
 			entryId: schema.nutritionIntake.entryId,
 			manifestDate: schema.nutritionIntake.manifestDate,
+			fuelDate: schema.nutritionIntake.fuelDate,
 			slotType: schema.nutritionIntake.slotType,
 			servings: schema.nutritionIntake.servings,
 			energyKcal: schema.nutritionIntake.energyKcal,
@@ -948,7 +958,7 @@ export async function listNutritionIntakesForRange(
 		)
 		.where(cursorWhere ? and(baseWhere, cursorWhere) : baseWhere)
 		.orderBy(
-			schema.nutritionIntake.manifestDate,
+			dateColumn,
 			schema.nutritionIntake.occurredAt,
 			schema.nutritionIntake.id,
 		)
@@ -958,7 +968,10 @@ export async function listNutritionIntakesForRange(
 	const items = page.map((r) => ({
 		id: r.id,
 		entryId: r.entryId ?? null,
-		manifestDate: r.manifestDate,
+		manifestDate:
+			options.dateField === "fuel"
+				? (r.fuelDate ?? r.manifestDate)
+				: r.manifestDate,
 		slotType: r.slotType,
 		servings: r.servings,
 		energyKcal: r.energyKcal,
@@ -1004,21 +1017,26 @@ export async function getNutritionSummary(
 	options: NutritionDiaryReadOptions = {},
 ): Promise<NutritionSummaryResult> {
 	const d1 = drizzle(db, { schema });
-	const orgFilter = options.crossOrgDiary
-		? undefined
-		: eq(schema.nutritionIntake.organizationId, orgId);
+	const dateColumn =
+		options.dateField === "fuel"
+			? schema.nutritionIntake.fuelDate
+			: schema.nutritionIntake.manifestDate;
+	const orgFilter =
+		options.crossOrgDiary || options.dateField === "fuel"
+			? undefined
+			: eq(schema.nutritionIntake.organizationId, orgId);
 	const whereClause = and(
 		eq(schema.nutritionIntake.userId, userId),
 		orgFilter,
-		gte(schema.nutritionIntake.manifestDate, from),
-		lte(schema.nutritionIntake.manifestDate, to),
+		gte(dateColumn, from),
+		lte(dateColumn, to),
 		isNull(schema.nutritionIntake.voidedAt),
 	);
 
 	// One indexed grouped read — ≤93 day rows. Range totals fold from days (no JSON loop).
 	const dayRows = await d1
 		.select({
-			date: schema.nutritionIntake.manifestDate,
+			date: dateColumn,
 			energyKcal: sql<number>`coalesce(sum(${schema.nutritionIntake.energyKcal}), 0)`,
 			proteinG: sql<number>`coalesce(sum(${schema.nutritionIntake.proteinG}), 0)`,
 			carbsG: sql<number>`coalesce(sum(${schema.nutritionIntake.carbsG}), 0)`,
@@ -1032,11 +1050,11 @@ export async function getNutritionSummary(
 		})
 		.from(schema.nutritionIntake)
 		.where(whereClause)
-		.groupBy(schema.nutritionIntake.manifestDate)
-		.orderBy(schema.nutritionIntake.manifestDate);
+		.groupBy(dateColumn)
+		.orderBy(dateColumn);
 
 	const days = dayRows.map((row) => ({
-		date: row.date,
+		date: row.date ?? "",
 		energyKcal: row.energyKcal,
 		proteinG: row.proteinG,
 		carbsG: row.carbsG,

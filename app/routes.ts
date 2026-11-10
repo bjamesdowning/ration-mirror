@@ -91,6 +91,8 @@ export default [
 
 		// Manifest (Meal Planning Calendar)
 		route("manifest", "routes/hub/manifest.tsx"),
+		route("fuel", "routes/hub/fuel.tsx"),
+		route("fuel/analytics", "routes/hub/fuel.analytics.tsx"),
 	]),
 
 	// Admin
@@ -227,6 +229,15 @@ export default [
 	route("api/nutrition/diary/quote", "routes/api/nutrition.diary.quote.ts"),
 	route("api/nutrition/diary/barcode", "routes/api/nutrition.diary.barcode.ts"),
 	route("api/nutrition/diary/propose", "routes/api/nutrition.diary.propose.ts"),
+	route("api/nutrition/diary/photo", "routes/api/nutrition.diary.photo.ts"),
+	route(
+		"api/nutrition/diary/photo/:requestId/confirm",
+		"routes/api/nutrition.diary.photo.$requestId.confirm.ts",
+	),
+	route(
+		"api/nutrition/diary/photo/:requestId",
+		"routes/api/nutrition.diary.photo.$requestId.ts",
+	),
 	route(
 		"api/nutrition/diary/:id/save-to-kitchen",
 		"routes/api/nutrition.diary.$id.save-to-kitchen.ts",
@@ -650,6 +661,18 @@ export default [
 	route(
 		"api/mobile/v1/nutrition/diary/propose",
 		"routes/api/mobile/v1.nutrition.diary.propose.ts",
+	),
+	route(
+		"api/mobile/v1/nutrition/diary/photo",
+		"routes/api/mobile/v1.nutrition.diary.photo.ts",
+	),
+	route(
+		"api/mobile/v1/nutrition/diary/photo/:requestId/confirm",
+		"routes/api/mobile/v1.nutrition.diary.photo.$requestId.confirm.ts",
+	),
+	route(
+		"api/mobile/v1/nutrition/diary/photo/:requestId",
+		"routes/api/mobile/v1.nutrition.diary.photo.$requestId.ts",
 	),
 	route(
 		"api/mobile/v1/nutrition/diary/:id/save-to-kitchen",

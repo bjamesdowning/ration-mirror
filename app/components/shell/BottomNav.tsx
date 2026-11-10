@@ -1,15 +1,14 @@
-import { NavLink } from "react-router";
+import { NavLink, useRouteLoaderData } from "react-router";
 import { NAV_ICONS } from "~/components/icons/PageIcons";
-
-const navItems = [
-	{ to: "/hub", icon: "home", label: "Hub" },
-	{ to: "/hub/cargo", icon: "package", label: "Cargo" },
-	{ to: "/hub/galley", icon: "chef-hat", label: "Galley" },
-	{ to: "/hub/manifest", icon: "calendar", label: "Manifest" },
-	{ to: "/hub/supply", icon: "shopping-cart", label: "Supply" },
-];
+import { fuelNavItems } from "~/lib/shell/fuel-nav";
 
 export function BottomNav() {
+	const rootData = useRouteLoaderData("root") as
+		| { clientFlags?: { nutritionFuelPage?: boolean } }
+		| undefined;
+	const navItems = fuelNavItems(
+		rootData?.clientFlags?.nutritionFuelPage === true,
+	).bottom;
 	return (
 		<nav className="md:hidden fixed bottom-0 left-0 right-0 bg-ceramic/95 backdrop-blur-lg border-t border-platinum safe-area-pb z-50">
 			<div className="flex items-center justify-around h-16 px-2">

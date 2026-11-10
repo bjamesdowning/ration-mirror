@@ -39,6 +39,14 @@ enum AppDeepLink {
             return nil
         case "supply":
             return composeRequested(url) ? .supplyCompose : .supply
+        case "fuel":
+            switch url.path.lowercased() {
+            case "/goals": return .fuelGoals
+            case "/add": return .fuelAdd
+            case "/scan": return .fuelScan
+            case "/barcode": return .fuelBarcode
+            default: return .fuel
+            }
         default:
             return nil
         }

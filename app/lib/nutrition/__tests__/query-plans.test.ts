@@ -70,6 +70,7 @@ describe("nutrition query plans", () => {
 		await db
 			.prepare(
 				`CREATE TABLE nutrition_intake (
+	fuel_date text,
           id TEXT PRIMARY KEY,
           organization_id TEXT NOT NULL,
           user_id TEXT NOT NULL,
@@ -123,6 +124,7 @@ describe("nutrition query plans", () => {
 		await db
 			.prepare(
 				`CREATE TABLE nutrition_intake (
+	fuel_date text,
           id TEXT PRIMARY KEY,
           occurred_at INTEGER NOT NULL
         )`,

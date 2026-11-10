@@ -1,15 +1,14 @@
-import { NavLink } from "react-router";
+import { NavLink, useRouteLoaderData } from "react-router";
 import { NAV_ICONS } from "~/components/icons/PageIcons";
-
-const navItems = [
-	{ to: "/hub", icon: "home", label: "Hub" },
-	{ to: "/hub/cargo", icon: "package", label: "Cargo" },
-	{ to: "/hub/galley", icon: "chef-hat", label: "Galley" },
-	{ to: "/hub/manifest", icon: "calendar", label: "Manifest" },
-	{ to: "/hub/supply", icon: "shopping-cart", label: "Supply" },
-];
+import { fuelNavItems } from "~/lib/shell/fuel-nav";
 
 export function RailSidebar() {
+	const rootData = useRouteLoaderData("root") as
+		| { clientFlags?: { nutritionFuelPage?: boolean } }
+		| undefined;
+	const navItems = fuelNavItems(
+		rootData?.clientFlags?.nutritionFuelPage === true,
+	).rail;
 	return (
 		<aside className="hidden md:flex flex-col w-20 h-screen bg-ceramic border-r border-platinum sticky top-0">
 			{/* Logo */}

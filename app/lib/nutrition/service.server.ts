@@ -16,7 +16,16 @@ import {
 	coerceFiniteNumber,
 	toIsoDateString,
 } from "~/lib/nutrition/dto.server";
+import { isNutritionFuelPageEnabled } from "~/lib/nutrition/fast-log-flag.server";
 import { resolveNutritionCapabilities } from "~/lib/nutrition/feature-policy.server";
+import {
+	personIsCrew,
+	releaseFuelSlot,
+	requireFuelTimeZone,
+	reserveFuelSlot,
+	stampFuelDate,
+} from "~/lib/nutrition/fuel-cap.server";
+import { assertFuelDateUnchanged } from "~/lib/nutrition/fuel-date";
 import { previousUtcCalendarDay } from "~/lib/nutrition/goal-effective";
 import {
 	coerceIntakeLoggedUnit,
@@ -1129,7 +1138,25 @@ export async function logManifestIntakes(
 				requestedNotes: item.requestedNotes,
 				priorNotes: prior?.notes ?? null,
 			});
-			const row: IntakeRow = {
+			const fuelPageOn = await isNutritionFuelPageEnabled(env, flags);
+			let fuelDate: string | null = null;
+			if (fuelPageOn && !prior) {
+				fuelDate = await stampFuelDate(
+					env.DB,
+					principal.userId,
+					item.occurredAt ?? committedAt,
+				);
+			} else if (fuelPageOn && prior) {
+				const zone = await requireFuelTimeZone(env.DB, principal.userId);
+				fuelDate = assertFuelDateUnchanged(
+					prior.fuelDate,
+					item.occurredAt ?? prior.occurredAt,
+					zone,
+				);
+			} else if (prior?.fuelDate) {
+				fuelDate = prior.fuelDate;
+			}
+			const row: typeof schema.nutritionIntake.$inferInsert = {
 				id: intakeId,
 				organizationId: principal.organizationId,
 				userId: principal.userId,
@@ -1176,13 +1203,34 @@ export async function logManifestIntakes(
 				barcode: null,
 				savedFoodId: null,
 				createdAt: committedAt,
+				...(fuelDate ? { fuelDate } : {}),
 			};
 			newRows.push(row);
 			results.push({
-				intake: row,
+				intake: row as IntakeRow,
 				replacedIntakeId: prior?.id ?? null,
 				replayed: false,
 			});
+		}
+
+		const reservedFuelDates: string[] = [];
+		const freshFuelRows = newRows.filter(
+			(row) => row.fuelDate && !row.replacesIntakeId,
+		);
+		if (freshFuelRows.length > 0) {
+			try {
+				const crew = await personIsCrew(env.DB, principal.userId, committedAt);
+				for (const row of freshFuelRows) {
+					const date = row.fuelDate as string;
+					await reserveFuelSlot(env.DB, principal.userId, date, crew);
+					reservedFuelDates.push(date);
+				}
+			} catch (error) {
+				for (const date of reservedFuelDates) {
+					await releaseFuelSlot(env.DB, principal.userId, date);
+				}
+				throw error;
+			}
 		}
 
 		// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch statement types are heterogeneous.
@@ -1265,6 +1313,9 @@ export async function logManifestIntakes(
 			// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch statement types are heterogeneous.
 			await db.batch(statements as [any, ...any[]]);
 		} catch (error) {
+			for (const date of reservedFuelDates) {
+				await releaseFuelSlot(env.DB, principal.userId, date);
+			}
 			assertNoPersistenceInvariantError(error);
 			const racedOperation = await loadOperation(
 				db,
@@ -1519,6 +1570,24 @@ export async function clearManifestIntakes(
 			}),
 		),
 	);
+	if (await isNutritionFuelPageEnabled(env, flags)) {
+		const active = await loadActiveRows(db, principal, input.entryIds);
+		for (const row of active.values()) {
+			if (!row.fuelDate) continue;
+			statements.push(
+				db
+					.update(schema.nutritionFuelDay)
+					.set({ used: sql`${schema.nutritionFuelDay.used} - 1` })
+					.where(
+						and(
+							eq(schema.nutritionFuelDay.userId, principal.userId),
+							eq(schema.nutritionFuelDay.fuelDate, row.fuelDate),
+							sql`${schema.nutritionFuelDay.used} >= 1`,
+						),
+					),
+			);
+		}
+	}
 	try {
 		// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch statement types are heterogeneous.
 		await db.batch(statements as [any, ...any[]]);
@@ -1911,6 +1980,13 @@ export async function getSummary(
 		: null;
 	const includeGoal = goalsConsent?.state === "active";
 	const crossOrgDiary = await resolveCrossOrgDiary(env, flags);
+	const fuelPage = await isNutritionFuelPageEnabled(env, flags);
+	if (fuelPage) {
+		const { backfillFuelDates } = await import(
+			"~/lib/nutrition/fuel-backfill.server"
+		);
+		await backfillFuelDates(env.DB);
+	}
 	const started = Date.now();
 	const summary = await readNutritionSummary(
 		env.DB,
@@ -1918,7 +1994,10 @@ export async function getSummary(
 		principal.organizationId,
 		from,
 		to,
-		{ crossOrgDiary },
+		{
+			crossOrgDiary: fuelPage ? true : crossOrgDiary,
+			dateField: fuelPage ? "fuel" : "manifest",
+		},
 	);
 	const gatedSummary = includeGoal ? summary : { ...summary, goal: null };
 	const { emitNutritionSummaryDuration } = await import(
@@ -2242,6 +2321,27 @@ export async function undoIntake(
 	) {
 		throw new NutritionUndoUnavailableError();
 	}
+	const fuelUndo = await isNutritionFuelPageEnabled(env, flags);
+	const undoFuelDates = fuelUndo
+		? rows
+				.map((row) => row.fuelDate)
+				.filter((date): date is string => Boolean(date))
+		: [];
+	if (fuelUndo && operation.operationType !== "log_manifest_intakes") {
+		const crew = await personIsCrew(env.DB, principal.userId, now);
+		const reserved: string[] = [];
+		try {
+			for (const date of undoFuelDates) {
+				await reserveFuelSlot(env.DB, principal.userId, date, crew);
+				reserved.push(date);
+			}
+		} catch (error) {
+			for (const date of reserved) {
+				await releaseFuelSlot(env.DB, principal.userId, date);
+			}
+			throw error;
+		}
+	}
 	// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch statement types are heterogeneous.
 	const statements: any[] = [
 		db
@@ -2289,10 +2389,31 @@ export async function undoIntake(
 				),
 			),
 	);
+	if (fuelUndo && operation.operationType === "log_manifest_intakes") {
+		for (const date of undoFuelDates) {
+			statements.push(
+				db
+					.update(schema.nutritionFuelDay)
+					.set({ used: sql`${schema.nutritionFuelDay.used} - 1` })
+					.where(
+						and(
+							eq(schema.nutritionFuelDay.userId, principal.userId),
+							eq(schema.nutritionFuelDay.fuelDate, date),
+							sql`${schema.nutritionFuelDay.used} >= 1`,
+						),
+					),
+			);
+		}
+	}
 	try {
 		// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch statement types are heterogeneous.
 		await db.batch(statements as [any, ...any[]]);
 	} catch (error) {
+		if (fuelUndo && operation.operationType !== "log_manifest_intakes") {
+			for (const date of undoFuelDates) {
+				await releaseFuelSlot(env.DB, principal.userId, date);
+			}
+		}
 		assertNoPersistenceInvariantError(error);
 		if (errorIncludes(error, "nutrition_intake_user_org_entry_active_uidx")) {
 			throw new NutritionUndoUnavailableError();

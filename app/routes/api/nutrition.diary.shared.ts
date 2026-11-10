@@ -11,7 +11,7 @@ type DiaryArgs = {
 export async function withDiary(
 	args: DiaryArgs,
 	surface: "web" | "mobile",
-	bucket: "settings_mutation" | "api_export",
+	bucket: "settings_mutation" | "api_export" | "scan" | "barcode_lookup",
 	run: (
 		started: Awaited<ReturnType<typeof beginDiaryRequest>>,
 	) => Promise<unknown>,

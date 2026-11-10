@@ -190,6 +190,7 @@ describe("authoritative operation day totals", () => {
 			create table nutrition_operation (status text, result_json text);
 			insert into nutrition_operation values ('in_progress', null);
 			create table nutrition_intake (
+	fuel_date text,
 				id text,
 				user_id text,
 				organization_id text,
@@ -204,8 +205,8 @@ describe("authoritative operation day totals", () => {
 				voided_at integer
 			);
 			insert into nutrition_intake values
-				('i1', 'user-1', 'org-1', '2026-08-09', 500, 20, 60, 15, null, '{"fiberG":8}', 0.9, null),
-				('i2', 'other-user', 'org-1', '2026-08-09', 999, 99, 99, 99, 99, null, 1, null);
+				(null, 'i1', 'user-1', 'org-1', '2026-08-09', 500, 20, 60, 15, null, '{"fiberG":8}', 0.9, null),
+				(null, 'i2', 'other-user', 'org-1', '2026-08-09', 999, 99, 99, 99, 99, null, 1, null);
 		`);
 		sqlite
 			.prepare(statement.sql)

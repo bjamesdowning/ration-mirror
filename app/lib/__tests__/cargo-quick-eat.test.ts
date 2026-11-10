@@ -17,7 +17,9 @@ vi.mock("~/lib/feature-flags/assert-enabled.server", () => ({
 }));
 
 vi.mock("~/lib/feature-flags/flags.server", () => ({
-	isFeatureEnabled: vi.fn().mockResolvedValue(true),
+	isFeatureEnabled: vi.fn(async (_env: unknown, flag: string) => {
+		return flag !== "nutrition-fuel-page";
+	}),
 }));
 
 vi.mock("~/lib/meals.server", () => ({

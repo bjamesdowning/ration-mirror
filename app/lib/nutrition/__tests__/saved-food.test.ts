@@ -86,6 +86,7 @@ describe("saved food tenancy", () => {
 				updated_at integer not null
 			);
 			create table nutrition_intake (
+	fuel_date text,
 				id text primary key,
 				user_id text not null,
 				energy_kcal real not null,
@@ -161,6 +162,7 @@ describe("saved food tenancy", () => {
 				updated_at integer not null
 			);
 			create table nutrition_intake (
+	fuel_date text,
 				id text primary key,
 				energy_kcal real not null,
 				saved_food_id text

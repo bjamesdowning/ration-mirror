@@ -62,6 +62,8 @@ export interface UserSettings {
 	welcomeTipsDismissed?: boolean;
 	/** Personal day-list layout. Absent means timeline. Not shared with the kitchen. */
 	diaryLayout?: "timeline" | "slots";
+	/** IANA zone for Fuel's personal day. Absent until the person sets it. */
+	fuelTimeZone?: string;
 	/**
 	 * Person-scoped Apple Health export preference. The device writes HealthKit.
 	 * Absent means off.
@@ -220,6 +222,8 @@ export interface HubLoaderData {
 	nutritionTrends?: import("~/lib/schemas/nutrition").NutritionSummary | null;
 	/** nutrition-fast-log. Daily Fuel opens the day instead of Goals. */
 	fuelCapture?: boolean;
+	/** nutrition-fuel-page. Widgets open Fuel. Goals opens the Fuel editor. */
+	fuelPage?: boolean;
 }
 
 /** Props passed to each Hub widget component. */

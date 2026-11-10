@@ -103,6 +103,7 @@ function setup(metadata: string | null = null) {
 			created_at integer not null
 		);
 		create table nutrition_intake (
+	fuel_date text,
 			id text primary key,
 			organization_id text,
 			user_id text not null,
@@ -222,7 +223,10 @@ function context(database: D1Database, flagOn: boolean, nutritionDb?: unknown) {
 				...(nutritionDb ? { NUTRITION_DB: nutritionDb } : {}),
 				RATION_KV: {} as KVNamespace,
 				RATION_ENV: "test",
-				FLAGS: { getBooleanValue: async () => flagOn },
+				FLAGS: {
+					getBooleanValue: async (flag: string) =>
+						flag === "nutrition-fuel-page" ? false : flagOn,
+				},
 			},
 		},
 	} as never;

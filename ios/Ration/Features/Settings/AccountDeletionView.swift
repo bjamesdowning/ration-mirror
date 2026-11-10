@@ -30,7 +30,7 @@ struct AccountDeletionView: View {
     var body: some View {
         Form {
             Section {
-                Text("Deleting your account permanently removes your inventory, meals, supply lists, meal plans, scans, copilot conversations, API keys, sessions, and OAuth grants. Financial ledger records may be anonymized where required by law. Deletion usually finishes within a few minutes; sign-in stays blocked until removal completes.")
+                Text("Deleting your account permanently removes your inventory, meals, supply lists, meal plans, scans, copilot conversations, API keys, sessions, and OAuth grants. Financial ledger records may be anonymized where required by law. Deletion usually finishes within a few minutes; sign-in stays blocked until removal completes. \(FuelAccountDeletion.healthSamplesRemain)")
                     .font(Typography.body())
             }
 
@@ -174,6 +174,16 @@ struct AccountDeletionView: View {
         errorMessage = nil
         defer { isDeleting = false }
         do {
+            let pending = try? await env.api.pendingHealthExport()
+            let identifiers = FuelAccountDeletion.rationIdentifiers(from: pending)
+            FuelAccountDeletion.store(identifiers)
+            if let pending {
+                let deletes = HealthExportPendingResponse(
+                    samples: [],
+                    deletes: pending.deletes
+                )
+                try? await HealthKitExporter.apply(deletes)
+            }
             let response = try await env.api.deleteAccount()
             deletionStartedMessage = response.message
                 ?? String(localized: "Your account is being deleted. This usually finishes within a few minutes.")

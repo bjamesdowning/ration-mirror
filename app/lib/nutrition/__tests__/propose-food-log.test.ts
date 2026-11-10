@@ -67,7 +67,10 @@ function setup() {
 			id text primary key,
 			name text not null
 		);
-		create table nutrition_intake (id text primary key);
+		create table nutrition_intake (
+			id text primary key,
+			fuel_date text
+		);
 		create table nutrition_consent (
 			id text primary key,
 			user_id text not null,

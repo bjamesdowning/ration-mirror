@@ -395,6 +395,7 @@ function setup() {
 			created_at integer not null
 		);
 		create table nutrition_intake (
+	fuel_date text,
 			id text primary key,
 			user_id text not null,
 			organization_id text,

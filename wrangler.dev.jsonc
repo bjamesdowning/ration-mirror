@@ -87,6 +87,7 @@
 	"queues": {
 		"producers": [
 			{ "queue": "ration-scan", "binding": "SCAN_QUEUE" },
+			{ "queue": "ration-fuel-photo", "binding": "FUEL_PHOTO_QUEUE" },
 			{ "queue": "ration-meal-generate", "binding": "MEAL_GENERATE_QUEUE" },
 			{ "queue": "ration-plan-week", "binding": "PLAN_WEEK_QUEUE" },
 			{ "queue": "ration-import-url", "binding": "IMPORT_URL_QUEUE" },
@@ -98,6 +99,12 @@
 		"consumers": [
 			{
 				"queue": "ration-scan",
+				"max_batch_size": 5,
+				"max_batch_timeout": 10,
+				"max_retries": 3
+			},
+			{
+				"queue": "ration-fuel-photo",
 				"max_batch_size": 5,
 				"max_batch_timeout": 10,
 				"max_retries": 3

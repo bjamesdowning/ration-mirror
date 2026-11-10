@@ -6,7 +6,9 @@ vi.mock("~/lib/feature-flags/assert-enabled.server", () => ({
 }));
 
 vi.mock("~/lib/feature-flags/flags.server", () => ({
-	isFeatureEnabled: vi.fn().mockResolvedValue(true),
+	isFeatureEnabled: vi.fn(
+		async (_env: unknown, flag: string) => flag !== "nutrition-fuel-page",
+	),
 }));
 
 vi.mock("~/lib/nutrition/consent.server", () => ({
@@ -66,6 +68,7 @@ function setup() {
 			consumed_at integer
 		);
 		create table nutrition_intake (
+	fuel_date text,
 			id text primary key,
 			organization_id text,
 			user_id text not null,
@@ -418,7 +421,7 @@ describe("canonical nutrition service with transactional SQLite", () => {
 					sqlite
 						.prepare(
 							`insert into nutrition_intake
-							 select 'competing-intake', organization_id, user_id, plan_id,
+							 select null, 'competing-intake', organization_id, user_id, plan_id,
 							 entry_id, meal_id, organization_name_snapshot, meal_name_snapshot,
 							 manifest_date, slot_type, 1.5, energy_kcal,
 							 protein_g, carbs_g, fat_g, coverage, source, confidence, verified,

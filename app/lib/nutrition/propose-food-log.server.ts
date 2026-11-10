@@ -131,6 +131,7 @@ export async function readFoodLogPhoto(
 	env: Env,
 	principal: NutritionPrincipal,
 	photoRef: string,
+	mimeType: "image/jpeg" | "image/png" | "image/webp" = "image/jpeg",
 ): Promise<FoodLogLine[]> {
 	const result = await callGemini(env, {
 		feature: "import_photo",
@@ -138,7 +139,7 @@ export async function readFoodLogPhoto(
 			{
 				text: 'Identify each food in this photo. Return ONLY JSON {"lines":[{"name":"","energyKcal":0,"proteinG":0,"carbsG":0,"fatG":0,"fiberG":null}]}. Estimates are unverified. Do not include an email address.',
 			},
-			{ inlineData: { mimeType: "image/jpeg", data: photoRef } },
+			{ inlineData: { mimeType, data: photoRef } },
 		],
 		metadata: {
 			organizationId: principal.organizationId,

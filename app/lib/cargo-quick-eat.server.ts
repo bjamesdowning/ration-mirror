@@ -12,6 +12,12 @@ import { isFeatureEnabled } from "~/lib/feature-flags/flags.server";
 import { cookMealFromGalley } from "~/lib/galley-cook-manifest.server";
 import { log } from "~/lib/logging.server";
 import { ensureProvisionFromCargo } from "~/lib/meals.server";
+import { isNutritionFuelPageEnabled } from "~/lib/nutrition/fast-log-flag.server";
+import { assertFuelCreateRoom } from "~/lib/nutrition/fuel-cap.server";
+import {
+	FuelDailyLimitError,
+	FuelTimezoneRequiredError,
+} from "~/lib/nutrition/fuel-errors";
 import {
 	deriveNutritionOperationKey,
 	logManifestIntakes,
@@ -222,6 +228,14 @@ export async function quickEatFromCargo(
 		);
 	}
 
+	if (
+		input.logIntake !== false &&
+		(await isFeatureEnabled(env, "nutrition-manifest", flagContext)) &&
+		(await isNutritionFuelPageEnabled(env, flagContext))
+	) {
+		await assertFuelCreateRoom(env.DB, principal.userId, new Date());
+	}
+
 	const cookResult = await cookMealFromGalley(
 		env,
 		organizationId,
@@ -319,6 +333,12 @@ export async function quickEatFromCargo(
 				intakeSkipReason = "clamped";
 			}
 		} catch (err) {
+			if (
+				err instanceof FuelDailyLimitError ||
+				err instanceof FuelTimezoneRequiredError
+			) {
+				throw err;
+			}
 			const code =
 				err && typeof err === "object" && "code" in err
 					? String((err as { code: unknown }).code)

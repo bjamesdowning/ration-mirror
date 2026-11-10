@@ -442,6 +442,13 @@
       "when": 1794256858173,
       "tag": "0062_familiar_blink",
       "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "6",
+      "when": 1794317405710,
+      "tag": "0063_slimy_purple_man",
+      "breakpoints": true
     }
   ]
 }

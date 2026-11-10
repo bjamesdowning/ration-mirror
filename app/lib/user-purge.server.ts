@@ -370,6 +370,7 @@ export async function purgeUserAccount(
 			db
 				.delete(schema.oauthClient)
 				.where(eq(schema.oauthClient.userId, userId)),
+			db.delete(schema.queueJob).where(eq(schema.queueJob.userId, userId)),
 			db.delete(schema.user).where(eq(schema.user.id, userId)),
 			// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
 		] as [any, ...any[]]);
@@ -380,6 +381,7 @@ export async function purgeUserAccount(
 	try {
 		if (storage) {
 			await deleteR2Prefix(storage, `users/${userId}/`);
+			await deleteR2Prefix(storage, `fuel-photo/${userId}/`);
 		}
 	} catch (error) {
 		throw wrapUserPurgeStep("user_wipe:r2", error);

@@ -24,7 +24,8 @@ export type QueueJobType =
 	| "scan"
 	| "meal_generate"
 	| "plan_week"
-	| "import_url";
+	| "import_url"
+	| "fuel_photo";
 export type QueueJobStatus = "pending" | "processing" | "completed" | "failed";
 
 /** Client-facing status: `processing` is reported as `pending` so polls continue. */

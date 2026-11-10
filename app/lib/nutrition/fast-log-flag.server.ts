@@ -90,7 +90,8 @@ async function isNutritionChildEnabled(
 	flag:
 		| "nutrition-barcode-diary"
 		| "nutrition-photo-log"
-		| "nutrition-health-export",
+		| "nutrition-health-export"
+		| "nutrition-fuel-page",
 ): Promise<boolean> {
 	if (!nutritionFastLogClientAllowed(context)) return false;
 	const [parent, child] = await Promise.all([
@@ -106,7 +107,8 @@ async function assertNutritionChild(
 	flag:
 		| "nutrition-barcode-diary"
 		| "nutrition-photo-log"
-		| "nutrition-health-export",
+		| "nutrition-health-export"
+		| "nutrition-fuel-page",
 	unavailable: string,
 ): Promise<void> {
 	if (!nutritionFastLogClientAllowed(context)) {
@@ -184,5 +186,25 @@ export function assertNutritionHealthExport(
 		context,
 		"nutrition-health-export",
 		"Apple Health export is unavailable.",
+	);
+}
+
+/** On only when nutrition-fast-log is on. iOS below 1.6.0 fails closed. */
+export function isNutritionFuelPageEnabled(
+	env: Env,
+	context: FlagshipEvaluationContext,
+): Promise<boolean> {
+	return isNutritionChildEnabled(env, context, "nutrition-fuel-page");
+}
+
+export function assertNutritionFuelPage(
+	env: Env,
+	context: FlagshipEvaluationContext,
+): Promise<void> {
+	return assertNutritionChild(
+		env,
+		context,
+		"nutrition-fuel-page",
+		"Fuel is unavailable.",
 	);
 }

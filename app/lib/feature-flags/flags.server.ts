@@ -134,6 +134,10 @@ export function applyClientFlagDependencies(
 		result.nutritionHealthExport =
 			result.nutritionFastLog === true && result.nutritionHealthExport === true;
 	}
+	if ("nutritionFuelPage" in result) {
+		result.nutritionFuelPage =
+			result.nutritionFastLog === true && result.nutritionFuelPage === true;
+	}
 	return result;
 }
 
@@ -155,7 +159,8 @@ export async function getClientSafeFlags(
 					flag === "nutrition-saved-food" ||
 					flag === "nutrition-barcode-diary" ||
 					flag === "nutrition-photo-log" ||
-					flag === "nutrition-health-export") &&
+					flag === "nutrition-health-export" ||
+					flag === "nutrition-fuel-page") &&
 				!nutritionFastLogClientAllowed(context)
 			) {
 				result[clientKey] = false;

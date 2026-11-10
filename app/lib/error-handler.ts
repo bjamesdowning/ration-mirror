@@ -9,6 +9,13 @@ import { GroupMembershipError } from "./group-membership.server";
 import { log } from "./logging.server";
 import { NutritionConsentError } from "./nutrition/consent.server";
 import {
+	FuelDailyLimitError,
+	FuelDateImmutableError,
+	FuelPhotoTooLargeError,
+	FuelPhotoTypeError,
+	FuelTimezoneRequiredError,
+} from "./nutrition/fuel-errors";
+import {
 	InvalidListStateError,
 	SupplyItemLimitError,
 	SupplyListNotFoundError,
@@ -344,6 +351,32 @@ export function handleApiError(error: unknown) {
 				state: error.state,
 			},
 			{ status: 409 },
+		);
+	}
+
+	if (error instanceof FuelDailyLimitError) {
+		return data(
+			{
+				error: "Daily Fuel limit reached",
+				code: error.code,
+				upgradeRequired: error.upgradeRequired,
+				limit: error.limit,
+				used: error.used,
+				localDate: error.localDate,
+			},
+			{ status: error.status },
+		);
+	}
+
+	if (
+		error instanceof FuelTimezoneRequiredError ||
+		error instanceof FuelDateImmutableError ||
+		error instanceof FuelPhotoTooLargeError ||
+		error instanceof FuelPhotoTypeError
+	) {
+		return data(
+			{ error: error.message, code: error.code },
+			{ status: error.status },
 		);
 	}
 

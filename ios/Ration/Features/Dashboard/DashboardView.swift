@@ -348,9 +348,21 @@ struct DashboardView: View {
                 summary: data.nutritionToday,
                 size: size,
                 filters: widget.filters,
-                onOpenGoals: onOpenNutritionGoals,
-                opensDay: fuelCapture,
-                onOpenDay: onOpenManifest
+                onOpenGoals: {
+                    if env.session.clientFlags.isNutritionFuelPageEnabled {
+                        env.openDeepLink(.fuelGoals)
+                    } else {
+                        onOpenNutritionGoals()
+                    }
+                },
+                opensDay: fuelCapture || env.session.clientFlags.isNutritionFuelPageEnabled,
+                onOpenDay: {
+                    if env.session.clientFlags.isNutritionFuelPageEnabled {
+                        env.openDeepLink(.fuel)
+                    } else {
+                        onOpenManifest()
+                    }
+                }
             )
         case .nutritionTrends:
             FuelTrendsWidget(

@@ -21,6 +21,7 @@ describe("getNutritionSummary cross-org diary", () => {
 				created_at integer not null
 			);
 			create table nutrition_intake (
+	fuel_date text,
 				id text primary key,
 				organization_id text,
 				user_id text not null,
@@ -99,6 +100,7 @@ describe("getNutritionSummary cross-org diary", () => {
 				name text not null
 			);
 			create table nutrition_intake (
+	fuel_date text,
 				id text primary key,
 				organization_id text references organization(id) on delete set null,
 				user_id text not null,

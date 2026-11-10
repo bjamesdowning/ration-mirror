@@ -144,6 +144,10 @@ CREATE TABLE oauthConsent (
   id TEXT PRIMARY KEY,
   user_id TEXT
 );
+CREATE TABLE queue_job (
+  id TEXT PRIMARY KEY,
+  user_id TEXT
+);
 CREATE TABLE oauthClient (
   id TEXT PRIMARY KEY,
   user_id TEXT
@@ -161,6 +165,7 @@ CREATE TABLE ingredient_nutrition_match (
   reviewed_by_user_id TEXT
 );
 CREATE TABLE nutrition_intake (
+	fuel_date text,
   id TEXT PRIMARY KEY,
   user_id TEXT,
   voided_by_user_id TEXT
@@ -188,6 +193,7 @@ DROP TABLE IF EXISTS nutrition_intake;
 DROP TABLE IF EXISTS ingredient_nutrition_match;
 DROP TABLE IF EXISTS meal_plan_entry;
 DROP TABLE IF EXISTS nutrition_consent;
+DROP TABLE IF EXISTS queue_job;
 DROP TABLE IF EXISTS oauthClient;
 DROP TABLE IF EXISTS oauthConsent;
 DROP TABLE IF EXISTS oauthRefreshToken;

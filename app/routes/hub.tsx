@@ -261,6 +261,11 @@ export default function DashboardLayout({ loaderData }: Route.ComponentProps) {
 		return () => window.removeEventListener("ration:open-ask", openAsk);
 	}, []);
 
+	const rootFlags = useRouteLoaderData("root") as
+		| { clientFlags?: { nutritionFuelPage?: boolean } }
+		| undefined;
+	const showHubButton = rootFlags?.clientFlags?.nutritionFuelPage === true;
+
 	return (
 		<ConfirmProvider>
 			<KitchenTimeZoneCapture
@@ -277,6 +282,16 @@ export default function DashboardLayout({ loaderData }: Route.ComponentProps) {
 						{/* Global Top Bar (Group Context) */}
 						<header className="px-4 md:px-8 py-2 safe-area-pt flex justify-between items-center gap-3 bg-ceramic/80 backdrop-blur-md sticky top-0 z-40 border-b border-platinum/50 min-h-[3rem]">
 							<div className="min-w-0 flex-1 flex items-center gap-3">
+								{showHubButton ? (
+									<NavLink
+										to="/hub"
+										end
+										className="md:hidden inline-flex items-center justify-center min-w-[44px] min-h-[44px] rounded-xl text-sm font-medium text-carbon"
+										aria-label="Hub"
+									>
+										Hub
+									</NavLink>
+								) : null}
 								<GroupSwitcher />
 							</div>
 							<div

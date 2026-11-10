@@ -323,6 +323,12 @@ export const RATE_LIMITS: Record<string, RateLimitConfig> = {
 		maxRequests: 30,
 		keyPrefix: "rate:settings_mut",
 	},
+	barcode_lookup: {
+		windowMs: 60_000,
+		maxRequests: 30,
+		keyPrefix: "rate:barcode_lookup",
+		failClosed: true,
+	},
 	user_purge: {
 		windowMs: 300_000, // 5 minutes
 		maxRequests: 1,

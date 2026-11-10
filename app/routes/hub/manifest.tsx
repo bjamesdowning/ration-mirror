@@ -557,6 +557,7 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 					nutritionSavedFood?: boolean;
 					nutritionBarcodeDiary?: boolean;
 					nutritionPhotoLog?: boolean;
+					nutritionFuelPage?: boolean;
 				};
 		  }
 		| undefined;
@@ -570,6 +571,8 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 	const nutritionIntakeNotesFlag =
 		rootData?.clientFlags?.nutritionIntakeNotes === true;
 	const fuelCapture = rootData?.clientFlags?.nutritionFastLog === true;
+	const fuelPage = rootData?.clientFlags?.nutritionFuelPage === true;
+	const showFuelOnManifest = fuelCapture && !fuelPage;
 	const savedFoods = rootData?.clientFlags?.nutritionSavedFood === true;
 	const barcodeDiary = rootData?.clientFlags?.nutritionBarcodeDiary === true;
 	const photoLog = rootData?.clientFlags?.nutritionPhotoLog === true;
@@ -727,6 +730,7 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 		cleared?: boolean;
 		voidedIntakeId?: string | null;
 		error?: string;
+		code?: string;
 	}>();
 	const [eatEntry, setEatEntry] = useState<MealPlanEntryWithMeal | null>(null);
 	const eatToast = useToast({ duration: 4000 });
@@ -1142,6 +1146,8 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 		} else if (data.cleared) {
 			revalidator.revalidate();
 			eatRemovedToast.show();
+		} else if (data.code === "fuel_daily_limit") {
+			window.location.assign("/hub/pricing");
 		} else if (data.error) {
 			eatErrorToast.show();
 		}
@@ -1404,7 +1410,7 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 						{!showDayView ? (
 							<div className="space-y-3">
 								<EmptyManifest onAdd={handleAdd} activeDate={activeDay} />
-								{fuelCapture && (
+								{showFuelOnManifest && (
 									<button
 										type="button"
 										onClick={() => {
@@ -1438,16 +1444,20 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 								onToggleSupplyInclusion={handleToggleSupplyInclusion}
 								togglingSupplyDate={togglingSupplyDate}
 								consumedNutrients={
-									showDayNutritionTotals
+									showDayNutritionTotals && !fuelPage
 										? (dayConsumedNutrients[activeDay] ?? null)
 										: null
 								}
-								goalsChrome={showDayNutritionTotals}
-								goalTargets={showDayNutritionTotals ? goalTargets : null}
-								intakeRows={nutritionManifestFlag ? activeDayIntakes : []}
-								fuelCapture={fuelCapture}
+								goalsChrome={showDayNutritionTotals && !fuelPage}
+								goalTargets={
+									showDayNutritionTotals && !fuelPage ? goalTargets : null
+								}
+								intakeRows={
+									nutritionManifestFlag && !fuelPage ? activeDayIntakes : []
+								}
+								fuelCapture={showFuelOnManifest}
 								diaryLayout={diaryLayout}
-								onDiaryLayout={fuelCapture ? setDiaryLayout : undefined}
+								onDiaryLayout={showFuelOnManifest ? setDiaryLayout : undefined}
 								onLogToFuel={() => {
 									setEditIntake(null);
 									setShowFuelLog(true);
@@ -1466,7 +1476,7 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 
 				{/* Desktop: Full week grid */}
 				<div className="hidden md:block">
-					{fuelCapture && (
+					{showFuelOnManifest && (
 						<div className="mb-4">
 							<DayView
 								date={selectedDay}

@@ -1,4 +1,4 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import * as schema from "~/db/schema";
 import { CapacityExceededError, checkCapacity } from "~/lib/capacity.server";
@@ -15,8 +15,17 @@ import type { DiaryNutritionOperationType } from "./diary-operations";
 import {
 	assertNutritionFastLog,
 	assertNutritionSavedFood,
+	isNutritionFuelPageEnabled,
 } from "./fast-log-flag.server";
 import { listFdcPortions } from "./fdc-portion.server";
+import {
+	personIsCrew,
+	releaseFuelSlot,
+	requireFuelTimeZone,
+	reserveFuelSlot,
+	stampFuelDate,
+} from "./fuel-cap.server";
+import { assertFuelDateUnchanged } from "./fuel-date";
 import { diaryCompositionStamp } from "./health-exportability";
 import {
 	resolveHouseholdPortion,
@@ -361,6 +370,7 @@ function intakeInsert(
 		savedFoodId: string | null;
 		barcode: string | null;
 		fdcId: string | null;
+		fuelDate?: string | null;
 		compositionSource?: string;
 		compositionConfirmedAt?: Date | null;
 	},
@@ -418,6 +428,7 @@ function intakeInsert(
 		barcode: input.barcode,
 		savedFoodId: input.savedFoodId,
 		createdAt: input.now,
+		...(input.fuelDate ? { fuelDate: input.fuelDate } : {}),
 	};
 }
 
@@ -768,6 +779,22 @@ export async function logDiaryFood(
 	}
 
 	const credits = chargeDiaryFoodLog();
+	let reservedFuelDate: string | null = null;
+	if (await isNutritionFuelPageEnabled(env, flags)) {
+		try {
+			const fuelDate = await stampFuelDate(
+				env.DB,
+				principal.userId,
+				food.occurredAt,
+			);
+			const crew = await personIsCrew(env.DB, principal.userId, now);
+			await reserveFuelSlot(env.DB, principal.userId, fuelDate, crew);
+			reservedFuelDate = fuelDate;
+		} catch (error) {
+			await markOperationFailed(db, operationId);
+			throw error;
+		}
+	}
 	const row = intakeInsert(food, {
 		id: intakeId,
 		principal,
@@ -782,6 +809,7 @@ export async function logDiaryFood(
 		savedFoodId: materialized.savedFoodId,
 		barcode: materialized.barcode,
 		fdcId: materialized.fdcId,
+		fuelDate: reservedFuelDate,
 		...diaryCompositionStamp(
 			input.savedFoodId ? "manual_macros" : input.compositionSource,
 			now,
@@ -823,6 +851,9 @@ export async function logDiaryFood(
 			}),
 		]);
 	} catch (error) {
+		if (reservedFuelDate) {
+			await releaseFuelSlot(env.DB, principal.userId, reservedFuelDate);
+		}
 		await markOperationFailed(db, operationId);
 		if (errorText(error).includes("nutrition_intake_user_idempotency_uidx")) {
 			throw new NutritionItemConflictError();
@@ -933,6 +964,20 @@ export async function updateDiaryFood(
 		now,
 	});
 	const credits = chargeDiaryFoodLog();
+	let keptFuelDate: string | null = null;
+	if (await isNutritionFuelPageEnabled(env, flags)) {
+		try {
+			const zone = await requireFuelTimeZone(env.DB, principal.userId);
+			keptFuelDate = assertFuelDateUnchanged(
+				current.fuelDate,
+				food.occurredAt,
+				zone,
+			);
+		} catch (error) {
+			await markOperationFailed(db, operationId);
+			throw error;
+		}
+	}
 	const row = intakeInsert(food, {
 		id: nextId,
 		principal,
@@ -950,6 +995,7 @@ export async function updateDiaryFood(
 		savedFoodId: materialized.savedFoodId,
 		barcode: materialized.barcode,
 		fdcId: materialized.fdcId,
+		fuelDate: keptFuelDate ?? current.fuelDate,
 	});
 	try {
 		await db.batch([
@@ -1053,6 +1099,7 @@ export async function voidDiaryFood(
 		now,
 	});
 	chargeDiaryFoodLog();
+	const fuelOn = await isNutritionFuelPageEnabled(env, flags);
 	try {
 		await db.batch([
 			db
@@ -1069,6 +1116,22 @@ export async function voidDiaryFood(
 						isNull(schema.nutritionIntake.voidedAt),
 					),
 				),
+			...(fuelOn && current.fuelDate
+				? [
+						db
+							.update(schema.nutritionFuelDay)
+							.set({
+								used: sql`${schema.nutritionFuelDay.used} - 1`,
+							})
+							.where(
+								and(
+									eq(schema.nutritionFuelDay.userId, principal.userId),
+									eq(schema.nutritionFuelDay.fuelDate, current.fuelDate),
+									sql`${schema.nutritionFuelDay.used} >= 1`,
+								),
+							),
+					]
+				: []),
 			db
 				.update(schema.nutritionOperation)
 				.set({

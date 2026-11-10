@@ -2,10 +2,13 @@ import XCTest
 @testable import Ration
 
 final class FuelCapturePolicyTests: XCTestCase {
-    func testOneControlAndTwoLabels() {
+    func testOneControlAndHubLabels() {
         XCTAssertEqual(HubCapturePolicy.controlCount, 1)
-        XCTAssertEqual(HubCapturePolicy.choiceLabels, ["Add to Cargo", "Log to Fuel"])
-        let banned = ["Copilot", "Scan items", "Log food", "I ate this"]
+        XCTAssertEqual(
+            HubCapturePolicy.choiceLabels,
+            ["Log to Fuel", "Scan to Cargo", "Generate Meal", "Plan Week", "Dock from Receipt"]
+        )
+        let banned = ["Copilot", "Scan items", "Log food", "I ate this", "Add to Cargo"]
         for label in HubCapturePolicy.choiceLabels {
             XCTAssertFalse(banned.contains(label))
         }

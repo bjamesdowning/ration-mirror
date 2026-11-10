@@ -17,6 +17,7 @@ import { Toast } from "~/components/shell/Toast";
 import type { cargo } from "~/db/schema";
 import { useToast } from "~/hooks/useToast";
 import { useConfirm } from "~/lib/confirm-context";
+import { orderOverflowActions } from "~/lib/detail-overflow";
 import type { NutritionSnapshot } from "~/lib/nutrition";
 import type { TagRecord } from "~/lib/tags";
 import { toSupportedUnit } from "~/lib/units";
@@ -302,41 +303,71 @@ export function CargoDetail({
 						<div className="text-xs text-muted">
 							Expiry: {formatExpiryDate(item.expiresAt)}
 						</div>
-						<div className="flex gap-2">
-							{cargoQuickEat && (
-								<button
-									type="button"
-									onClick={() => setShowQuickEat(true)}
-									className="px-3 py-1.5 text-sm rounded-lg border border-hyper-green/40 text-hyper-green hover:bg-hyper-green/5"
-								>
-									Eat
-								</button>
-							)}
-							<button
-								type="button"
-								onClick={() => setIsEditing(true)}
-								className="px-3 py-1.5 text-sm rounded-lg border border-platinum text-muted hover:text-carbon"
-							>
-								Edit
-							</button>
-							{localQuantity > 0 && (
-								<button
-									type="button"
-									onClick={handleMarkEmpty}
-									disabled={isMarkingEmpty || isDeleting}
-									className="px-3 py-1.5 text-sm rounded-lg border border-warning/40 text-warning hover:bg-warning/5 disabled:opacity-60"
-								>
-									{isMarkingEmpty ? "Clearing..." : "Mark Empty"}
-								</button>
-							)}
-							<button
-								type="button"
-								onClick={handleDelete}
-								disabled={isDeleting}
-								className="px-3 py-1.5 text-sm rounded-lg border border-danger/40 text-danger hover:bg-danger/5 disabled:opacity-60"
-							>
-								{isDeleting ? "Deleting..." : "Delete"}
-							</button>
+						<div className="flex gap-2" data-testid="detail-actions">
+							{orderOverflowActions([
+								...(cargoQuickEat
+									? [
+											{
+												label: "Eat",
+												node: (
+													<button
+														type="button"
+														onClick={() => setShowQuickEat(true)}
+														className="px-3 py-1.5 text-sm rounded-lg border border-hyper-green/40 text-hyper-green hover:bg-hyper-green/5"
+													>
+														Eat
+													</button>
+												),
+											},
+										]
+									: []),
+								{
+									label: "Edit",
+									node: (
+										<button
+											type="button"
+											onClick={() => setIsEditing(true)}
+											className="px-3 py-1.5 text-sm rounded-lg border border-platinum text-muted hover:text-carbon"
+										>
+											Edit
+										</button>
+									),
+								},
+								...(localQuantity > 0
+									? [
+											{
+												label: "Mark Empty",
+												node: (
+													<button
+														type="button"
+														onClick={handleMarkEmpty}
+														disabled={isMarkingEmpty || isDeleting}
+														className="px-3 py-1.5 text-sm rounded-lg border border-warning/40 text-warning hover:bg-warning/5 disabled:opacity-60"
+													>
+														{isMarkingEmpty ? "Clearing..." : "Mark Empty"}
+													</button>
+												),
+											},
+										]
+									: []),
+								{
+									label: "Delete",
+									node: (
+										<button
+											type="button"
+											onClick={handleDelete}
+											disabled={isDeleting}
+											className="px-3 py-1.5 text-sm rounded-lg border border-danger/40 text-danger hover:bg-danger/5 disabled:opacity-60"
+										>
+											{isDeleting ? "Deleting..." : "Delete"}
+										</button>
+									),
+								},
+							]).map((action) => (
+								<span key={action.label} data-overflow-label={action.label}>
+									{action.node}
+								</span>
+							))}
 						</div>
 					</div>
 				</div>

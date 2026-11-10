@@ -7,12 +7,12 @@ import { isVersionAtLeast } from "~/lib/client-version";
  */
 export const NUTRITION_FAST_LOG_IOS_MIN = "1.6.0";
 
-export const FUEL_CAPTURE_ADD_TO_CARGO = "Add to Cargo";
+export const FUEL_CAPTURE_SCAN_TO_CARGO = "Scan to Cargo";
 export const FUEL_CAPTURE_LOG_TO_FUEL = "Log to Fuel";
 
-/** The only actions on the capture sheet. Copilot is not one of them. */
+/** The only actions on the cargo capture sheet. The Hub menu is separate. */
 export const FUEL_CAPTURE_CHOICES = [
-	FUEL_CAPTURE_ADD_TO_CARGO,
+	FUEL_CAPTURE_SCAN_TO_CARGO,
 	FUEL_CAPTURE_LOG_TO_FUEL,
 ] as const;
 

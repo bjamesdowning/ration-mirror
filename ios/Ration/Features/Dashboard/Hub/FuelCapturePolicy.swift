@@ -1,13 +1,55 @@
 import Foundation
 
-/// One Hub capture control. The choice sheet exists only when the flag is on
-/// and this binary is an iOS 1.6 client. Flag off and 1.5 keep the scan action.
+/// One Hub action control. Log to Fuel still requires the fast-log flag
+/// and an iOS 1.6 client. Other rows use the flag that already gates them.
 enum HubCapturePolicy {
     static let iosMinimum = "1.6.0"
-    static let addToCargo = "Add to Cargo"
     static let logToFuel = "Log to Fuel"
-    static let choiceLabels = [addToCargo, logToFuel]
+    static let scanToCargo = "Scan to Cargo"
+    static let generateMeal = "Generate Meal"
+    static let planWeek = "Plan Week"
+    static let dockFromReceipt = "Dock from Receipt"
+    static let choiceLabels = [
+        logToFuel, scanToCargo, generateMeal, planWeek, dockFromReceipt,
+    ]
     static let controlCount = 1
+
+    struct Visibility: Equatable {
+        var logToFuel: Bool
+        var scanToCargo: Bool
+        var generateMeal: Bool
+        var planWeek: Bool
+        var dockFromReceipt: Bool
+
+        init(
+            logToFuel: Bool = false,
+            scanToCargo: Bool = false,
+            generateMeal: Bool = false,
+            planWeek: Bool = false,
+            dockFromReceipt: Bool = false
+        ) {
+            self.logToFuel = logToFuel
+            self.scanToCargo = scanToCargo
+            self.generateMeal = generateMeal
+            self.planWeek = planWeek
+            self.dockFromReceipt = dockFromReceipt
+        }
+    }
+
+    /// Menu order with flagged-off rows removed. Relative order of the rest stays.
+    static func visibleLabels(_ visibility: Visibility) -> [String] {
+        var labels: [String] = []
+        if visibility.logToFuel { labels.append(logToFuel) }
+        if visibility.scanToCargo { labels.append(scanToCargo) }
+        if visibility.generateMeal { labels.append(generateMeal) }
+        if visibility.planWeek { labels.append(planWeek) }
+        if visibility.dockFromReceipt { labels.append(dockFromReceipt) }
+        return labels
+    }
+
+    static func menuActive(_ visibility: Visibility) -> Bool {
+        !visibleLabels(visibility).isEmpty
+    }
 
     static func choiceVisible(fastLogEnabled: Bool, appVersion: String) -> Bool {
         fastLogEnabled && isAtLeast(appVersion, iosMinimum)

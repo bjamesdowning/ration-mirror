@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useFetcher, useSearchParams } from "react-router";
+import { HubActionMenu } from "~/components/hub/HubActionMenu";
 import { HubEditMode } from "~/components/hub/HubEditMode";
 import { HubEditModeMobile } from "~/components/hub/HubEditModeMobile";
 import { WelcomeBanner } from "~/components/hub/WelcomeBanner";
@@ -306,14 +307,17 @@ export default function DashboardHub({ loaderData }: Route.ComponentProps) {
 					</div>
 
 					{!isEditing && (
-						<button
-							type="button"
-							onClick={() => setIsEditing(true)}
-							className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-muted hover:text-carbon dark:hover:text-white bg-platinum/50 dark:bg-white/10 hover:bg-platinum dark:hover:bg-white/20 rounded-lg transition-all"
-						>
-							<PencilIcon className="w-3.5 h-3.5" />
-							Customize
-						</button>
+						<div className="flex items-center gap-2">
+							<HubActionMenu />
+							<button
+								type="button"
+								onClick={() => setIsEditing(true)}
+								className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-muted hover:text-carbon dark:hover:text-white bg-platinum/50 dark:bg-white/10 hover:bg-platinum dark:hover:bg-white/20 rounded-lg transition-all"
+							>
+								<PencilIcon className="w-3.5 h-3.5" />
+								Customize
+							</button>
+						</div>
 					)}
 				</div>
 			</header>

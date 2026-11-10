@@ -8,6 +8,7 @@ import {
 	useSearchParams,
 } from "react-router";
 import { PanelToolbar } from "~/components/hub/PanelToolbar";
+import { useOpenHubAction } from "~/components/hub/useHubAction";
 import {
 	CalendarIcon,
 	ChevronLeftIcon,
@@ -543,6 +544,7 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 	const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
 	// Plan Week modal — controlled from FAB on mobile
 	const [showPlanWeekModal, setShowPlanWeekModal] = useState(false);
+	const [showFuelLog, setShowFuelLog] = useState(false);
 	const rootData = useRouteLoaderData("root") as
 		| {
 				clientFlags?: {
@@ -583,7 +585,12 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 			{ method: "post" },
 		);
 	}
-	const [showFuelLog, setShowFuelLog] = useState(false);
+	useOpenHubAction("log-to-fuel", fuelCapture, () => {
+		setShowFuelLog(true);
+	});
+	useOpenHubAction("plan-week", aiPlanWeek, () => {
+		setShowPlanWeekModal(true);
+	});
 	const [editIntake, setEditIntake] = useState<DayIntakeRow | null>(null);
 	const showDayNutritionTotals = nutritionManifestFlag && nutritionGoalsFlag;
 	/** nutrition-cook-log-split — shared Cook replaces Consume; private Eat opens separately. */

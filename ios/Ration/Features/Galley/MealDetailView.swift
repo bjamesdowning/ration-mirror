@@ -97,34 +97,9 @@ struct MealDetailView: View {
         }
         .tabDockAction(tag: .galley, layer: .detail, isActive: currentMainTab == .galley) {
             IconFABMenuCore(systemImage: "ellipsis.circle.fill", accessibilityLabel: "Meal actions") {
-                Button { Task { await cook() } } label: {
-                    Label("Cook meal", systemImage: "flame")
+                ForEach(MealOverflowMenu.ordered(), id: \.self) { action in
+                    mealOverflowButton(action)
                 }
-                Button {
-                    env.openDeepLink(
-                        .manifestAddEntry(
-                            mealId: mealId,
-                            date: ManifestDateHelpers.todayISO()
-                        )
-                    )
-                } label: {
-                    Label("Add to Manifest", systemImage: "calendar.badge.plus")
-                }
-                Button { Task { await toggleSupply() } } label: {
-                    Label(
-                        isSelectedForSupply ? "Remove from Supply" : "Add to Supply",
-                        systemImage: isSelectedForSupply ? "cart.fill.badge.minus" : "cart.badge.plus"
-                    )
-                }
-                .disabled(isTogglingSupply)
-                Button { showingEdit = true } label: {
-                    Label("Edit", systemImage: "pencil")
-                }
-                .disabled(meal == nil && initialMeal.organizationId.isEmpty)
-                Button(role: .destructive) { showingDeleteConfirm = true } label: {
-                    Label("Delete", systemImage: "trash")
-                }
-                .destructiveDeleteTint()
             }
         }
         .task {
@@ -187,6 +162,45 @@ struct MealDetailView: View {
                     )
                 }
             )
+        }
+    }
+
+    @ViewBuilder
+    private func mealOverflowButton(_ action: MealOverflowAction) -> some View {
+        switch action {
+        case .delete:
+            Button(role: .destructive) { showingDeleteConfirm = true } label: {
+                Label("Delete", systemImage: "trash")
+            }
+            .destructiveDeleteTint()
+        case .edit:
+            Button { showingEdit = true } label: {
+                Label("Edit", systemImage: "pencil")
+            }
+            .disabled(meal == nil && initialMeal.organizationId.isEmpty)
+        case .cook:
+            Button { Task { await cook() } } label: {
+                Label("Cook meal", systemImage: "flame")
+            }
+        case .manifest:
+            Button {
+                env.openDeepLink(
+                    .manifestAddEntry(
+                        mealId: mealId,
+                        date: ManifestDateHelpers.todayISO()
+                    )
+                )
+            } label: {
+                Label("Add to Manifest", systemImage: "calendar.badge.plus")
+            }
+        case .supply:
+            Button { Task { await toggleSupply() } } label: {
+                Label(
+                    isSelectedForSupply ? "Remove from Supply" : "Add to Supply",
+                    systemImage: isSelectedForSupply ? "cart.fill.badge.minus" : "cart.badge.plus"
+                )
+            }
+            .disabled(isTogglingSupply)
         }
     }
 

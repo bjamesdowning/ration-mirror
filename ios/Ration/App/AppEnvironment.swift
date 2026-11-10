@@ -21,6 +21,8 @@ final class AppEnvironment {
         case manifestToday
         case supply
         case supplyCompose
+        /// Opens Supply's existing Dock from Receipt sheet.
+        case supplyDockReceipt
         case cargoEat(id: String)
     }
 

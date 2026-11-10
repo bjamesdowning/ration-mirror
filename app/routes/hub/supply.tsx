@@ -11,6 +11,7 @@ import {
 } from "react-router";
 import { EmptyPanel } from "~/components/hub/EmptyPanel";
 import { PanelToolbar } from "~/components/hub/PanelToolbar";
+import { useOpenHubAction } from "~/components/hub/useHubAction";
 import {
 	CheckIcon,
 	CloseIcon,
@@ -440,6 +441,9 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 	const aiDockFromReceipt =
 		rootData?.clientFlags?.aiDockFromReceipt === true &&
 		rootData?.clientFlags?.aiScanReceipt === true;
+	useOpenHubAction("dock-from-receipt", aiDockFromReceipt, () => {
+		setShowReplenishReceipt(true);
+	});
 	const { confirm } = useConfirm();
 	const summaryToast = useToast({ duration: 5000 });
 	const dockToast = useToast({ duration: 4000 });

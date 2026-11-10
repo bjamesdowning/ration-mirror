@@ -403,6 +403,13 @@ struct SupplyView: View {
                 .disabled(model.purchasedCount == 0 || model.isDocking || !model.isLiveList)
             }
         }
+        .onChange(of: env.deepLinkRouter.supplyDockReceiptPending, initial: true) { _, pending in
+            guard pending else { return }
+            if env.session.clientFlags.isAiDockFromReceiptEnabled {
+                showingReplenishReceipt = true
+            }
+            env.deepLinkRouter.acknowledgeSupplyDockReceipt()
+        }
         .onChange(of: env.deepLinkRouter.supplyComposePending, initial: true) { _, pending in
             guard pending else { return }
             openSupplyComposerIfNeeded()

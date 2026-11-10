@@ -66,54 +66,9 @@ struct CargoDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .tabDockAction(tag: .cargo, layer: .detail, isActive: currentMainTab == .cargo) {
             IconFABMenuCore(systemImage: "ellipsis.circle.fill", accessibilityLabel: "Cargo actions") {
-                Button { showingQuickEat = true } label: {
-                    Label {
-                        Text("Eat")
-                    } icon: {
-                        Image(systemName: "carrot")
-                            .symbolRenderingMode(.monochrome)
-                    }
+                ForEach(cargoOverflowActions, id: \.self) { action in
+                    cargoOverflowButton(action)
                 }
-                .tint(Theme.warning)
-                .disabled(model.item == nil || model.isQuickEating || !env.network.isOnline)
-                Button {
-                    Task { await handlePromote() }
-                } label: {
-                    Label(
-                        model.isPromoted ? "In Galley" : "Add to Galley",
-                        systemImage: model.isPromoted ? "checkmark.circle" : "fork.knife"
-                    )
-                }
-                .disabled(model.item == nil || model.isPromoting || model.isPromoted || !env.network.isOnline)
-                Button { showingEdit = true } label: {
-                    Label("Edit", systemImage: "pencil")
-                }
-                .disabled(model.item == nil)
-                if let item = model.item, item.quantity > 0 {
-                    Button {
-                        Task {
-                            await model.markEmpty(api: env.api)
-                            env.notifyCargoDataChanged()
-                        }
-                    } label: {
-                        Label("Mark Empty", systemImage: "0.circle")
-                    }
-                    .disabled(model.isMarkingEmpty || !env.network.isOnline)
-                }
-                Button {
-                    Task { await handleSupplyToggle() }
-                } label: {
-                    Label(
-                        model.isSelectedForRestock ? "Remove from Supply" : "Add to Supply",
-                        systemImage: model.isSelectedForRestock ? "cart.fill.badge.minus" : "cart.badge.plus"
-                    )
-                }
-                .disabled(model.item == nil || model.isTogglingRestock || !env.network.isOnline)
-                Button(role: .destructive) { showingDeleteConfirm = true } label: {
-                    Label("Delete", systemImage: "trash")
-                }
-                .disabled(model.item == nil)
-                .destructiveDeleteTint()
             }
         }
         .onChange(of: model.item != nil) { _, _ in
@@ -183,6 +138,68 @@ struct CargoDetailView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("This will look up USDA values for this item name and replace your override.")
+        }
+    }
+
+    private var cargoOverflowActions: [CargoOverflowAction] {
+        CargoOverflowMenu.ordered(showsMarkEmpty: (model.item?.quantity ?? 0) > 0)
+    }
+
+    @ViewBuilder
+    private func cargoOverflowButton(_ action: CargoOverflowAction) -> some View {
+        switch action {
+        case .delete:
+            Button(role: .destructive) { showingDeleteConfirm = true } label: {
+                Label("Delete", systemImage: "trash")
+            }
+            .disabled(model.item == nil)
+            .destructiveDeleteTint()
+        case .edit:
+            Button { showingEdit = true } label: {
+                Label("Edit", systemImage: "pencil")
+            }
+            .disabled(model.item == nil)
+        case .eat:
+            Button { showingQuickEat = true } label: {
+                Label {
+                    Text("Eat")
+                } icon: {
+                    Image(systemName: "carrot")
+                        .symbolRenderingMode(.monochrome)
+                }
+            }
+            .tint(Theme.warning)
+            .disabled(model.item == nil || model.isQuickEating || !env.network.isOnline)
+        case .galley:
+            Button {
+                Task { await handlePromote() }
+            } label: {
+                Label(
+                    model.isPromoted ? "In Galley" : "Add to Galley",
+                    systemImage: model.isPromoted ? "checkmark.circle" : "fork.knife"
+                )
+            }
+            .disabled(model.item == nil || model.isPromoting || model.isPromoted || !env.network.isOnline)
+        case .markEmpty:
+            Button {
+                Task {
+                    await model.markEmpty(api: env.api)
+                    env.notifyCargoDataChanged()
+                }
+            } label: {
+                Label("Mark Empty", systemImage: "0.circle")
+            }
+            .disabled(model.isMarkingEmpty || !env.network.isOnline)
+        case .supply:
+            Button {
+                Task { await handleSupplyToggle() }
+            } label: {
+                Label(
+                    model.isSelectedForRestock ? "Remove from Supply" : "Add to Supply",
+                    systemImage: model.isSelectedForRestock ? "cart.fill.badge.minus" : "cart.badge.plus"
+                )
+            }
+            .disabled(model.item == nil || model.isTogglingRestock || !env.network.isOnline)
         }
     }
 

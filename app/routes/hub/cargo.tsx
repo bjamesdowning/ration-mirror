@@ -15,6 +15,7 @@ import { ManifestGrid } from "~/components/cargo/ManifestGrid";
 import { ViewToggle } from "~/components/common/ViewToggle";
 import { EmptyPanel } from "~/components/hub/EmptyPanel";
 import { PanelToolbar } from "~/components/hub/PanelToolbar";
+import { useOpenHubAction } from "~/components/hub/useHubAction";
 import {
 	CameraIcon,
 	CloseIcon,
@@ -506,6 +507,9 @@ export default function CargoPage({ loaderData }: Route.ComponentProps) {
 	const barcodeDiary = rootData?.clientFlags?.nutritionBarcodeDiary === true;
 	const photoLog = rootData?.clientFlags?.nutritionPhotoLog === true;
 	const [showScanIntroModal, setShowScanIntroModal] = useState(false);
+	useOpenHubAction("scan-to-cargo", aiScanReceipt, () => {
+		setShowScanIntroModal(true);
+	});
 	const [showCaptureChoice, setShowCaptureChoice] = useState(false);
 	const [showFuelLog, setShowFuelLog] = useState(false);
 	const cameraRef = useRef<CameraInputHandle>(null);

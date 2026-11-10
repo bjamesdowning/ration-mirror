@@ -15,11 +15,11 @@ import {
 } from "../fuel-capture";
 
 describe("fuel capture", () => {
-	it("keeps one sheet with Add to Cargo and Log to Fuel", () => {
-		expect(FUEL_CAPTURE_CHOICES).toEqual(["Add to Cargo", "Log to Fuel"]);
+	it("keeps one sheet with Scan to Cargo and Log to Fuel", () => {
+		expect(FUEL_CAPTURE_CHOICES).toEqual(["Scan to Cargo", "Log to Fuel"]);
 		expect(captureLabelsAreExclusive(FUEL_CAPTURE_CHOICES)).toBe(true);
 		expect(
-			captureLabelsAreExclusive(["Add to Cargo", "Log to Fuel", "Copilot"]),
+			captureLabelsAreExclusive(["Scan to Cargo", "Log to Fuel", "Copilot"]),
 		).toBe(false);
 		expect(captureLabelsAreExclusive(["Scan items"])).toBe(false);
 		expect(captureLabelsAreExclusive(["Log food"])).toBe(false);

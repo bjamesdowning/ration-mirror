@@ -19,6 +19,7 @@ import { MealQuickAdd } from "~/components/galley/MealQuickAdd";
 import { ProvisionQuickAdd } from "~/components/galley/ProvisionQuickAdd";
 import { EmptyPanel } from "~/components/hub/EmptyPanel";
 import { PanelToolbar } from "~/components/hub/PanelToolbar";
+import { useOpenHubAction } from "~/components/hub/useHubAction";
 import {
 	ChefHatIcon,
 	CloseIcon,
@@ -272,6 +273,9 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 	);
 	const clearFetcher = useFetcher<{ success: boolean; cleared: number }>();
 	const generateRef = useRef<GenerateMealButtonHandle>(null);
+	useOpenHubAction("generate-meal", aiGenerateMeal, () => {
+		generateRef.current?.open();
+	});
 	const importRef = useRef<ImportRecipeButtonHandle>(null);
 	const galleyImportRef = useRef<GalleyImportButtonHandle>(null);
 	const tagSuggestions = availableTags.map((t) => t.slug);

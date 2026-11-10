@@ -19,6 +19,7 @@ import { detectAllergens } from "~/lib/allergens";
 import type { CargoLinkedIngredient } from "~/lib/cargo-links";
 import { useConfirm } from "~/lib/confirm-context";
 import { galleyPartialCookDescription } from "~/lib/cook-feedback";
+import { orderOverflowActions } from "~/lib/detail-overflow";
 import { log } from "~/lib/logging.client";
 import { getTodayISO } from "~/lib/manifest-dates";
 import { inferSlotTypeFromLocalHour } from "~/lib/manifest-slot";
@@ -513,21 +514,37 @@ export function MealDetail({
 						Meal ID: {meal.id.slice(0, 8)}
 					</div>
 					{isOwner && (
-						<div className="flex gap-2 shrink-0">
-							<Link
-								to="edit"
-								className="text-muted hover:text-hyper-green px-3 py-1 text-sm transition-colors"
-							>
-								Edit
-							</Link>
-							<button
-								type="button"
-								onClick={handleDelete}
-								disabled={isDeleting}
-								className="text-muted hover:text-danger px-3 py-1 text-sm transition-colors disabled:opacity-50"
-							>
-								{isDeleting ? "Deleting..." : "Delete"}
-							</button>
+						<div className="flex gap-2 shrink-0" data-testid="detail-actions">
+							{orderOverflowActions([
+								{
+									label: "Edit",
+									node: (
+										<Link
+											to="edit"
+											className="text-muted hover:text-hyper-green px-3 py-1 text-sm transition-colors"
+										>
+											Edit
+										</Link>
+									),
+								},
+								{
+									label: "Delete",
+									node: (
+										<button
+											type="button"
+											onClick={handleDelete}
+											disabled={isDeleting}
+											className="text-muted hover:text-danger px-3 py-1 text-sm transition-colors disabled:opacity-50"
+										>
+											{isDeleting ? "Deleting..." : "Delete"}
+										</button>
+									),
+								},
+							]).map((action) => (
+								<span key={action.label} data-overflow-label={action.label}>
+									{action.node}
+								</span>
+							))}
 						</div>
 					)}
 				</div>

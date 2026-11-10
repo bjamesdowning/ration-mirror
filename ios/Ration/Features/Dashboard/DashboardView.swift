@@ -18,6 +18,44 @@ struct DashboardView: View {
     @State private var model = HubViewModel()
     @State private var showLogToFuel = false
 
+    private var hubMenuVisibility: HubCapturePolicy.Visibility {
+        HubCapturePolicy.Visibility(
+            logToFuel: fuelCapture,
+            scanToCargo: env.session.clientFlags.isAiScanReceiptEnabled,
+            generateMeal: env.session.clientFlags.isAiGenerateMealEnabled,
+            planWeek: env.session.clientFlags.isAiPlanWeekEnabled,
+            dockFromReceipt: env.session.clientFlags.isAiDockFromReceiptEnabled
+        )
+    }
+
+    @ViewBuilder
+    private func hubActionButton(_ label: String) -> some View {
+        switch label {
+        case HubCapturePolicy.logToFuel:
+            Button { showLogToFuel = true } label: {
+                Label(label, systemImage: "fork.knife")
+            }
+        case HubCapturePolicy.scanToCargo:
+            Button(action: onScan) {
+                Label(label, systemImage: "camera.viewfinder")
+            }
+        case HubCapturePolicy.generateMeal:
+            Button { env.openDeepLink(.galleyGenerate) } label: {
+                Label(label, systemImage: "sparkles")
+            }
+        case HubCapturePolicy.planWeek:
+            Button { env.openDeepLink(.manifestPlanWeek) } label: {
+                Label(label, systemImage: "sparkles")
+            }
+        case HubCapturePolicy.dockFromReceipt:
+            Button { env.openDeepLink(.supplyDockReceipt) } label: {
+                Label(label, systemImage: "camera.fill")
+            }
+        default:
+            EmptyView()
+        }
+    }
+
     private var fuelCapture: Bool {
         HubCapturePolicy.choiceVisible(
             fastLogEnabled: env.session.clientFlags.isNutritionFastLogEnabled,
@@ -147,22 +185,11 @@ struct DashboardView: View {
         }
         .tabDockAction(
             tag: .hub,
-            isActive: !model.isEditMode
-                && (env.session.clientFlags.isAiScanReceiptEnabled || fuelCapture)
+            isActive: !model.isEditMode && HubCapturePolicy.menuActive(hubMenuVisibility)
         ) {
             IconFABMenuCore(systemImage: "plus.circle.fill", accessibilityLabel: "Hub actions") {
-                if env.session.clientFlags.isAiScanReceiptEnabled {
-                    Button(action: onScan) {
-                        Label(
-                            fuelCapture ? HubCapturePolicy.addToCargo : "Scan items",
-                            systemImage: "camera.viewfinder"
-                        )
-                    }
-                }
-                if fuelCapture {
-                    Button { showLogToFuel = true } label: {
-                        Label(HubCapturePolicy.logToFuel, systemImage: "fork.knife")
-                    }
+                ForEach(HubCapturePolicy.visibleLabels(hubMenuVisibility), id: \.self) { label in
+                    hubActionButton(label)
                 }
             }
         }

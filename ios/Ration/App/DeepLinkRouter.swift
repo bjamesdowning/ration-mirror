@@ -29,6 +29,7 @@ final class DeepLinkRouter {
     private(set) var manifestPlanWeekPending = false
     private(set) var manifestAddEntryPending: ManifestAddEntryPrefill?
     private(set) var supplyComposePending = false
+    private(set) var supplyDockReceiptPending = false
     private(set) var cargoItemPending: String?
     private(set) var cargoEatPending: String?
     private(set) var cargoTagPending: String?
@@ -60,6 +61,7 @@ final class DeepLinkRouter {
         manifestPlanWeekPending = false
         manifestAddEntryPending = nil
         supplyComposePending = false
+        supplyDockReceiptPending = false
         cargoItemPending = nil
         cargoEatPending = nil
         cargoTagPending = nil
@@ -111,6 +113,9 @@ final class DeepLinkRouter {
         case .supplyCompose:
             selectedTab = .supply
             supplyComposePending = true
+        case .supplyDockReceipt:
+            selectedTab = .supply
+            supplyDockReceiptPending = true
         case .cargoEat(let id):
             selectedTab = .cargo
             cargoEatPending = id
@@ -128,6 +133,7 @@ final class DeepLinkRouter {
     func acknowledgeManifestPlanWeek() { manifestPlanWeekPending = false }
     func acknowledgeManifestAddEntry() { manifestAddEntryPending = nil }
     func acknowledgeSupplyCompose() { supplyComposePending = false }
+    func acknowledgeSupplyDockReceipt() { supplyDockReceiptPending = false }
     func acknowledgeCargoItem() { cargoItemPending = nil }
     func acknowledgeCargoEat() { cargoEatPending = nil }
     func acknowledgeCargoTag() { cargoTagPending = nil }

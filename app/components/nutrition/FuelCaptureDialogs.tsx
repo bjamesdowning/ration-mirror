@@ -691,7 +691,7 @@ export function LogToFuelDialog({
 	);
 }
 
-/** Two actions. Copilot is not on this sheet. */
+/** Cargo photo choice. Copilot is not on this sheet. The Hub menu is separate. */
 export function FuelCaptureChoiceDialog({
 	open,
 	onClose,
@@ -716,11 +716,11 @@ export function FuelCaptureChoiceDialog({
 				</h2>
 				<button
 					type="button"
-					aria-label="Add to Cargo"
+					aria-label="Scan to Cargo"
 					onClick={onAddToCargo}
 					className="block w-full rounded-xl border border-platinum px-4 py-3 text-left"
 				>
-					<span className="font-semibold">Add to Cargo</span>
+					<span className="font-semibold">Scan to Cargo</span>
 					<span className="mt-1 block text-sm text-muted">
 						The photo becomes kitchen stock.
 					</span>

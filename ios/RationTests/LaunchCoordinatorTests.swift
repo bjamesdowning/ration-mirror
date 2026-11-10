@@ -66,6 +66,22 @@ final class LaunchCoordinatorTests: XCTestCase {
 
 final class DeepLinkRouterTests: XCTestCase {
     @MainActor
+    func testReplayPendingOpensSupplyDockReceipt() {
+        let router = DeepLinkRouter()
+        router.enqueue(.supplyDockReceipt)
+        var selectedTab: MainTab = .hub
+        router.replayPending(
+            selectedTab: &selectedTab,
+            openAskSheet: {},
+            openScan: {}
+        )
+        XCTAssertEqual(selectedTab, .supply)
+        XCTAssertTrue(router.supplyDockReceiptPending)
+        router.acknowledgeSupplyDockReceipt()
+        XCTAssertFalse(router.supplyDockReceiptPending)
+    }
+
+    @MainActor
     func testReplayPendingOpensGalleyGenerate() {
         let router = DeepLinkRouter()
         router.enqueue(.galleyGenerate)

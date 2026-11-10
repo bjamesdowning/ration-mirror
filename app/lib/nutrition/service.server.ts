@@ -1506,6 +1506,14 @@ export async function clearManifestIntakes(
 	}
 	const operationId = crypto.randomUUID();
 	const committedAt = new Date();
+	const fuelOn = await isNutritionFuelPageEnabled(env, flags);
+	const activeFuelDates = new Map<string, string>();
+	if (fuelOn) {
+		const active = await loadActiveRows(db, principal, input.entryIds);
+		for (const [entryId, row] of active) {
+			if (row.fuelDate) activeFuelDates.set(entryId, row.fuelDate);
+		}
+	}
 	// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch statement types are heterogeneous.
 	const statements: any[] = [
 		db.insert(schema.nutritionOperation).values({
@@ -1538,6 +1546,21 @@ export async function clearManifestIntakes(
 					),
 				),
 		);
+		const fuelDate = activeFuelDates.get(entryId);
+		if (fuelDate) {
+			statements.push(
+				db
+					.update(schema.nutritionFuelDay)
+					.set({ used: sql`${schema.nutritionFuelDay.used} - 1` })
+					.where(
+						and(
+							eq(schema.nutritionFuelDay.userId, principal.userId),
+							eq(schema.nutritionFuelDay.fuelDate, fuelDate),
+							sql`${schema.nutritionFuelDay.used} >= 1 AND changes() > 0`,
+						),
+					),
+			);
+		}
 	}
 	statements.push(
 		db
@@ -1570,24 +1593,6 @@ export async function clearManifestIntakes(
 			}),
 		),
 	);
-	if (await isNutritionFuelPageEnabled(env, flags)) {
-		const active = await loadActiveRows(db, principal, input.entryIds);
-		for (const row of active.values()) {
-			if (!row.fuelDate) continue;
-			statements.push(
-				db
-					.update(schema.nutritionFuelDay)
-					.set({ used: sql`${schema.nutritionFuelDay.used} - 1` })
-					.where(
-						and(
-							eq(schema.nutritionFuelDay.userId, principal.userId),
-							eq(schema.nutritionFuelDay.fuelDate, row.fuelDate),
-							sql`${schema.nutritionFuelDay.used} >= 1`,
-						),
-					),
-			);
-		}
-	}
 	try {
 		// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch statement types are heterogeneous.
 		await db.batch(statements as [any, ...any[]]);

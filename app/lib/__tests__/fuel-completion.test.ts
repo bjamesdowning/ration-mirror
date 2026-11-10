@@ -8,6 +8,7 @@ import {
 	voidDiaryFood,
 } from "~/lib/nutrition/diary.server";
 import { postFoodBarcode } from "~/lib/nutrition/diary-http.server";
+import { isNutritionFuelPageEnabled } from "~/lib/nutrition/fast-log-flag.server";
 import { lookupFoodBarcode } from "~/lib/nutrition/food-barcode.server";
 import { readFuelUsed } from "~/lib/nutrition/fuel-cap.server";
 import { FuelDailyLimitError } from "~/lib/nutrition/fuel-errors";
@@ -266,6 +267,53 @@ describe("fuel writers at the cap", () => {
 			now,
 		});
 		expect(await readFuelUsed(db, "user-1", "2026-11-10")).toBe(2);
+	});
+
+	it("frees one slot when two voids overlap", async () => {
+		const { db } = await database();
+		const env = envFor(db);
+		const first = await logDiaryFood(env, owner, {}, diaryInput("Breakfast"));
+		await logDiaryFood(env, owner, {}, diaryInput("Lunch"));
+		expect(await readFuelUsed(db, "user-1", "2026-11-10")).toBe(2);
+		let arrived = 0;
+		let release: () => void = () => {};
+		const bothInside = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		vi.mocked(isNutritionFuelPageEnabled).mockImplementation(async () => {
+			arrived += 1;
+			if (arrived >= 2) release();
+			await bothInside;
+			return true;
+		});
+		try {
+			const settled = await Promise.race([
+				Promise.allSettled([
+					voidDiaryFood(env, owner, {}, first.intakeId, {
+						confirm: true,
+						operationKey: crypto.randomUUID(),
+						now,
+					}),
+					voidDiaryFood(env, owner, {}, first.intakeId, {
+						confirm: true,
+						operationKey: crypto.randomUUID(),
+						now,
+					}),
+				]),
+				new Promise<never>((_, reject) => {
+					setTimeout(
+						() => reject(new Error("overlapping voids did not meet")),
+						2000,
+					);
+				}),
+			]);
+			expect(settled.every((result) => result.status === "fulfilled")).toBe(
+				true,
+			);
+			expect(await readFuelUsed(db, "user-1", "2026-11-10")).toBe(1);
+		} finally {
+			vi.mocked(isNutritionFuelPageEnabled).mockResolvedValue(true);
+		}
 	});
 
 	it("refuses another user on update and void", async () => {

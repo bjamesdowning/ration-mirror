@@ -1127,7 +1127,7 @@ export async function voidDiaryFood(
 								and(
 									eq(schema.nutritionFuelDay.userId, principal.userId),
 									eq(schema.nutritionFuelDay.fuelDate, current.fuelDate),
-									sql`${schema.nutritionFuelDay.used} >= 1`,
+									sql`${schema.nutritionFuelDay.used} >= 1 AND changes() > 0`,
 								),
 							),
 					]

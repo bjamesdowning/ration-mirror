@@ -4,6 +4,8 @@ import SwiftUI
 /// First dock tab when nutrition-fuel-page is on. Hub stays a toolbar button.
 struct FuelView: View {
     @Environment(AppEnvironment.self) private var env
+    var onOpenSettings: () -> Void = {}
+    var onOpenGroupSettings: () -> Void = {}
     @State private var day: FuelDayResponse?
     @State private var loaded = false
     @State private var cameraDenied = false
@@ -20,11 +22,15 @@ struct FuelView: View {
     @State private var message: String?
     @State private var reviewName = ""
     @State private var reviewEnergy = ""
+    @State private var reviewProtein = ""
+    @State private var reviewCarbs = ""
+    @State private var reviewFat = ""
     @State private var photoRequestId: String?
     @State private var photoTask: Task<Void, Never>?
     @State private var zone = ""
 
     var body: some View {
+        NavigationStack {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 HStack {
@@ -113,6 +119,12 @@ struct FuelView: View {
             .padding()
         }
         .navigationTitle("Fuel")
+        .toolbar {
+            GlobalPageToolbar(
+                onOpenGroupSettings: onOpenGroupSettings,
+                onOpenSettings: onOpenSettings
+            )
+        }
         .sheet(isPresented: $showingAdd) { addSheet }
         .sheet(isPresented: $showingPaywall) { PaywallView(context: .settings()) }
         .sheet(isPresented: $showingGoals) { NutritionGoalsView() }
@@ -133,6 +145,7 @@ struct FuelView: View {
         .sheet(isPresented: $showingTypedBarcode) { typedBarcode }
         .task { await reloadAndHandleDeepLink() }
         .onDisappear { photoTask?.cancel() }
+        }
     }
 
     private func weekStrip(_ day: FuelDayResponse) -> some View {
@@ -384,6 +397,9 @@ struct FuelView: View {
                 photoRequestId = queued.requestId
                 reviewName = lines.map { $0.name ?? "Food" }.joined(separator: ", ")
                 reviewEnergy = String(lines.reduce(0) { $0 + ($1.energyKcal ?? 0) })
+                reviewProtein = String(lines.reduce(0) { $0 + ($1.proteinG ?? 0) })
+                reviewCarbs = String(lines.reduce(0) { $0 + ($1.carbsG ?? 0) })
+                reviewFat = String(lines.reduce(0) { $0 + ($1.fatG ?? 0) })
             } catch is CancellationError {
                 return
             } catch {
@@ -408,7 +424,11 @@ struct FuelView: View {
     }
 
     private func confirmPhoto() async {
-        guard let photoRequestId, let energy = Double(reviewEnergy) else { return }
+        guard let photoRequestId,
+              let energy = Double(reviewEnergy),
+              let protein = Double(reviewProtein),
+              let carbs = Double(reviewCarbs),
+              let fat = Double(reviewFat) else { return }
         let key = UUID().uuidString
         do {
             _ = try await env.api.confirmFuelPhoto(
@@ -416,15 +436,19 @@ struct FuelView: View {
                 body: diaryBody(
                     name: reviewName,
                     energy: energy,
-                    protein: 0,
-                    carbs: 0,
-                    fat: 0,
+                    protein: protein,
+                    carbs: carbs,
+                    fat: fat,
                     key: key,
                     source: "ai_estimate"
                 )
             )
             self.photoRequestId = nil
             reviewName = ""
+            reviewEnergy = ""
+            reviewProtein = ""
+            reviewCarbs = ""
+            reviewFat = ""
             await load(date: day?.date ?? LocalDay.todayISO())
         } catch {
             await handleWrite(error)

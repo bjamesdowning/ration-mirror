@@ -129,7 +129,10 @@ struct MainTabView: View {
         TabView(selection: $selectedTab) {
             Group {
                 if env.session.clientFlags.isNutritionFuelPageEnabled {
-                    FuelView()
+                    FuelView(
+                        onOpenSettings: { showingSettings = true },
+                        onOpenGroupSettings: { showingGroupSettings = true }
+                    )
                 } else {
                     DashboardView(
                 isTabActive: activatedTabs.contains(.hub),

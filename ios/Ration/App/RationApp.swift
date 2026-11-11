@@ -44,7 +44,17 @@ struct RationApp: App {
                     guard phase == .active else { return }
                     WidgetAPIBase.publish(AppConfig.apiBaseURL)
                     WidgetCenter.shared.reloadAllTimelines()
-                    consumeSharedImportHandoff()
+                    if SharedImportStore.appGroup()?.hasPending() == true {
+                        if env.auth.phase == .signedIn {
+                            Task { await resumeSharedImportQueue() }
+                        }
+                    } else {
+                        consumeSharedImportHandoff()
+                    }
+                }
+                .onChange(of: env.auth.phase) { _, phase in
+                    guard phase == .signedIn else { return }
+                    Task { await resumeSharedImportQueue() }
                 }
         }
     }
@@ -53,6 +63,12 @@ struct RationApp: App {
     private func handleAppDeepLink(_ url: URL) -> Bool {
         if let destination = AppDeepLink.parse(url) {
             if case .galleyImport(let linkURL, let autoStart, _) = destination {
+                if SharedImportStore.appGroup()?.hasPending() == true {
+                    if env.auth.phase == .signedIn {
+                        Task { await resumeSharedImportQueue() }
+                    }
+                    return true
+                }
                 let shared = SharedImportHandoff.consumePending()
                 // App Group URL is source of truth when present (share handoff).
                 let resolvedURL: String?
@@ -76,6 +92,54 @@ struct RationApp: App {
             return true
         }
         return consumeSharedImportHandoff()
+    }
+
+    /// Continues a share job that the extension already bound to this kitchen.
+    @MainActor
+    private func resumeSharedImportQueue() async {
+        if env.session.session == nil {
+            _ = await env.session.load(api: env.api)
+        }
+        guard let session = env.session.session,
+              let organization = session.organization,
+              let store = SharedImportStore.appGroup(),
+              let record = store.peekOldest()
+        else { return }
+        let memberships = Set(session.organizations.map(\.id))
+        switch ShareImportResume.decide(
+            record: record,
+            userId: session.user.id,
+            organizationId: organization.id,
+            memberships: memberships,
+            currentEpoch: store.epoch
+        ) {
+        case .resume(let clientRequestId):
+            SharedImportHandoff.clear()
+            env.deepLinkRouter.openShareResume(
+                requestId: clientRequestId,
+                url: record.url,
+                userText: record.userText,
+                autoResume: true,
+                recordId: record.id
+            )
+        case .continueInKitchen(let clientRequestId):
+            SharedImportHandoff.clear()
+            env.deepLinkRouter.openShareResume(
+                requestId: clientRequestId,
+                url: record.url,
+                userText: record.userText,
+                autoResume: false,
+                recordId: record.id
+            )
+        case .discard:
+            store.acknowledge(id: record.id)
+            SharedImportHandoff.clear()
+        case .switchKitchen(let name):
+            SharedImportHandoff.clear()
+            env.deepLinkRouter.presentShareNotice(
+                "This import belongs to \(name). Switch to that kitchen in Ration, then share again."
+            )
+        }
     }
 
     /// Prefer App Group handoff from Share Extension when present.

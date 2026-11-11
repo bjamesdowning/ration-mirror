@@ -16,6 +16,10 @@ struct ImportRecipeSheet: View {
     var initialUserText: String? = nil
     /// When true (Share Extension handoff), start import after credit/consent gates.
     var autoStart: Bool = false
+    /// Exact share job. Poll this id instead of creating another charge.
+    var resumeRequestId: String? = nil
+    var autoResume: Bool = false
+    var shareRecordId: String? = nil
     var onComplete: () async -> Void = {}
     var onImportedMeal: (MealSummary) -> Void = { _ in }
     var onAddManually: () -> Void = {}
@@ -162,9 +166,25 @@ struct ImportRecipeSheet: View {
                 if !linkImportEnabled, photoImportEnabled {
                     model.inputMode = .photo
                 }
-                attemptAutoStartIfNeeded()
+                if let resumeRequestId {
+                    model.boundClientRequestId = resumeRequestId
+                }
+                if autoResume, let resumeRequestId {
+                    model.resumeShare(
+                        requestId: resumeRequestId,
+                        api: env.api,
+                        session: env.session
+                    )
+                } else {
+                    attemptAutoStartIfNeeded()
+                }
             }
-            .onDisappear { model.cancelActiveWork() }
+            .onDisappear {
+                if let shareRecordId, model.isTerminalShare {
+                    SharedImportStore.appGroup()?.acknowledge(id: shareRecordId)
+                }
+                model.cancelActiveWork()
+            }
         }
     }
 

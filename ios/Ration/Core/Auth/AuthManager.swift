@@ -425,10 +425,12 @@ final class AuthManager {
     }
 
     func signOutLocal() async {
+        SharedImportStore.appGroup()?.advanceEpoch()
         accessToken = nil
         accessExpiry = nil
         refreshToken = nil
         Keychain.delete(Self.refreshKey)
+        SharedImportStore.appGroup()?.clearAll()
         resetWidgetSession()
         // An abandoned magic-link request otherwise leaves this in Keychain indefinitely.
         Keychain.delete(Self.pkceVerifierKey)

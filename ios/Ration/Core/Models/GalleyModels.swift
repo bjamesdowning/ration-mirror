@@ -528,6 +528,7 @@ struct ImportRecipeRequest: Encodable, Sendable {
     var userText: String?
     var photoBase64: String?
     var photoMimeType: String?
+    var clientRequestId: String?
 
     enum CodingKeys: String, CodingKey {
         case url
@@ -535,6 +536,7 @@ struct ImportRecipeRequest: Encodable, Sendable {
         case userText
         case photoBase64
         case photoMimeType
+        case clientRequestId
     }
 
     func encode(to encoder: Encoder) throws {
@@ -553,6 +555,9 @@ struct ImportRecipeRequest: Encodable, Sendable {
         }
         if let photoMimeType, !photoMimeType.isEmpty {
             try container.encode(photoMimeType, forKey: .photoMimeType)
+        }
+        if let clientRequestId, !clientRequestId.isEmpty {
+            try container.encode(clientRequestId, forKey: .clientRequestId)
         }
     }
 }

@@ -40,6 +40,32 @@ enum AppGroupFileLock {
         }
         throw AppGroupLockTimeout()
     }
+
+    /// Share Extension refresh. Missing the App Group or the lock does not run the work.
+    static func performOrThrow<T>(
+        _ name: String,
+        _ work: () async throws -> T
+    ) async throws -> T {
+        guard let container = AppGroup.containerURL else {
+            throw AppGroupLockTimeout()
+        }
+        let url = container.appendingPathComponent(name)
+        let fd = open(url.path, O_CREAT | O_RDWR, 0o600)
+        if fd < 0 {
+            throw AppGroupLockTimeout()
+        }
+        defer { close(fd) }
+
+        let deadline = Date().addingTimeInterval(12)
+        while Date() < deadline {
+            if flock(fd, LOCK_EX | LOCK_NB) == 0 {
+                defer { flock(fd, LOCK_UN) }
+                return try await work()
+            }
+            try await Task.sleep(nanoseconds: 40_000_000)
+        }
+        throw AppGroupLockTimeout()
+    }
 }
 
 /// API origin the signed-in app is using. The widget refuses non-local http.

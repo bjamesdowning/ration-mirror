@@ -35,8 +35,7 @@ struct PrivacySettingsView: View {
 
 enum AIConsentCopy {
     /// 5.1.2(i): name the third-party AI provider and what is sent before asking.
-    static let disclosure =
-        "Scan, meal generation, recipe import, Plan week, and Ask Ration send the photos, text, links, and kitchen details you use with them to Google Gemini (via Cloudflare AI Gateway) to produce results. Recipe imports also send the link to Supadata to read the page. Credits are used automatically when your Crew allowance runs out."
+    static let disclosure = ShareImportCopy.disclosure
 }
 
 /// Asks for AI consent the first time an AI feature is used.

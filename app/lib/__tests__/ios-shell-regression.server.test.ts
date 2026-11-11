@@ -314,13 +314,24 @@ describe("fuel reads", () => {
 	});
 
 	it("does not privately launch the host from the share extension", () => {
-		const source = readFileSync(
+		const files = [
 			"ios/RationShare/ShareViewController.swift",
-			"utf8",
-		);
+			"ios/RationShare/ShareImportView.swift",
+			"ios/Shared/ShareImport/ShareImportCoordinator.swift",
+			"ios/Shared/ShareImport/ShareImportClient.swift",
+			"ios/Shared/ShareImport/ShareImportModels.swift",
+		];
+		const source = files.map((file) => readFileSync(file, "utf8")).join("\n");
 		expect(source).not.toContain("unsafeBitCast");
 		expect(source).not.toContain("NSSelectorFromString");
+		expect(source).not.toContain("UIApplication");
+		expect(source).not.toContain("scheduledTimer");
+		expect(source).not.toContain("asyncAfter");
 		expect(source).not.toContain('title = "Open Ration"');
+		expect(source).toContain("if !flagOn");
+		expect(
+			readFileSync("ios/Shared/ShareImport/ShareImportClient.swift", "utf8"),
+		).not.toContain("UserDefaults");
 	});
 
 	it("includes a legacy null fuel date and skips a malformed row", async () => {

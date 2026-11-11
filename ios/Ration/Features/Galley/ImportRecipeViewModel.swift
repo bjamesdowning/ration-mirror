@@ -59,6 +59,10 @@ final class ImportRecipeViewModel {
     private var activeTask: Task<Void, Never>?
     private var submissionGeneration = 0
     private var didAttemptDeviceCapture = false
+    /// Set when a share record is resumed so a blocked page does not start a second job.
+    private var suppressDeviceCapture = false
+    /// Exact id from a share record. The first submit uses it and does not mint another.
+    var boundClientRequestId: String?
 
     func cancelActiveWork() {
         submissionGeneration += 1
@@ -72,7 +76,11 @@ final class ImportRecipeViewModel {
         let caption = userText
         beginSubmission(generation: submissionGeneration + 1) { generation in
             let response = try await api.importRecipe(
-                ImportRecipeRequest(url: trimmed, userText: caption)
+                ImportRecipeRequest(
+                    url: trimmed,
+                    userText: caption,
+                    clientRequestId: self.boundClientRequestId
+                )
             )
             try await self.handleSubmitResponse(
                 response,
@@ -264,8 +272,51 @@ final class ImportRecipeViewModel {
         await poll(requestId: requestId, api: api, generation: generation, session: session)
     }
 
+    var isTerminalShare: Bool {
+        switch state {
+        case .completed, .duplicate, .failed, .siteBlocked, .softFailToPhoto:
+            true
+        default:
+            false
+        }
+    }
+
+    /// Polls an existing share job. Posts the same id only when the server has no record of it.
+    func resumeShare(requestId: String, api: RationAPI, session: SessionStore) {
+        suppressDeviceCapture = true
+        boundClientRequestId = requestId
+        let trimmed = url.trimmingCharacters(in: .whitespacesAndNewlines)
+        let caption = userText
+        beginSubmission(generation: submissionGeneration + 1) { generation in
+            do {
+                _ = try await api.importRecipeStatus(requestId: requestId)
+                guard self.isCurrent(generation) else { return }
+                await self.poll(
+                    requestId: requestId,
+                    api: api,
+                    generation: generation,
+                    session: session
+                )
+            } catch let error as APIError where error.statusCode == 404 {
+                let response = try await api.importRecipe(
+                    ImportRecipeRequest(
+                        url: trimmed,
+                        userText: caption,
+                        clientRequestId: requestId
+                    )
+                )
+                try await self.handleSubmitResponse(
+                    response,
+                    api: api,
+                    session: session,
+                    generation: generation
+                )
+            }
+        }
+    }
+
     private func shouldAttemptDeviceCapture(_ result: ImportRecipeStatusResponse) -> Bool {
-        !didAttemptDeviceCapture && isSiteBlocked(result)
+        !suppressDeviceCapture && !didAttemptDeviceCapture && isSiteBlocked(result)
     }
 
     private func isSiteBlocked(_ result: ImportRecipeStatusResponse) -> Bool {

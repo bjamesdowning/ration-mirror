@@ -51,9 +51,9 @@ final class SessionStore {
         defer { isLoading = false }
         do {
             session = try await api.session()
-            UserDefaults(suiteName: ShareImportQueue.appGroupId)?.set(
+            UserDefaults(suiteName: SharedImportStore.appGroupId)?.set(
                 session?.flags.isShareExtensionImportEnabled == true,
-                forKey: ShareImportQueue.flagKey
+                forKey: SharedImportStore.flagKey
             )
             return true
         } catch {
@@ -87,9 +87,9 @@ final class SessionStore {
     func clear() {
         session = nil
         hasAIConsent = false
-        UserDefaults(suiteName: ShareImportQueue.appGroupId)?.set(
+        UserDefaults(suiteName: SharedImportStore.appGroupId)?.set(
             false,
-            forKey: ShareImportQueue.flagKey
+            forKey: SharedImportStore.flagKey
         )
         orgSelectionOrganizations = nil
         KitchenClock.set(identifier: nil)

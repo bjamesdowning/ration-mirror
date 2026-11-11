@@ -26,6 +26,11 @@ final class DeepLinkRouter {
     private(set) var galleyImportURL: String?
     private(set) var galleyImportAutoStart = false
     private(set) var galleyImportUserText: String?
+    private(set) var galleyImportResumeRequestId: String?
+    private(set) var galleyImportAutoResume = false
+    private(set) var galleyImportRecordId: String?
+    private(set) var shareImportNotice: String?
+    private var pendingShareResume: (requestId: String, autoResume: Bool, recordId: String)?
     private(set) var manifestPlanWeekPending = false
     private(set) var manifestAddEntryPending: ManifestAddEntryPrefill?
     private(set) var supplyComposePending = false
@@ -104,6 +109,16 @@ final class DeepLinkRouter {
             galleyImportURL = url
             galleyImportAutoStart = autoStart
             galleyImportUserText = userText
+            if let resume = pendingShareResume {
+                galleyImportResumeRequestId = resume.requestId
+                galleyImportAutoResume = resume.autoResume
+                galleyImportRecordId = resume.recordId
+                pendingShareResume = nil
+            } else {
+                galleyImportResumeRequestId = nil
+                galleyImportAutoResume = false
+                galleyImportRecordId = nil
+            }
         case .manifestPlanWeek:
             selectedTab = .manifest
             manifestPlanWeekPending = true
@@ -142,11 +157,33 @@ final class DeepLinkRouter {
     }
 
     func acknowledgeGalleyGenerate() { galleyGeneratePending = false }
+    func openShareResume(
+        requestId: String,
+        url: String,
+        userText: String?,
+        autoResume: Bool,
+        recordId: String
+    ) {
+        pendingShareResume = (requestId, autoResume, recordId)
+        enqueue(.galleyImport(url: url, autoStart: false, userText: userText))
+    }
+
+    func presentShareNotice(_ message: String) {
+        shareImportNotice = message
+    }
+
+    func acknowledgeShareNotice() {
+        shareImportNotice = nil
+    }
+
     func acknowledgeGalleyImport() {
         galleyImportPending = false
         galleyImportURL = nil
         galleyImportAutoStart = false
         galleyImportUserText = nil
+        galleyImportResumeRequestId = nil
+        galleyImportAutoResume = false
+        galleyImportRecordId = nil
     }
     func acknowledgeManifestPlanWeek() { manifestPlanWeekPending = false }
     func acknowledgeManifestAddEntry() { manifestAddEntryPending = nil }

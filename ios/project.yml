@@ -15,8 +15,8 @@ options:
 
 settings:
   base:
-    MARKETING_VERSION: "1.6.8"
-    CURRENT_PROJECT_VERSION: "159"
+    MARKETING_VERSION: "1.6.9"
+    CURRENT_PROJECT_VERSION: "160"
     SWIFT_VERSION: "5.9"
     # Set your Apple Developer Team ID here (must match App Store Connect / AASA).
     DEVELOPMENT_TEAM: "M2KJH5GDGH"
@@ -61,6 +61,8 @@ targets:
           - Default
         com.apple.security.application-groups:
           - group.com.mayutic.ration
+        keychain-access-groups:
+          - $(AppIdentifierPrefix)com.mayutic.ration
         com.apple.developer.healthkit: true
     settings:
       base:
@@ -123,6 +125,7 @@ targets:
     sources:
       - path: RationShare
       - path: Shared/ShareImport
+      - path: Shared/AppGroup.swift
     entitlements:
       path: RationShare/RationShare.entitlements
       properties:

@@ -1,3 +1,4 @@
+import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
 
@@ -92,22 +93,35 @@ final class ShareViewController: UIViewController {
         }
 
         let defaults = UserDefaults(suiteName: Self.appGroupId)
-        let flagOn = ShareImportQueue.flagEnabled(defaults)
-        persistPending(url: extracted.url, userText: extracted.userText, autoStart: flagOn)
-        if let directory = FileManager.default.containerURL(
-            forSecurityApplicationGroupIdentifier: Self.appGroupId
-        ) {
-            _ = try? ShareImportQueue.enqueue(
-                url: extracted.url,
-                userText: extracted.userText,
-                defaults: defaults,
-                directory: directory
-            )
+        let flagOn = SharedImportStore.flagEnabled(defaults)
+        if !flagOn {
+            persistPending(url: extracted.url, userText: extracted.userText, autoStart: true)
+            statusLabel?.text = ShareImportCopy.savedForLater
+            doneButton?.isHidden = false
+            return
         }
-        statusLabel?.text = flagOn
-            ? "Saved to Ration. Open Ration from your Home Screen to finish the import."
-            : "Saved to Ration for 24 hours. Open Ration from your Home Screen to continue."
-        doneButton?.isHidden = false
+        persistPending(url: extracted.url, userText: extracted.userText, autoStart: false)
+        presentImport(url: extracted.url, userText: extracted.userText)
+    }
+
+    private func presentImport(url: URL, userText: String?) {
+        statusLabel?.isHidden = true
+        doneButton?.isHidden = true
+        let root = ShareImportView(url: url, userText: userText) { [weak self] in
+            self?.extensionContext?.completeRequest(returningItems: nil, completionHandler: nil)
+        }
+        let host = UIHostingController(rootView: root)
+        host.view.backgroundColor = Self.ceramicBackground
+        host.view.translatesAutoresizingMaskIntoConstraints = false
+        addChild(host)
+        view.addSubview(host.view)
+        NSLayoutConstraint.activate([
+            host.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            host.view.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            host.view.topAnchor.constraint(equalTo: view.topAnchor),
+            host.view.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+        ])
+        host.didMove(toParent: self)
     }
 
     @objc private func finish() {

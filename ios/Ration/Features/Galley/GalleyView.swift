@@ -17,6 +17,9 @@ struct GalleyView: View {
     @State private var importPrefillURL: String?
     @State private var importPrefillUserText: String?
     @State private var importAutoStart = false
+    @State private var importResumeRequestId: String?
+    @State private var importAutoResume = false
+    @State private var importRecordId: String?
     @State private var path: [MealDetailRoute] = []
     @State private var availableTags: [String] = []
     @State private var generateSuccessMessage: String?
@@ -149,11 +152,17 @@ struct GalleyView: View {
                 importPrefillURL = nil
                 importPrefillUserText = nil
                 importAutoStart = false
+                importResumeRequestId = nil
+                importAutoResume = false
+                importRecordId = nil
             }) {
                 ImportRecipeSheet(
                     initialURL: importPrefillURL,
                     initialUserText: importPrefillUserText,
                     autoStart: importAutoStart,
+                    resumeRequestId: importResumeRequestId,
+                    autoResume: importAutoResume,
+                    shareRecordId: importRecordId,
                     onComplete: { await reload() },
                     onImportedMeal: { meal in path = [MealDetailRoute(id: meal.id)] },
                     onAddManually: {
@@ -206,6 +215,9 @@ struct GalleyView: View {
                         importPrefillURL = nil
                         importPrefillUserText = nil
                         importAutoStart = false
+                        importResumeRequestId = nil
+                        importAutoResume = false
+                        importRecordId = nil
                         showingImport = true
                     } label: {
                         Label("Import recipe", systemImage: "link")
@@ -273,14 +285,33 @@ struct GalleyView: View {
         }
         .onChange(of: env.deepLinkRouter.galleyImportPending, initial: true) { _, pending in
             if pending {
+                let recordId = env.deepLinkRouter.galleyImportRecordId
+                if showingImport, recordId != nil, importRecordId == recordId {
+                    env.deepLinkRouter.acknowledgeGalleyImport()
+                    return
+                }
                 importPrefillURL = env.deepLinkRouter.galleyImportURL
                 importPrefillUserText = env.deepLinkRouter.galleyImportUserText
                 importAutoStart = env.deepLinkRouter.galleyImportAutoStart
-                if env.session.clientFlags.isAiImportUrlEnabled {
+                importResumeRequestId = env.deepLinkRouter.galleyImportResumeRequestId
+                importAutoResume = env.deepLinkRouter.galleyImportAutoResume
+                importRecordId = recordId
+                if env.session.clientFlags.isAiImportUrlEnabled || importResumeRequestId != nil {
                     showingImport = true
                 }
                 env.deepLinkRouter.acknowledgeGalleyImport()
             }
+        }
+        .alert(
+            "Import",
+            isPresented: Binding(
+                get: { env.deepLinkRouter.shareImportNotice != nil },
+                set: { if !$0 { env.deepLinkRouter.acknowledgeShareNotice() } }
+            )
+        ) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(env.deepLinkRouter.shareImportNotice ?? "")
         }
         .alert("Insufficient cargo", isPresented: $showCookConfirmation) {
             Button("Cook anyway") {

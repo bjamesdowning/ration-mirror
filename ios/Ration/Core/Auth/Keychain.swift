@@ -21,11 +21,7 @@ enum Keychain {
     @discardableResult
     static func set(_ value: String, for key: String) -> Bool {
         let data = Data(value.utf8)
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: key,
-        ]
+        let query = baseQuery(key)
         // Update in place so the shared item is never briefly missing for the widget.
         let updateStatus = SecItemUpdate(
             query as CFDictionary,
@@ -52,13 +48,9 @@ enum Keychain {
     }
 
     static func get(_ key: String) -> String? {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: key,
-            kSecReturnData as String: true,
-            kSecMatchLimit as String: kSecMatchLimitOne,
-        ]
+        var query = baseQuery(key)
+        query[kSecReturnData as String] = true
+        query[kSecMatchLimit as String] = kSecMatchLimitOne
         var result: AnyObject?
         guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
               let data = result as? Data,
@@ -69,11 +61,7 @@ enum Keychain {
 
     @discardableResult
     static func delete(_ key: String) -> Bool {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: key,
-        ]
+        let query = baseQuery(key)
         let status = SecItemDelete(query as CFDictionary)
         if status == errSecSuccess || status == errSecItemNotFound {
             return true
@@ -82,5 +70,15 @@ enum Keychain {
         if status == missingEntitlement { return true }
         #endif
         return false
+    }
+
+    /// Same access group as the widget and the Share Extension.
+    private static func baseQuery(_ key: String) -> [String: Any] {
+        [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: key,
+            kSecAttrAccessGroup as String: ShareImportKeychainPolicy.accessGroup,
+        ]
     }
 }

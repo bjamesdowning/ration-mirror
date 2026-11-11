@@ -61,9 +61,9 @@ advice. Intake history is retained about 13 months. MCP tools: \`get_nutrition_s
 
 ## Pricing
 
-- **Free:** ${opts.maxInventoryItems} inventory items, ${opts.maxMeals} recipes, ${opts.maxGroceryLists} supply lists, 1 owned group.
+- **Free:** ${opts.maxInventoryItems} inventory items, ${opts.maxMeals} recipes, ${opts.maxGroceryLists} supply lists, 1 owned group, and full MCP access.
 - **Crew Member (${opts.crewMonthlyPrice} or ${opts.crewAnnualPrice}):** Unlimited inventory and recipes, 25 supply lists,
-  multi-member group sharing, and MCP access.
+  and multi-member group sharing. MCP access is the same on both tiers.
 
 Visual scanning and AI meal generation use a credit-based ledger (purchasable via
 Stripe) so usage costs are bounded.

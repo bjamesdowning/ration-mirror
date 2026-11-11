@@ -17,7 +17,7 @@ struct PreferencesSettingsSection: View {
     }
 
     var body: some View {
-        Section("Dietary restrictions") {
+        Section {
             Text("Galley meals containing selected allergens are flagged on the list and meal detail.")
                 .font(Typography.caption())
                 .foregroundStyle(Theme.muted)
@@ -34,9 +34,11 @@ struct PreferencesSettingsSection: View {
                     }
                 ))
             }
+        } header: {
+            SettingsSectionHeader(title: "Dietary restrictions", systemImage: "exclamationmark.shield")
         }
 
-        Section("Expiration alerts") {
+        Section {
             Text("Cargo expiring within this window appears on your Hub.")
                 .font(Typography.caption())
                 .foregroundStyle(Theme.muted)
@@ -56,6 +58,8 @@ struct PreferencesSettingsSection: View {
                     .font(Typography.caption())
                     .foregroundStyle(Theme.muted)
             }
+        } header: {
+            SettingsSectionHeader(title: "Expiration alerts", systemImage: "clock.badge.exclamationmark")
         }
     }
 

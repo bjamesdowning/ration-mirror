@@ -66,8 +66,10 @@ struct SettingsView: View {
                 Task { await model.load(api: env.api) }
             }
             .buttonStyle(SecondaryButtonStyle())
-            NavigationLink("Delete account") {
+            NavigationLink {
                 AccountDeletionView(onAccountDeleted: { dismiss() })
+            } label: {
+                Label("Delete account", systemImage: "trash")
             }
             .foregroundStyle(Theme.danger)
             Button(String(localized: "Sign out"), role: .destructive) {
@@ -84,7 +86,7 @@ struct SettingsView: View {
 
     private func content(_ session: SessionResponse) -> some View {
         List {
-            Section("Profile") {
+            Section {
                 AvatarUploadPicker(
                     title: "Your photo",
                     imageURL: env.session.userImageURL,
@@ -93,14 +95,18 @@ struct SettingsView: View {
                     }
                 )
                 .listRowBackground(Color.clear)
+            } header: {
+                SettingsSectionHeader(title: "Profile", systemImage: "person.crop.circle")
             }
 
-            Section("Account") {
+            Section {
                 LabeledContent("Name", value: session.user.name ?? "—")
                 LabeledContent("Email", value: session.user.email)
+            } header: {
+                SettingsSectionHeader(title: "Account", systemImage: "person.text.rectangle")
             }
 
-            Section("Membership") {
+            Section {
                 LabeledContent(
                     "Your plan",
                     value: MembershipDisplay.tierLabel(isAccountCrewMember: session.isAccountCrewMember)
@@ -114,34 +120,54 @@ struct SettingsView: View {
                         .foregroundStyle(Theme.muted)
                 }
                 LabeledContent("Credits", value: "\(session.credits)")
-                Button(
-                    MembershipDisplay.billingButtonTitle(
-                        isAccountCrewMember: session.isAccountCrewMember
-                    )
-                ) {
+                Button {
                     showingPaywall = true
+                } label: {
+                    SettingsNavigationLabel(
+                        title: MembershipDisplay.billingButtonTitle(
+                            isAccountCrewMember: session.isAccountCrewMember
+                        ),
+                        systemImage: "creditcard"
+                    )
                 }
+                .buttonStyle(.plain)
                 .foregroundStyle(Theme.hyperGreen)
+            } header: {
+                SettingsSectionHeader(title: "Membership", systemImage: "creditcard")
             }
 
-            Section("Privacy") {
-                Button("Feature enablement") { showingPrivacy = true }
-                Button("Privacy Policy") { openURL(AppConfig.privacyURL) }
-                Button("Terms of Service") { openURL(AppConfig.termsURL) }
+            Section {
+                Button { showingPrivacy = true } label: {
+                    SettingsNavigationLabel(title: "Feature enablement", systemImage: "hand.raised")
+                }
+                .buttonStyle(.plain)
+                Button { openURL(AppConfig.privacyURL) } label: {
+                    SettingsNavigationLabel(title: "Privacy Policy", systemImage: "hand.raised")
+                }
+                .buttonStyle(.plain)
+                Button { openURL(AppConfig.termsURL) } label: {
+                    SettingsNavigationLabel(title: "Terms of Service", systemImage: "hand.raised")
+                }
+                .buttonStyle(.plain)
                 if let consent = model.settings?.aiConsentAt, !consent.isEmpty {
                     LabeledContent("AI Features", value: "On")
                 }
+            } header: {
+                SettingsSectionHeader(title: "Privacy", systemImage: "hand.raised")
             }
 
-            Section("Nutrition") {
-                Button("Nutrition Goals") {
+            Section {
+                Button {
                     if env.session.clientFlags.isNutritionFuelPageEnabled {
                         dismiss()
                         env.openDeepLink(.fuelGoals)
                     } else {
                         showingNutritionGoals = true
                     }
+                } label: {
+                    SettingsNavigationLabel(title: "Nutrition Goals", systemImage: "flame")
                 }
+                .buttonStyle(.plain)
                 if DiaryLayout.controlVisible(
                     fastLogEnabled: env.session.clientFlags.isNutritionFastLogEnabled,
                     appVersion: AppMarketingVersion.current
@@ -191,6 +217,8 @@ struct SettingsView: View {
                             .foregroundStyle(Theme.danger)
                     }
                 }
+            } header: {
+                SettingsSectionHeader(title: "Nutrition", systemImage: "flame")
             }
 
             if let settings = model.settings {
@@ -210,15 +238,19 @@ struct SettingsView: View {
                         dismiss()
                     }
                 }
+            } header: {
+                SettingsSectionHeader(title: "Session", systemImage: "rectangle.portrait.and.arrow.right")
             }
 
             Section {
-                NavigationLink("Delete account") {
+                NavigationLink {
                     AccountDeletionView(onAccountDeleted: { dismiss() })
+                } label: {
+                    Label("Delete account", systemImage: "trash")
                 }
                 .foregroundStyle(Theme.danger)
             } header: {
-                Text("Danger zone")
+                SettingsSectionHeader(title: "Danger zone", systemImage: "trash")
             } footer: {
                 Text("Permanently delete your account and personal data. This cannot be undone.")
             }

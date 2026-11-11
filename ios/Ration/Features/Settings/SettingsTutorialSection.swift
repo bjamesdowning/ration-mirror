@@ -33,7 +33,7 @@ struct SettingsTutorialSection: View {
                     .foregroundStyle(Theme.danger)
             }
         } header: {
-            Text("Tutorial")
+            SettingsSectionHeader(title: "Tutorial", systemImage: "arrow.counterclockwise")
         }
     }
 

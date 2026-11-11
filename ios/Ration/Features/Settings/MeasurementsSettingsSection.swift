@@ -13,7 +13,7 @@ struct MeasurementsSettingsSection: View {
     }
 
     var body: some View {
-        Section("Measurements") {
+        Section {
             Picker("Unit display", selection: $selectedMode) {
                 ForEach(UnitDisplayMode.allCases) { mode in
                     Text(mode.label).tag(mode)
@@ -32,6 +32,8 @@ struct MeasurementsSettingsSection: View {
             Text("Original shows stored units. Metric and Imperial use shopping weights. Cooking uses cups and spoons when density is known.")
                 .font(Typography.caption())
                 .foregroundStyle(Theme.muted)
+        } header: {
+            SettingsSectionHeader(title: "Measurements", systemImage: "ruler")
         }
     }
 

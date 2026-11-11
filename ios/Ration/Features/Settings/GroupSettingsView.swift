@@ -154,15 +154,19 @@ struct GroupSettingsView: View {
 
             createGroupSection
 
-            membersSection
-
             if env.session.activeOrg?.canManageLogo == true {
-                Section("Tags") {
-                    NavigationLink("Manage tags") {
+                Section {
+                    NavigationLink {
                         TagsSettingsView()
+                    } label: {
+                        Label("Manage tags", systemImage: "tag")
                     }
+                } header: {
+                    SettingsSectionHeader(title: "Tags", systemImage: "tag")
                 }
             }
+
+            membersSection
 
             if let session = model.session,
                GroupSettingsSupport.canTransferCredits(organizations: session.organizations)
@@ -189,22 +193,7 @@ struct GroupSettingsView: View {
                 transferOwnershipSection
             }
 
-            if GroupSettingsSupport.canDeleteGroup(
-                isOwner: model.isOwner,
-                isPersonalGroup: env.session.activeOrg?.isPersonalGroup == true
-            ) {
-                deleteGroupSection
-            } else if model.isOwner, env.session.activeOrg?.isPersonalGroup == true {
-                personalGroupDeleteBlockedSection
-            }
-
-            if let activeOrg = env.session.activeOrg,
-               GroupSettingsSupport.canLeaveGroup(
-                currentUserRole: activeOrg.role,
-                isPersonalGroup: activeOrg.isPersonalGroup
-               ) {
-                leaveGroupSection
-            }
+            dangerZoneSection
         }
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
@@ -290,7 +279,7 @@ struct GroupSettingsView: View {
 
     @ViewBuilder
     private var supplyPlanningSection: some View {
-        Section("Supply planning") {
+        Section {
             if let supplySettingsError {
                 Text(supplySettingsError)
                     .foregroundStyle(Theme.danger)
@@ -313,6 +302,8 @@ struct GroupSettingsView: View {
                     .font(Typography.caption())
                     .foregroundStyle(Theme.muted)
             }
+        } header: {
+            SettingsSectionHeader(title: "Supply planning", systemImage: "cart")
         }
     }
 
@@ -353,6 +344,18 @@ struct GroupSettingsView: View {
     private var activeOrgSection: some View {
         if let org = env.session.activeOrg {
             Section {
+                if org.canManageLogo {
+                    AvatarUploadPicker(
+                        title: "Group photo",
+                        imageURL: AvatarURLResolver.resolve(org.logo),
+                        usesAuthenticatedImage: true,
+                        size: 48,
+                        upload: { data, mime in
+                            _ = try await env.api.uploadOrganizationAvatar(imageData: data, mimeType: mime)
+                        }
+                    )
+                    .listRowBackground(Color.clear)
+                }
                 HStack(spacing: 12) {
                     OrgAvatar(name: org.name, orgId: org.id, imageURL: org.logo, size: 44)
                     VStack(alignment: .leading, spacing: 4) {
@@ -379,26 +382,15 @@ struct GroupSettingsView: View {
                     }
                 }
                 .padding(.vertical, 4)
-
-                if org.canManageLogo {
-                    AvatarUploadPicker(
-                        title: "Group photo",
-                        imageURL: AvatarURLResolver.resolve(org.logo),
-                        usesAuthenticatedImage: true,
-                        size: 48,
-                        upload: { data, mime in
-                            _ = try await env.api.uploadOrganizationAvatar(imageData: data, mimeType: mime)
-                        }
-                    )
-                    .listRowBackground(Color.clear)
-                }
+            } header: {
+                SettingsSectionHeader(title: "This group", systemImage: "person.3")
             }
         }
     }
 
     @ViewBuilder
     private func orgSwitcherSection(_ session: SessionResponse) -> some View {
-        Section("Switch group") {
+        Section {
             ForEach(session.organizations) { org in
                 Button {
                     Task { await model.activateOrg(org, env: env) }
@@ -414,6 +406,8 @@ struct GroupSettingsView: View {
                 }
                 .disabled(org.isActive || env.session.isSwitchingOrg)
             }
+        } header: {
+            SettingsSectionHeader(title: "Switch group", systemImage: "arrow.left.arrow.right")
         }
     }
 
@@ -438,7 +432,7 @@ struct GroupSettingsView: View {
             .disabled(model.isCreatingGroup || !canCreateGroup)
             .foregroundStyle(canCreateGroup ? Theme.hyperGreen : Theme.muted)
         } header: {
-            Text("Create group")
+            SettingsSectionHeader(title: "Create group", systemImage: "plus.rectangle")
         } footer: {
             if let footer = createGroupFooter {
                 Text(footer)
@@ -496,7 +490,7 @@ struct GroupSettingsView: View {
                     }
             }
         } header: {
-            Text("Members")
+            SettingsSectionHeader(title: "Members", systemImage: "person.2")
         } footer: {
             Text("Manage who has access to this group's cargo.")
         }
@@ -575,60 +569,74 @@ struct GroupSettingsView: View {
             .disabled(selectedTransferMemberId.isEmpty)
             .foregroundStyle(Theme.warning)
         } header: {
-            Text("Transfer ownership")
+            SettingsSectionHeader(title: "Transfer ownership", systemImage: "person.badge.key")
         } footer: {
             Text("Hand off this group to another member. You will become a regular member.")
         }
     }
 
-    @ViewBuilder
-    private var personalGroupDeleteBlockedSection: some View {
-        Section {
-            Text("Your personal group can't be deleted. To remove all your data, delete your account instead.")
-                .font(Typography.caption())
-                .foregroundStyle(Theme.muted)
-        } header: {
-            Text("Danger zone")
-        }
+    private var canDeleteActiveGroup: Bool {
+        GroupSettingsSupport.canDeleteGroup(
+            isOwner: model.isOwner,
+            isPersonalGroup: env.session.activeOrg?.isPersonalGroup == true
+        )
+    }
+
+    private var personalGroupDeleteBlocked: Bool {
+        model.isOwner && env.session.activeOrg?.isPersonalGroup == true && !canDeleteActiveGroup
+    }
+
+    private var canLeaveActiveGroup: Bool {
+        guard let activeOrg = env.session.activeOrg else { return false }
+        return GroupSettingsSupport.canLeaveGroup(
+            currentUserRole: activeOrg.role,
+            isPersonalGroup: activeOrg.isPersonalGroup
+        )
     }
 
     @ViewBuilder
-    private var deleteGroupSection: some View {
-        let credits = env.session.activeOrg?.credits ?? 0
-        Section {
-            Button("Delete group", role: .destructive) {
-                deleteConfirmText = ""
-                if GroupSettingsSupport.requiresCreditForfeitAck(credits: credits) {
-                    deleteCreditCount = credits
-                    showingCreditDeleteSheet = true
-                } else {
-                    showingDeleteConfirm = true
+    private var dangerZoneSection: some View {
+        if canDeleteActiveGroup || personalGroupDeleteBlocked || canLeaveActiveGroup {
+            let credits = env.session.activeOrg?.credits ?? 0
+            Section {
+                if canDeleteActiveGroup {
+                    Button("Delete group", role: .destructive) {
+                        deleteConfirmText = ""
+                        if GroupSettingsSupport.requiresCreditForfeitAck(credits: credits) {
+                            deleteCreditCount = credits
+                            showingCreditDeleteSheet = true
+                        } else {
+                            showingDeleteConfirm = true
+                        }
+                    }
+                    .destructiveDeleteTint()
+                    if GroupSettingsSupport.requiresCreditForfeitAck(credits: credits) {
+                        Text(GroupSettingsSupport.groupDeleteCreditFooter(credits: credits))
+                            .font(Typography.caption())
+                            .foregroundStyle(Theme.muted)
+                    } else {
+                        Text("Permanently delete this group and all its data. You will return to the group picker immediately. This cannot be undone.")
+                            .font(Typography.caption())
+                            .foregroundStyle(Theme.muted)
+                    }
+                } else if personalGroupDeleteBlocked {
+                    Text("Your personal group can't be deleted. To remove all your data, delete your account instead.")
+                        .font(Typography.caption())
+                        .foregroundStyle(Theme.muted)
                 }
+                if canLeaveActiveGroup {
+                    Button(model.isLeavingGroup ? "Leaving…" : "Leave group", role: .destructive) {
+                        showingLeaveConfirm = true
+                    }
+                    .disabled(model.isLeavingGroup)
+                    .destructiveDeleteTint()
+                    Text("Remove yourself from this group. You will return to the group picker. Owners must transfer ownership or delete the group instead.")
+                        .font(Typography.caption())
+                        .foregroundStyle(Theme.muted)
+                }
+            } header: {
+                SettingsSectionHeader(title: "Danger zone", systemImage: "trash")
             }
-            .destructiveDeleteTint()
-        } header: {
-            Text("Danger zone")
-        } footer: {
-            if GroupSettingsSupport.requiresCreditForfeitAck(credits: credits) {
-                Text(GroupSettingsSupport.groupDeleteCreditFooter(credits: credits))
-            } else {
-                Text("Permanently delete this group and all its data. You will return to the group picker immediately. This cannot be undone.")
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var leaveGroupSection: some View {
-        Section {
-            Button(model.isLeavingGroup ? "Leaving…" : "Leave group", role: .destructive) {
-                showingLeaveConfirm = true
-            }
-            .disabled(model.isLeavingGroup)
-            .destructiveDeleteTint()
-        } header: {
-            Text("Danger zone")
-        } footer: {
-            Text("Remove yourself from this group. You will return to the group picker. Owners must transfer ownership or delete the group instead.")
         }
     }
 }
@@ -659,7 +667,7 @@ struct TransferCreditsSection: View {
     }
 
     var body: some View {
-        Section("Transfer credits") {
+        Section {
             if let errorMessage {
                 Text(errorMessage).foregroundStyle(Theme.danger).font(Typography.caption())
             }
@@ -693,6 +701,8 @@ struct TransferCreditsSection: View {
                 Task { await transfer() }
             }
             .disabled(isTransferring || sourceId.isEmpty || destinationId.isEmpty)
+        } header: {
+            SettingsSectionHeader(title: "Transfer credits", systemImage: "arrow.left.arrow.right.circle")
         }
         .onAppear {
             if sourceId.isEmpty { sourceId = sourceOrgs.first?.id ?? "" }

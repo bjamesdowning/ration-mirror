@@ -33,7 +33,7 @@ struct AppearanceSettingsSection: View {
                 saveTask = Task { await saveTheme(newTheme) }
             }
         } header: {
-            Text("Appearance")
+            SettingsSectionHeader(title: "Appearance", systemImage: "circle.lefthalf.filled")
         } footer: {
             Text("Syncs with your Ration account on web and mobile.")
         }

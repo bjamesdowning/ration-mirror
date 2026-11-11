@@ -381,6 +381,18 @@ final class ShareImportCoordinatorTests: XCTestCase {
             ShareImportCopy.preparing(host: "example.com", cost: 3),
             "Preparing import from example.com. This import uses 3 credits."
         )
+        var stale = saved
+        stale.sessionEpoch = 4
+        XCTAssertEqual(
+            ShareImportResume.decide(
+                record: stale,
+                userId: "user-2",
+                organizationId: "org-2",
+                memberships: ["org-2"],
+                currentEpoch: 5
+            ),
+            .discard
+        )
         mine.sessionEpoch = 4
         XCTAssertEqual(
             ShareImportResume.decide(
@@ -507,6 +519,76 @@ final class ShareImportQueueTests: XCTestCase {
         store.failLock = true
         XCTAssertThrowsError(try store.insert(ShareImportQueueTests.record(0)))
         XCTAssertNil(store.record(id: "0"))
+    }
+
+    func testLateInsertAfterLogoutDoesNotSurvive() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let suite = "share-import-logout-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = SharedImportStore(directory: directory, defaults: defaults)
+        let captured = store.epoch
+        store.advanceEpoch()
+        store.clearAll()
+        var late = Self.record(0)
+        late.sessionEpoch = captured
+        late.ownerUserId = nil
+        late.url = "https://example.com/private-recipe"
+        try store.insert(late)
+        XCTAssertNil(store.record(id: late.id))
+        XCTAssertNil(store.peekOldest())
+        XCTAssertEqual(
+            ShareImportResume.decide(
+                record: late,
+                userId: "user-2",
+                organizationId: "org-2",
+                memberships: ["org-2"],
+                currentEpoch: store.epoch
+            ),
+            .discard
+        )
+
+        var signedOut = Self.record(1)
+        signedOut.sessionEpoch = store.epoch
+        signedOut.ownerUserId = nil
+        signedOut.url = "https://example.com/signed-out"
+        try store.insert(signedOut)
+        store.dropForeignRows(keepUnownedCurrentSession: false)
+        XCTAssertNil(store.record(id: signedOut.id))
+        XCTAssertNil(store.peekOldest())
+
+        var current = Self.record(2)
+        current.sessionEpoch = store.epoch
+        current.ownerUserId = nil
+        current.url = "https://example.com/this-session"
+        try store.insert(current)
+        store.dropForeignRows(keepUnownedCurrentSession: true)
+        XCTAssertEqual(store.peekOldest()?.url, "https://example.com/this-session")
+        XCTAssertEqual(
+            ShareImportResume.decide(
+                record: current,
+                userId: "user-1",
+                organizationId: "org-1",
+                memberships: ["org-1"],
+                currentEpoch: store.epoch
+            ),
+            .continueInKitchen(clientRequestId: current.clientRequestId)
+        )
+        store.advanceEpoch()
+        store.dropForeignRows(keepUnownedCurrentSession: true)
+        XCTAssertNil(store.peekOldest())
+        XCTAssertEqual(
+            ShareImportResume.decide(
+                record: current,
+                userId: "user-2",
+                organizationId: "org-2",
+                memberships: ["org-2"],
+                currentEpoch: store.epoch
+            ),
+            .discard
+        )
     }
 
     func testClearAndPeekStayInsideTheLock() throws {

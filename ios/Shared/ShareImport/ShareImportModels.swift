@@ -218,7 +218,8 @@ enum ShareImportResume {
         currentEpoch: Int
     ) -> ShareImportResumeAction {
         if record.acknowledged { return .discard }
-        if record.ownerUserId != nil, record.sessionEpoch != currentEpoch {
+        // A previous or signed-out session, including an unowned row inserted after logout.
+        if record.sessionEpoch != currentEpoch {
             return .discard
         }
         if let owner = record.ownerUserId, owner != userId {
@@ -242,6 +243,8 @@ enum ShareImportResume {
                 allowDeviceCapture: record.state == "needsApp"
             )
         }
+        let currentSession = record.ownerUserId == nil || record.ownerUserId == userId
+        guard currentSession else { return .discard }
         return .continueInKitchen(clientRequestId: record.clientRequestId)
     }
 }

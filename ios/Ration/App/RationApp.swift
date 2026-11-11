@@ -44,6 +44,9 @@ struct RationApp: App {
                     guard phase == .active else { return }
                     WidgetAPIBase.publish(AppConfig.apiBaseURL)
                     WidgetCenter.shared.reloadAllTimelines()
+                    SharedImportStore.appGroup()?.dropForeignRows(
+                        keepUnownedCurrentSession: env.auth.phase == .signedIn
+                    )
                     if SharedImportStore.appGroup()?.hasPending() == true {
                         if env.auth.phase == .signedIn {
                             Task { await resumeSharedImportQueue() }
@@ -52,7 +55,12 @@ struct RationApp: App {
                         consumeSharedImportHandoff()
                     }
                 }
-                .onChange(of: env.auth.phase) { _, phase in
+                .onChange(of: env.auth.phase) { previous, phase in
+                    if previous == .signedOut, phase == .signedIn {
+                        let store = SharedImportStore.appGroup()
+                        store?.advanceEpoch()
+                        store?.dropForeignRows(keepUnownedCurrentSession: true)
+                    }
                     guard phase == .signedIn else { return }
                     Task { await resumeSharedImportQueue() }
                 }
@@ -101,12 +109,13 @@ struct RationApp: App {
     /// Continues a share job that the extension already bound to this kitchen.
     @MainActor
     private func resumeSharedImportQueue() async {
+        guard let store = SharedImportStore.appGroup() else { return }
+        store.dropForeignRows(keepUnownedCurrentSession: true)
         if env.session.session == nil {
             _ = await env.session.load(api: env.api)
         }
         guard let session = env.session.session,
               let organization = session.organization,
-              let store = SharedImportStore.appGroup(),
               let record = store.peekOldest()
         else { return }
         let memberships = Set(session.organizations.map(\.id))

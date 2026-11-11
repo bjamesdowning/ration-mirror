@@ -62,6 +62,7 @@ final class SharedImportStore: ShareImportStoring {
 
     func insert(_ record: ShareImportRecord) throws {
         try mutate { existing in
+            guard record.sessionEpoch == epoch else { return existing }
             var next = existing
             if next.contains(where: { $0.id == record.id }) {
                 return next
@@ -121,6 +122,20 @@ final class SharedImportStore: ShareImportStoring {
 
     func clearAll() {
         try? mutate { _ in [] }
+    }
+
+    /// Drops rows from a signed-out or previous session before any import UI.
+    /// An unowned row from the current signed-in session is kept only when `keepUnownedCurrentSession` is true.
+    func dropForeignRows(keepUnownedCurrentSession: Bool) {
+        try? mutate { existing in
+            existing.filter { record in
+                guard record.sessionEpoch == epoch else { return false }
+                if record.ownerUserId == nil, !keepUnownedCurrentSession {
+                    return false
+                }
+                return true
+            }
+        }
     }
 
     func hasPending(now: Date = Date()) -> Bool {

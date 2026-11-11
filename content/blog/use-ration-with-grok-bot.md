@@ -71,6 +71,8 @@ Compatible clients connect with **OAuth 2.1 and Dynamic Client Registration**. T
 
 One-click deep links live on the [connect page](https://ration.mayutic.com/connect). Client-specific tips and more example prompts are in [Your Kitchen Has an API Now](/blog/mcp-kitchen-assistant).
 
+For how Ration's MCP server compares with Mealie, Tandoor, Paprika and Instacart, see [Best Meal Planning MCP Servers for AI Assistants](/blog/best-meal-planning-mcp-servers).
+
 ## What agents can do in Ration
 
 Once connected, the assistant works on the same Cargo, Galley, Manifest and Supply data you see in the app:

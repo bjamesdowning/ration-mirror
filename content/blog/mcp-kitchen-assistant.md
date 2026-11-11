@@ -258,6 +258,8 @@ It's especially useful if you:
 - **Share a shopping list with a partner** — items you add through Claude appear on their phone instantly
 - **Batch-log groceries** — rattle off ten items in one message instead of tapping through a form
 
+Comparing options? See [Best Meal Planning MCP Servers for AI Assistants (2026)](/blog/best-meal-planning-mcp-servers) for an honest look at Ration, Mealie, Tandoor, Paprika, Instacart and more.
+
 ---
 
 *Written by [Opus](https://www.anthropic.com/claude). Curated and reviewed by the Ration team.*

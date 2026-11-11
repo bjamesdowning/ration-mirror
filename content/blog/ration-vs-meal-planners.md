@@ -1,8 +1,8 @@
 ---
 title: "Ration vs other meal planners: where its ideas come from, and which parts to use"
-description: "A factual comparison of Ration with Paprika, AnyList, Mealime, Plan to Eat, Eat This Much and Samsung Food, covering stock, Meals, planning, macros and shopping lists, and how to pick the parts of Ration you need."
+description: "A factual comparison of Ration with Paprika, AnyList, Plan to Eat, Eat This Much and Samsung Food, covering stock, Meals, planning, macros and shopping lists, and how to pick the parts of Ration you need."
 date: 2026-10-31
-dateModified: 2026-10-31
+dateModified: 2026-11-11
 authorName: "Ration"
 image: "/static/ration-logo.png"
 tags:
@@ -25,9 +25,8 @@ Competitor details below come from each company's own website and help pages. Fe
 | App | Web recipe import | Meal plan calendar | List from plan | Multiple or shared lists | Stock tracking | Macros | AI features |
 |---|---|---|---|---|---|---|---|
 | Ration | Yes¹ | Yes | Yes² | Yes | Yes³ | Yes⁴ | Yes⁵ |
-| Paprika 3 | Yes | Yes | Yes² | Synced | Yes | Not covered | Not covered |
+| Paprika 4 | Yes | Yes | Yes² | Synced | Yes | Not covered | Not covered |
 | AnyList | Yes⁶ | Yes | Yes | Yes | Not covered | Not covered | Not covered |
-| Mealime | Curated | Yes | Yes | Not covered | Not covered | Not covered | Not covered |
 | Plan to Eat | Yes | Yes | Yes | Staples list | Freezer only | Yes | Not covered |
 | Eat This Much | Generated | Yes | Yes | Not covered | Yes | Yes | Plans to targets |
 | Samsung Food | Yes | Yes | Yes | Yes | Not covered | Not covered | Not covered |
@@ -57,7 +56,7 @@ Recipe managers like Paprika and Plan to Eat proved people want their own librar
 
 ### Manifest: your week and your macros, from planners and trackers
 
-Meal planners like Mealime and Plan to Eat organise the week, and Eat This Much showed a plan can double as a macro tracker. Ration's Manifest lets you plan Meals across the week and track macros from what you actually cook, so there's no second food diary. On iOS, a dedicated macro analytics page shows how you're tracking over time.
+Meal planners like Plan to Eat organise the week, and Eat This Much showed a plan can double as a macro tracker. Ration's Manifest lets you plan Meals across the week and track macros from what you actually cook, so there's no second food diary. On iOS, a dedicated macro analytics page shows how you're tracking over time.
 
 **Lean into Manifest if** you want to hit protein or calorie goals without logging every meal by hand.
 
@@ -69,9 +68,9 @@ Shared list apps like AnyList set the standard for the shopping trip itself. Rat
 
 ## How to choose
 
-- **If you only want a recipe library**, Paprika 3 or Plan to Eat are strong, focused choices.
+- **If you only want a recipe library**, Paprika or Plan to Eat are strong, focused choices.
 - **If shopping with someone else is the main problem**, AnyList is built for that.
-- **If you want dinners chosen for you**, Mealime does it well.
+- **If you want dinners chosen for you**, Eat This Much generates a plan from your preferences. (Mealime, which we used to suggest here, shut down on 21 October 2026.)
 - **If calorie and macro targets drive everything**, Eat This Much plans to the numbers.
 - **If you want stock, Meals, the plan, macros and lists to update each other**, that's what Ration is for.
 

@@ -591,6 +591,60 @@ final class ShareImportQueueTests: XCTestCase {
         )
     }
 
+    func testColdLaunchOrderKeepsTheSameSessionsUnownedRow() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let suite = "share-import-cold-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = SharedImportStore(directory: directory, defaults: defaults)
+        var previous = Self.record(0)
+        previous.sessionEpoch = store.epoch
+        previous.ownerUserId = nil
+        previous.url = "https://example.com/other-account"
+        try store.insert(previous)
+        store.advanceEpoch()
+        var same = Self.record(1)
+        same.sessionEpoch = store.epoch
+        same.ownerUserId = nil
+        same.url = "https://example.com/same-session"
+        try store.insert(same)
+        let epochAtLaunch = store.epoch
+
+        XCTAssertNil(ShareImportLaunchPurge.keepUnownedCurrentSession(.loading))
+        XCTAssertEqual(store.record(id: same.id)?.url, "https://example.com/same-session")
+        XCTAssertEqual(store.epoch, epochAtLaunch)
+
+        let keep = try XCTUnwrap(ShareImportLaunchPurge.keepUnownedCurrentSession(.signedIn))
+        XCTAssertTrue(keep)
+        store.dropForeignRows(keepUnownedCurrentSession: keep)
+        XCTAssertEqual(store.epoch, epochAtLaunch)
+        XCTAssertEqual(store.peekOldest()?.url, "https://example.com/same-session")
+        XCTAssertNil(store.record(id: previous.id))
+        XCTAssertEqual(
+            ShareImportResume.decide(
+                record: same,
+                userId: "user-1",
+                organizationId: "org-1",
+                memberships: ["org-1"],
+                currentEpoch: store.epoch
+            ),
+            .continueInKitchen(clientRequestId: same.clientRequestId)
+        )
+        XCTAssertEqual(
+            ShareImportResume.decide(
+                record: previous,
+                userId: "user-2",
+                organizationId: "org-2",
+                memberships: ["org-2"],
+                currentEpoch: store.epoch
+            ),
+            .discard
+        )
+        XCTAssertEqual(ShareImportLaunchPurge.keepUnownedCurrentSession(.signedOut), false)
+    }
+
     func testClearAndPeekStayInsideTheLock() throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)

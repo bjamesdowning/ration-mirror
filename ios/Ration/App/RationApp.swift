@@ -2,6 +2,21 @@ import GoogleSignIn
 import SwiftUI
 import WidgetKit
 
+/// Cold launch stays in `.loading` while a refresh token exists. Dropping rows then
+/// deletes the current session's unowned share. Nil means the session is not known yet.
+enum ShareImportLaunchPurge {
+    static func keepUnownedCurrentSession(_ phase: AuthManager.Phase) -> Bool? {
+        switch phase {
+        case .loading:
+            nil
+        case .signedIn:
+            true
+        case .signedOut:
+            false
+        }
+    }
+}
+
 @main
 struct RationApp: App {
     @State private var env = AppEnvironment()
@@ -44,25 +59,14 @@ struct RationApp: App {
                     guard phase == .active else { return }
                     WidgetAPIBase.publish(AppConfig.apiBaseURL)
                     WidgetCenter.shared.reloadAllTimelines()
-                    SharedImportStore.appGroup()?.dropForeignRows(
-                        keepUnownedCurrentSession: env.auth.phase == .signedIn
-                    )
-                    if SharedImportStore.appGroup()?.hasPending() == true {
-                        if env.auth.phase == .signedIn {
-                            Task { await resumeSharedImportQueue() }
-                        }
-                    } else {
-                        consumeSharedImportHandoff()
-                    }
+                    handleShareOnForeground()
                 }
                 .onChange(of: env.auth.phase) { previous, phase in
                     if previous == .signedOut, phase == .signedIn {
-                        let store = SharedImportStore.appGroup()
-                        store?.advanceEpoch()
-                        store?.dropForeignRows(keepUnownedCurrentSession: true)
+                        SharedImportStore.appGroup()?.advanceEpoch()
                     }
-                    guard phase == .signedIn else { return }
-                    Task { await resumeSharedImportQueue() }
+                    guard scenePhase == .active else { return }
+                    handleShareOnForeground()
                 }
                 .onChange(of: env.session.orgGeneration) { _, generation in
                     guard generation > 0, env.auth.phase == .signedIn else { return }
@@ -104,6 +108,21 @@ struct RationApp: App {
             return true
         }
         return consumeSharedImportHandoff()
+    }
+
+    /// Drops rows from another session only after auth has left `.loading`.
+    @MainActor
+    private func handleShareOnForeground() {
+        guard let keep = ShareImportLaunchPurge.keepUnownedCurrentSession(env.auth.phase) else { return }
+        let store = SharedImportStore.appGroup()
+        store?.dropForeignRows(keepUnownedCurrentSession: keep)
+        if store?.hasPending() == true {
+            if env.auth.phase == .signedIn {
+                Task { await resumeSharedImportQueue() }
+            }
+        } else {
+            consumeSharedImportHandoff()
+        }
     }
 
     /// Continues a share job that the extension already bound to this kitchen.

@@ -14,10 +14,12 @@ enum Theme {
 
     /// Ceramic — primary background.
     static let ceramic = adaptive(light: 0xF8F9FA, dark: 0x000000)
+    static let ceramicUIColor = adaptiveUIColor(light: 0xF8F9FA, dark: 0x000000)
     /// Platinum — secondary background / cards.
     static let platinum = adaptive(light: 0xE6E6E6, dark: 0x1A1A1A)
     /// Carbon — primary text.
     static let carbon = adaptive(light: 0x111111, dark: 0xF8F9FA)
+    static let carbonUIColor = adaptiveUIColor(light: 0x111111, dark: 0xF8F9FA)
     /// Muted text.
     static let muted = adaptive(light: 0x6B7280, dark: 0x9CA3AF)
     /// Surface — frosted panels.
@@ -40,6 +42,12 @@ enum Theme {
             let alpha = traits.userInterfaceStyle == .dark ? dark : light
             return uiColor(hex: 0x00E088, alpha: alpha)
         })
+    }
+
+    static func adaptiveUIColor(light: UInt32, dark: UInt32) -> UIColor {
+        UIColor { traits in
+            traits.userInterfaceStyle == .dark ? uiColor(hex: dark) : uiColor(hex: light)
+        }
     }
 
     private static func adaptive(light: UInt32, dark: UInt32) -> Color {

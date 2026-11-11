@@ -86,7 +86,7 @@ struct RootView: View {
     }
 }
 
-/// Bottom tab navigation — Hub, Cargo, Galley, Manifest, Supply.
+/// Bottom tab navigation. Flag on: Cargo, Galley, Fuel, Manifest, Supply.
 struct MainTabView: View {
     @Environment(AppEnvironment.self) private var env
     @Environment(\.scenePhase) private var scenePhase
@@ -144,111 +144,15 @@ struct MainTabView: View {
     var body: some View {
         ZStack {
         TabView(selection: $selectedTab) {
-            Group {
-                if env.session.clientFlags.isNutritionFuelPageEnabled {
-                    FuelView(
-                        onOpenSettings: {
-                            settingsSegment = .profile
-                            showingSettings = true
-                        },
-                        fuelDockActive: HubShellPolicy.fuelDockActive(
-                            showingHub: hubOverlayVisible,
-                            selected: selectedTab
-                        )
+            ForEach(DockOrder.tabs(fuelPageOn: fuelPage)) { tab in
+                tabPage(tab)
+                    .id(orgGeneration)
+                    .tabItem { tabLabel(tab) }
+                    .tag(tab)
+                    .accessibilityIdentifier(
+                        DockOrder.accessibilityIdentifier(tab, fuelPageOn: fuelPage)
                     )
-                } else {
-                    DashboardView(
-                isTabActive: activatedTabs.contains(.hub),
-                hubTabReselectToken: hubTabReselectToken,
-                isHubEditMode: $isHubEditMode,
-                onScan: {
-                    guard canOpenScan else { return }
-                    showingScan = true
-                },
-                onOpenSettings: {
-                    settingsSegment = .profile
-                    showingSettings = true
-                },
-                onOpenSupply: { leaveHub(to: .supply) },
-                onOpenCargo: { leaveHub(to: .cargo) },
-                onOpenGalley: { leaveHub(to: .galley) },
-                onOpenManifest: { leaveHub(to: .manifest) },
-                onOpenNutritionGoals: { showingNutritionGoals = true }
-            )
-                }
             }
-                .id(orgGeneration)
-                .tabItem {
-                    Label(
-                        env.session.clientFlags.isNutritionFuelPageEnabled
-                            ? String(localized: "Fuel")
-                            : String(localized: "Hub"),
-                        systemImage: env.session.clientFlags.isNutritionFuelPageEnabled
-                            ? "flame.fill"
-                            : "square.grid.2x2"
-                    )
-                }
-                .tag(MainTab.hub)
-                .accessibilityIdentifier(
-                    env.session.clientFlags.isNutritionFuelPageEnabled ? "tab.fuel" : "tab.hub"
-                )
-
-            CargoListView(
-                isTabActive: activatedTabs.contains(.cargo),
-                onScan: {
-                    guard canOpenScan else { return }
-                    showingScan = true
-                },
-                onOpenSettings: {
-                    settingsSegment = .profile
-                    showingSettings = true
-                }
-            )
-                .id(orgGeneration)
-                .tabItem { Label(String(localized: "Cargo"), systemImage: "shippingbox") }
-                .tag(MainTab.cargo)
-                .accessibilityIdentifier("tab.cargo")
-
-            GalleyView(
-                isTabActive: activatedTabs.contains(.galley),
-                onOpenSettings: {
-                    settingsSegment = .profile
-                    showingSettings = true
-                }
-            )
-                .id(orgGeneration)
-                .tabItem { Label(String(localized: "Galley"), systemImage: "fork.knife") }
-                .tag(MainTab.galley)
-                .accessibilityIdentifier("tab.galley")
-
-            ManifestView(
-                isTabActive: activatedTabs.contains(.manifest),
-                onOpenSettings: {
-                    settingsSegment = .profile
-                    showingSettings = true
-                },
-                onOpenNutritionGoals: { showingNutritionGoals = true },
-                onPlanWeekComplete: { count in
-                    leaveHub(to: .manifest)
-                    manifestSuccessMessage = "Added \(count) meals to Manifest"
-                }
-            )
-                .id(orgGeneration)
-                .tabItem { Label(String(localized: "Manifest"), systemImage: "calendar") }
-                .tag(MainTab.manifest)
-                .accessibilityIdentifier("tab.manifest")
-
-            SupplyView(
-                isTabActive: activatedTabs.contains(.supply),
-                onOpenSettings: {
-                    settingsSegment = .profile
-                    showingSettings = true
-                }
-            )
-                .id(orgGeneration)
-                .tabItem { Label(String(localized: "Supply"), systemImage: "cart") }
-                .tag(MainTab.supply)
-                .accessibilityIdentifier("tab.supply")
         }
         if hubOverlayVisible {
             hubPage
@@ -381,7 +285,7 @@ struct MainTabView: View {
                 if hubOverlayVisible {
                     showingHub = false
                 }
-                if index == MainTab.hub.rawValue {
+                if DockOrder.tab(at: index, fuelPageOn: fuelPage) == .hub {
                     hubTabReselectToken += 1
                 }
             }
@@ -526,6 +430,90 @@ struct MainTabView: View {
                 .frame(height: env.copilotScroll.tabBarOverlap)
                 .allowsHitTesting(false)
         }
+    }
+
+    @ViewBuilder
+    private func tabPage(_ tab: MainTab) -> some View {
+        switch tab {
+        case .hub:
+            if fuelPage {
+                FuelView(
+                    onOpenSettings: openProfileSettings,
+                    fuelDockActive: HubShellPolicy.fuelDockActive(
+                        showingHub: hubOverlayVisible,
+                        selected: selectedTab
+                    )
+                )
+            } else {
+                DashboardView(
+                    isTabActive: activatedTabs.contains(.hub),
+                    hubTabReselectToken: hubTabReselectToken,
+                    isHubEditMode: $isHubEditMode,
+                    onScan: openScan,
+                    onOpenSettings: openProfileSettings,
+                    onOpenSupply: { leaveHub(to: .supply) },
+                    onOpenCargo: { leaveHub(to: .cargo) },
+                    onOpenGalley: { leaveHub(to: .galley) },
+                    onOpenManifest: { leaveHub(to: .manifest) },
+                    onOpenNutritionGoals: { showingNutritionGoals = true }
+                )
+            }
+        case .cargo:
+            CargoListView(
+                isTabActive: activatedTabs.contains(.cargo),
+                onScan: openScan,
+                onOpenSettings: openProfileSettings
+            )
+        case .galley:
+            GalleyView(
+                isTabActive: activatedTabs.contains(.galley),
+                onOpenSettings: openProfileSettings
+            )
+        case .manifest:
+            ManifestView(
+                isTabActive: activatedTabs.contains(.manifest),
+                onOpenSettings: openProfileSettings,
+                onOpenNutritionGoals: { showingNutritionGoals = true },
+                onPlanWeekComplete: { count in
+                    leaveHub(to: .manifest)
+                    manifestSuccessMessage = "Added \(count) meals to Manifest"
+                }
+            )
+        case .supply:
+            SupplyView(
+                isTabActive: activatedTabs.contains(.supply),
+                onOpenSettings: openProfileSettings
+            )
+        }
+    }
+
+    @ViewBuilder
+    private func tabLabel(_ tab: MainTab) -> some View {
+        switch tab {
+        case .hub:
+            Label(
+                fuelPage ? String(localized: "Fuel") : String(localized: "Hub"),
+                systemImage: fuelPage ? "flame.fill" : "square.grid.2x2"
+            )
+        case .cargo:
+            Label(String(localized: "Cargo"), systemImage: "shippingbox")
+        case .galley:
+            Label(String(localized: "Galley"), systemImage: "fork.knife")
+        case .manifest:
+            Label(String(localized: "Manifest"), systemImage: "calendar")
+        case .supply:
+            Label(String(localized: "Supply"), systemImage: "cart")
+        }
+    }
+
+    private func openProfileSettings() {
+        settingsSegment = .profile
+        showingSettings = true
+    }
+
+    private func openScan() {
+        guard canOpenScan else { return }
+        showingScan = true
     }
 
     private func presentAsk() {

@@ -264,7 +264,10 @@ extension RationAPI {
     }
 
     func fuelDay(date: String) async throws -> FuelDayResponse {
-        try await client.get("nutrition/fuel?date=\(date)")
+        try await client.get(
+            "nutrition/fuel",
+            query: [URLQueryItem(name: "date", value: date)]
+        )
     }
 
     func submitFuelPhoto(_ body: FuelPhotoSubmitBody) async throws -> FuelPhotoQueuedResponse {

@@ -83,7 +83,7 @@ struct GalleyView: View {
             .ceramicPageChrome()
             .searchable(
                 text: $model.filters.search,
-                placement: .navigationBarDrawer(displayMode: .always),
+                placement: .navigationBarDrawer(displayMode: .automatic),
                 prompt: "Search galley"
             )
             .toolbar {

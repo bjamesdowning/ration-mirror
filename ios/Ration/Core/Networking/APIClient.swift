@@ -1,5 +1,19 @@
 import Foundation
 
+/// Joins a mobile path and query without encoding `?` into the path.
+enum MobileRequestURL {
+    static func make(base: URL, path: String, query: [URLQueryItem]) -> URL {
+        var components = URLComponents(
+            url: base.appending(path: path),
+            resolvingAgainstBaseURL: false
+        )!
+        if !query.isEmpty {
+            components.queryItems = query
+        }
+        return components.url!
+    }
+}
+
 /// Bearer-authenticated client for `/api/mobile/v1/*`.
 /// Attaches the access token; on 401, refreshes once via `AuthManager` and
 /// auto-replays only idempotent GET/HEAD. Mutating verbs surface
@@ -108,13 +122,12 @@ final class APIClient {
         contentType: String = "application/json",
         isRetry: Bool = false
     ) async throws -> T {
-        var components = URLComponents(
-            url: AppConfig.apiBaseURL.appending(path: path),
-            resolvingAgainstBaseURL: false
-        )!
-        if !query.isEmpty { components.queryItems = query }
-
-        var req = URLRequest(url: components.url!)
+        let url = MobileRequestURL.make(
+            base: AppConfig.apiBaseURL,
+            path: path,
+            query: query
+        )
+        var req = URLRequest(url: url)
         req.httpMethod = method
         req.cachePolicy = .reloadIgnoringLocalCacheData
         let clientVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown"

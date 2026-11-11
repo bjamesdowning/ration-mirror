@@ -75,7 +75,7 @@ struct CargoListView: View {
             .ceramicPageChrome()
             .searchable(
                 text: $model.filters.search,
-                placement: .navigationBarDrawer(displayMode: .always),
+                placement: .navigationBarDrawer(displayMode: .automatic),
                 prompt: "Search cargo"
             )
             .onSubmit(of: .search) {

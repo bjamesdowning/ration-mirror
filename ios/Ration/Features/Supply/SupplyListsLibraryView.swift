@@ -91,9 +91,9 @@ struct SupplyListsLibraryView: View {
             }
         }
         .scrollContentBackground(.hidden)
-        .background(Theme.ceramic)
         .navigationTitle("Lists")
         .rationLargeTitle()
+        .ceramicPageChrome()
         .tabDockAction(tag: .supply, layer: .lists, isActive: currentMainTab == .supply) {
             IconFABMenuCore(
                 systemImage: "plus.circle.fill",

@@ -142,9 +142,11 @@ struct FuelView: View {
             isActive: fuelDockActive
         ) {
             IconFABMenuCore(systemImage: "plus.circle.fill", accessibilityLabel: "Fuel actions") {
-                Button("Add Fuel", systemImage: "plus") { Task { await perform(.add) } }
-                Button("Scan to Fuel", systemImage: "camera.viewfinder") { Task { await perform(.scan) } }
-                Button("Barcode to Fuel", systemImage: "barcode.viewfinder") { Task { await perform(.barcode) } }
+                ForEach(FuelCreateAction.allCases, id: \.self) { action in
+                    Button(FuelMenuCopy.label(for: action), systemImage: FuelMenuCopy.systemImage(for: action)) {
+                        Task { await perform(action) }
+                    }
+                }
             }
         }
         .sheet(isPresented: $showingAdd) { addSheet }
@@ -291,15 +293,14 @@ struct FuelView: View {
     }
 
     private func perform(_ action: FuelCreateAction) async {
-        guard day != nil else {
-            message = "Fuel did not load."
+        let today = LocalDay.todayISO()
+        if FuelMenuRouting.needsTodayLoad(loadedDate: day?.date, today: today) {
+            await load(date: today)
+        }
+        guard let day, FuelMenuRouting.canOpen(loadedDate: day.date, today: today) else {
             return
         }
-        if day?.date != LocalDay.todayISO() {
-            await load(date: LocalDay.todayISO())
-        }
-        guard let today = day, today.date == LocalDay.todayISO() else { return }
-        await perform(action, used: today.used, limit: today.limit)
+        await perform(action, used: day.used, limit: day.limit)
     }
 
     private func perform(_ action: FuelCreateAction, used: Int, limit: Int?) async {

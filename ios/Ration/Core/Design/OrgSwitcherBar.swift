@@ -83,11 +83,12 @@ struct OrgSwitcherBar: View {
 }
 
 extension View {
-    /// Page canvas and navigation bar share ceramic. Light stays #F8F9FA.
+    /// Page canvas is ceramic. The bar color and both title styles come from `NavigationTitleChrome`.
     func ceramicPageChrome() -> some View {
         background(Theme.ceramic)
-            .toolbarBackground(Theme.ceramic, for: .navigationBar)
-            .toolbarBackground(.visible, for: .navigationBar)
+            .background {
+                NavigationTitleChromeInstaller()
+            }
     }
 
     /// Large title on a page root. Detail and modal screens stay inline.

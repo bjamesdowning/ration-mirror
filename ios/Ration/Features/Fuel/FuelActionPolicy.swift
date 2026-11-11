@@ -1,9 +1,41 @@
 import Foundation
 
-enum FuelCreateAction: Equatable {
+enum FuelCreateAction: Equatable, CaseIterable {
     case add
     case scan
     case barcode
+}
+
+/// Plus-menu copy. The three actions stay available whenever Fuel is visible.
+enum FuelMenuCopy {
+    static let labels = ["Add Fuel", "Scan to Fuel", "Barcode to Fuel"]
+
+    static func label(for action: FuelCreateAction) -> String {
+        switch action {
+        case .add: return "Add Fuel"
+        case .scan: return "Scan to Fuel"
+        case .barcode: return "Barcode to Fuel"
+        }
+    }
+
+    static func systemImage(for action: FuelCreateAction) -> String {
+        switch action {
+        case .add: return "plus"
+        case .scan: return "camera.viewfinder"
+        case .barcode: return "barcode.viewfinder"
+        }
+    }
+}
+
+/// A create tap loads today before it opens anything. A missing day is not a dead tap.
+enum FuelMenuRouting {
+    static func needsTodayLoad(loadedDate: String?, today: String) -> Bool {
+        loadedDate != today
+    }
+
+    static func canOpen(loadedDate: String?, today: String) -> Bool {
+        loadedDate == today
+    }
 }
 
 enum FuelActionDecision: Equatable {

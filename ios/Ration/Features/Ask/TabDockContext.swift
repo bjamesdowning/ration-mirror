@@ -29,6 +29,13 @@ enum TabDockLayer: Int, Comparable, Sendable {
     }
 }
 
+/// A still-visible page keeps its dock menu. Disappear clears it only after the page is no longer active.
+enum TabDockLifecycle {
+    static func clearsRegistrationOnDisappear(isActive: Bool) -> Bool {
+        !isActive
+    }
+}
+
 private struct CurrentMainTabKey: EnvironmentKey {
     static let defaultValue: MainTab? = nil
 }
@@ -114,7 +121,11 @@ private struct TabDockActionModifier<Action: View>: ViewModifier {
         return content
             .onAppear { sync() }
             .onChange(of: isActive) { _, _ in sync() }
-            .onDisappear { unregisterFromDock() }
+            .onDisappear {
+                if TabDockLifecycle.clearsRegistrationOnDisappear(isActive: isActive) {
+                    unregisterFromDock()
+                }
+            }
     }
 
     private func sync() {

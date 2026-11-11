@@ -56,8 +56,10 @@ struct ShareImportView: View {
 
     private var title: String {
         switch coordinator.state {
-        case .idle, .preparing:
-            ShareImportCopy.preparing
+        case .idle:
+            ShareImportCopy.preparing(host: "this page", cost: nil)
+        case .preparing(let host, let cost):
+            ShareImportCopy.preparing(host: host, cost: cost)
         case .needsConsent:
             "Allow AI features?"
         case .unavailable:

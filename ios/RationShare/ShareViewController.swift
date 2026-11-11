@@ -100,7 +100,7 @@ final class ShareViewController: UIViewController {
             doneButton?.isHidden = false
             return
         }
-        persistPending(url: extracted.url, userText: extracted.userText, autoStart: false)
+        clearLegacyPending()
         presentImport(url: extracted.url, userText: extracted.userText)
     }
 
@@ -126,6 +126,14 @@ final class ShareViewController: UIViewController {
 
     @objc private func finish() {
         extensionContext?.completeRequest(returningItems: nil, completionHandler: nil)
+    }
+
+    private func clearLegacyPending() {
+        guard let defaults = UserDefaults(suiteName: Self.appGroupId) else { return }
+        defaults.removeObject(forKey: Self.pendingURLKey)
+        defaults.removeObject(forKey: Self.pendingAtKey)
+        defaults.removeObject(forKey: Self.pendingAutoStartKey)
+        defaults.removeObject(forKey: Self.pendingUserTextKey)
     }
 
     private func persistPending(url: URL, userText: String?, autoStart: Bool) {

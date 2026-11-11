@@ -9,7 +9,16 @@ enum ShareImportCopy {
     static let addToGalley = "Add to Galley"
     static let addedToGalley = "Added to Galley"
     static let importStarted = "Import started"
-    static let preparing = "Preparing import…"
+    static func preparing(host: String, cost: Int?) -> String {
+        if let cost {
+            return "Preparing import from \(host). This import uses \(cost) credits."
+        }
+        return "Preparing import from \(host)."
+    }
+
+    static func switchKitchen(_ name: String) -> String {
+        "This import belongs to \(name). Switch to that kitchen to finish it."
+    }
     static let unavailable = "Recipe import is unavailable."
     static let readingPage = "Reading page"
     static let listeningToVideo = "Listening to video"
@@ -33,7 +42,7 @@ enum ShareImportCopy {
 
 enum ShareImportState: Equatable, Sendable {
     case idle
-    case preparing
+    case preparing(host: String, cost: Int?)
     case needsConsent
     case unavailable
     case needsCredits(required: Int)
@@ -192,7 +201,8 @@ enum ShareImportProgressLabel {
 
 enum ShareImportResumeAction: Equatable, Sendable {
     /// The server already has this id, or the extension had started the POST.
-    case resume(clientRequestId: String)
+    /// `allowDeviceCapture` is true only for a page the extension saved as `needsApp`.
+    case resume(clientRequestId: String, allowDeviceCapture: Bool)
     /// Show the import screen. Do not submit until the person continues.
     case continueInKitchen(clientRequestId: String)
     case discard
@@ -227,7 +237,10 @@ enum ShareImportResume {
             || record.state == "processing"
             || record.state == "needsApp"
         if started, record.ownerUserId == userId {
-            return .resume(clientRequestId: record.clientRequestId)
+            return .resume(
+                clientRequestId: record.clientRequestId,
+                allowDeviceCapture: record.state == "needsApp"
+            )
         }
         return .continueInKitchen(clientRequestId: record.clientRequestId)
     }

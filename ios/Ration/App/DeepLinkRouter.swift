@@ -29,8 +29,14 @@ final class DeepLinkRouter {
     private(set) var galleyImportResumeRequestId: String?
     private(set) var galleyImportAutoResume = false
     private(set) var galleyImportRecordId: String?
+    private(set) var galleyImportAllowDeviceCapture = false
     private(set) var shareImportNotice: String?
-    private var pendingShareResume: (requestId: String, autoResume: Bool, recordId: String)?
+    private var pendingShareResume: (
+        requestId: String,
+        autoResume: Bool,
+        allowDeviceCapture: Bool,
+        recordId: String
+    )?
     private(set) var manifestPlanWeekPending = false
     private(set) var manifestAddEntryPending: ManifestAddEntryPrefill?
     private(set) var supplyComposePending = false
@@ -112,11 +118,13 @@ final class DeepLinkRouter {
             if let resume = pendingShareResume {
                 galleyImportResumeRequestId = resume.requestId
                 galleyImportAutoResume = resume.autoResume
+                galleyImportAllowDeviceCapture = resume.allowDeviceCapture
                 galleyImportRecordId = resume.recordId
                 pendingShareResume = nil
             } else {
                 galleyImportResumeRequestId = nil
                 galleyImportAutoResume = false
+                galleyImportAllowDeviceCapture = false
                 galleyImportRecordId = nil
             }
         case .manifestPlanWeek:
@@ -162,9 +170,10 @@ final class DeepLinkRouter {
         url: String,
         userText: String?,
         autoResume: Bool,
+        allowDeviceCapture: Bool,
         recordId: String
     ) {
-        pendingShareResume = (requestId, autoResume, recordId)
+        pendingShareResume = (requestId, autoResume, allowDeviceCapture, recordId)
         enqueue(.galleyImport(url: url, autoStart: false, userText: userText))
     }
 
@@ -183,6 +192,7 @@ final class DeepLinkRouter {
         galleyImportUserText = nil
         galleyImportResumeRequestId = nil
         galleyImportAutoResume = false
+        galleyImportAllowDeviceCapture = false
         galleyImportRecordId = nil
     }
     func acknowledgeManifestPlanWeek() { manifestPlanWeekPending = false }

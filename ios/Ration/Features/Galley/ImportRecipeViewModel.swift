@@ -282,8 +282,14 @@ final class ImportRecipeViewModel {
     }
 
     /// Polls an existing share job. Posts the same id only when the server has no record of it.
-    func resumeShare(requestId: String, api: RationAPI, session: SessionStore) {
-        suppressDeviceCapture = true
+    /// Device capture runs only for a page the extension saved as needing the app.
+    func resumeShare(
+        requestId: String,
+        api: RationAPI,
+        session: SessionStore,
+        allowDeviceCapture: Bool
+    ) {
+        suppressDeviceCapture = !allowDeviceCapture
         boundClientRequestId = requestId
         let trimmed = url.trimmingCharacters(in: .whitespacesAndNewlines)
         let caption = userText

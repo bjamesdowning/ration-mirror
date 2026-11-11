@@ -19,6 +19,7 @@ struct GalleyView: View {
     @State private var importAutoStart = false
     @State private var importResumeRequestId: String?
     @State private var importAutoResume = false
+    @State private var importAllowDeviceCapture = false
     @State private var importRecordId: String?
     @State private var path: [MealDetailRoute] = []
     @State private var availableTags: [String] = []
@@ -154,6 +155,7 @@ struct GalleyView: View {
                 importAutoStart = false
                 importResumeRequestId = nil
                 importAutoResume = false
+                importAllowDeviceCapture = false
                 importRecordId = nil
             }) {
                 ImportRecipeSheet(
@@ -162,6 +164,7 @@ struct GalleyView: View {
                     autoStart: importAutoStart,
                     resumeRequestId: importResumeRequestId,
                     autoResume: importAutoResume,
+                    allowDeviceCapture: importAllowDeviceCapture,
                     shareRecordId: importRecordId,
                     onComplete: { await reload() },
                     onImportedMeal: { meal in path = [MealDetailRoute(id: meal.id)] },
@@ -217,6 +220,7 @@ struct GalleyView: View {
                         importAutoStart = false
                         importResumeRequestId = nil
                         importAutoResume = false
+                        importAllowDeviceCapture = false
                         importRecordId = nil
                         showingImport = true
                     } label: {
@@ -295,6 +299,7 @@ struct GalleyView: View {
                 importAutoStart = env.deepLinkRouter.galleyImportAutoStart
                 importResumeRequestId = env.deepLinkRouter.galleyImportResumeRequestId
                 importAutoResume = env.deepLinkRouter.galleyImportAutoResume
+                importAllowDeviceCapture = env.deepLinkRouter.galleyImportAllowDeviceCapture
                 importRecordId = recordId
                 if env.session.clientFlags.isAiImportUrlEnabled || importResumeRequestId != nil {
                     showingImport = true

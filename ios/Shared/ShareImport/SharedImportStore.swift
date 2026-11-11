@@ -76,6 +76,9 @@ final class SharedImportStore: ShareImportStoring {
 
     func update(_ record: ShareImportRecord) throws {
         try mutate { existing in
+            if record.sessionEpoch != epoch {
+                return existing.filter { $0.id != record.id }
+            }
             var next = existing
             if let index = next.firstIndex(where: { $0.id == record.id }) {
                 next[index] = record
@@ -93,11 +96,16 @@ final class SharedImportStore: ShareImportStoring {
     }
 
     func peekOldest(now: Date = Date()) -> ShareImportRecord? {
-        let kept = prune(load(), now: now)
-        if kept != load() {
-            try? replace(kept)
+        var found: ShareImportRecord?
+        do {
+            try mutate(now: now) { existing in
+                found = existing.first { !$0.acknowledged }
+                return existing
+            }
+        } catch {
+            return nil
         }
-        return kept.first { !$0.acknowledged }
+        return found
     }
 
     func acknowledge(id: String) {
@@ -112,7 +120,7 @@ final class SharedImportStore: ShareImportStoring {
     }
 
     func clearAll() {
-        try? replace([])
+        try? mutate { _ in [] }
     }
 
     func hasPending(now: Date = Date()) -> Bool {
@@ -140,7 +148,10 @@ final class SharedImportStore: ShareImportStoring {
         try data.write(to: url, options: .atomic)
     }
 
-    private func mutate(_ body: ([ShareImportRecord]) throws -> [ShareImportRecord]) throws {
+    private func mutate(
+        now: Date = Date(),
+        _ body: ([ShareImportRecord]) throws -> [ShareImportRecord]
+    ) throws {
         if failLock { throw SharedImportStoreError.lockFailed }
         let lockURL = directory.appendingPathComponent(Self.lockName)
         let fd = open(lockURL.path, O_CREAT | O_RDWR, 0o600)
@@ -148,7 +159,7 @@ final class SharedImportStore: ShareImportStoring {
         defer { close(fd) }
         guard flock(fd, LOCK_EX) == 0 else { throw SharedImportStoreError.lockFailed }
         defer { _ = flock(fd, LOCK_UN) }
-        let next = try body(prune(load(), now: Date()))
+        let next = try body(prune(load(), now: now))
         try replace(next)
     }
 }

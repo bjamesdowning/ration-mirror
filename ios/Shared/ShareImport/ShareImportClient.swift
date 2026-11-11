@@ -273,6 +273,7 @@ final class ShareImportLiveService: ShareImportServicing {
         request.httpMethod = method
         request.timeoutInterval = 20
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue(Self.clientHeader, forHTTPHeaderField: "X-Ration-Client")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         if surface {
             request.setValue("share-extension", forHTTPHeaderField: "X-Ration-Surface")
@@ -282,6 +283,13 @@ final class ShareImportLiveService: ShareImportServicing {
             request.httpBody = try JSONSerialization.data(withJSONObject: body)
         }
         return request
+    }
+
+    /// Marketing version from this extension bundle. A missing version must not look like a shipped iOS client.
+    static var clientHeader: String {
+        let raw = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
+        let version = raw?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return "ios/\(version.isEmpty ? "unknown" : version)"
     }
 
     private static func map(status: Int, data: Data) -> ShareImportServiceError {
@@ -304,6 +312,7 @@ final class ShareImportLiveService: ShareImportServicing {
         var request = URLRequest(url: WidgetAPIBase.resolve().appending(path: "auth/token"))
         request.httpMethod = "POST"
         request.timeoutInterval = 20
+        request.setValue(clientHeader, forHTTPHeaderField: "X-Ration-Client")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONSerialization.data(withJSONObject: [
             "grantType": "refresh_token",

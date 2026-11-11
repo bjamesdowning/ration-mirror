@@ -329,9 +329,13 @@ describe("fuel reads", () => {
 		expect(source).not.toContain("asyncAfter");
 		expect(source).not.toContain('title = "Open Ration"');
 		expect(source).toContain("if !flagOn");
-		expect(
-			readFileSync("ios/Shared/ShareImport/ShareImportClient.swift", "utf8"),
-		).not.toContain("UserDefaults");
+		const client = readFileSync(
+			"ios/Shared/ShareImport/ShareImportClient.swift",
+			"utf8",
+		);
+		expect(client).not.toContain("UserDefaults");
+		expect(client).toContain("X-Ration-Client");
+		expect(client).toContain("CFBundleShortVersionString");
 	});
 
 	it("includes a legacy null fuel date and skips a malformed row", async () => {

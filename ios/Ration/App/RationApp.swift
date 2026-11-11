@@ -56,6 +56,10 @@ struct RationApp: App {
                     guard phase == .signedIn else { return }
                     Task { await resumeSharedImportQueue() }
                 }
+                .onChange(of: env.session.orgGeneration) { _, generation in
+                    guard generation > 0, env.auth.phase == .signedIn else { return }
+                    Task { await resumeSharedImportQueue() }
+                }
         }
     }
 
@@ -113,22 +117,26 @@ struct RationApp: App {
             memberships: memberships,
             currentEpoch: store.epoch
         ) {
-        case .resume(let clientRequestId):
+        case .resume(let clientRequestId, let allowDeviceCapture):
+            env.deepLinkRouter.acknowledgeShareNotice()
             SharedImportHandoff.clear()
             env.deepLinkRouter.openShareResume(
                 requestId: clientRequestId,
                 url: record.url,
                 userText: record.userText,
                 autoResume: true,
+                allowDeviceCapture: allowDeviceCapture,
                 recordId: record.id
             )
         case .continueInKitchen(let clientRequestId):
+            env.deepLinkRouter.acknowledgeShareNotice()
             SharedImportHandoff.clear()
             env.deepLinkRouter.openShareResume(
                 requestId: clientRequestId,
                 url: record.url,
                 userText: record.userText,
                 autoResume: false,
+                allowDeviceCapture: false,
                 recordId: record.id
             )
         case .discard:
@@ -136,9 +144,7 @@ struct RationApp: App {
             SharedImportHandoff.clear()
         case .switchKitchen(let name):
             SharedImportHandoff.clear()
-            env.deepLinkRouter.presentShareNotice(
-                "This import belongs to \(name). Switch to that kitchen in Ration, then share again."
-            )
+            env.deepLinkRouter.presentShareNotice(ShareImportCopy.switchKitchen(name))
         }
     }
 

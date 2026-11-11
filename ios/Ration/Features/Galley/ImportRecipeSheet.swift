@@ -19,6 +19,8 @@ struct ImportRecipeSheet: View {
     /// Exact share job. Poll this id instead of creating another charge.
     var resumeRequestId: String? = nil
     var autoResume: Bool = false
+    /// True only when the extension saved this page as needing in-app capture.
+    var allowDeviceCapture: Bool = false
     var shareRecordId: String? = nil
     var onComplete: () async -> Void = {}
     var onImportedMeal: (MealSummary) -> Void = { _ in }
@@ -173,7 +175,8 @@ struct ImportRecipeSheet: View {
                     model.resumeShare(
                         requestId: resumeRequestId,
                         api: env.api,
-                        session: env.session
+                        session: env.session,
+                        allowDeviceCapture: allowDeviceCapture
                     )
                 } else {
                     attemptAutoStartIfNeeded()

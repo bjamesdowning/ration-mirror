@@ -17,6 +17,8 @@ final class ShareImportCoordinatorTests: XCTestCase {
         )
         XCTAssertEqual(coordinator.submitCount, 1)
         XCTAssertEqual(service.grantCount, 0)
+        XCTAssertEqual(coordinator.preparedHost, "example.com")
+        XCTAssertEqual(coordinator.preparedCost, 3)
         XCTAssertEqual(coordinator.state, .started)
         XCTAssertEqual(store.records.first?.ownerUserId, "user-1")
         XCTAssertEqual(store.records.first?.organizationId, "org-1")
@@ -358,7 +360,26 @@ final class ShareImportCoordinatorTests: XCTestCase {
                 memberships: ["org-1"],
                 currentEpoch: 0
             ),
-            .resume(clientRequestId: mine.clientRequestId)
+            .resume(clientRequestId: mine.clientRequestId, allowDeviceCapture: false)
+        )
+        var blocked = mine
+        blocked.state = "needsApp"
+        blocked.sessionEpoch = 0
+        XCTAssertEqual(
+            ShareImportResume.decide(
+                record: blocked,
+                userId: "user-1",
+                organizationId: "org-1",
+                memberships: ["org-1"],
+                currentEpoch: 0
+            ),
+            .resume(clientRequestId: blocked.clientRequestId, allowDeviceCapture: true)
+        )
+        XCTAssertFalse(ShareImportCopy.switchKitchen("Crew").localizedCaseInsensitiveContains("share again"))
+        XCTAssertTrue(ShareImportCopy.switchKitchen("Crew").contains("Crew"))
+        XCTAssertEqual(
+            ShareImportCopy.preparing(host: "example.com", cost: 3),
+            "Preparing import from example.com. This import uses 3 credits."
         )
         mine.sessionEpoch = 4
         XCTAssertEqual(
@@ -371,6 +392,29 @@ final class ShareImportCoordinatorTests: XCTestCase {
             ),
             .discard
         )
+    }
+
+    func testConfirmRechecksTheSessionEpoch() async {
+        let store = MemoryShareImportStore()
+        let service = ScriptedShareImportService(session: .make())
+        service.statuses = [
+            .success(.make(status: "completed", needsVerification: true))
+        ]
+        service.onConfirm = { store.epoch += 1 }
+        let coordinator = ShareImportCoordinator()
+        await coordinator.begin(
+            url: URL(string: "https://example.com/soup")!,
+            userText: nil,
+            service: service,
+            store: store,
+            sleep: { _ in }
+        )
+        XCTAssertEqual(coordinator.state, .readyToAdd)
+        await coordinator.addToGalley()
+        XCTAssertEqual(service.confirmCount, 1)
+        XCTAssertEqual(coordinator.state, .signedOut)
+        XCTAssertNotEqual(store.records.first?.state, "confirmed")
+        XCTAssertNotEqual(store.records.first?.acknowledged, true)
     }
 
     func testRefreshHoldsTheAuthLockAndFailsClosed() async {
@@ -463,6 +507,42 @@ final class ShareImportQueueTests: XCTestCase {
         store.failLock = true
         XCTAssertThrowsError(try store.insert(ShareImportQueueTests.record(0)))
         XCTAssertNil(store.record(id: "0"))
+    }
+
+    func testClearAndPeekStayInsideTheLock() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let store = SharedImportStore(directory: directory, defaults: nil)
+        try store.insert(Self.record(0))
+        store.failLock = true
+        store.clearAll()
+        XCTAssertEqual(store.record(id: "0")?.url, "https://example.com/0")
+        XCTAssertNil(store.peekOldest())
+        store.failLock = false
+        XCTAssertEqual(store.peekOldest()?.id, "0")
+        store.clearAll()
+        XCTAssertNil(store.peekOldest())
+        XCTAssertNil(store.record(id: "0"))
+    }
+
+    func testStaleEpochUpdateDropsTheRow() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let suite = "share-import-epoch-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = SharedImportStore(directory: directory, defaults: defaults)
+        var record = Self.record(0)
+        record.ownerUserId = "user-1"
+        record.sessionEpoch = store.epoch
+        try store.insert(record)
+        store.advanceEpoch()
+        record.state = "processing"
+        try store.update(record)
+        XCTAssertNil(store.record(id: "0"))
+        XCTAssertNil(store.peekOldest())
     }
 
     func testExpiredUnsubmittedRecordIsDropped() throws {
@@ -576,8 +656,11 @@ private final class ScriptedShareImportService: ShareImportServicing {
         return .make(status: "pending")
     }
 
+    var onConfirm: () -> Void = {}
+
     func confirm(_ requestId: String) async throws {
         confirmCount += 1
+        onConfirm()
     }
 }
 
@@ -611,7 +694,8 @@ private extension ShareImportJobSnapshot {
         progress: String? = nil,
         code: String? = nil,
         error: String? = nil,
-        mealName: String? = nil
+        mealName: String? = nil,
+        needsVerification: Bool = false
     ) -> ShareImportJobSnapshot {
         ShareImportJobSnapshot(
             status: status,
@@ -620,7 +704,7 @@ private extension ShareImportJobSnapshot {
             error: error,
             existingMealName: nil,
             mealName: mealName,
-            needsVerification: false
+            needsVerification: needsVerification
         )
     }
 }

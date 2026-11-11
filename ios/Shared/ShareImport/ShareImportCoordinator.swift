@@ -17,6 +17,8 @@ final class ShareImportCoordinator {
     private(set) var trace: [String] = []
     private(set) var completionCount = 0
     private(set) var submitCount = 0
+    private(set) var preparedHost: String?
+    private(set) var preparedCost: Int?
     private var stopPolling = false
     private var service: ShareImportServicing?
     private var store: ShareImportStoring?
@@ -71,7 +73,8 @@ final class ShareImportCoordinator {
         self.maxPolls = maxPolls
         self.sleepNanoseconds = sleep
         startedEpoch = store.epoch
-        state = .preparing
+        let host = url.host ?? "this page"
+        showPreparing(host: host, cost: nil)
         let clientRequestId = UUID().uuidString
         var created = ShareImportRecord(
             id: UUID().uuidString,
@@ -108,10 +111,11 @@ final class ShareImportCoordinator {
             created.organizationId = session.organizationId
             created.organizationName = session.organizationName
             created.state = "bound"
-            created.sessionEpoch = store.epoch
+            created.sessionEpoch = startedEpoch
             try store.update(created)
             record = created
             trace.append("bound")
+            showPreparing(host: host, cost: session.importCost)
             guard epochStillValid() else {
                 state = .signedOut
                 return
@@ -157,6 +161,9 @@ final class ShareImportCoordinator {
                 state = .needsCredits(required: session.importCost)
                 return
             }
+            if let host = URL(string: record.url)?.host {
+                showPreparing(host: host, cost: session.importCost)
+            }
             await submitAndFollow(sessionCost: session.importCost)
         } catch let error as ShareImportServiceError {
             apply(error)
@@ -169,8 +176,20 @@ final class ShareImportCoordinator {
         guard case .readyToAdd = state, let service, let requestId = record?.requestId ?? record?.clientRequestId else {
             return
         }
+        guard epochStillValid() else {
+            state = .signedOut
+            return
+        }
         do {
+            guard epochStillValid() else {
+                state = .signedOut
+                return
+            }
             try await service.confirm(requestId)
+            guard epochStillValid() else {
+                state = .signedOut
+                return
+            }
             record?.state = "confirmed"
             record?.acknowledged = true
             if let record { try? store?.update(record) }
@@ -349,6 +368,14 @@ final class ShareImportCoordinator {
             state = .failed("Could not start the import.")
         }
         _ = cost
+    }
+
+    private func showPreparing(host: String, cost: Int?) {
+        preparedHost = host
+        if let cost {
+            preparedCost = cost
+        }
+        state = .preparing(host: host, cost: cost)
     }
 
     private func epochStillValid() -> Bool {

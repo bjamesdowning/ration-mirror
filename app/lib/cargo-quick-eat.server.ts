@@ -327,6 +327,7 @@ export async function quickEatFromCargo(
 			await logManifestIntakes(env, principal, flagContext, {
 				operationKey: intakeOperationKey,
 				planId: cookResult.planId,
+				fuelTimeZone: input.fuelTimeZone,
 				items: [
 					{
 						entryId: cookResult.entry.id,

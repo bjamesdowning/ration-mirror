@@ -54,7 +54,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 					?.weekStart ?? "sunday";
 			const span =
 				(settings.manifestSettings as { calendarSpan?: 1 | 3 | 5 | 7 })
-					?.calendarSpan ?? 7;
+					?.calendarSpan ?? 5;
 			const anchor = await kitchenTodayForOrganization(
 				context.cloudflare.env.DB,
 				organizationId,

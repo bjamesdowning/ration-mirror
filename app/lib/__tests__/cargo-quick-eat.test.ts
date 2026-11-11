@@ -162,6 +162,7 @@ describe("quickEatFromCargo", () => {
 		expect(logManifestIntakes).toHaveBeenCalledTimes(1);
 		const firstCall = logManifestIntakes.mock.calls[0]?.[3] as {
 			operationKey: string;
+			fuelTimeZone?: string;
 			items: Array<{ idempotencyKey: string }>;
 		};
 		expect(firstCall.operationKey).toMatch(UUID_RE);
@@ -181,6 +182,7 @@ describe("quickEatFromCargo", () => {
 		]);
 		expect(firstCall.operationKey).toBe(expectedOp);
 		expect(firstCall.items[0]?.idempotencyKey).toBe(expectedItem);
+		expect(firstCall.fuelTimeZone).toBeUndefined();
 
 		// Same parent key → same derived keys (idempotent retries).
 		logManifestIntakes.mockClear();
@@ -201,6 +203,30 @@ describe("quickEatFromCargo", () => {
 		};
 		expect(secondCall.operationKey).toBe(expectedOp);
 		expect(secondCall.items[0]?.idempotencyKey).toBe(expectedItem);
+	});
+
+	it("forwards the request fuel time zone and does not send the cook date as the Fuel day", async () => {
+		const env = createMockEnv();
+		await quickEatFromCargo(
+			env,
+			"org-1",
+			principal,
+			{ userId: "user-1" } as never,
+			{
+				cargoId: "cargo-1",
+				quantity: 1,
+				unit: "unit",
+				date: "2026-08-11",
+				operationKey: OPERATION_KEY,
+				fuelTimeZone: "America/Los_Angeles",
+			},
+		);
+		const call = logManifestIntakes.mock.calls[0]?.[3] as {
+			fuelTimeZone?: string;
+			items: Array<{ date?: string }>;
+		};
+		expect(call.fuelTimeZone).toBe("America/Los_Angeles");
+		expect(call.items[0]?.date).toBeUndefined();
 	});
 
 	it("does not cook when Fuel is on and the zone cannot be resolved", async () => {

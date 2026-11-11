@@ -94,7 +94,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 	const weekStartPref: "sunday" | "monday" =
 		settings.manifestSettings?.weekStart ?? "sunday";
 	const showSnackSlot = settings.manifestSettings?.showSnackSlot ?? true;
-	const calendarSpan = (settings.manifestSettings?.calendarSpan ?? 7) as
+	const calendarSpan = (settings.manifestSettings?.calendarSpan ?? 5) as
 		| 1
 		| 3
 		| 5

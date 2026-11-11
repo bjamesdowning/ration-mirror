@@ -512,11 +512,12 @@ struct MainTabView: View {
                 onOpenManifest: { leaveHub(to: .manifest) },
                 onOpenNutritionGoals: { showingNutritionGoals = true }
             )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .clipped()
             Color.clear
                 .frame(height: env.copilotScroll.tabBarOverlap)
                 .allowsHitTesting(false)
         }
-        .background(Theme.ceramic)
     }
 
     private var copilotDock: some View {

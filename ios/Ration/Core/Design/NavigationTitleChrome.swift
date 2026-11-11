@@ -69,16 +69,36 @@ struct NavigationTitleChromeInstaller: UIViewControllerRepresentable {
             return nil
         }
 
+        /// The page in the stack. A background child does not own the title item.
+        private func enclosingStackItem() -> UIViewController? {
+            var current: UIViewController? = self
+            while let controller = current {
+                if controller.parent is UINavigationController {
+                    return controller
+                }
+                current = controller.parent
+            }
+            return nil
+        }
+
         @discardableResult
         private func install() -> Bool {
-            guard let bar = enclosingNavigationBar() else { return false }
-            bar.prefersLargeTitles = true
-            let expanded = NavigationTitleChrome.scrollEdgeAppearance()
-            let collapsed = NavigationTitleChrome.standardAppearance()
-            bar.scrollEdgeAppearance = expanded
-            bar.compactScrollEdgeAppearance = expanded
-            bar.standardAppearance = collapsed
-            bar.compactAppearance = collapsed
+            let stackItem = enclosingStackItem()
+            let bar = stackItem?.navigationController?.navigationBar ?? enclosingNavigationBar()
+            guard stackItem != nil || bar != nil else { return false }
+            if let bar {
+                bar.prefersLargeTitles = true
+                bar.scrollEdgeAppearance = NavigationTitleChrome.scrollEdgeAppearance()
+                bar.compactScrollEdgeAppearance = NavigationTitleChrome.scrollEdgeAppearance()
+                bar.standardAppearance = NavigationTitleChrome.standardAppearance()
+                bar.compactAppearance = NavigationTitleChrome.standardAppearance()
+            }
+            if let item = stackItem?.navigationItem {
+                item.scrollEdgeAppearance = NavigationTitleChrome.scrollEdgeAppearance()
+                item.compactScrollEdgeAppearance = NavigationTitleChrome.scrollEdgeAppearance()
+                item.standardAppearance = NavigationTitleChrome.standardAppearance()
+                item.compactAppearance = NavigationTitleChrome.standardAppearance()
+            }
             return true
         }
     }

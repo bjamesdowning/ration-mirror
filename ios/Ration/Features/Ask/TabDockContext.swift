@@ -29,10 +29,15 @@ enum TabDockLayer: Int, Comparable, Sendable {
     }
 }
 
-/// A still-visible page keeps its dock menu. Disappear clears it only after the page is no longer active.
+/// A root menu stays through a disappear that happens while that page is still the dock owner.
+/// Pushed layers (lists, meal detail, cargo detail) always clear, because Back leaves the tab selected.
 enum TabDockLifecycle {
-    static func clearsRegistrationOnDisappear(isActive: Bool) -> Bool {
-        !isActive
+    static func clearsRegistrationOnDisappear(
+        isActive: Bool,
+        layer: TabDockLayer = .root
+    ) -> Bool {
+        if layer != .root { return true }
+        return !isActive
     }
 }
 
@@ -122,7 +127,7 @@ private struct TabDockActionModifier<Action: View>: ViewModifier {
             .onAppear { sync() }
             .onChange(of: isActive) { _, _ in sync() }
             .onDisappear {
-                if TabDockLifecycle.clearsRegistrationOnDisappear(isActive: isActive) {
+                if TabDockLifecycle.clearsRegistrationOnDisappear(isActive: isActive, layer: layer) {
                     unregisterFromDock()
                 }
             }

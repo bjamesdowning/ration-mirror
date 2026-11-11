@@ -139,7 +139,7 @@ struct FuelView: View {
         }
         .tabDockAction(
             tag: .hub,
-            isActive: fuelDockActive
+            isActive: fuelDockActive && !showingMacros
         ) {
             IconFABMenuCore(systemImage: "plus.circle.fill", accessibilityLabel: "Fuel actions") {
                 ForEach(FuelCreateAction.allCases, id: \.self) { action in

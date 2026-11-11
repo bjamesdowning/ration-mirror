@@ -54,8 +54,10 @@ final class FuelPageRepairTests: XCTestCase {
     }
 
     func testActiveFuelMenuSurvivesDisappear() {
-        XCTAssertFalse(TabDockLifecycle.clearsRegistrationOnDisappear(isActive: true))
-        XCTAssertTrue(TabDockLifecycle.clearsRegistrationOnDisappear(isActive: false))
+        XCTAssertFalse(TabDockLifecycle.clearsRegistrationOnDisappear(isActive: true, layer: .root))
+        XCTAssertTrue(TabDockLifecycle.clearsRegistrationOnDisappear(isActive: false, layer: .root))
+        XCTAssertTrue(TabDockLifecycle.clearsRegistrationOnDisappear(isActive: true, layer: .detail))
+        XCTAssertTrue(TabDockLifecycle.clearsRegistrationOnDisappear(isActive: true, layer: .lists))
     }
 
     func testDockPutsFuelInTheCenterOnlyWhenTheFlagIsOn() {
@@ -153,6 +155,12 @@ final class FuelPageRepairTests: XCTestCase {
             )
             XCTAssertNotNil(
                 navigation.navigationBar.compactAppearance?.titleTextAttributes[.foregroundColor]
+            )
+            XCTAssertNotNil(
+                root.navigationItem.standardAppearance?.titleTextAttributes[.foregroundColor]
+            )
+            XCTAssertNotNil(
+                root.navigationItem.scrollEdgeAppearance?.largeTitleTextAttributes[.foregroundColor]
             )
             installed.fulfill()
         }

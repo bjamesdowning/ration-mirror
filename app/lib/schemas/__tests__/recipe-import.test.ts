@@ -5,6 +5,48 @@ import {
 } from "~/lib/schemas/recipe-import";
 
 describe("RecipeImportRequestSchema", () => {
+	it("accepts released web and iOS bodies and an optional request id", () => {
+		expect(
+			RecipeImportRequestSchema.safeParse({
+				url: "https://example.com/recipe/chocolate-cake",
+			}).success,
+		).toBe(true);
+		expect(
+			RecipeImportRequestSchema.safeParse({
+				url: "https://example.com/recipe",
+				userText: "caption",
+			}).success,
+		).toBe(true);
+		expect(
+			RecipeImportRequestSchema.safeParse({
+				photoBase64: "a".repeat(32),
+				photoMimeType: "image/jpeg",
+			}).success,
+		).toBe(true);
+		const id = "11111111-1111-4111-8111-111111111111";
+		const withId = RecipeImportRequestSchema.safeParse({
+			url: "https://example.com/recipe",
+			clientRequestId: id,
+		});
+		expect(withId.success).toBe(true);
+		if (withId.success) expect(withId.data.clientRequestId).toBe(id);
+	});
+
+	it("rejects unknown keys and a non-uuid client request id", () => {
+		expect(
+			RecipeImportRequestSchema.safeParse({
+				url: "https://example.com/recipe",
+				extra: true,
+			}).success,
+		).toBe(false);
+		expect(
+			RecipeImportRequestSchema.safeParse({
+				url: "https://example.com/recipe",
+				clientRequestId: "not-a-uuid",
+			}).success,
+		).toBe(false);
+	});
+
 	it("accepts valid HTTPS URL", () => {
 		const result = RecipeImportRequestSchema.safeParse({
 			url: "https://example.com/recipe/chocolate-cake",

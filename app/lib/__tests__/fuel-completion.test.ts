@@ -209,6 +209,8 @@ async function database() {
 			status text not null,
 			result_json text,
 			model_artifact text,
+			processing_owner text,
+			processing_lease_expires_at integer,
 			created_at integer not null,
 			expires_at integer not null
 		);
@@ -489,7 +491,7 @@ describe("fuel photo queue", () => {
 		sqlite.exec(`
 			INSERT INTO queue_job VALUES (
 				'${requestId}', 'fuel_photo', 'org-1', 'user-1', 'completed',
-				'${JSON.stringify(meta).replaceAll("'", "''")}', NULL, ${expires}, ${expires}
+				'${JSON.stringify(meta).replaceAll("'", "''")}', NULL, NULL, NULL, ${expires}, ${expires}
 			);
 			INSERT INTO nutrition_food_draft VALUES (
 				'${draftId}', 'user-1', 'org-1', 'Kitchen', '${operationId}', 'custom',

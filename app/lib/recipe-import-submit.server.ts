@@ -9,18 +9,10 @@ import {
 	type ImportSourceKind,
 	laneFlagForSource,
 } from "~/lib/import/classify-import-url";
-import {
-	AI_COSTS,
-	InsufficientCreditsError,
-	withCreditGate,
-} from "~/lib/ledger.server";
+import { submitDurableRecipeImport } from "~/lib/import-dispatch.server";
+import { InsufficientCreditsError } from "~/lib/ledger.server";
 import { log } from "~/lib/logging.server";
-import { insertQueueJobPending } from "~/lib/queue-job.server";
-import {
-	importPageR2Key,
-	importPhotoR2Key,
-	utf8ByteLength,
-} from "~/lib/recipe-import-block.server";
+import { utf8ByteLength } from "~/lib/recipe-import-block.server";
 import {
 	RECIPE_IMPORT_PAGE_HTML_MAX,
 	RECIPE_IMPORT_PHOTO_MAX_BYTES,
@@ -85,6 +77,7 @@ export interface SubmitRecipeImportInput {
 	userText?: string;
 	photoBase64?: string;
 	photoMimeType?: RecipeImportRequest["photoMimeType"];
+	clientRequestId?: string;
 	flagContext: FlagshipEvaluationContext;
 }
 
@@ -119,6 +112,7 @@ export async function submitRecipeImport(
 		userText,
 		photoBase64,
 		photoMimeType,
+		clientRequestId,
 		flagContext,
 	} = input;
 
@@ -193,58 +187,18 @@ export async function submitRecipeImport(
 		throw data({ error: "Import service unavailable" }, { status: 503 });
 	}
 
-	return withCreditGate(
-		{
-			env,
-			organizationId,
-			userId,
-			cost: AI_COSTS.IMPORT_URL,
-			reason: "Import URL",
-		},
-		async () => {
-			const requestId = crypto.randomUUID();
-			await insertQueueJobPending(
-				env.DB,
-				requestId,
-				"import_url",
-				organizationId,
-			);
-
-			const useClientHtml = Boolean(pageHtml?.trim()) && !hasPhoto;
-			if (useClientHtml && pageHtml) {
-				// R2 for strong read-after-write (KV is eventually consistent across colos).
-				await env.STORAGE.put(importPageR2Key(requestId), pageHtml, {
-					httpMetadata: { contentType: "text/html; charset=utf-8" },
-				});
-			}
-
-			let photoR2Key: string | undefined;
-			if (hasPhoto && photoBase64 && photoMimeType) {
-				photoR2Key = importPhotoR2Key(requestId);
-				const buf = decodeBase64Photo(photoBase64);
-				await env.STORAGE.put(photoR2Key, buf, {
-					httpMetadata: { contentType: photoMimeType },
-				});
-			}
-
-			const queueUrl = validatedUrl || (hasPhoto ? `photo://${requestId}` : "");
-
-			await queue.send({
-				requestId,
-				organizationId,
-				userId,
-				url: queueUrl,
-				cost: AI_COSTS.IMPORT_URL,
-				sourceKind,
-				...(useClientHtml ? { contentSource: "client" as const } : {}),
-				...(userText?.trim() ? { userText: userText.trim() } : {}),
-				...(photoR2Key
-					? { photoR2Key, photoMimeType: photoMimeType ?? "image/jpeg" }
-					: {}),
-			});
-			return { status: "processing" as const, requestId };
-		},
-	);
+	return submitDurableRecipeImport(env, {
+		userId,
+		organizationId,
+		clientRequestId,
+		url: validatedUrl || (hasPhoto ? "" : validatedUrl),
+		userText,
+		pageHtml,
+		photoBase64,
+		photoMimeType,
+		sourceKind,
+		hasPhoto,
+	});
 }
 
 export function mapRecipeImportSubmitError(outerError: unknown): void {

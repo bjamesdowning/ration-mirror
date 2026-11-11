@@ -75,8 +75,13 @@ struct GalleyView: View {
                 }
             }
             .navigationTitle("Galley")
+            .rationLargeTitle()
             .ceramicPageChrome()
-            .searchable(text: $model.filters.search, prompt: "Search galley")
+            .searchable(
+                text: $model.filters.search,
+                placement: .navigationBarDrawer(displayMode: .always),
+                prompt: "Search galley"
+            )
             .toolbar {
                 GlobalPageToolbar(
                     hasActiveFilters: model.filters.hasActiveFilters,

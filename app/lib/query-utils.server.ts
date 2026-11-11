@@ -66,6 +66,12 @@ export const D1_MAX_PLAN_ENTRY_ROWS_PER_STATEMENT = Math.floor(
 );
 
 /**
+ * Fuel-date backfill updates one id per bound parameter.
+ * Stay at 99 so the statement cannot hit D1's hard cap of 100.
+ */
+export const D1_MAX_FUEL_DATE_BACKFILL_ROWS = D1_SAFE_BOUND_PARAMS;
+
+/**
  * Bound params per kitchen_event row when id is set explicitly:
  * id, organizationId, userId, eventType, occurredAt, mealId, cargoId,
  * subjectName, payload = 9. (occurredAt may use default but we set it.)

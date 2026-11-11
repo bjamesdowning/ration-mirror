@@ -239,7 +239,7 @@ describe("runIdempotentAiJob", () => {
 		expect(work).not.toHaveBeenCalled();
 	});
 
-	it("runs work on processing re-entry when claim fails but job is not terminal", async () => {
+	it("does not run work when a live lease loses the claim", async () => {
 		getQueueJob
 			.mockResolvedValueOnce({
 				status: "processing",
@@ -265,7 +265,7 @@ describe("runIdempotentAiJob", () => {
 			deps,
 		);
 
-		expect(outcome).toEqual({ ran: true, claimed: false });
-		expect(work).toHaveBeenCalledTimes(1);
+		expect(outcome).toEqual({ ran: false, reason: "leased" });
+		expect(work).not.toHaveBeenCalled();
 	});
 });

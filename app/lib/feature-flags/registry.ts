@@ -226,6 +226,14 @@ export const FLAG_REGISTRY: Record<string, FlagRegistryEntry> = {
 		clientKey: "supplyMultiLists",
 		iosAlwaysOn: true,
 	},
+	"share-extension-import": {
+		defaultEnabled: false,
+		description:
+			"Visible Share Extension recipe import with durable in-app resume. Default off. Not iosAlwaysOn. In-app import stays on the existing ai-import flags.",
+		clientVisible: true,
+		clientKey: "shareExtensionImport",
+		iosAlwaysOn: false,
+	},
 };
 
 /** Registry keys — narrows as entries are added to FLAG_REGISTRY. */

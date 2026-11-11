@@ -1,7 +1,11 @@
 import { data } from "react-router";
 import { handleApiError } from "~/lib/error-handler";
 import { requireMobileActiveGroup } from "~/lib/mobile/auth.server";
-import { getQueueJob, toClientQueueJobStatus } from "~/lib/queue-job.server";
+import {
+	getQueueJob,
+	importJobReadableBy,
+	toClientQueueJobStatus,
+} from "~/lib/queue-job.server";
 import { NO_STORE, parseJobResultJson } from "~/lib/queue-status-loader.server";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import { RequestIdSchema } from "~/lib/schemas/queue";
@@ -38,7 +42,7 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
 			context.cloudflare.env.DB,
 			requestIdResult.data,
 		);
-		if (!job || job.organizationId !== organizationId) {
+		if (!job || !importJobReadableBy(job, { userId, organizationId })) {
 			throw data(
 				{ error: "Job not found or expired", status: "unknown" },
 				{ status: 404, headers: NO_STORE },

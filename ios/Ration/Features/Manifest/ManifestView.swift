@@ -195,6 +195,7 @@ struct ManifestView: View {
                 }
             }
             .navigationTitle("Manifest")
+            .rationLargeTitle()
             .ceramicPageChrome()
             .toolbar {
                 GlobalPageToolbar(
@@ -227,13 +228,18 @@ struct ManifestView: View {
                     },
                     onSaveSettings: { weekStart, span in
                         do {
-                            _ = try await env.api.patchSettings(SettingsPatch(
+                            let response = try await env.api.patchSettings(SettingsPatch(
                                 manifestSettings: ManifestSettings(
                                     weekStart: weekStart,
                                     calendarSpan: span
                                 )
                             ))
-                            model.configureFromSettings(calendarSpan: span, weekStartPref: weekStart)
+                            env.launch.updateUserSettings(response.settings)
+                            let stored = response.settings.manifestSettings
+                            model.configureFromSettings(
+                                calendarSpan: stored?.calendarSpan ?? span,
+                                weekStartPref: stored?.weekStart ?? weekStart
+                            )
                             Haptics.success()
                             await reload()
                         } catch {

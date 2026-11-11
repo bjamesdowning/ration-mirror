@@ -91,6 +91,7 @@ struct MainTabView: View {
     @Environment(AppEnvironment.self) private var env
     @Environment(\.scenePhase) private var scenePhase
     @State private var showingSettings = false
+    @State private var pendingAskAfterSettings = false
     @State private var settingsSegment: SettingsHubSegment = .profile
     @State private var showingHub = true
     @State private var showingNutritionGoals = false
@@ -276,8 +277,15 @@ struct MainTabView: View {
         .environment(env.copilotScroll)
         .environment(env.tabDock)
         .environment(\.currentMainTab, selectedTab)
-        .sheet(isPresented: $showingSettings) {
-            SettingsHubView(segment: settingsSegment)
+        .sheet(isPresented: $showingSettings, onDismiss: {
+            guard pendingAskAfterSettings else { return }
+            pendingAskAfterSettings = false
+            presentAsk()
+        }) {
+            SettingsHubView(segment: settingsSegment, onAskRation: {
+                pendingAskAfterSettings = true
+                showingSettings = false
+            })
         }
         .sheet(isPresented: $showingCopilotPaywall, onDismiss: {
             Task {
@@ -520,6 +528,20 @@ struct MainTabView: View {
         }
     }
 
+    private func presentAsk() {
+        guard let organizationId = env.session.activeOrganizationId else {
+            env.ask.openSheet()
+            return
+        }
+        Task {
+            await env.ask.prepareSheetPresentation(
+                auth: env.auth,
+                organizationId: organizationId,
+                snapshots: env.snapshots
+            )
+        }
+    }
+
     private var copilotDock: some View {
         CopilotBottomDock(
             scrollContext: env.copilotScroll,
@@ -533,19 +555,7 @@ struct MainTabView: View {
             isTurnActive: env.ask.model.isTurnActive,
             isStopping: env.ask.model.isStopping,
             isAwaitingApproval: env.ask.model.isAwaitingApproval,
-            onOpenSheet: {
-                guard let organizationId = env.session.activeOrganizationId else {
-                    env.ask.openSheet()
-                    return
-                }
-                Task {
-                    await env.ask.prepareSheetPresentation(
-                        auth: env.auth,
-                        organizationId: organizationId,
-                        snapshots: env.snapshots
-                    )
-                }
-            },
+            onOpenSheet: { presentAsk() },
             onSend: { text in
                 guard let organizationId = env.session.activeOrganizationId else { return false }
                 if env.session.hasAIConsent {

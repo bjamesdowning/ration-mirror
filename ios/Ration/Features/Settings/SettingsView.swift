@@ -5,6 +5,7 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
     var embedded = false
+    var onAskRation: () -> Void = {}
     @State private var model = SettingsSessionViewModel()
     @State private var healthExportMessage: String?
     @State private var showingPaywall = false
@@ -228,7 +229,10 @@ struct SettingsView: View {
                 PreferencesSettingsSection(settings: settings, api: env.api)
             }
 
-            SettingsHelpSection()
+            SettingsHelpSection(
+                copilotEnabled: env.session.clientFlags.isRationCopilotEnabled,
+                onAskRation: onAskRation
+            )
             SettingsTutorialSection()
 
             Section {

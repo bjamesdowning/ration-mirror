@@ -18,6 +18,7 @@ enum SettingsHubSegment: String, CaseIterable, Identifiable {
 struct SettingsHubView: View {
     @Environment(\.dismiss) private var dismiss
     @State var segment: SettingsHubSegment
+    var onAskRation: () -> Void = {}
 
     var body: some View {
         NavigationStack {
@@ -34,7 +35,7 @@ struct SettingsHubView: View {
 
                 Group {
                     if segment == .profile {
-                        SettingsView(embedded: true)
+                        SettingsView(embedded: true, onAskRation: onAskRation)
                     } else {
                         GroupSettingsView(embedded: true)
                     }

@@ -146,6 +146,9 @@ struct FeatureEnablementView: View {
                     )
                     .font(.caption)
                     .foregroundStyle(Theme.muted)
+                    Text("Not medical advice. Goals and totals are planning aids only.")
+                        .font(.caption)
+                        .foregroundStyle(Theme.muted)
                 }
             }
             .disabled(isSaving)

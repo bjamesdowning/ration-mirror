@@ -57,7 +57,7 @@ struct CargoQuickEatSheet: View {
                 } footer: {
                     Text(needsMassLink
                         ? "Each \(item.unit) uses the weight you set. Macros follow USDA per 100 g for that weight. Not medical advice."
-                        : "Estimates scale with amount. Saving logs nutrients to your private intake when available. Not medical advice. Goals and totals are planning aids only.")
+                        : "Estimates scale with amount. Saving logs nutrients to your private intake when available.")
                         .rationCaption()
                 }
                 Section {

@@ -94,6 +94,12 @@ enum ManifestDateHelpers {
         display.dateFormat = "MMM d"
         display.timeZone = TimeZone.current
         let year = calendar.component(.year, from: s)
+        if calendar.isDate(s, equalTo: e, toGranularity: .day) {
+            let full = DateFormatter()
+            full.dateFormat = "MMM d, yyyy"
+            full.timeZone = TimeZone.current
+            return full.string(from: s)
+        }
         if calendar.isDate(s, equalTo: e, toGranularity: .month) {
             return "\(display.string(from: s))–\(calendar.component(.day, from: e)), \(year)"
         }
@@ -444,10 +450,10 @@ struct DayNutrientStrip: View {
         let lines = NutritionGoalProgress.manifestStripLines(day: day, goal: goal)
         let energy = lines.first { $0.key == "energy" }
         let macros = lines.filter { $0.key != "energy" }
-        return VStack(alignment: .leading, spacing: 8) {
+        let spoken = lines.map(\.accessibilityText).joined(separator: ", ")
+        let strip = VStack(alignment: .leading, spacing: 8) {
             if let energy {
-                tappable {
-                    VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: 6) {
                         HStack(spacing: 8) {
                             Label(energy.displayText, systemImage: "bolt.fill")
                                 .font(Typography.dataCaption())
@@ -456,38 +462,38 @@ struct DayNutrientStrip: View {
                         }
                         ThinProgressBar(progress: NutritionGoalProgress.clamped(energy.ratio), height: 3)
                     }
-                    .accessibilityElement(children: .ignore)
-                    .accessibilityLabel(energy.accessibilityText)
-                }
+                    .accessibilityHidden(true)
             }
             if !macros.isEmpty {
                 HStack(alignment: .top, spacing: 8) {
                     ForEach(macros, id: \.key) { line in
-                        tappable {
-                            MacroProgressDial(
-                                label: line.label,
-                                actualText: "\(Int(line.actual.rounded()))",
-                                targetText: "/\(Int(line.target.rounded()))",
-                                progress: NutritionGoalProgress.clamped(line.ratio),
-                                overTarget: line.isOverTarget,
-                                accessibilityText: line.accessibilityText
-                            )
-                        }
+                        MacroProgressDial(
+                            label: line.label,
+                            actualText: "\(Int(line.actual.rounded()))",
+                            targetText: "/\(Int(line.target.rounded()))",
+                            progress: NutritionGoalProgress.clamped(line.ratio),
+                            overTarget: line.isOverTarget,
+                            accessibilityText: line.accessibilityText
+                        )
+                        .accessibilityHidden(true)
                     }
                 }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    @ViewBuilder
-    private func tappable<Content: View>(@ViewBuilder content: () -> Content) -> some View {
-        if let onTap {
-            Button(action: onTap, label: content)
-                .buttonStyle(.borderless)
-                .accessibilityHint("Opens Nutrition Goals")
-        } else {
-            content()
+        return Group {
+            if let onTap {
+                Button(action: onTap) { strip }
+                    .buttonStyle(.plain)
+                    .frame(minHeight: 44)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(spoken)
+                    .accessibilityHint("Opens Nutrition Goals")
+            } else {
+                strip
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(spoken)
+            }
         }
     }
 }

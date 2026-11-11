@@ -30,14 +30,19 @@ extension RationAPI {
     }
 
     /// Month-scoped planned (and optional intake) calendar markers.
-    func manifestPlannedDates(from: String, to: String) async throws -> ManifestPlannedDatesResponse {
-        try await client.get(
-            "manifest/planned-dates",
-            query: [
-                URLQueryItem(name: "from", value: from),
-                URLQueryItem(name: "to", value: to),
-            ]
-        )
+    func manifestPlannedDates(
+        from: String,
+        to: String,
+        intake: String? = nil
+    ) async throws -> ManifestPlannedDatesResponse {
+        var query = [
+            URLQueryItem(name: "from", value: from),
+            URLQueryItem(name: "to", value: to),
+        ]
+        if let intake {
+            query.append(URLQueryItem(name: "intake", value: intake))
+        }
+        return try await client.get("manifest/planned-dates", query: query)
     }
 
     func bulkManifest(_ body: BulkManifestRequest) async throws -> BulkManifestResponse {

@@ -729,32 +729,59 @@ export async function getUserSettings(
 }
 
 /**
- * Merge a partial settings patch into the user's existing settings and persist.
- * Uses a read-then-write pattern; keys not present in `patch` are preserved.
- * Explicit `null` values remove the corresponding key from stored settings
- * (e.g. withdrawing AI consent via `aiConsentAt: null`).
+ * Drop `undefined` so SQLite `json_patch` leaves those keys alone.
+ * `null` is kept: `json_patch` deletes that key, including nested keys.
+ */
+export function settingsJsonPatchPayload(
+	patch: Partial<UserSettings> & Record<string, unknown>,
+): Record<string, unknown> {
+	const payload: Record<string, unknown> = {};
+	for (const [key, value] of Object.entries(patch)) {
+		if (value === undefined) continue;
+		payload[key] = value;
+	}
+	return payload;
+}
+
+function parseStoredSettings(value: unknown): UserSettings {
+	if (value == null) return {};
+	if (typeof value === "string") {
+		try {
+			const parsed = JSON.parse(value) as unknown;
+			return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+				? (parsed as UserSettings)
+				: {};
+		} catch {
+			return {};
+		}
+	}
+	if (typeof value === "object" && !Array.isArray(value)) {
+		return value as UserSettings;
+	}
+	return {};
+}
+
+/**
+ * Atomically merge a settings patch with SQLite `json_patch` and return the
+ * stored object. Objects merge recursively, arrays replace, omitted keys stay,
+ * and explicit `null` deletes that key. The session user id is the only row key.
  */
 export async function patchUserSettings(
 	db: D1Database,
 	userId: string,
 	patch: Partial<UserSettings> & Record<string, unknown>,
-): Promise<void> {
-	const drizzleDb = drizzle(db, { schema });
-	const row = await drizzleDb.query.user.findFirst({
-		where: eq(schema.user.id, userId),
-		columns: { settings: true },
-	});
-	const current = (row?.settings as UserSettings) ?? {};
-	const next: UserSettings = { ...current, ...patch };
-	for (const [key, value] of Object.entries(patch)) {
-		if (value === null) {
-			delete next[key];
-		}
-	}
-	await drizzleDb
-		.update(schema.user)
-		.set({ settings: next })
-		.where(eq(schema.user.id, userId));
+): Promise<UserSettings> {
+	const payload = JSON.stringify(settingsJsonPatchPayload(patch));
+	const result = await db
+		.prepare(
+			`UPDATE user
+			 SET settings = json_patch(COALESCE(settings, '{}'), json(?1))
+			 WHERE id = ?2
+			 RETURNING settings`,
+		)
+		.bind(payload, userId)
+		.all<{ settings: unknown }>();
+	return parseStoredSettings(result.results?.[0]?.settings);
 }
 
 /**

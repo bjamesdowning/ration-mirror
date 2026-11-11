@@ -161,6 +161,7 @@ describe("cookability and supply", () => {
 		nutritionComputedRevision: 0,
 		nutritionStatus: "current" as const,
 		nutritionUpdatedAt: null,
+		importRequestId: null,
 		createdAt: new Date(),
 		updatedAt: new Date(),
 	});

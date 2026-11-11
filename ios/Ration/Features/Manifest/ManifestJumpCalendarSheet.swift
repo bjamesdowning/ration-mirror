@@ -7,6 +7,7 @@ struct ManifestJumpCalendarSheet: View {
 
     let initialDay: String
     var weekStartPref: String = "sunday"
+    var todayProvider: () -> String = { ManifestDateHelpers.todayISO() }
     var loadMarkers: (String, String) async throws -> (planned: [String], consumed: [String])
     var onSelect: (String) -> Void
 
@@ -25,11 +26,13 @@ struct ManifestJumpCalendarSheet: View {
     init(
         initialDay: String,
         weekStartPref: String = "sunday",
+        todayProvider: @escaping () -> String = { ManifestDateHelpers.todayISO() },
         loadMarkers: @escaping (String, String) async throws -> (planned: [String], consumed: [String]),
         onSelect: @escaping (String) -> Void
     ) {
         self.initialDay = initialDay
         self.weekStartPref = weekStartPref
+        self.todayProvider = todayProvider
         self.loadMarkers = loadMarkers
         self.onSelect = onSelect
         let parsed = ManifestDateHelpers.parseYearMonth(initialDay)
@@ -38,7 +41,7 @@ struct ManifestJumpCalendarSheet: View {
         _selectedDay = State(initialValue: initialDay)
     }
 
-    private var today: String { ManifestDateHelpers.todayISO() }
+    private var today: String { todayProvider() }
 
     private var grid: [String] {
         ManifestDateHelpers.buildMonthGrid(year: year, month: month, weekStartPref: weekStartPref)

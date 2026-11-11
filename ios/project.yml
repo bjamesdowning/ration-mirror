@@ -15,8 +15,8 @@ options:
 
 settings:
   base:
-    MARKETING_VERSION: "1.6.7"
-    CURRENT_PROJECT_VERSION: "158"
+    MARKETING_VERSION: "1.6.8"
+    CURRENT_PROJECT_VERSION: "159"
     SWIFT_VERSION: "5.9"
     # Set your Apple Developer Team ID here (must match App Store Connect / AASA).
     DEVELOPMENT_TEAM: "M2KJH5GDGH"
@@ -91,6 +91,8 @@ targets:
     sources:
       - path: RationWidgets
       - path: Shared
+        excludes:
+          - ShareImport
       - path: Ration/Resources/Fonts
         includes:
           - SpaceMono-Regular.ttf
@@ -120,17 +122,21 @@ targets:
     platform: iOS
     sources:
       - path: RationShare
+      - path: Shared/ShareImport
     entitlements:
       path: RationShare/RationShare.entitlements
       properties:
         com.apple.security.application-groups:
           - group.com.mayutic.ration
+        keychain-access-groups:
+          - $(AppIdentifierPrefix)com.mayutic.ration
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.mayutic.ration.share
         GENERATE_INFOPLIST_FILE: NO
         INFOPLIST_FILE: RationShare/Info.plist
         TARGETED_DEVICE_FAMILY: "1"
+        APPLICATION_EXTENSION_API_ONLY: YES
         LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks"
       configs:
         Release:

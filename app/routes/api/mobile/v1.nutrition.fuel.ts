@@ -1,11 +1,18 @@
 import { data } from "react-router";
 import { handleApiError } from "~/lib/error-handler";
 import { buildMobileFlagContext } from "~/lib/feature-flags/flags.server";
+import { log } from "~/lib/logging.server";
 import { requireMobileActiveGroup } from "~/lib/mobile/auth.server";
 import { isNutritionFuelPageEnabled } from "~/lib/nutrition/fast-log-flag.server";
+import { selectPublishableFuelItems } from "~/lib/nutrition/fuel-dto.server";
 import { loadFuelDay } from "~/lib/nutrition/fuel-read.server";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
+import { CalendarDateSchema } from "~/lib/schemas/nutrition-contract";
 import type { Route } from "./+types/v1.nutrition.fuel";
+
+function finiteTotal(value: unknown): number | null {
+	return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
 
 /**
  * GET /api/mobile/v1/nutrition/fuel?date=YYYY-MM-DD
@@ -31,11 +38,36 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		);
 		if (!rate.allowed) throw rateLimitResponse(rate);
 		const requested = new URL(request.url).searchParams.get("date");
-		const date =
-			requested && /^\d{4}-\d{2}-\d{2}$/.test(requested)
-				? requested
-				: new Date().toISOString().slice(0, 10);
+		let date = new Date().toISOString().slice(0, 10);
+		if (requested) {
+			const parsedDate = CalendarDateSchema.safeParse(requested);
+			if (!parsedDate.success) {
+				throw data(
+					{ error: "Invalid date", code: "invalid_request" },
+					{ status: 400 },
+				);
+			}
+			date = parsedDate.data;
+		}
 		const day = await loadFuelDay(env.DB, userId, date);
+		const items = selectPublishableFuelItems(day.items, (diagnostic) => {
+			log.warn("fuel_day_rows_skipped", {
+				code: diagnostic.code,
+				skipped: diagnostic.skipped,
+			});
+		});
+		const energyKcal = finiteTotal(day.totals?.energyKcal);
+		const proteinG = finiteTotal(day.totals?.proteinG);
+		const carbsG = finiteTotal(day.totals?.carbsG);
+		const fatG = finiteTotal(day.totals?.fatG);
+		const totals =
+			day.totals &&
+			energyKcal != null &&
+			proteinG != null &&
+			carbsG != null &&
+			fatG != null
+				? { energyKcal, proteinG, carbsG, fatG }
+				: null;
 		return {
 			date: day.date,
 			week: day.week,
@@ -55,24 +87,8 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 						fiberG: day.goal.fiberG,
 					}
 				: null,
-			totals: day.totals
-				? {
-						energyKcal: day.totals.energyKcal,
-						proteinG: day.totals.proteinG,
-						carbsG: day.totals.carbsG,
-						fatG: day.totals.fatG,
-					}
-				: null,
-			items: day.items.map((item) => ({
-				id: item.id,
-				name: item.mealName ?? "Food",
-				energyKcal: item.energyKcal,
-				proteinG: item.proteinG,
-				carbsG: item.carbsG,
-				fatG: item.fatG,
-				occurredAt: item.occurredAt.toISOString(),
-				slotType: item.slotType,
-			})),
+			totals,
+			items,
 		};
 	} catch (error) {
 		return handleApiError(error);

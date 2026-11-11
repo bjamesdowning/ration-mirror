@@ -1993,12 +1993,6 @@ export async function getSummary(
 	const includeGoal = goalsConsent?.state === "active";
 	const crossOrgDiary = await resolveCrossOrgDiary(env, flags);
 	const fuelPage = await isNutritionFuelPageEnabled(env, flags);
-	if (fuelPage) {
-		const { backfillFuelDates } = await import(
-			"~/lib/nutrition/fuel-backfill.server"
-		);
-		await backfillFuelDates(env.DB);
-	}
 	const started = Date.now();
 	const summary = await readNutritionSummary(
 		env.DB,

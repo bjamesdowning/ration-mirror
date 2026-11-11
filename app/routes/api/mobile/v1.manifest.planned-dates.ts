@@ -1,16 +1,22 @@
 import { data } from "react-router";
+import { z } from "zod";
 import { handleApiError } from "~/lib/error-handler";
 import { buildMobileFlagContext } from "~/lib/feature-flags/context.server";
 import {
 	ensureMealPlan,
 	getConsumedIntakeDatesForRange,
+	getFuelLoggedDatesForRange,
 	getPlannedDatesForRange,
 } from "~/lib/manifest.server";
 import { requireMobileActiveGroup } from "~/lib/mobile/auth.server";
 import { serializePlannedDatesResponse } from "~/lib/nutrition/dto.server";
+import { isNutritionFuelPageEnabled } from "~/lib/nutrition/fast-log-flag.server";
 import { resolveNutritionCapabilities } from "~/lib/nutrition/feature-policy.server";
 import { WeekQuerySchema } from "~/lib/schemas/manifest";
+import { CalendarDateSchema } from "~/lib/schemas/nutrition-contract";
 import type { Route } from "./+types/v1.manifest.planned-dates";
+
+const IntakeMarkerSchema = z.enum(["manifest", "fuel"]);
 
 /**
  * GET /api/mobile/v1/manifest/planned-dates?from=&to=
@@ -35,7 +41,29 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 			);
 		}
 
+		const intakeRaw = url.searchParams.get("intake");
+		const intakeParsed =
+			intakeRaw == null
+				? { success: true as const, data: "manifest" as const }
+				: IntakeMarkerSchema.safeParse(intakeRaw);
+		if (!intakeParsed.success) {
+			throw data(
+				{ error: "Invalid intake marker", code: "invalid_request" },
+				{ status: 400 },
+			);
+		}
+		const intake = intakeParsed.data;
+
 		const { startDate: from, endDate: to } = parsed.data;
+		if (
+			!CalendarDateSchema.safeParse(from).success ||
+			!CalendarDateSchema.safeParse(to).success
+		) {
+			throw data(
+				{ error: "Invalid date range", code: "invalid_request" },
+				{ status: 400 },
+			);
+		}
 		// Guard against accidental 13-month fetches — calendar UI loads one month.
 		const fromTime = Date.parse(`${from}T00:00:00.000Z`);
 		const toTime = Date.parse(`${to}T00:00:00.000Z`);
@@ -67,6 +95,22 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 			user: { id: userId },
 		});
 		const caps = await resolveNutritionCapabilities(env, flagContext);
+
+		if (intake === "fuel") {
+			if (!(await isNutritionFuelPageEnabled(env, flagContext))) {
+				throw data(
+					{ error: "Fuel is unavailable.", code: "FEATURE_DISABLED" },
+					{ status: 403 },
+				);
+			}
+			const consumedDates = await getFuelLoggedDatesForRange(
+				env.DB,
+				userId,
+				from,
+				to,
+			);
+			return serializePlannedDatesResponse({ from, to, dates, consumedDates });
+		}
 
 		if (!caps.manifest) {
 			return serializePlannedDatesResponse({ from, to, dates });

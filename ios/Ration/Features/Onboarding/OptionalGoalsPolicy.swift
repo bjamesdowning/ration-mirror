@@ -4,7 +4,7 @@ import Foundation
 /// Draft copy, pending review. No calculator and no suggested numbers.
 enum OptionalGoalsPolicy {
     static let draftCopy = "Enter targets you already use"
-    static let notMedical = "Not medical advice. Goals and totals are planning aids only."
+    static let notMedical = "Targets are optional. Ration does not prescribe them."
 
     static func stepVisible(
         macroTrackingOn: Bool,

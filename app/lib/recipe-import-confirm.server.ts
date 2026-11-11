@@ -3,7 +3,7 @@ import { drizzle } from "drizzle-orm/d1";
 import { data } from "react-router";
 import { meal } from "~/db/schema";
 import { createMeal } from "~/lib/meals.server";
-import { getQueueJob } from "~/lib/queue-job.server";
+import { getQueueJob, importJobReadableBy } from "~/lib/queue-job.server";
 import { parseJobResultJson } from "~/lib/queue-status-loader.server";
 import type { MealInput } from "~/lib/schemas/meal";
 import { MealSchema } from "~/lib/schemas/meal";
@@ -21,7 +21,11 @@ export async function confirmRecipeImport(
 	const { organizationId, requestId, userId } = input;
 
 	const job = await getQueueJob(env.DB, requestId);
-	if (!job || job.organizationId !== organizationId) {
+	if (
+		!job ||
+		!userId ||
+		!importJobReadableBy(job, { userId, organizationId })
+	) {
 		throw data(
 			{ error: "Import session expired. Please try again." },
 			{ status: 404 },
@@ -56,6 +60,25 @@ export async function confirmRecipeImport(
 	const extractedRecipe = parsedRecipe.data as MealInput;
 
 	const db = drizzle(env.DB);
+	const confirmed = await db
+		.select({
+			id: meal.id,
+			name: meal.name,
+			organizationId: meal.organizationId,
+		})
+		.from(meal)
+		.where(eq(meal.importRequestId, requestId))
+		.limit(1);
+	if (confirmed[0]) {
+		if (confirmed[0].organizationId !== organizationId) {
+			throw data(
+				{ error: "Import session expired. Please try again." },
+				{ status: 404 },
+			);
+		}
+		return { meal: { id: confirmed[0].id, name: confirmed[0].name } };
+	}
+
 	const duplicates = await db
 		.select({ id: meal.id, name: meal.name })
 		.from(meal)
@@ -75,12 +98,37 @@ export async function confirmRecipeImport(
 		};
 	}
 
-	const created = await createMeal(env.DB, organizationId, extractedRecipe, {
-		env,
-		userId,
-	});
-	if (!created) {
-		throw data({ error: "Failed to create meal" }, { status: 500 });
+	try {
+		const created = await createMeal(env.DB, organizationId, extractedRecipe, {
+			env,
+			userId,
+			importRequestId: requestId,
+		});
+		if (!created) {
+			throw data({ error: "Failed to create meal" }, { status: 500 });
+		}
+		return { meal: { id: created.id, name: created.name } };
+	} catch (error) {
+		const message = error instanceof Error ? error.message : String(error);
+		if (/capacity_exceeded/.test(message)) {
+			throw data(
+				{ error: "Meal capacity reached", code: "capacity_exceeded" },
+				{ status: 403 },
+			);
+		}
+		if (/unique/i.test(message)) {
+			const again = await db
+				.select({ id: meal.id, name: meal.name })
+				.from(meal)
+				.where(
+					and(
+						eq(meal.importRequestId, requestId),
+						eq(meal.organizationId, organizationId),
+					),
+				)
+				.limit(1);
+			if (again[0]) return { meal: { id: again[0].id, name: again[0].name } };
+		}
+		throw error;
 	}
-	return { meal: { id: created.id, name: created.name } };
 }

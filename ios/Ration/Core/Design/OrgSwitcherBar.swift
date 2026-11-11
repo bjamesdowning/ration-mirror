@@ -11,31 +11,38 @@ struct PageCapsuleAccessory: Identifiable {
     let action: () -> Void
 }
 
-/// Group photo, page accessories, and a settings gear. The photo does not open settings.
+/// Group photo and settings gear in one button, then page accessories.
 struct OrgSwitcherBar: View {
     @Environment(AppEnvironment.self) private var env
     var accessories: [PageCapsuleAccessory] = []
     let onSettings: () -> Void
-    @State private var showExpandedName = false
 
     var body: some View {
         HStack(spacing: 0) {
-            photo
+            settingsButton
             ForEach(accessories) { accessory in
                 accessoryButton(accessory)
             }
-            Button {
-                onSettings()
-                Haptics.light()
-            } label: {
-                Image(systemName: "gearshape")
-                    .frame(minWidth: 44, minHeight: 44)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Settings")
         }
         .padding(.leading, 6)
         .background(Theme.platinum.opacity(0.45), in: Capsule())
+    }
+
+    private var settingsButton: some View {
+        Button {
+            onSettings()
+            Haptics.light()
+        } label: {
+            HStack(spacing: 0) {
+                photo
+                Image(systemName: "gearshape")
+                    .frame(minWidth: 44, minHeight: 44)
+            }
+            .frame(minHeight: 44)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Settings")
+        .accessibilityValue(env.session.activeOrg?.name ?? "")
     }
 
     @ViewBuilder
@@ -48,29 +55,17 @@ struct OrgSwitcherBar: View {
                 size: 28
             )
             .padding(.horizontal, 6)
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(org.name)
-            .onLongPressGesture(minimumDuration: 0.35) {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    showExpandedName.toggle()
-                }
-            }
-            if showExpandedName {
-                Text(org.name)
-                    .rationCaption()
-                    .lineLimit(1)
-                    .frame(maxWidth: 120, alignment: .leading)
-                    .accessibilityHidden(true)
-            }
+            .accessibilityHidden(true)
         } else if env.session.isLoading {
             ProgressView()
                 .controlSize(.small)
                 .frame(minWidth: 44, minHeight: 44)
+                .accessibilityHidden(true)
         } else {
             Image(systemName: "building.2")
                 .foregroundStyle(Theme.muted)
                 .frame(minWidth: 44, minHeight: 44)
-                .accessibilityLabel("Group")
+                .accessibilityHidden(true)
         }
     }
 
@@ -93,5 +88,10 @@ extension View {
         background(Theme.ceramic)
             .toolbarBackground(Theme.ceramic, for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
+    }
+
+    /// Large title on a page root. Detail and modal screens stay inline.
+    func rationLargeTitle() -> some View {
+        navigationBarTitleDisplayMode(.large)
     }
 }

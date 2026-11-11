@@ -4,6 +4,7 @@ import {
 	eq,
 	gte,
 	inArray,
+	isNotNull,
 	isNull,
 	lte,
 	notInArray,
@@ -369,6 +370,34 @@ export async function getConsumedIntakeDatesForRange(
 		.orderBy(nutritionIntake.manifestDate)
 		.limit(400);
 	return rows.map((r) => r.date);
+}
+
+/**
+ * Person-global Fuel log days. Uses fuel_date only. Planned meal dots stay
+ * on the active kitchen and are not read here.
+ */
+export async function getFuelLoggedDatesForRange(
+	db: D1Database,
+	userId: string,
+	startDate: string,
+	endDate: string,
+): Promise<string[]> {
+	const d1 = drizzle(db);
+	const rows = await d1
+		.selectDistinct({ date: nutritionIntake.fuelDate })
+		.from(nutritionIntake)
+		.where(
+			and(
+				eq(nutritionIntake.userId, userId),
+				isNotNull(nutritionIntake.fuelDate),
+				gte(nutritionIntake.fuelDate, startDate),
+				lte(nutritionIntake.fuelDate, endDate),
+				isNull(nutritionIntake.voidedAt),
+			),
+		)
+		.orderBy(nutritionIntake.fuelDate)
+		.limit(400);
+	return rows.flatMap((row) => (row.date ? [row.date] : []));
 }
 
 // ---------------------------------------------------------------------------

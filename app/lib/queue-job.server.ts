@@ -19,6 +19,8 @@ import { log } from "./logging.server";
 import { emitOpsMetric } from "./telemetry.server";
 
 const JOB_TTL_SECONDS = 3600; // 1 hour
+/** Live processing lease. A duplicate delivery exits while this is in the future. */
+export const QUEUE_JOB_LEASE_SECONDS = 120;
 
 export type QueueJobType =
 	| "scan"
@@ -49,6 +51,7 @@ export async function insertQueueJobPending(
 	requestId: string,
 	jobType: QueueJobType,
 	organizationId: string,
+	userId?: string | null,
 ): Promise<void> {
 	const now = Math.floor(Date.now() / 1000);
 	const d1 = drizzle(db);
@@ -56,6 +59,7 @@ export async function insertQueueJobPending(
 		requestId,
 		jobType,
 		organizationId,
+		userId: userId ?? null,
 		status: "pending",
 		resultJson: null,
 		modelArtifact: null,
@@ -70,12 +74,52 @@ export async function insertQueueJobPending(
 export async function claimQueueJobForProcessing(
 	db: D1Database,
 	requestId: string,
+	now = new Date(),
 ): Promise<boolean> {
+	const nowSec = Math.floor(now.getTime() / 1000);
+	const owner = crypto.randomUUID();
+	const leaseExpires = nowSec + QUEUE_JOB_LEASE_SECONDS;
 	const result = await db
 		.prepare(
-			"UPDATE queue_job SET status = 'processing' WHERE request_id = ? AND status = 'pending'",
+			`UPDATE queue_job
+			 SET status = 'processing',
+			     processing_owner = ?1,
+			     processing_lease_expires_at = ?2
+			 WHERE request_id = ?3
+			   AND (
+			     status = 'pending'
+			     OR (
+			       status = 'processing'
+			       AND (
+			         processing_lease_expires_at IS NULL
+			         OR processing_lease_expires_at <= ?4
+			       )
+			     )
+			   )`,
 		)
-		.bind(requestId)
+		.bind(owner, leaseExpires, requestId, nowSec)
+		.run();
+	return (result.meta.changes ?? 0) > 0;
+}
+
+/** Extend a live lease. A loser of the claim cannot renew an expired lease. */
+export async function renewQueueJobLease(
+	db: D1Database,
+	requestId: string,
+	now = new Date(),
+): Promise<boolean> {
+	const nowSec = Math.floor(now.getTime() / 1000);
+	const leaseExpires = nowSec + QUEUE_JOB_LEASE_SECONDS;
+	const result = await db
+		.prepare(
+			`UPDATE queue_job
+			 SET processing_lease_expires_at = ?1
+			 WHERE request_id = ?2
+			   AND status = 'processing'
+			   AND processing_lease_expires_at IS NOT NULL
+			   AND processing_lease_expires_at > ?3`,
+		)
+		.bind(leaseExpires, requestId, nowSec)
 		.run();
 	return (result.meta.changes ?? 0) > 0;
 }
@@ -149,19 +193,25 @@ export async function getQueueJob(
 	requestId: string,
 ): Promise<{
 	status: QueueJobStatus;
+	jobType: QueueJobType;
 	organizationId: string;
+	userId: string | null;
 	resultJson: string | null;
 	modelArtifact: string | null;
 	expiresAt: number;
+	processingLeaseExpiresAt: number | null;
 } | null> {
 	const d1 = drizzle(db);
 	const rows = await d1
 		.select({
 			status: schema.queueJob.status,
+			jobType: schema.queueJob.jobType,
 			organizationId: schema.queueJob.organizationId,
+			userId: schema.queueJob.userId,
 			resultJson: schema.queueJob.resultJson,
 			modelArtifact: schema.queueJob.modelArtifact,
 			expiresAt: schema.queueJob.expiresAt,
+			processingLeaseExpiresAt: schema.queueJob.processingLeaseExpiresAt,
 		})
 		.from(schema.queueJob)
 		.where(eq(schema.queueJob.requestId, requestId))
@@ -174,13 +224,41 @@ export async function getQueueJob(
 			? row.expiresAt.getTime()
 			: Number(row.expiresAt) * 1000;
 	if (expiresAtMs < Date.now()) return null;
+	const leaseMs =
+		row.processingLeaseExpiresAt instanceof Date
+			? row.processingLeaseExpiresAt.getTime()
+			: row.processingLeaseExpiresAt == null
+				? null
+				: Number(row.processingLeaseExpiresAt) * 1000;
 	return {
 		status: row.status as QueueJobStatus,
+		jobType: row.jobType as QueueJobType,
 		organizationId: row.organizationId,
+		userId: row.userId ?? null,
 		resultJson: row.resultJson,
 		modelArtifact: row.modelArtifact ?? null,
 		expiresAt: Math.floor(expiresAtMs / 1000),
+		processingLeaseExpiresAt:
+			leaseMs == null ? null : Math.floor(leaseMs / 1000),
 	};
+}
+
+/**
+ * Organization-only access remains only for pre-deployment rows whose owner
+ * is null, and only while `getQueueJob` still returns them (inside the TTL).
+ */
+export function importJobReadableBy(
+	job: {
+		jobType: string;
+		organizationId: string;
+		userId: string | null;
+	},
+	viewer: { userId: string; organizationId: string },
+): boolean {
+	if (job.jobType !== "import_url") return false;
+	if (job.organizationId !== viewer.organizationId) return false;
+	if (job.userId == null) return true;
+	return job.userId === viewer.userId;
 }
 
 /**
@@ -205,6 +283,17 @@ export async function callGeminiWithArtifact(
 	const saveArtifact =
 		deps.saveQueueJobModelArtifact ?? saveQueueJobModelArtifact;
 	const invoke = deps.callGemini ?? callGemini;
+
+	if (typeof env.DB?.prepare === "function") {
+		try {
+			await renewQueueJobLease(env.DB, requestId);
+		} catch {
+			log.warn("queue_lease_renew_failed", {
+				requestId,
+				code: "lease_renew_failed",
+			});
+		}
+	}
 
 	if (!runOptions?.forceRefresh) {
 		const existing = await getJob(env.DB, requestId);
@@ -240,7 +329,7 @@ export async function callGeminiWithArtifact(
 }
 
 export type IdempotentAiJobOutcome =
-	| { ran: false; reason: "terminal" }
+	| { ran: false; reason: "terminal" | "leased" }
 	| { ran: true; claimed: boolean };
 
 export interface IdempotentAiJobDeps {
@@ -255,9 +344,9 @@ export interface IdempotentAiJobDeps {
  * Missing/expired jobs throw so the queue message is retried (producers insert
  * the row after enqueue; a fast consumer must not ack-and-drop).
  *
- * Re-entry while `processing` (crash / unacked retry) still runs `work` so the
- * job cannot stick forever. Terminal writes use conditional UPDATE so a late
- * peer cannot clobber completed/failed. Prefer `callGeminiWithArtifact` inside
+ * A live processing lease makes a duplicate delivery return without running
+ * `work`. An expired lease can be claimed so a crashed consumer recovers.
+ * Terminal writes stay conditional. Prefer `callGeminiWithArtifact` inside
  * `work` so model text survives a failed terminal write.
  */
 export async function runIdempotentAiJob(
@@ -285,8 +374,6 @@ export async function runIdempotentAiJob(
 
 	const claimed = await deps.claimQueueJobForProcessing(db, requestId);
 	if (!claimed) {
-		// Race: another isolate may have finished while we claimed, or status is
-		// already processing (re-entry). Re-check terminal before spending.
 		const again = await deps.getQueueJob(db, requestId);
 		if (!again) {
 			throw new Error(`AI queue job missing after claim: ${requestId}`);
@@ -298,6 +385,11 @@ export async function runIdempotentAiJob(
 			});
 			return { ran: false, reason: "terminal" };
 		}
+		log.info("AI queue job lease is live; skipping consumer work", {
+			requestId,
+			status: again.status,
+		});
+		return { ran: false, reason: "leased" };
 	}
 
 	await work();

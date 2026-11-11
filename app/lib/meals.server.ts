@@ -120,6 +120,8 @@ export type MealWriteOptions = {
 	 * for nutrition does not double-run capacity.
 	 */
 	skipCapacityCheck?: boolean;
+	/** Durable import confirm. Unique when set so a replay returns one meal. */
+	importRequestId?: string;
 };
 
 function resolveMealNutritionFlagContext(
@@ -304,6 +306,7 @@ export async function getMeals(
 					nutritionComputedRevision: meal.nutritionComputedRevision,
 					nutritionStatus: meal.nutritionStatus,
 					nutritionUpdatedAt: meal.nutritionUpdatedAt,
+					importRequestId: meal.importRequestId,
 					createdAt: meal.createdAt,
 					updatedAt: meal.updatedAt,
 				})
@@ -334,6 +337,7 @@ export async function getMeals(
 					nutritionComputedRevision: meal.nutritionComputedRevision,
 					nutritionStatus: meal.nutritionStatus,
 					nutritionUpdatedAt: meal.nutritionUpdatedAt,
+					importRequestId: meal.importRequestId,
 					createdAt: meal.createdAt,
 					updatedAt: meal.updatedAt,
 				})
@@ -804,6 +808,9 @@ export async function createMeal(
 			prepTime: data.prepTime,
 			cookTime: data.cookTime,
 			customFields: data.customFields || {},
+			...(options?.importRequestId
+				? { importRequestId: options.importRequestId }
+				: {}),
 		}),
 	];
 

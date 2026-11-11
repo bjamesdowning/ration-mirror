@@ -122,6 +122,7 @@ export const MobileSettingsPatchSchema = z
 					.union([z.literal(1), z.literal(3), z.literal(5), z.literal(7)])
 					.optional(),
 			})
+			.strict()
 			.optional(),
 		/** Person-scoped day list. nutrition-fast-log. iOS below 1.6 is rejected. */
 		diaryLayout: z.enum(["timeline", "slots"]).optional(),
@@ -130,6 +131,7 @@ export const MobileSettingsPatchSchema = z
 		/** Clears onboarding completion and resets step to 0 (Restart Tutorial). */
 		restartOnboarding: z.literal(true).optional(),
 	})
+	.strict()
 	.refine((v) => Object.keys(v).length > 0, {
 		message: "At least one setting is required",
 	});

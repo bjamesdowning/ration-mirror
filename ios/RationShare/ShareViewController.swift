@@ -1,9 +1,8 @@
 import UIKit
 import UniformTypeIdentifiers
 
-/// Lightweight share extension: capture a URL (or URL-in-text), persist via App Group
-/// with auto-start intent, then open Ration Import. The app also consumes the App Group
-/// payload when it next becomes active, so a failed host launch loses nothing.
+/// Share extension: save a URL for Ration. Flag off does not submit.
+/// The containing app reads the App Group payload the next time it is opened.
 final class ShareViewController: UIViewController {
     private static let appGroupId = "group.com.mayutic.ration"
     private static let pendingURLKey = "pendingImportURL"
@@ -36,9 +35,7 @@ final class ShareViewController: UIViewController {
 
     private var didStart = false
     private var statusLabel: UILabel?
-    private var openButton: UIButton?
     private var doneButton: UIButton?
-    private var pendingOpenURL: URL?
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -70,17 +67,6 @@ final class ShareViewController: UIViewController {
         statusLabel = label
         stack.addArrangedSubview(label)
 
-        var config = UIButton.Configuration.filled()
-        config.baseBackgroundColor = UIColor(red: 0, green: 0.878, blue: 0.533, alpha: 1) // Hyper-Green
-        config.baseForegroundColor = UIColor(white: 0.067, alpha: 1) // on-hyper-green
-        config.title = "Open Ration"
-        config.cornerStyle = .medium
-        let button = UIButton(configuration: config)
-        button.isHidden = true
-        button.addTarget(self, action: #selector(retryOpenHost), for: .touchUpInside)
-        openButton = button
-        stack.addArrangedSubview(button)
-
         var doneConfig = UIButton.Configuration.plain()
         doneConfig.title = "Done"
         doneConfig.baseForegroundColor = Self.mutedForeground
@@ -101,45 +87,27 @@ final class ShareViewController: UIViewController {
         guard let extracted = await extractSharedPayload() else {
             statusLabel?.text =
                 "No link found in this share. Copy the recipe URL and paste it in Ration → Import."
-            openButton?.isHidden = true
             doneButton?.isHidden = false
             return
         }
 
-        persistPending(url: extracted.url, userText: extracted.userText, autoStart: true)
-
-        let encoded =
-            extracted.url.absoluteString.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)
-            ?? extracted.url.absoluteString
-        guard let openURL = URL(string: "ration://galley/import?url=\(encoded)&auto=1") else {
-            statusLabel?.text = "Could not prepare Import link."
-            doneButton?.isHidden = false
-            return
+        let defaults = UserDefaults(suiteName: Self.appGroupId)
+        let flagOn = ShareImportQueue.flagEnabled(defaults)
+        persistPending(url: extracted.url, userText: extracted.userText, autoStart: flagOn)
+        if let directory = FileManager.default.containerURL(
+            forSecurityApplicationGroupIdentifier: Self.appGroupId
+        ) {
+            _ = try? ShareImportQueue.enqueue(
+                url: extracted.url,
+                userText: extracted.userText,
+                defaults: defaults,
+                directory: directory
+            )
         }
-
-        pendingOpenURL = openURL
-        let opened = openHostApp(openURL)
-        if opened {
-            // Completing immediately can cancel the host activation in flight.
-            try? await Task.sleep(nanoseconds: 250_000_000)
-            finish()
-            return
-        }
-
-        statusLabel?.text =
-            "Link saved. Open Ration to import — or tap below if it didn’t switch automatically."
-        openButton?.isHidden = false
+        statusLabel?.text = flagOn
+            ? "Saved to Ration. Open Ration from your Home Screen to finish the import."
+            : "Saved to Ration for 24 hours. Open Ration from your Home Screen to continue."
         doneButton?.isHidden = false
-    }
-
-    @objc private func retryOpenHost() {
-        guard let openURL = pendingOpenURL else { return }
-        if openHostApp(openURL) {
-            Task {
-                try? await Task.sleep(nanoseconds: 250_000_000)
-                finish()
-            }
-        }
     }
 
     @objc private func finish() {
@@ -282,38 +250,4 @@ final class ShareViewController: UIViewController {
         return httpsOrNil(url)
     }
 
-    /// Share extensions have no public API to open their containing app, so walk the
-    /// responder chain to the host's `openURL:options:completionHandler:`.
-    @discardableResult
-    private func openHostApp(_ url: URL) -> Bool {
-        let selector = NSSelectorFromString("openURL:options:completionHandler:")
-        var responder: UIResponder? = self
-        while let current = responder {
-            if let application = current as? UIApplication {
-                application.open(url, options: [:], completionHandler: nil)
-                return true
-            }
-            if current.responds(to: selector) {
-                typealias OpenURLFn = @convention(c) (
-                    AnyObject,
-                    Selector,
-                    NSURL,
-                    NSDictionary,
-                    AnyObject?
-                ) -> Void
-                let target = current as AnyObject
-                let cls: AnyClass = object_getClass(target) ?? type(of: target)
-                guard let method = class_getInstanceMethod(cls, selector) else {
-                    responder = current.next
-                    continue
-                }
-                let imp = method_getImplementation(method)
-                let open = unsafeBitCast(imp, to: OpenURLFn.self)
-                open(target, selector, url as NSURL, NSDictionary(), nil)
-                return true
-            }
-            responder = current.next
-        }
-        return false
-    }
 }

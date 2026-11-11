@@ -76,8 +76,11 @@ export async function action({ request, context }: Route.ActionArgs) {
 				: {}),
 		};
 
-		await patchUserSettings(context.cloudflare.env.DB, userId, settingsPatch);
-		const settings = await getUserSettings(context.cloudflare.env.DB, userId);
+		const settings = await patchUserSettings(
+			context.cloudflare.env.DB,
+			userId,
+			settingsPatch,
+		);
 		return { settings };
 	} catch (e) {
 		return handleApiError(e);

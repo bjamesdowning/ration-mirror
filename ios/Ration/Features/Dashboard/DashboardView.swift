@@ -75,68 +75,7 @@ struct DashboardView: View {
 
     var body: some View {
         NavigationStack {
-            Group {
-                switch model.state {
-                case .loading:
-                    LoadingView()
-                case let .failed(message):
-                    VStack(spacing: 16) {
-                        ErrorBanner(message: message)
-                        Button("Retry") {
-                            Task { await reload() }
-                        }
-                        .buttonStyle(SecondaryButtonStyle())
-                    }
-                    .padding(24)
-                case let .loaded(data):
-                    if model.isEditMode {
-                        HubEditView(
-                            hubProfile: data.hubProfile,
-                            hubLayout: data.hubLayout,
-                            availableMealTags: data.availableMealTags,
-                            availableCargoTags: data.availableCargoTags ?? [],
-                            onSave: { widgets in
-                                try await model.saveLayout(widgets, api: env.api)
-                                await reload()
-                            },
-                            onSaveProfile: { profile in
-                                try await model.saveProfile(profile, api: env.api)
-                                await reload()
-                            }
-                        )
-                    } else {
-                        hubContent(data)
-                    }
-                }
-            }
-            .navigationTitle(model.isEditMode ? "Edit Hub" : "Hub")
-            .ceramicPageChrome()
-            .toolbar {
-                GlobalPageToolbar(
-                    syncDomain: SnapshotDomain.hub,
-                    organizationId: organizationId,
-                    isRefreshing: model.isRefreshing,
-                    showsHubButton: false,
-                    onOpenSettings: onOpenSettings
-                )
-                if case .loaded = model.state, model.isEditMode {
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button("Done") {
-                            model.isEditMode = false
-                            Task { await reload() }
-                        }
-                    }
-                } else if case .loaded = model.state, !model.isEditMode {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Button {
-                            model.isEditMode = true
-                        } label: {
-                            Image(systemName: "slider.horizontal.3")
-                        }
-                        .accessibilityLabel("Edit Hub layout")
-                    }
-                }
-            }
+            hubPage
             .background(Theme.ceramic)
             .safeAreaInset(edge: .top, spacing: 0) {
                 if let message = model.refreshErrorMessage {
@@ -205,6 +144,82 @@ struct DashboardView: View {
                 Task { await reload() }
             })
         }
+    }
+
+    private var hubPage: some View {
+        hubCanvas
+            .navigationTitle(model.isEditMode ? "Edit Hub" : "Hub")
+            .rationLargeTitle()
+            .ceramicPageChrome()
+            .toolbar { hubToolbar }
+    }
+
+    @ViewBuilder
+    private var hubCanvas: some View {
+        switch model.state {
+        case .loading:
+            LoadingView()
+        case let .failed(message):
+            VStack(spacing: 16) {
+                ErrorBanner(message: message)
+                Button("Retry") {
+                    Task { await reload() }
+                }
+                .buttonStyle(SecondaryButtonStyle())
+            }
+            .padding(24)
+        case let .loaded(data):
+            if model.isEditMode {
+                HubEditView(
+                    hubProfile: data.hubProfile,
+                    hubLayout: data.hubLayout,
+                    availableMealTags: data.availableMealTags,
+                    availableCargoTags: data.availableCargoTags ?? [],
+                    onSave: saveHubLayout,
+                    onSaveProfile: saveHubProfile,
+                    saves: model.layoutSaves
+                )
+            } else {
+                hubContent(data)
+            }
+        }
+    }
+
+    @ToolbarContentBuilder
+    private var hubToolbar: some ToolbarContent {
+        GlobalPageToolbar(
+            syncDomain: SnapshotDomain.hub,
+            organizationId: organizationId,
+            isRefreshing: model.isRefreshing,
+            showsHubButton: false,
+            showsHubAvatar: model.state.isLoaded,
+            isHubEditing: model.isEditMode,
+            hubSaveInFlight: model.layoutSaves.isSaving,
+            onEditHub: model.state.isLoaded && !model.isEditMode ? beginHubEdit : nil,
+            onFinishHubEdit: { Task { await finishHubEdit() } },
+            onOpenSettings: onOpenSettings
+        )
+    }
+
+    private func beginHubEdit() {
+        model.isEditMode = true
+    }
+
+    private func saveHubLayout(_ widgets: [HubWidgetLayout]) async throws {
+        try await model.saveLayout(widgets, api: env.api)
+        await reload()
+    }
+
+    private func saveHubProfile(_ profile: HubProfile) async throws {
+        try await model.saveProfile(profile, api: env.api)
+        await reload()
+    }
+
+    private func finishHubEdit() async {
+        await model.layoutSaves.finish()
+        guard model.layoutSaves.lastError == nil else { return }
+        model.isEditMode = false
+        await reload()
     }
 
     private func reload() async {

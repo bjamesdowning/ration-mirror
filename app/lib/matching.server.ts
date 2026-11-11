@@ -588,6 +588,7 @@ export async function matchMeals(
 					nutritionComputedRevision: meal.nutritionComputedRevision,
 					nutritionStatus: meal.nutritionStatus,
 					nutritionUpdatedAt: meal.nutritionUpdatedAt,
+					importRequestId: meal.importRequestId,
 					createdAt: meal.createdAt,
 					updatedAt: meal.updatedAt,
 				})

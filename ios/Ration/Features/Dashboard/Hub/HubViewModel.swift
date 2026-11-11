@@ -8,9 +8,15 @@ final class HubViewModel {
         case loading
         case loaded(HubResponse)
         case failed(String)
+
+        var isLoaded: Bool {
+            if case .loaded = self { return true }
+            return false
+        }
     }
 
     private(set) var state: State = .loading
+    let layoutSaves = HubLayoutSaveCoordinator()
     private(set) var isRefreshing = false
     private(set) var refreshErrorMessage: String?
     var isEditMode = false
@@ -165,5 +171,54 @@ private extension HubResponse {
             nutritionToday: nutritionToday,
             nutritionTrends: nutritionTrends
         )
+    }
+}
+
+/// Serializes Hub layout writes. Only the newest revision is authoritative.
+@MainActor
+@Observable
+final class HubLayoutSaveCoordinator {
+    private(set) var isSaving = false
+    private(set) var lastError: String?
+    private var revision = 0
+    private var pending: (() async throws -> Void)?
+    private var running = false
+    private var drainTask: Task<Void, Never>?
+
+    func submit(_ work: @escaping () async throws -> Void) {
+        revision += 1
+        pending = work
+        isSaving = true
+        guard !running else { return }
+        running = true
+        drainTask = Task { await drain() }
+    }
+
+    func finish() async {
+        await drainTask?.value
+    }
+
+    private func drain() async {
+        while let work = pending {
+            pending = nil
+            let token = revision
+            do {
+                try await work()
+                if token == revision {
+                    lastError = nil
+                }
+            } catch {
+                if token == revision {
+                    lastError = (error as? APIError)?.errorDescription ?? "Hub layout did not save."
+                }
+            }
+        }
+        running = false
+        drainTask = nil
+        isSaving = pending != nil
+        if pending != nil {
+            running = true
+            drainTask = Task { await drain() }
+        }
     }
 }

@@ -846,6 +846,21 @@ export type NutritionDiaryReadOptions = {
 
 const MAX_INTAKE_LIST_LIMIT = 500;
 
+/** Indexed OR: a fuel_date hit, else the immutable legacy manifest_date. */
+function legacyFuelDatePredicate(from: string, to: string) {
+	return sql`(
+		(${schema.nutritionIntake.fuelDate} IS NOT NULL
+			AND ${schema.nutritionIntake.fuelDate} >= ${from}
+			AND ${schema.nutritionIntake.fuelDate} <= ${to})
+		OR (${schema.nutritionIntake.fuelDate} IS NULL
+			AND ${schema.nutritionIntake.manifestDate} IS NOT NULL
+			AND ${schema.nutritionIntake.manifestDate} >= ${from}
+			AND ${schema.nutritionIntake.manifestDate} <= ${to})
+	)`;
+}
+
+const legacyFuelDayKey = sql<string>`coalesce(${schema.nutritionIntake.fuelDate}, ${schema.nutritionIntake.manifestDate})`;
+
 export type ListNutritionIntakesResult = {
 	items: NutritionIntakeRow[];
 	nextCursor: string | null;
@@ -894,37 +909,55 @@ export async function listNutritionIntakesForRange(
 		? decodeNutritionIntakeCursor(options.cursor)
 		: null;
 
-	const dateColumn =
-		options.dateField === "fuel"
-			? schema.nutritionIntake.fuelDate
-			: schema.nutritionIntake.manifestDate;
+	const usesFuel = options.dateField === "fuel";
+	const dateColumn = usesFuel
+		? legacyFuelDayKey
+		: schema.nutritionIntake.manifestDate;
 	const orgFilter =
-		options.crossOrgDiary || options.dateField === "fuel"
+		options.crossOrgDiary || usesFuel
 			? undefined
 			: eq(schema.nutritionIntake.organizationId, orgId);
+	const rangePredicate = usesFuel
+		? legacyFuelDatePredicate(from, to)
+		: and(
+				gte(schema.nutritionIntake.manifestDate, from),
+				lte(schema.nutritionIntake.manifestDate, to),
+			);
 
 	const baseWhere = and(
 		eq(schema.nutritionIntake.userId, userId),
 		orgFilter,
-		gte(dateColumn, from),
-		lte(dateColumn, to),
+		rangePredicate,
 		isNull(schema.nutritionIntake.voidedAt),
 	);
 
-	const cursorWhere = decoded
-		? or(
-				gt(dateColumn, decoded.manifestDate),
-				and(
-					eq(dateColumn, decoded.manifestDate),
-					gt(schema.nutritionIntake.occurredAt, decoded.occurredAt),
-				),
-				and(
-					eq(dateColumn, decoded.manifestDate),
-					eq(schema.nutritionIntake.occurredAt, decoded.occurredAt),
-					gt(schema.nutritionIntake.id, decoded.id),
-				),
-			)
-		: undefined;
+	const cursorWhere = !decoded
+		? undefined
+		: usesFuel
+			? or(
+					sql`${legacyFuelDayKey} > ${decoded.manifestDate}`,
+					and(
+						sql`${legacyFuelDayKey} = ${decoded.manifestDate}`,
+						gt(schema.nutritionIntake.occurredAt, decoded.occurredAt),
+					),
+					and(
+						sql`${legacyFuelDayKey} = ${decoded.manifestDate}`,
+						eq(schema.nutritionIntake.occurredAt, decoded.occurredAt),
+						gt(schema.nutritionIntake.id, decoded.id),
+					),
+				)
+			: or(
+					gt(schema.nutritionIntake.manifestDate, decoded.manifestDate),
+					and(
+						eq(schema.nutritionIntake.manifestDate, decoded.manifestDate),
+						gt(schema.nutritionIntake.occurredAt, decoded.occurredAt),
+					),
+					and(
+						eq(schema.nutritionIntake.manifestDate, decoded.manifestDate),
+						eq(schema.nutritionIntake.occurredAt, decoded.occurredAt),
+						gt(schema.nutritionIntake.id, decoded.id),
+					),
+				);
 
 	const rows = await d1
 		.select({
@@ -1017,19 +1050,24 @@ export async function getNutritionSummary(
 	options: NutritionDiaryReadOptions = {},
 ): Promise<NutritionSummaryResult> {
 	const d1 = drizzle(db, { schema });
-	const dateColumn =
-		options.dateField === "fuel"
-			? schema.nutritionIntake.fuelDate
-			: schema.nutritionIntake.manifestDate;
+	const usesFuel = options.dateField === "fuel";
+	const dateColumn = usesFuel
+		? legacyFuelDayKey
+		: schema.nutritionIntake.manifestDate;
 	const orgFilter =
-		options.crossOrgDiary || options.dateField === "fuel"
+		options.crossOrgDiary || usesFuel
 			? undefined
 			: eq(schema.nutritionIntake.organizationId, orgId);
+	const rangePredicate = usesFuel
+		? legacyFuelDatePredicate(from, to)
+		: and(
+				gte(schema.nutritionIntake.manifestDate, from),
+				lte(schema.nutritionIntake.manifestDate, to),
+			);
 	const whereClause = and(
 		eq(schema.nutritionIntake.userId, userId),
 		orgFilter,
-		gte(dateColumn, from),
-		lte(dateColumn, to),
+		rangePredicate,
 		isNull(schema.nutritionIntake.voidedAt),
 	);
 

@@ -94,6 +94,7 @@ struct SupplyView: View {
                 }
             }
             .navigationTitle("Supply")
+            .rationLargeTitle()
             .ceramicPageChrome()
             .toolbar {
                 GlobalPageToolbar(

@@ -53,6 +53,7 @@ function setup() {
 			user_id text,
 			amount integer not null,
 			reason text not null,
+			idempotency_key text,
 			created_at integer
 		);
 		create table cargo (

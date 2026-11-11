@@ -42,7 +42,10 @@ export const RecipeImportRequestSchema = z
 		/** Base64-encoded recipe photo / screenshot (no data: prefix). */
 		photoBase64: z.string().min(32).max(4_200_000).optional(),
 		photoMimeType: z.enum(RECIPE_IMPORT_PHOTO_MIME).optional(),
+		/** Stable id from the Share Extension. Released clients omit it. */
+		clientRequestId: z.string().uuid().optional(),
 	})
+	.strict()
 	.superRefine((data, ctx) => {
 		const hasPhoto = Boolean(data.photoBase64?.trim());
 		const hasUrl = Boolean(data.url?.trim());

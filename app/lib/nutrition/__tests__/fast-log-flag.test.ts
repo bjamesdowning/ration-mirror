@@ -3,6 +3,7 @@ import { isFeatureEnabled } from "~/lib/feature-flags/flags.server";
 import {
 	isNutritionBarcodeDiaryEnabled,
 	isNutritionFastLogEnabled,
+	isNutritionFuelPageEnabled,
 	isNutritionHealthExportEnabled,
 	isNutritionPhotoLogEnabled,
 	isNutritionSavedFoodEnabled,
@@ -120,6 +121,25 @@ describe("nutrition-fast-log client gate", () => {
 		).resolves.toBe(false);
 		await expect(
 			isNutritionHealthExportEnabled({} as Env, { clientPlatform: "web" }),
+		).resolves.toBe(true);
+	});
+
+	it("keeps the Fuel page off unless nutrition-fast-log is on", async () => {
+		vi.mocked(isFeatureEnabled).mockImplementation(
+			async (_env, key) => key === "nutrition-fuel-page",
+		);
+		await expect(
+			isNutritionFuelPageEnabled({} as Env, { clientPlatform: "web" }),
+		).resolves.toBe(false);
+		vi.mocked(isFeatureEnabled).mockResolvedValue(true);
+		await expect(
+			isNutritionFuelPageEnabled({} as Env, {
+				clientPlatform: "ios",
+				clientVersion: "1.5.18",
+			}),
+		).resolves.toBe(false);
+		await expect(
+			isNutritionFuelPageEnabled({} as Env, { clientPlatform: "web" }),
 		).resolves.toBe(true);
 	});
 });

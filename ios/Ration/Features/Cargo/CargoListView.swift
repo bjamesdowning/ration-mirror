@@ -71,8 +71,13 @@ struct CargoListView: View {
                 }
             }
             .navigationTitle("Cargo")
+            .rationLargeTitle()
             .ceramicPageChrome()
-            .searchable(text: $model.filters.search, prompt: "Search cargo")
+            .searchable(
+                text: $model.filters.search,
+                placement: .navigationBarDrawer(displayMode: .always),
+                prompt: "Search cargo"
+            )
             .onSubmit(of: .search) {
                 Task { await reload(forceRemoteSearch: true, organizationId: organizationId) }
             }

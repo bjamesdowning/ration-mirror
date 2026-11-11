@@ -51,6 +51,10 @@ final class SessionStore {
         defer { isLoading = false }
         do {
             session = try await api.session()
+            UserDefaults(suiteName: ShareImportQueue.appGroupId)?.set(
+                session?.flags.isShareExtensionImportEnabled == true,
+                forKey: ShareImportQueue.flagKey
+            )
             return true
         } catch {
             // Keep prior session on transient failure.
@@ -83,6 +87,10 @@ final class SessionStore {
     func clear() {
         session = nil
         hasAIConsent = false
+        UserDefaults(suiteName: ShareImportQueue.appGroupId)?.set(
+            false,
+            forKey: ShareImportQueue.flagKey
+        )
         orgSelectionOrganizations = nil
         KitchenClock.set(identifier: nil)
     }

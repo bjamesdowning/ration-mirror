@@ -28,50 +28,44 @@ struct FuelView: View {
     @State private var reviewFat = ""
     @State private var photoRequestId: String?
     @State private var photoTask: Task<Void, Never>?
+    @State private var generation = 0
+    @State private var failedTarget: String?
+    @State private var showingCalendar = false
+    @State private var isNavigating = false
     var body: some View {
         NavigationStack {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 if let day {
-                    weekStrip(day)
-                    DatePicker(
-                        "Jump calendar",
-                        selection: jumpDate(day.date),
-                        displayedComponents: .date
-                    )
-                    .datePickerStyle(.compact)
-                    .labelsHidden()
-                    .accessibilityLabel("Jump calendar")
+                    fuelRocker(day)
                     Text(FuelActionPolicy.counterLabel(used: day.used, limit: day.limit))
                         .font(Typography.body())
                         .minimumScaleFactor(0.7)
                         .accessibilityLabel(FuelActionPolicy.counterLabel(used: day.used, limit: day.limit))
-                    if let totals = day.totals {
-                        DayNutrientStrip(
-                            totals: NutritionDayTotals(
-                                date: day.date,
-                                energyKcal: totals.energyKcal,
-                                proteinG: totals.proteinG,
-                                carbsG: totals.carbsG,
-                                fatG: totals.fatG,
-                                fiberG: totals.fiberG,
-                                coverageAvg: 0,
-                                entryCount: day.items.count
-                            ),
-                            goal: day.goal.map {
-                                NutritionSummary.Goal(
-                                    dailyEnergyKcal: $0.dailyEnergyKcal,
-                                    proteinG: $0.proteinG,
-                                    carbsG: $0.carbsG,
-                                    fatG: $0.fatG,
-                                    fiberG: $0.fiberG,
-                                    effectiveFrom: day.date,
-                                    effectiveTo: nil
-                                )
-                            },
-                            onTap: { showingGoals = true }
-                        )
-                    }
+                    DayNutrientStrip(
+                        totals: NutritionDayTotals(
+                            date: day.date,
+                            energyKcal: day.totals?.energyKcal ?? 0,
+                            proteinG: day.totals?.proteinG ?? 0,
+                            carbsG: day.totals?.carbsG ?? 0,
+                            fatG: day.totals?.fatG ?? 0,
+                            fiberG: day.totals?.fiberG ?? 0,
+                            coverageAvg: 0,
+                            entryCount: day.items.count
+                        ),
+                        goal: day.goal.map {
+                            NutritionSummary.Goal(
+                                dailyEnergyKcal: $0.dailyEnergyKcal,
+                                proteinG: $0.proteinG,
+                                carbsG: $0.carbsG,
+                                fatG: $0.fatG,
+                                fiberG: $0.fiberG,
+                                effectiveFrom: day.date,
+                                effectiveTo: nil
+                            )
+                        },
+                        onTap: { showingGoals = true }
+                    )
                     Picker("Day layout", selection: layoutBinding(day.diaryLayout)) {
                         Text("Timeline").tag("timeline")
                         Text("Slots").tag("slots")
@@ -87,7 +81,9 @@ struct FuelView: View {
                 if message == "Fuel did not load." {
                     Text(message ?? "")
                         .rationCaption()
-                    Button("Retry") { Task { await load(date: LocalDay.todayISO()) } }
+                    Button("Retry") {
+                        Task { await load(date: failedTarget ?? day?.date ?? LocalDay.todayISO()) }
+                    }
                         .frame(minHeight: 44)
                 } else if let message {
                     Text(message).rationCaption()
@@ -122,6 +118,7 @@ struct FuelView: View {
             .padding()
         }
         .navigationTitle("Fuel")
+        .rationLargeTitle()
         .ceramicPageChrome()
         .toolbar {
             GlobalPageToolbar(
@@ -133,15 +130,16 @@ struct FuelView: View {
                         action: { showingMacros = true }
                     )
                 ],
+                trailingAccessories: todayAccessory,
                 onOpenSettings: onOpenSettings
             )
         }
         .navigationDestination(isPresented: $showingMacros) {
-            MacrosHistoryView(showsNotes: false)
+            MacrosHistoryView(onOpenGoals: { showingGoals = true }, showsNotes: false)
         }
         .tabDockAction(
             tag: .hub,
-            isActive: fuelDockActive && env.network.isOnline && day != nil
+            isActive: fuelDockActive
         ) {
             IconFABMenuCore(systemImage: "plus.circle.fill", accessibilityLabel: "Fuel actions") {
                 Button("Add Fuel", systemImage: "plus") { Task { await perform(.add) } }
@@ -178,25 +176,62 @@ struct FuelView: View {
         }
     }
 
-    private func weekStrip(_ day: FuelDayResponse) -> some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack {
-                ForEach(day.week, id: \.self) { date in
-                    Button(date.suffix(2)) { Task { await load(date: date) } }
-                        .frame(minWidth: 44, minHeight: 44)
-                        .accessibilityLabel(day.loggedDates.contains(date) ? "\(date) logged" : date)
-                }
+    private var todayAccessory: [PageCapsuleAccessory] {
+        guard env.session.clientFlags.isNutritionFuelPageEnabled else { return [] }
+        let showingToday = day?.date == LocalDay.todayISO()
+        return [
+            PageCapsuleAccessory(
+                id: "today",
+                systemImage: "calendar",
+                label: "Today",
+                hint: showingToday ? nil : "Jump to today",
+                value: showingToday ? "Showing today" : nil,
+                isEnabled: !showingToday && !isNavigating,
+                action: { Task { await load(date: LocalDay.todayISO()) } }
+            )
+        ]
+    }
+
+    private func fuelRocker(_ day: FuelDayResponse) -> some View {
+        let label = ManifestDateHelpers.formatRange(start: day.date, end: day.date)
+        return HStack(spacing: 0) {
+            Button { Task { await step(day, by: -1) } } label: {
+                Image(systemName: "chevron.left").frame(minWidth: 44, minHeight: 44)
             }
+            .accessibilityLabel("Previous day")
+            .disabled(isNavigating)
+            Button { showingCalendar = true } label: {
+                Text(label).frame(maxWidth: .infinity, minHeight: 44)
+            }
+            .accessibilityLabel(label)
+            .accessibilityHint("Opens calendar to jump to a date")
+            Button { Task { await step(day, by: 1) } } label: {
+                Image(systemName: "chevron.right").frame(minWidth: 44, minHeight: 44)
+            }
+            .accessibilityLabel("Next day")
+            .disabled(isNavigating)
+        }
+        .sheet(isPresented: $showingCalendar) {
+            ManifestJumpCalendarSheet(
+                initialDay: day.date,
+                todayProvider: { LocalDay.todayISO() },
+                loadMarkers: { from, to in
+                    let response = try await env.api.manifestPlannedDates(
+                        from: from,
+                        to: to,
+                        intake: "fuel"
+                    )
+                    return (response.dates, response.consumedDates ?? [])
+                },
+                onSelect: { isoDay in
+                    Task { await load(date: isoDay) }
+                }
+            )
         }
     }
 
-    private func jumpDate(_ iso: String) -> Binding<Date> {
-        Binding(
-            get: { LocalDay.date(from: iso) ?? Date() },
-            set: { next in
-                Task { await load(date: LocalDay.isoString(from: next)) }
-            }
-        )
+    private func step(_ day: FuelDayResponse, by days: Int) async {
+        await load(date: LocalDay.addDays(day.date, days: days))
     }
 
     private func layoutBinding(_ current: String) -> Binding<String> {
@@ -207,7 +242,7 @@ struct FuelView: View {
     }
 
     private func reloadAndHandleDeepLink() async {
-        await refreshCameraAccess()
+        readCameraStatus()
         await load(date: day?.date ?? LocalDay.todayISO())
         guard loaded, let day else { return }
         if env.deepLinkRouter.fuelGoalsPending {
@@ -219,37 +254,57 @@ struct FuelView: View {
         env.deepLinkRouter.acknowledgeFuel()
     }
 
-    private func refreshCameraAccess() async {
-        switch AVCaptureDevice.authorizationStatus(for: .video) {
-        case .authorized:
-            cameraDenied = false
-        case .notDetermined:
+    private func readCameraStatus() {
+        cameraDenied = AVCaptureDevice.authorizationStatus(for: .video) != .authorized
+    }
+
+    private func ensureCameraAccess() async {
+        let status = AVCaptureDevice.authorizationStatus(for: .video)
+        if status == .notDetermined {
             let granted = await AVCaptureDevice.requestAccess(for: .video)
             cameraDenied = !granted
-        default:
-            cameraDenied = true
+        } else {
+            cameraDenied = status != .authorized
         }
     }
 
     private func load(date: String) async {
+        generation += 1
+        let token = generation
+        isNavigating = true
+        defer {
+            if token == generation { isNavigating = false }
+        }
         do {
-            day = try await env.api.fuelDay(date: date)
+            let next = try await env.api.fuelDay(date: date)
+            guard token == generation else { return }
+            day = next
             loaded = true
+            failedTarget = nil
             message = nil
         } catch {
+            guard token == generation else { return }
             loaded = true
+            failedTarget = date
             message = "Fuel did not load."
         }
     }
 
     private func perform(_ action: FuelCreateAction) async {
-        guard let day else { return }
-        await perform(action, used: day.used, limit: day.limit)
+        guard day != nil else {
+            message = "Fuel did not load."
+            return
+        }
+        if day?.date != LocalDay.todayISO() {
+            await load(date: LocalDay.todayISO())
+        }
+        guard let today = day, today.date == LocalDay.todayISO() else { return }
+        await perform(action, used: today.used, limit: today.limit)
     }
 
     private func perform(_ action: FuelCreateAction, used: Int, limit: Int?) async {
         if action == .scan || action == .barcode {
-            await refreshCameraAccess()
+            await ensureCameraAccess()
         }
         let decision = FuelActionPolicy.decide(
             action: action,

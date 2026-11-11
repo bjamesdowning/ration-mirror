@@ -1,5 +1,6 @@
 import { data } from "react-router";
 import { handleApiError } from "~/lib/error-handler";
+import { assertFeatureEnabled } from "~/lib/feature-flags/assert-enabled.server";
 import { buildMobileFlagContext } from "~/lib/feature-flags/flags.server";
 import { requireMobileAIConsent } from "~/lib/mobile/ai-consent.server";
 import { requireMobileActiveGroup } from "~/lib/mobile/auth.server";
@@ -48,6 +49,12 @@ export async function action({ request, context }: Route.ActionArgs) {
 			);
 		}
 
+		const flagContext = buildMobileFlagContext(request, env, {
+			user: { id: userId },
+		});
+		if (request.headers.get("x-ration-surface") === "share-extension") {
+			await assertFeatureEnabled(env, "share-extension-import", flagContext);
+		}
 		const result = await submitRecipeImport(env, {
 			userId,
 			organizationId,
@@ -56,9 +63,8 @@ export async function action({ request, context }: Route.ActionArgs) {
 			userText: parsedRequest.data.userText,
 			photoBase64: parsedRequest.data.photoBase64,
 			photoMimeType: parsedRequest.data.photoMimeType,
-			flagContext: buildMobileFlagContext(request, env, {
-				user: { id: userId },
-			}),
+			clientRequestId: parsedRequest.data.clientRequestId,
+			flagContext,
 		});
 
 		if ("code" in result && result.code === "DUPLICATE_URL") {

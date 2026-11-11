@@ -64,6 +64,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 			userText: parsedRequest.data.userText,
 			photoBase64: parsedRequest.data.photoBase64,
 			photoMimeType: parsedRequest.data.photoMimeType,
+			clientRequestId: parsedRequest.data.clientRequestId,
 			flagContext,
 		});
 

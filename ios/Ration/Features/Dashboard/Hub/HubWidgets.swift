@@ -780,8 +780,6 @@ struct DailyFuelWidget: View {
                     } label: {
                         VStack(alignment: .leading, spacing: 12) {
                             content
-                            Text("Not medical advice. Goals and totals are planning aids only.")
-                                .rationCaption()
                         }
                     }
                     .buttonStyle(.plain)
@@ -796,8 +794,6 @@ struct DailyFuelWidget: View {
                     VStack(alignment: .leading, spacing: 12) {
                         HubWidgetHeader(title: "Daily Fuel", systemImage: "flame.fill", trailing: "Goals")
                         content
-                        Text("Not medical advice. Goals and totals are planning aids only.")
-                            .rationCaption()
                     }
                 }
             }
@@ -899,8 +895,6 @@ struct FuelTrendsWidget: View {
                         trailing: "\(HubFuelMath.range(from: filters))d"
                     )
                     content
-                    Text("Not medical advice. Goals and totals are planning aids only.")
-                        .rationCaption()
                 }
             }
         }

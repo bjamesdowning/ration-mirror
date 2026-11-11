@@ -8,11 +8,10 @@ struct HubEditView: View {
     let availableCargoTags: [String]
     let onSave: ([HubWidgetLayout]) async throws -> Void
     let onSaveProfile: (HubProfile) async throws -> Void
+    let saves: HubLayoutSaveCoordinator
 
     @State private var widgets: [HubWidgetLayout] = []
     @State private var selectedProfile: HubProfile = "full"
-    @State private var isSaving = false
-    @State private var errorMessage: String?
     @State private var configureWidget: HubWidgetLayout?
 
     private let profileOptions: [HubProfile] = ["full", "cook", "shop", "minimal", "custom"]
@@ -23,7 +22,8 @@ struct HubEditView: View {
         availableMealTags: [String],
         availableCargoTags: [String],
         onSave: @escaping ([HubWidgetLayout]) async throws -> Void,
-        onSaveProfile: @escaping (HubProfile) async throws -> Void
+        onSaveProfile: @escaping (HubProfile) async throws -> Void,
+        saves: HubLayoutSaveCoordinator
     ) {
         self.hubProfile = hubProfile
         self.hubLayout = hubLayout
@@ -31,13 +31,17 @@ struct HubEditView: View {
         self.availableCargoTags = availableCargoTags
         self.onSave = onSave
         self.onSaveProfile = onSaveProfile
+        self.saves = saves
         _selectedProfile = State(initialValue: hubProfile ?? "full")
     }
 
     var body: some View {
         List {
-            if let errorMessage {
+            if let errorMessage = saves.lastError {
                 ErrorBanner(message: errorMessage)
+                Button("Retry") { persist() }
+                    .buttonStyle(SecondaryButtonStyle())
+                    .listRowBackground(Color.clear)
                     .listRowBackground(Color.clear)
                     .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
             }
@@ -49,7 +53,7 @@ struct HubEditView: View {
                     }
                 }
                 .pickerStyle(.menu)
-                .disabled(isSaving)
+                .disabled(saves.isSaving)
                 .onChange(of: selectedProfile) { _, newValue in
                     guard newValue != "custom" else { return }
                     applyPreset(newValue)
@@ -59,7 +63,7 @@ struct HubEditView: View {
             Section("Widgets") {
                 ForEach(widgets) { widget in
                     widgetRow(for: widget)
-                        .moveDisabled(isSaving)
+                        .moveDisabled(saves.isSaving)
                 }
                 .onMove(perform: moveWidgets)
             }
@@ -70,7 +74,7 @@ struct HubEditView: View {
         .environment(\.editMode, .constant(.active))
         .scrollDismissesKeyboard(.interactively)
         .overlay {
-            if isSaving { ProgressView().tint(Theme.hyperGreen) }
+            if saves.isSaving { ProgressView().tint(Theme.hyperGreen) }
         }
         .sheet(item: $configureWidget) { widget in
             HubWidgetConfigureSheet(
@@ -123,14 +127,20 @@ struct HubEditView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .disabled(isSaving)
+            .disabled(saves.isSaving)
             .accessibilityLabel("Configure \(title)")
 
             Toggle("", isOn: binding(for: widget.id))
                 .labelsHidden()
                 .tint(Theme.hyperGreen)
-                .disabled(isSaving)
-                .accessibilityLabel(widget.visible ? "Hide \(title)" : "Show \(title)")
+                .disabled(saves.isSaving)
+                .accessibilityLabel("\(title) widget")
+        }
+        .accessibilityAction(named: "Move Up") {
+            move(widget, by: -1)
+        }
+        .accessibilityAction(named: "Move Down") {
+            move(widget, by: 1)
         }
         .padding(.vertical, 4)
         .listRowBackground(Theme.surface)
@@ -149,16 +159,21 @@ struct HubEditView: View {
 
     private func applyPreset(_ profile: HubProfile) {
         widgets = HubLayoutEngine.initEditableWidgets(profile: profile, layout: nil)
-        isSaving = true
-        Task {
-            defer { isSaving = false }
-            do {
-                try await onSaveProfile(profile)
-                Haptics.success()
-            } catch {
-                errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
-            }
+        saves.submit { [onSaveProfile] in
+            try await onSaveProfile(profile)
         }
+    }
+
+    private func move(_ widget: HubWidgetLayout, by offset: Int) {
+        guard let index = widgets.firstIndex(where: { $0.id == widget.id }) else { return }
+        let destination = index + offset
+        guard widgets.indices.contains(destination) else { return }
+        widgets.move(
+            fromOffsets: IndexSet(integer: index),
+            toOffset: offset > 0 ? destination + 1 : destination
+        )
+        widgets = HubLayoutEngine.reindexOrder(widgets)
+        persist()
     }
 
     private func moveWidgets(from source: IndexSet, to destination: Int) {
@@ -184,15 +199,9 @@ struct HubEditView: View {
 
     private func persist() {
         selectedProfile = "custom"
-        isSaving = true
-        Task {
-            defer { isSaving = false }
-            do {
-                try await onSave(widgets)
-                Haptics.success()
-            } catch {
-                errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
-            }
+        let snapshot = widgets
+        saves.submit { [onSave] in
+            try await onSave(snapshot)
         }
     }
 }

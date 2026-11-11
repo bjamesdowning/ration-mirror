@@ -39,6 +39,7 @@ function setupMealDb() {
 			nutrition_computed_revision INTEGER NOT NULL DEFAULT 0,
 			nutrition_status TEXT NOT NULL DEFAULT 'current',
 			nutrition_updated_at INTEGER,
+			import_request_id TEXT,
 			created_at INTEGER NOT NULL DEFAULT (unixepoch()),
 			updated_at INTEGER NOT NULL DEFAULT (unixepoch())
 		);

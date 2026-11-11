@@ -32,6 +32,7 @@ describe("FLAG_REGISTRY validation", () => {
 			"nutrition-health-export",
 			"nutrition-photo-log",
 			"nutrition-saved-food",
+			"share-extension-import",
 		]);
 	});
 });

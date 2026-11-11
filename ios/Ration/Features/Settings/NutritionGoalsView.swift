@@ -197,7 +197,7 @@ struct NutritionGoalsView: View {
             Section {
                 Text("Enter targets you already use")
                     .rationCaption()
-                Text("Draft, pending review. Not medical advice. Goals and totals are planning aids only.")
+                Text("Draft, pending review.")
                     .rationCaption()
             }
 

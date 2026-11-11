@@ -4,6 +4,7 @@ import { purgeOrphanAgentKitchens } from "../app/lib/agent/orphan-cleanup.server
 import { AI_QUEUE_HANDLERS } from "../app/lib/ai-queue-registry.server";
 import { refreshStaleCargoStatuses } from "../app/lib/cargo.server";
 import { runDailyD1HygieneThenPurgeRetry } from "../app/lib/cron-hygiene.server";
+import { sweepImportDispatches } from "../app/lib/import-dispatch.server";
 import {
 	detectAndRecordExpiredCargo,
 	purgeExpiredKitchenEvents,
@@ -170,6 +171,14 @@ export default {
 					} catch (err) {
 						log.error("[CRON] Nutrition recompute repair failed", err, {
 							event: "cron_purge_failed",
+						});
+					}
+					try {
+						await sweepImportDispatches(env);
+					} catch (err) {
+						log.error("[CRON] Import dispatch sweep failed", err, {
+							event: "cron_purge_failed",
+							code: "import_dispatch_sweep_failed",
 						});
 					}
 				},

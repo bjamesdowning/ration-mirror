@@ -81,8 +81,6 @@ struct ManifestPlateUpSheet: View {
                 Section {
                     Text(MealNameDisplay.text(entry.mealName)).rationHeadline()
                     Text(entry.mealType.capitalized).rationCaption()
-                    Text("Not medical advice. Goals and totals are planning aids only.")
-                        .rationCaption()
                 } header: {
                     Text("Log my serving")
                 }

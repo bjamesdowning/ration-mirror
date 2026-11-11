@@ -342,10 +342,15 @@ export const ledger = sqliteTable(
 		createdAt: integer("created_at", { mode: "timestamp" })
 			.notNull()
 			.default(sql`(unixepoch())`),
+		/** Debit/refund identity. Null on historical rows. Unique when set. */
+		idempotencyKey: text("idempotency_key"),
 	},
 	(table) => [
 		index("ledger_org_idx").on(table.organizationId),
 		index("ledger_user_idx").on(table.userId),
+		uniqueIndex("ledger_idempotency_key_uidx")
+			.on(table.idempotencyKey)
+			.where(sql`${table.idempotencyKey} IS NOT NULL`),
 	],
 );
 
@@ -395,12 +400,17 @@ export const meal = sqliteTable(
 		updatedAt: integer("updated_at", { mode: "timestamp" })
 			.notNull()
 			.default(sql`(unixepoch())`),
+		/** Confirmed recipe-import request. Null on meals that were not imports. */
+		importRequestId: text("import_request_id"),
 	},
 	(table) => [
 		// Compound index covers both single-column and multi-column queries
 		index("meal_org_id_idx").on(table.organizationId, table.id),
 		index("meal_domain_idx").on(table.organizationId, table.domain),
 		index("meal_type_idx").on(table.organizationId, table.type),
+		uniqueIndex("meal_import_request_uidx")
+			.on(table.importRequestId)
+			.where(sql`${table.importRequestId} IS NOT NULL`),
 	],
 );
 
@@ -1103,6 +1113,12 @@ export const queueJob = sqliteTable(
 			.notNull()
 			.default(sql`(unixepoch())`),
 		expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
+		/** Consumer that currently holds the processing lease. */
+		processingOwner: text("processing_owner"),
+		/** Unix time when a live processing lease may be reclaimed. */
+		processingLeaseExpiresAt: integer("processing_lease_expires_at", {
+			mode: "timestamp",
+		}),
 	},
 	(table) => [
 		index("queue_job_expires_idx").on(table.expiresAt),
@@ -1112,6 +1128,54 @@ export const queueJob = sqliteTable(
 			table.status,
 			table.expiresAt,
 		),
+	],
+);
+
+/**
+ * Durable recipe-import dispatch. Kitchen tenancy: the row belongs to the
+ * active organization, records the verified initiating user, and cascades
+ * with the organization. Large HTML and photos stay in R2, not this row.
+ */
+export const importDispatch = sqliteTable(
+	"import_dispatch",
+	{
+		requestId: text("request_id").primaryKey(),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id, { onDelete: "cascade" }),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		jobType: text("job_type").notNull().default("import_url"),
+		contentHash: text("content_hash").notNull(),
+		/** Small validated URL/caption and R2 keys. Cleared after dispatch. */
+		payloadJson: text("payload_json"),
+		state: text("state", {
+			enum: ["reserved", "debited", "dispatched", "failed"],
+		}).notNull(),
+		attempts: integer("attempts").notNull().default(0),
+		nextAttemptAt: integer("next_attempt_at", { mode: "timestamp" }),
+		ledgerIdempotencyKey: text("ledger_idempotency_key"),
+		createdAt: integer("created_at", { mode: "timestamp" })
+			.notNull()
+			.default(sql`(unixepoch())`),
+		updatedAt: integer("updated_at", { mode: "timestamp" })
+			.notNull()
+			.default(sql`(unixepoch())`),
+	},
+	(table) => [
+		index("import_dispatch_org_user_idx").on(
+			table.organizationId,
+			table.userId,
+			table.state,
+		),
+		index("import_dispatch_state_next_idx").on(
+			table.state,
+			table.nextAttemptAt,
+		),
+		uniqueIndex("import_dispatch_ledger_key_uidx")
+			.on(table.ledgerIdempotencyKey)
+			.where(sql`${table.ledgerIdempotencyKey} IS NOT NULL`),
 	],
 );
 

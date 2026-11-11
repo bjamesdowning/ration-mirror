@@ -4,6 +4,7 @@
  */
 
 import { log } from "~/lib/logging.server";
+import { backfillFuelDatesBounded } from "~/lib/nutrition/fuel-backfill.server";
 import {
 	purgeExpiredNutritionIntake,
 	purgeExpiredNutritionRecomputeJobs,
@@ -131,8 +132,23 @@ export async function runDailyD1HygieneThenPurgeRetry(
 	await purgeExpiredSessions(env);
 	await purgeExpiredQueueJobs(env);
 	await purgeExpiredSupplyOperations(env);
+	await repairLegacyFuelDates(env);
 	await purgeExpiredNutritionRetention(env);
 	await retryFailedPurgeJobs(env);
+}
+
+async function repairLegacyFuelDates(env: Cloudflare.Env): Promise<void> {
+	try {
+		const updated = await backfillFuelDatesBounded(env.DB);
+		if (updated > 0) {
+			log.info("[CRON] Backfilled legacy fuel dates", { updated });
+		}
+	} catch (err) {
+		log.error("[CRON] Fuel date backfill failed", err, {
+			event: "cron_purge_failed",
+			code: "fuel_date_backfill_failed",
+		});
+	}
 }
 
 async function purgeExpiredNutritionRetention(

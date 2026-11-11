@@ -2,7 +2,7 @@
 title: "Pantry App vs Recipe Manager vs Meal Planner"
 description: "These three kitchen app categories solve different jobs. Here is how to tell them apart, when you need more than one, and why a connected loop beats stitching tools together."
 date: 2026-07-28
-dateModified: 2026-07-28
+dateModified: 2026-11-11
 authorName: "Ration"
 image: "/static/ration-logo.png"
 tags:
@@ -17,7 +17,7 @@ tags:
 
 Search for a kitchen app and you get three answers that sound interchangeable: pantry tracker, recipe manager, meal planner. They are not the same product. Each one owns a different job in the weekly cooking loop, and most households eventually need pieces of all three.
 
-The confusion is why people bounce between Paprika-style cookbooks, AnyList-style shopping lists, Mealime-style plan generators, and a fridge inventory app that never quite sticks. The tools are fine. The category labels blur the seams between them.
+The confusion is why people bounce between Paprika-style cookbooks, AnyList-style shopping lists, Eat This Much-style plan generators, and a fridge inventory app that never quite sticks. The tools are fine. The category labels blur the seams between them.
 
 This post is a category map: what each app type is for, where it stops, and how a connected system closes the gaps.
 
@@ -88,7 +88,7 @@ You care about:
 - producing one shopping list from the plan
 - repeating a rhythm that survives busy weeks
 
-Mealime-style products shine here: curated libraries, preference filters, and a plan that becomes a list. You trade some ownership of the recipe library for speed.
+Plan generators such as Eat This Much shine here: curated libraries, preference filters, and a plan that becomes a list. You trade some ownership of the recipe library for speed.
 
 **Where meal planners stop:** they often assume a closed recipe set and a clean slate each week. They do not deeply track what you already own. Crossing items off the list because "we have that" is still mostly human judgment. Inventory drift after cooking is rarely automatic.
 

@@ -2,7 +2,7 @@
 title: "Best all-around kitchen apps: recipes, plans, shopping, and what’s in the fridge"
 description: "Five strong apps that cover more than one kitchen job — what each does well, from its own docs — and how to choose."
 date: 2026-08-14
-dateModified: 2026-08-14
+dateModified: 2026-11-11
 authorName: "Ration"
 image: "/static/ration-logo.png"
 tags:
@@ -27,7 +27,7 @@ Ration is not in the five. A short note on when a connected pantry-plus-macros l
 
 Paid upgrades exist on several of these products. Check their sites for current pricing; this piece does not quote fees.
 
-## Paprika 3 — the cookbook that also plans and shops
+## Paprika — the cookbook that also plans and shops
 
 **Best for:** people who want a serious personal recipe library, then a calendar and a list that come along with it.
 
@@ -35,7 +35,7 @@ Paid upgrades exist on several of these products. Check their sites for current 
 
 The [Android user guide](https://www.paprikaapp.com/help/android/) also documents a **Pantry**: quantity, purchase date, expiration, in- or out-of-stock. Ingredients already in the pantry are automatically unchecked when you add recipes or meal plans to the grocery list. You can move purchased groceries into the pantry.
 
-Paprika sells each platform separately. If you live in a clipped-recipe household and want that library in the kitchen, this is a strong all-around choice.
+Paprika 4 is free to download with limits, and a Premium subscription removes them. If you live in a clipped-recipe household and want that library in the kitchen, this is a strong all-around choice.
 
 ## AnyList — shared lists first, recipes and a calendar with them
 
@@ -47,15 +47,9 @@ On the recipe side, AnyList lets you collect recipes, add ingredients to a shopp
 
 If the week only works when everyone can check off milk in real time, AnyList is built for that coordination.
 
-## Mealime — guided dinners, then a done-for-you list
+## A note on Mealime
 
-**Best for:** “just tell me what we are eating this week” without assembling a cookbook first.
-
-[Mealime](https://www.mealime.com/) frames the week as plan → shop → cook. You personalize a plan (the homepage highlights plan type, allergies, dislikes, and servings) and get recipes aimed at about 30 minutes. The grocery list is “done for you” and auto-sorted into categories.
-
-Their [getting started guide](https://support.mealime.com/article/151-getting-started-guide) describes diet types from classic through keto and vegan, allergy and dislike filters, and retailer integrations for delivery or pickup. [Diet types](https://support.mealime.com/article/58-choose-your-diet-type) currently list classic, flexitarian, low carb, pescatarian, vegetarian, paleo, keto, and vegan.
-
-Choose Mealime when a curated, filterable menu is the feature — not when the job is clipping every family recipe.
+Earlier versions of this roundup included Mealime. Its [homepage](https://www.mealime.com/) says Mealime will shut down on October 21, 2026, so we no longer recommend it. If you want dinners chosen for you, Eat This Much (below) generates a plan from your preferences.
 
 ## Plan to Eat — clip your recipes, plan your calendar, shop the range
 
@@ -77,7 +71,7 @@ Their [macro tracker page](https://www.eatthismuch.com/macro-tracker-app) is exp
 
 Choose this when the week should be generated to numbers, not clipped from blogs.
 
-## Also consider: Samsung Food
+## Samsung Food — a big catalogue, plans and shared lists
 
 [Samsung Food](https://samsungfood.com/) positions itself as recipe saving, meal planning, grocery shopping, and sharing. Official pages describe turning a recipe or a [meal plan](https://samsungfood.com/meal-planner/) into a shopping list, sorting that list [by aisle or by recipe](https://samsungfood.com/grocery-list-app/), collaborating, and adding recipes from the web. Help docs cover [getting started with the meal planner](https://support.samsungfood.com/hc/en-us/articles/35369657798548-Getting-Started-with-Meal-Planner) and [shared shopping lists](https://support.samsungfood.com/hc/en-us/articles/18369342052372-Getting-Started-with-Samsung-Food-Create-and-Manage-Shopping-Lists). Delivery from a local retailer is described where the feature is available.
 
@@ -85,9 +79,9 @@ If discovery and a large catalogue matter as much as the week’s list, start he
 
 ## How to choose
 
-- **You already collect recipes** → Paprika 3 or Plan to Eat.
+- **You already collect recipes** → Paprika or Plan to Eat.
 - **The aisle is a two-person sport** → AnyList.
-- **You want dinners handed to you** → Mealime.
+- **You want dinners handed to you** → Eat This Much.
 - **The week should hit protein and kcal first** → Eat This Much.
 - **You want a huge catalogue and social saving** → Samsung Food.
 

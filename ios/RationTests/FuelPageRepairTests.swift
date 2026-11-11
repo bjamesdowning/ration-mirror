@@ -81,17 +81,54 @@ final class FuelPageRepairTests: XCTestCase {
         let expanded = NavigationTitleChrome.scrollEdgeAppearance()
         let collapsed = NavigationTitleChrome.standardAppearance()
 
-        XCTAssertNotNil(expanded.largeTitleTextAttributes[.foregroundColor])
-        XCTAssertNotNil(collapsed.titleTextAttributes[.foregroundColor])
+        XCTAssertEqual(backgroundAlpha(expanded.backgroundColor, style: .light), 0, accuracy: 0.001)
+        XCTAssertEqual(backgroundAlpha(expanded.backgroundColor, style: .dark), 0, accuracy: 0.001)
         XCTAssertEqual(
-            resolved(expanded.backgroundColor, style: .light),
+            resolved(collapsed.backgroundColor, style: .light),
             resolved(Theme.ceramicUIColor, style: .light)
         )
         XCTAssertEqual(
             resolved(collapsed.backgroundColor, style: .dark),
             resolved(Theme.ceramicUIColor, style: .dark)
         )
+        XCTAssertEqual(
+            resolved(titleColor(expanded.largeTitleTextAttributes), style: .light),
+            resolved(Theme.carbonUIColor, style: .light)
+        )
+        XCTAssertEqual(
+            resolved(titleColor(expanded.largeTitleTextAttributes), style: .dark),
+            resolved(Theme.carbonUIColor, style: .dark)
+        )
+        XCTAssertEqual(
+            resolved(titleColor(collapsed.titleTextAttributes), style: .light),
+            resolved(Theme.carbonUIColor, style: .light)
+        )
+        XCTAssertFalse(fontFace(expanded.titleTextAttributes).localizedCaseInsensitiveContains("Space"))
+        XCTAssertFalse(fontFace(expanded.largeTitleTextAttributes).localizedCaseInsensitiveContains("Space"))
+        XCTAssertFalse(fontFace(collapsed.titleTextAttributes).localizedCaseInsensitiveContains("Space"))
         XCTAssertNotEqual(ObjectIdentifier(expanded), ObjectIdentifier(collapsed))
+    }
+
+    private func fontFace(_ attributes: [NSAttributedString.Key: Any]) -> String {
+        (attributes[.font] as? UIFont)?.familyName ?? ""
+    }
+
+    private func titleColor(_ attributes: [NSAttributedString.Key: Any]) -> UIColor? {
+        attributes[.foregroundColor] as? UIColor
+    }
+
+    private func backgroundAlpha(_ color: UIColor?, style: UIUserInterfaceStyle) -> CGFloat {
+        guard let color else { return 0 }
+        let resolved = color.resolvedColor(with: UITraitCollection(userInterfaceStyle: style))
+        var red: CGFloat = 0
+        var green: CGFloat = 0
+        var blue: CGFloat = 0
+        var alpha: CGFloat = 0
+        if resolved.getRed(&red, green: &green, blue: &blue, alpha: &alpha) {
+            return alpha
+        }
+        resolved.getWhite(&red, alpha: &alpha)
+        return alpha
     }
 
     func testScrollingKeepsTheNavigationTitle() {
@@ -101,6 +138,8 @@ final class FuelPageRepairTests: XCTestCase {
         root.view = scroll
         root.navigationItem.title = "Fuel"
         root.navigationItem.largeTitleDisplayMode = .always
+        root.navigationItem.scrollEdgeAppearance = NavigationTitleChrome.scrollEdgeAppearance()
+        root.navigationItem.standardAppearance = NavigationTitleChrome.standardAppearance()
 
         let navigation = UINavigationController(rootViewController: root)
         navigation.navigationBar.prefersLargeTitles = true
@@ -111,22 +150,38 @@ final class FuelPageRepairTests: XCTestCase {
         window.rootViewController = navigation
         window.makeKeyAndVisible()
         navigation.view.layoutIfNeeded()
+        navigation.navigationBar.layoutIfNeeded()
 
-        XCTAssertEqual(root.navigationItem.title, "Fuel")
+        XCTAssertTrue(visibleTitles(in: navigation.view).contains("Fuel"))
         scroll.setContentOffset(CGPoint(x: 0, y: 240), animated: false)
         navigation.view.layoutIfNeeded()
+        navigation.navigationBar.layoutIfNeeded()
+        XCTAssertTrue(visibleTitles(in: navigation.view).contains("Fuel"))
         XCTAssertEqual(root.navigationItem.title, "Fuel")
-        XCTAssertNotNil(
-            navigation.navigationBar.standardAppearance.titleTextAttributes[.foregroundColor]
-        )
 
         scroll.setContentOffset(.zero, animated: false)
         navigation.view.layoutIfNeeded()
-        XCTAssertEqual(root.navigationItem.title, "Fuel")
-        XCTAssertNotNil(
-            navigation.navigationBar.scrollEdgeAppearance?.largeTitleTextAttributes[.foregroundColor]
-        )
+        XCTAssertTrue(visibleTitles(in: navigation.view).contains("Fuel"))
         window.isHidden = true
+    }
+
+    private func visibleTitles(in view: UIView) -> [String] {
+        var titles: [String] = []
+        if !view.isHidden, view.alpha > 0 {
+            if let label = view as? UILabel, let text = label.text, !text.isEmpty {
+                titles.append(text)
+            }
+            if let control = view as? UIButton, let text = control.title(for: .normal), !text.isEmpty {
+                titles.append(text)
+            }
+            if let text = view.accessibilityLabel, !text.isEmpty {
+                titles.append(text)
+            }
+        }
+        for child in view.subviews {
+            titles.append(contentsOf: visibleTitles(in: child))
+        }
+        return titles
     }
 
     func testInstallerWritesBothAppearancesOnTheParentBar() {
@@ -161,6 +216,14 @@ final class FuelPageRepairTests: XCTestCase {
             )
             XCTAssertNotNil(
                 root.navigationItem.scrollEdgeAppearance?.largeTitleTextAttributes[.foregroundColor]
+            )
+            XCTAssertEqual(
+                self.backgroundAlpha(
+                    navigation.navigationBar.scrollEdgeAppearance?.backgroundColor,
+                    style: .dark
+                ),
+                0,
+                accuracy: 0.001
             )
             installed.fulfill()
         }

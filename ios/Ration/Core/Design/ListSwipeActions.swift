@@ -101,6 +101,23 @@ extension View {
         )
     }
 
+    /// Fuel log: Edit then Delete. Full swipe stays off. The row itself does not say Void.
+    func fuelLogSwipeActions(
+        onEdit: @escaping () -> Void,
+        onDelete: @escaping () -> Void
+    ) -> some View {
+        swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            Button(role: .destructive, action: onDelete) {
+                Label("Delete", systemImage: "trash")
+            }
+            .tint(Theme.danger)
+            Button(action: onEdit) {
+                Label("Edit", systemImage: "pencil")
+            }
+            .tint(Theme.hyperGreen)
+        }
+    }
+
     /// Trailing swipe (swipe left): destructive delete with explicit danger tint.
     /// Used by Manifest / Plan Week (Delete only; full swipe disabled).
     func destructiveTrailingSwipe(

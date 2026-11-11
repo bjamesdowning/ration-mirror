@@ -18,7 +18,8 @@ struct FuelView: View {
     @State private var showingTypedBarcode = false
     @State private var name = ""
     @State private var calories = ""
-    @State private var editingId: String?
+    @State private var editingDraft: FuelLogWrite?
+    @State private var path: [FuelLogRoute] = []
     @State private var barcode = ""
     @State private var message: String?
     @State private var reviewName = ""
@@ -33,90 +34,72 @@ struct FuelView: View {
     @State private var showingCalendar = false
     @State private var isNavigating = false
     var body: some View {
-        NavigationStack {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                if let day {
-                    fuelRocker(day)
-                    Text(FuelActionPolicy.counterLabel(used: day.used, limit: day.limit))
-                        .font(Typography.body())
-                        .minimumScaleFactor(0.7)
-                        .accessibilityLabel(FuelActionPolicy.counterLabel(used: day.used, limit: day.limit))
-                    DayNutrientStrip(
-                        totals: NutritionDayTotals(
-                            date: day.date,
-                            energyKcal: day.totals?.energyKcal ?? 0,
-                            proteinG: day.totals?.proteinG ?? 0,
-                            carbsG: day.totals?.carbsG ?? 0,
-                            fatG: day.totals?.fatG ?? 0,
-                            fiberG: day.totals?.fiberG ?? 0,
-                            coverageAvg: 0,
-                            entryCount: day.items.count
-                        ),
-                        goal: day.goal.map {
-                            NutritionSummary.Goal(
-                                dailyEnergyKcal: $0.dailyEnergyKcal,
-                                proteinG: $0.proteinG,
-                                carbsG: $0.carbsG,
-                                fatG: $0.fatG,
-                                fiberG: $0.fiberG,
-                                effectiveFrom: day.date,
-                                effectiveTo: nil
-                            )
-                        },
-                        onTap: { showingGoals = true }
-                    )
-                    Picker("Day layout", selection: layoutBinding(day.diaryLayout)) {
-                        Text("Timeline").tag("timeline")
-                        Text("Slots").tag("slots")
+        NavigationStack(path: $path) {
+        List {
+            Section {
+                VStack(alignment: .leading, spacing: 16) {
+                    if let day {
+                        fuelRocker(day)
+                        Text(FuelActionPolicy.counterLabel(used: day.used, limit: day.limit))
+                            .font(Typography.body())
+                            .minimumScaleFactor(0.7)
+                            .accessibilityLabel(FuelActionPolicy.counterLabel(used: day.used, limit: day.limit))
+                        FuelDaySummary(model: summary(for: day)) { showingGoals = true }
+                    } else if !loaded {
+                        ProgressView()
                     }
-                    .pickerStyle(.segmented)
-                } else if !loaded {
-                    ProgressView()
-                }
-                if !env.network.isOnline {
-                    Text("You're offline. Fuel writes, scans, and barcodes stay off until the connection returns.")
-                        .rationCaption()
-                }
-                if message == "Fuel did not load." {
-                    Text(message ?? "")
-                        .rationCaption()
-                    Button("Retry") {
-                        Task { await load(date: failedTarget ?? day?.date ?? LocalDay.todayISO()) }
+                    if !env.network.isOnline {
+                        Text("You're offline. Fuel writes, scans, and barcodes stay off until the connection returns.")
+                            .rationCaption()
                     }
+                    if message == "Fuel did not load." {
+                        Text(message ?? "")
+                            .rationCaption()
+                        Button("Retry") {
+                            Task { await load(date: failedTarget ?? day?.date ?? LocalDay.todayISO()) }
+                        }
                         .frame(minHeight: 44)
-                } else if let message {
-                    Text(message).rationCaption()
+                    } else if let message {
+                        Text(message).rationCaption()
+                    }
+                    if let photoRequestId, !reviewName.isEmpty {
+                        Text(reviewName).rationBody()
+                        Button("Confirm meal") { Task { await confirmPhoto() } }
+                            .frame(minHeight: 44)
+                            .accessibilityIdentifier("fuel.photo.confirm")
+                    }
                 }
-                if let day {
-                    Text(day.diaryLayout == "slots" ? "Slots" : "Timeline")
-                        .rationCaption()
+                .buttonStyle(.borderless)
+                .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+            }
+            if let day {
+                Section {
                     ForEach(day.items) { item in
-                        HStack {
-                            VStack(alignment: .leading) {
+                        NavigationLink(value: FuelLogRoute(id: item.id)) {
+                            VStack(alignment: .leading, spacing: 4) {
                                 Text(item.name).rationBody()
                                 Text("\(Int(item.energyKcal.rounded())) kcal").rationCaption()
                             }
-                            Spacer()
-                            Button("Edit") { beginEdit(item) }
-                                .frame(minWidth: 44, minHeight: 44)
-                            Button("Void") { Task { await voidItem(item) } }
-                                .frame(minWidth: 44, minHeight: 44)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.vertical, 4)
                         }
+                        .fuelLogSwipeActions(
+                            onEdit: { editingDraft = .editing(item) },
+                            onDelete: { Task { await voidItem(item) } }
+                        )
                     }
                     if day.items.isEmpty {
                         Text("Nothing logged on this day.").rationCaption()
                     }
                 }
-                if let photoRequestId, !reviewName.isEmpty {
-                    Text(reviewName).rationBody()
-                    Button("Confirm meal") { Task { await confirmPhoto() } }
-                        .frame(minHeight: 44)
-                        .accessibilityIdentifier("fuel.photo.confirm")
-                }
             }
-            .padding()
         }
+        .listStyle(.insetGrouped)
+        .scrollContentBackground(.hidden)
+        .background(Theme.ceramic)
+        .copilotDockScrollMargins()
         .navigationTitle("Fuel")
         .rationLargeTitle()
         .ceramicPageChrome()
@@ -134,12 +117,24 @@ struct FuelView: View {
                 onOpenSettings: onOpenSettings
             )
         }
+        .navigationDestination(for: FuelLogRoute.self) { route in
+            if let item = day?.items.first(where: { $0.id == route.id }) {
+                FuelLogDetailView(
+                    item: item,
+                    onEdit: { editingDraft = .editing(item) },
+                    onDelete: {
+                        path.removeAll()
+                        Task { await voidItem(item) }
+                    }
+                )
+            }
+        }
         .navigationDestination(isPresented: $showingMacros) {
             MacrosHistoryView(onOpenGoals: { showingGoals = true }, showsNotes: false)
         }
         .tabDockAction(
             tag: .hub,
-            isActive: fuelDockActive && !showingMacros
+            isActive: fuelDockActive && !showingMacros && path.isEmpty
         ) {
             IconFABMenuCore(systemImage: "plus.circle.fill", accessibilityLabel: "Fuel actions") {
                 ForEach(FuelCreateAction.allCases, id: \.self) { action in
@@ -150,6 +145,28 @@ struct FuelView: View {
             }
         }
         .sheet(isPresented: $showingAdd) { addSheet }
+        .sheet(item: $editingDraft) { draft in
+            FuelLogEditSheet(draft: draft) { next in
+                Task { await saveEdit(next) }
+            }
+        }
+        .sheet(isPresented: $showingCalendar) {
+            ManifestJumpCalendarSheet(
+                initialDay: day?.date ?? LocalDay.todayISO(),
+                todayProvider: { LocalDay.todayISO() },
+                loadMarkers: { from, to in
+                    let response = try await env.api.manifestPlannedDates(
+                        from: from,
+                        to: to,
+                        intake: "fuel"
+                    )
+                    return (response.dates, response.consumedDates ?? [])
+                },
+                onSelect: { isoDay in
+                    Task { await load(date: isoDay) }
+                }
+            )
+        }
         .sheet(isPresented: $showingPaywall) { PaywallView(context: .settings()) }
         .sheet(isPresented: $showingGoals) { NutritionGoalsView() }
         .sheet(isPresented: $showingBarcodeCamera) {
@@ -194,53 +211,52 @@ struct FuelView: View {
         ]
     }
 
+    private func summary(for day: FuelDayResponse) -> FuelDaySummaryModel {
+        FuelDaySummaryModel.make(
+            energyKcal: day.totals?.energyKcal ?? 0,
+            proteinG: day.totals?.proteinG ?? 0,
+            carbsG: day.totals?.carbsG ?? 0,
+            fatG: day.totals?.fatG ?? 0,
+            fiberG: day.totals?.fiberG,
+            goal: day.goal.map {
+                NutritionSummary.Goal(
+                    dailyEnergyKcal: $0.dailyEnergyKcal,
+                    proteinG: $0.proteinG,
+                    carbsG: $0.carbsG,
+                    fatG: $0.fatG,
+                    fiberG: $0.fiberG,
+                    effectiveFrom: day.date,
+                    effectiveTo: nil
+                )
+            }
+        )
+    }
+
     private func fuelRocker(_ day: FuelDayResponse) -> some View {
         let label = ManifestDateHelpers.formatRange(start: day.date, end: day.date)
         return HStack(spacing: 0) {
             Button { Task { await step(day, by: -1) } } label: {
-                Image(systemName: "chevron.left").frame(minWidth: 44, minHeight: 44)
+                DateRockerChevron(systemName: "chevron.left", isEnabled: !isNavigating)
             }
             .accessibilityLabel("Previous day")
             .disabled(isNavigating)
             Button { showingCalendar = true } label: {
-                Text(label).frame(maxWidth: .infinity, minHeight: 44)
+                DateRockerLabel(text: label)
+                    .frame(maxWidth: .infinity, minHeight: 44)
             }
             .accessibilityLabel(label)
             .accessibilityHint("Opens calendar to jump to a date")
             Button { Task { await step(day, by: 1) } } label: {
-                Image(systemName: "chevron.right").frame(minWidth: 44, minHeight: 44)
+                DateRockerChevron(systemName: "chevron.right", isEnabled: !isNavigating)
             }
             .accessibilityLabel("Next day")
             .disabled(isNavigating)
         }
-        .sheet(isPresented: $showingCalendar) {
-            ManifestJumpCalendarSheet(
-                initialDay: day.date,
-                todayProvider: { LocalDay.todayISO() },
-                loadMarkers: { from, to in
-                    let response = try await env.api.manifestPlannedDates(
-                        from: from,
-                        to: to,
-                        intake: "fuel"
-                    )
-                    return (response.dates, response.consumedDates ?? [])
-                },
-                onSelect: { isoDay in
-                    Task { await load(date: isoDay) }
-                }
-            )
-        }
+        .buttonStyle(.borderless)
     }
 
     private func step(_ day: FuelDayResponse, by days: Int) async {
         await load(date: LocalDay.addDays(day.date, days: days))
-    }
-
-    private func layoutBinding(_ current: String) -> Binding<String> {
-        Binding(
-            get: { current },
-            set: { next in Task { await saveLayout(next) } }
-        )
     }
 
     private func reloadAndHandleDeepLink() async {
@@ -382,13 +398,8 @@ struct FuelView: View {
         let key = UUID().uuidString
         let body = diaryBody(name: name, energy: energy, protein: 0, carbs: 0, fat: 0, key: key, source: "manual_macros")
         do {
-            if let editingId {
-                _ = try await env.api.updateDiaryFood(id: editingId, body: body)
-            } else {
-                _ = try await env.api.logDiaryFood(body)
-            }
+            _ = try await env.api.logDiaryFood(body)
             showingAdd = false
-            self.editingId = nil
             name = ""
             calories = ""
             await load(date: day?.date ?? LocalDay.todayISO())
@@ -397,11 +408,15 @@ struct FuelView: View {
         }
     }
 
-    private func beginEdit(_ item: FuelDayResponse.Item) {
-        editingId = item.id
-        name = item.name
-        calories = String(Int(item.energyKcal.rounded()))
-        showingAdd = true
+    private func saveEdit(_ draft: FuelLogWrite) async {
+        let key = UUID().uuidString
+        do {
+            _ = try await env.api.updateDiaryFood(id: draft.id, body: draft.body(key: key))
+            editingDraft = nil
+            await load(date: day?.date ?? LocalDay.todayISO())
+        } catch {
+            await handleWrite(error)
+        }
     }
 
     private func voidItem(_ item: FuelDayResponse.Item) async {
@@ -544,15 +559,6 @@ struct FuelView: View {
         }
     }
 
-    private func saveLayout(_ layout: String) async {
-        do {
-            _ = try await env.api.patchSettings(SettingsPatch(diaryLayout: layout))
-            await load(date: day?.date ?? LocalDay.todayISO())
-        } catch {
-            message = "Day layout was not saved."
-        }
-    }
-
     private func diaryBody(
         name: String,
         energy: Double,
@@ -578,6 +584,7 @@ struct FuelView: View {
         let code = (error as? APIError)?.code
         if code == "fuel_daily_limit" {
             showingAdd = false
+            editingDraft = nil
             showingPaywall = true
         } else {
             message = "That log was not saved."

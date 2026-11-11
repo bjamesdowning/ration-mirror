@@ -1,28 +1,37 @@
 import SwiftUI
 import UIKit
 
-/// Scroll-edge large title and centered inline title, both on ceramic.
+/// Large title under the left pill, then the same title centered once the page scrolls.
+/// iOS 26 draws the large title only when the scroll-edge bar is transparent.
+/// The standard bar is opaque ceramic so the centered title stays readable.
 /// A forced SwiftUI toolbar background drops the center title on the first scroll.
 enum NavigationTitleChrome {
     /// Roots install this appearance. They do not pin `toolbarBackground(.visible)`.
     static let pinsBackgroundVisible = false
 
     static func scrollEdgeAppearance() -> UINavigationBarAppearance {
-        appearance()
+        let appearance = UINavigationBarAppearance()
+        appearance.configureWithTransparentBackground()
+        appearance.backgroundColor = .clear
+        appearance.shadowColor = .clear
+        appearance.titleTextAttributes = carbonTitle
+        appearance.largeTitleTextAttributes = carbonTitle
+        return appearance
     }
 
     static func standardAppearance() -> UINavigationBarAppearance {
-        appearance()
-    }
-
-    private static func appearance() -> UINavigationBarAppearance {
         let appearance = UINavigationBarAppearance()
         appearance.configureWithOpaqueBackground()
         appearance.backgroundColor = Theme.ceramicUIColor
         appearance.shadowColor = .clear
-        appearance.titleTextAttributes = [.foregroundColor: Theme.carbonUIColor]
-        appearance.largeTitleTextAttributes = [.foregroundColor: Theme.carbonUIColor]
+        appearance.titleTextAttributes = carbonTitle
+        appearance.largeTitleTextAttributes = carbonTitle
         return appearance
+    }
+
+    /// System font. Carbon is #111111 in light and #F8F9FA in dark.
+    private static var carbonTitle: [NSAttributedString.Key: Any] {
+        [.foregroundColor: Theme.carbonUIColor]
     }
 }
 

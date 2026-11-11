@@ -1,6 +1,9 @@
 import { data } from "react-router";
 import { handleApiError } from "~/lib/error-handler";
-import { buildMobileFlagContext } from "~/lib/feature-flags/flags.server";
+import {
+	buildMobileFlagContext,
+	isFeatureEnabled,
+} from "~/lib/feature-flags/flags.server";
 import { log } from "~/lib/logging.server";
 import { requireMobileActiveGroup } from "~/lib/mobile/auth.server";
 import { isNutritionFuelPageEnabled } from "~/lib/nutrition/fast-log-flag.server";
@@ -50,12 +53,21 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 			date = parsedDate.data;
 		}
 		const day = await loadFuelDay(env.DB, userId, date);
-		const items = selectPublishableFuelItems(day.items, (diagnostic) => {
-			log.warn("fuel_day_rows_skipped", {
-				code: diagnostic.code,
-				skipped: diagnostic.skipped,
-			});
-		});
+		const includeNotes = await isFeatureEnabled(
+			env,
+			"nutrition-intake-notes",
+			flags,
+		);
+		const items = selectPublishableFuelItems(
+			day.items,
+			(diagnostic) => {
+				log.warn("fuel_day_rows_skipped", {
+					code: diagnostic.code,
+					skipped: diagnostic.skipped,
+				});
+			},
+			{ includeNotes },
+		);
 		const energyKcal = finiteTotal(day.totals?.energyKcal);
 		const proteinG = finiteTotal(day.totals?.proteinG);
 		const carbsG = finiteTotal(day.totals?.carbsG);

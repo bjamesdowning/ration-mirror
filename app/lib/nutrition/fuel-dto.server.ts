@@ -14,6 +14,9 @@ export type FuelItemSource = {
 	occurredAt: Date;
 	slotType: string | null;
 	notes?: string | null;
+	servings?: number | null;
+	loggedAmount?: number | null;
+	loggedUnit?: string | null;
 };
 
 export type PublishableFuelItem = {
@@ -25,6 +28,11 @@ export type PublishableFuelItem = {
 	fatG: number;
 	occurredAt: string;
 	slotType: string | null;
+	servings: number | null;
+	loggedAmount: number | null;
+	loggedUnit: string | null;
+	/** Present only when the caller asks. Flag-off JSON has no note text. */
+	notes?: string | null;
 };
 
 export type FuelDiagnostic = {
@@ -35,9 +43,20 @@ export type FuelDiagnostic = {
 const finiteNutrient = (value: unknown): value is number =>
 	typeof value === "number" && Number.isFinite(value);
 
+function finiteOrNull(value: unknown): number | null {
+	return finiteNutrient(value) ? value : null;
+}
+
+function textOrNull(value: unknown): string | null {
+	if (typeof value !== "string") return null;
+	const trimmed = value.trim();
+	return trimmed.length > 0 ? trimmed : null;
+}
+
 export function selectPublishableFuelItems(
 	items: FuelItemSource[],
 	record: (diagnostic: FuelDiagnostic) => void = () => {},
+	options: { includeNotes?: boolean } = {},
 ): PublishableFuelItem[] {
 	const published: PublishableFuelItem[] = [];
 	let skipped = 0;
@@ -55,7 +74,7 @@ export function selectPublishableFuelItems(
 			skipped += 1;
 			continue;
 		}
-		published.push({
+		const row: PublishableFuelItem = {
 			id: item.id,
 			name: item.mealName?.trim() || item.name?.trim() || "Food",
 			energyKcal: item.energyKcal,
@@ -64,7 +83,14 @@ export function selectPublishableFuelItems(
 			fatG: item.fatG,
 			occurredAt: occurredAt.toISOString(),
 			slotType: item.slotType,
-		});
+			servings: finiteOrNull(item.servings),
+			loggedAmount: finiteOrNull(item.loggedAmount),
+			loggedUnit: textOrNull(item.loggedUnit),
+		};
+		if (options.includeNotes) {
+			row.notes = textOrNull(item.notes);
+		}
+		published.push(row);
 	}
 	if (skipped > 0) {
 		record({ code: "malformed_fuel_row", skipped });

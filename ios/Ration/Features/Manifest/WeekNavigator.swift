@@ -304,7 +304,6 @@ struct WeekNavigator: View {
     /// Tapping the range label opens the jump calendar — `nil` keeps the label non-interactive.
     var onOpenCalendar: (() -> Void)?
     var onNavigate: (String) -> Void
-    @ScaledMetric(relativeTo: .body) private var chevronPoints: CGFloat = 17
 
     private var selectedDayNutrition: NutritionDayTotals? {
         nutritionByDate[selectedDay]
@@ -347,11 +346,7 @@ struct WeekNavigator: View {
                 Button {
                     navigate(toRaw: ManifestDateHelpers.addDays(rangeStart, days: -calendarSpan))
                 } label: {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: chevronPoints, weight: .semibold))
-                        .foregroundStyle(canGoBack ? Theme.muted : Theme.platinum)
-                        .frame(minWidth: 44, minHeight: 44)
-                        .contentShape(Rectangle())
+                    DateRockerChevron(systemName: "chevron.left", isEnabled: canGoBack)
                 }
                 .disabled(!canGoBack || isLoading)
                 .accessibilityLabel("Previous")
@@ -365,11 +360,7 @@ struct WeekNavigator: View {
                 Button {
                     navigate(toRaw: ManifestDateHelpers.addDays(rangeStart, days: calendarSpan))
                 } label: {
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: chevronPoints, weight: .semibold))
-                        .foregroundStyle(canGoForward ? Theme.muted : Theme.platinum)
-                        .frame(minWidth: 44, minHeight: 44)
-                        .contentShape(Rectangle())
+                    DateRockerChevron(systemName: "chevron.right", isEnabled: canGoForward)
                 }
                 .disabled(!canGoForward || isLoading)
                 .accessibilityLabel("Next")
@@ -391,12 +382,7 @@ struct WeekNavigator: View {
                 ProgressView()
                     .controlSize(.small)
             }
-            Text(ManifestDateHelpers.formatRange(start: rangeStart, end: rangeEnd))
-                .font(Typography.headline())
-                .foregroundStyle(Theme.carbon)
-                .multilineTextAlignment(.center)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
+            DateRockerLabel(text: ManifestDateHelpers.formatRange(start: rangeStart, end: rangeEnd))
         }
 
         if let onOpenCalendar {

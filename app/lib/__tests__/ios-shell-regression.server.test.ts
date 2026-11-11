@@ -461,6 +461,89 @@ describe("fuel reads", () => {
 		expect(JSON.stringify(warnings)).toContain("malformed_fuel_row");
 	});
 
+	it("publishes amount and unit, and notes only when asked", () => {
+		const occurredAt = new Date("2026-11-11T15:00:00.000Z");
+		const source = {
+			id: "row-1",
+			mealName: "eggs",
+			notes: "leftovers",
+			energyKcal: 347,
+			proteinG: 20,
+			carbsG: 2,
+			fatG: 4,
+			occurredAt,
+			slotType: "lunch" as string | null,
+			servings: 1.5,
+			loggedAmount: 180,
+			loggedUnit: "g",
+		};
+		const hidden = selectPublishableFuelItems([source]);
+		expect(hidden[0]).toMatchObject({
+			servings: 1.5,
+			loggedAmount: 180,
+			loggedUnit: "g",
+		});
+		expect(hidden[0]).not.toHaveProperty("notes");
+		expect(JSON.stringify(hidden)).not.toContain("leftovers");
+
+		const shown = selectPublishableFuelItems([source], () => {}, {
+			includeNotes: true,
+		});
+		expect(shown[0]?.notes).toBe("leftovers");
+
+		const blank = selectPublishableFuelItems(
+			[{ ...source, notes: "   " }],
+			() => {},
+			{ includeNotes: true },
+		);
+		expect(blank[0]?.notes).toBeNull();
+
+		const warnings: unknown[] = [];
+		const bad = selectPublishableFuelItems(
+			[
+				{
+					...source,
+					id: "bad",
+					mealName: "Secret food",
+					notes: "secret note",
+					energyKcal: Number.NaN,
+				},
+			],
+			(diagnostic) => warnings.push(diagnostic),
+		);
+		expect(bad.find((item) => item.id === "bad")).toBeUndefined();
+		expect(JSON.stringify(warnings)).not.toContain("Secret");
+		expect(JSON.stringify(warnings)).not.toContain("note");
+	});
+
+	it("keeps Timeline and standing Void off Fuel, and the setting in Settings", () => {
+		const fuel = readFileSync(
+			"ios/Ration/Features/Fuel/FuelView.swift",
+			"utf8",
+		);
+		const settings = readFileSync(
+			"ios/Ration/Features/Settings/SettingsView.swift",
+			"utf8",
+		);
+		const swipes = readFileSync(
+			"ios/Ration/Core/Design/ListSwipeActions.swift",
+			"utf8",
+		);
+		expect(fuel).not.toContain("Day layout");
+		expect(fuel).not.toContain('Text("Timeline")');
+		expect(fuel).not.toContain('Text("Slots")');
+		expect(fuel).not.toContain('Button("Void")');
+		expect(fuel).not.toContain('Button("Edit")');
+		expect(fuel).toContain("fuelLogSwipeActions");
+		expect(fuel).toContain("NutritionGoalsView()");
+		expect(fuel).toContain("FuelLogDetailView");
+		expect(settings).toContain("Day layout");
+		expect(settings).toContain("diaryLayout");
+		expect(swipes).toContain("allowsFullSwipe: false");
+		expect(swipes).toContain('Label("Edit"');
+		expect(swipes).toContain('Label("Delete"');
+	});
+
 	it("drains fuel dates in bounded idempotent rounds", async () => {
 		expect(D1_MAX_FUEL_DATE_BACKFILL_ROWS).toBeLessThanOrEqual(
 			D1_MAX_BOUND_PARAMS,

@@ -1,4 +1,6 @@
+import { patchUserSettings } from "~/lib/auth.server";
 import { getEffectiveTier } from "~/lib/capacity.server";
+import { FuelTimeZoneSchema } from "~/lib/schemas/fuel";
 import type { TierSlug } from "~/lib/types";
 import { fuelDateForInstant } from "./fuel-date";
 import {
@@ -44,19 +46,40 @@ export async function personIsCrew(
 	return tier === "crew_member";
 }
 
+function validFuelZone(value: string | null | undefined): string | null {
+	if (!value) return null;
+	const parsed = FuelTimeZoneSchema.safeParse(value);
+	return parsed.success ? parsed.data : null;
+}
+
+/**
+ * Persist a device IANA zone on the session user and return the zone that
+ * stamps this request. A valid candidate wins. An invalid candidate leaves a
+ * stored zone in place. The kitchen zone is never read.
+ */
+export async function ensureFuelTimeZone(
+	db: D1Database,
+	userId: string,
+	candidate?: string | null,
+): Promise<string> {
+	const next = validFuelZone(candidate);
+	const row = await loadPerson(db, userId);
+	const stored = validFuelZone(typeof row?.zone === "string" ? row.zone : "");
+	if (next) {
+		if (next !== stored) {
+			await patchUserSettings(db, userId, { fuelTimeZone: next });
+		}
+		return next;
+	}
+	if (stored) return stored;
+	throw new FuelTimezoneRequiredError();
+}
+
 export async function requireFuelTimeZone(
 	db: D1Database,
 	userId: string,
 ): Promise<string> {
-	const row = await loadPerson(db, userId);
-	const zone = typeof row?.zone === "string" ? row.zone : "";
-	if (!zone) throw new FuelTimezoneRequiredError();
-	try {
-		fuelDateForInstant(new Date(), zone);
-	} catch {
-		throw new FuelTimezoneRequiredError();
-	}
-	return zone;
+	return ensureFuelTimeZone(db, userId);
 }
 
 export async function readFuelUsed(
@@ -140,15 +163,13 @@ export async function releaseFuelSlot(
 		.run();
 }
 
-/** Read-only gate for camera, lookup, and upload. Does not change `used`. */
-export async function assertFuelCreateRoom(
+/** Cap check for a day that is already known. Does not read or write a zone. */
+export async function assertFuelDayRoom(
 	db: D1Database,
 	userId: string,
-	occurredAt: Date,
+	fuelDate: string,
 	now = new Date(),
 ): Promise<{ fuelDate: string; used: number; crew: boolean }> {
-	const zone = await requireFuelTimeZone(db, userId);
-	const fuelDate = fuelDateForInstant(occurredAt, zone);
 	const crew = await personIsCrew(db, userId, now);
 	const used = await readFuelUsed(db, userId, fuelDate);
 	if (!crew && used >= FUEL_DAILY_LIMIT) {
@@ -157,12 +178,26 @@ export async function assertFuelCreateRoom(
 	return { fuelDate, used, crew };
 }
 
+/** Read-only gate for camera, lookup, and upload. Does not change `used`. */
+export async function assertFuelCreateRoom(
+	db: D1Database,
+	userId: string,
+	occurredAt: Date,
+	now = new Date(),
+	candidate?: string | null,
+): Promise<{ fuelDate: string; used: number; crew: boolean }> {
+	const zone = await ensureFuelTimeZone(db, userId, candidate);
+	const fuelDate = fuelDateForInstant(occurredAt, zone);
+	return assertFuelDayRoom(db, userId, fuelDate, now);
+}
+
 export async function stampFuelDate(
 	db: D1Database,
 	userId: string,
 	occurredAt: Date,
+	candidate?: string | null,
 ): Promise<string> {
-	const zone = await requireFuelTimeZone(db, userId);
+	const zone = await ensureFuelTimeZone(db, userId, candidate);
 	return fuelDateForInstant(occurredAt, zone);
 }
 

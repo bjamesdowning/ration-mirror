@@ -94,6 +94,7 @@ struct SupplyView: View {
                 }
             }
             .navigationTitle("Supply")
+            .ceramicPageChrome()
             .toolbar {
                 GlobalPageToolbar(
                     hasActiveFilters: model.filters.hasActiveFilters,
@@ -101,17 +102,16 @@ struct SupplyView: View {
                     organizationId: organizationId,
                     isRefreshing: model.isRefreshing,
                     onOptions: { showingOptions = true },
-                    onOpenGroupSettings: onOpenGroupSettings,
+                    accessories: [
+                        PageCapsuleAccessory(
+                            id: "lists",
+                            systemImage: "list.bullet.rectangle",
+                            label: "Lists",
+                            action: { showingLists = true }
+                        )
+                    ],
                     onOpenSettings: onOpenSettings
                 )
-                ToolbarItem(placement: .topBarLeading) {
-                    Button {
-                        showingLists = true
-                    } label: {
-                        Image(systemName: "list.bullet.rectangle")
-                    }
-                    .accessibilityLabel("Lists")
-                }
             }
             .navigationDestination(isPresented: $showingLists) {
                 SupplyListsLibraryView()

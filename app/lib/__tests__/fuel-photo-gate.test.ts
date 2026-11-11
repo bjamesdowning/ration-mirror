@@ -36,6 +36,10 @@ CREATE TABLE nutrition_fuel_day (
   used INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (user_id, fuel_date)
 );
+CREATE TABLE nutrition_operation (
+  id TEXT PRIMARY KEY,
+  result_json TEXT
+);
 CREATE TABLE queue_job (
   request_id TEXT PRIMARY KEY,
   job_type TEXT NOT NULL,
@@ -109,6 +113,47 @@ describe("fuel photo authorization and cap", () => {
 			),
 		).rejects.toBeInstanceOf(DiaryFoodNotFoundError);
 		expect(logIntake).not.toHaveBeenCalled();
+	});
+
+	it("uses the fuel day stored at submit instead of a newer zone", async () => {
+		const db = await seed();
+		await db
+			.prepare(
+				"INSERT INTO nutrition_operation (id, result_json) VALUES (?, ?)",
+			)
+			.bind(
+				"op-1",
+				JSON.stringify({ requestId: "req-1", fuelDate: "2026-11-09" }),
+			)
+			.run();
+		await db
+			.prepare(
+				"INSERT INTO nutrition_fuel_day (user_id, fuel_date, used) VALUES (?, ?, 3)",
+			)
+			.bind("user-1", "2026-11-09")
+			.run();
+		const logIntake = vi.fn();
+		await expect(
+			confirmFuelPhoto(
+				{ DB: db } as Env,
+				owner,
+				{} as never,
+				"req-1",
+				{
+					occurredAt: "2026-11-10T12:00:00.000Z",
+					fuelTimeZone: "Pacific/Kiritimati",
+				} as never,
+				{ logIntake, now: new Date(readyAt) },
+			),
+		).rejects.toBeInstanceOf(FuelDailyLimitError);
+		expect(logIntake).not.toHaveBeenCalled();
+		const row = await db
+			.prepare(
+				"SELECT json_extract(settings, '$.fuelTimeZone') AS zone FROM user WHERE id = ?",
+			)
+			.bind("user-1")
+			.first<{ zone: string }>();
+		expect(row?.zone).toBe("Europe/Dublin");
 	});
 
 	it("does not insert or debit a ready draft when the free day is full", async () => {

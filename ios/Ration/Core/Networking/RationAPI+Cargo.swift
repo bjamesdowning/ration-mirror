@@ -76,7 +76,15 @@ extension RationAPI {
     }
 
     func quickEatCargo(id: String, _ body: CargoQuickEatRequest) async throws -> CargoQuickEatResponse {
-        try await client.post("cargo/\(id)/quick-eat", body: body)
+        var stamped = body
+        stamped.fuelTimeZone = stamped.fuelTimeZone ?? FuelDeviceZone.candidate
+        do {
+            return try await client.post("cargo/\(id)/quick-eat", body: stamped)
+        } catch let error as APIError where error.code == "fuel_timezone_required" {
+            guard let zone = FuelDeviceZone.candidate else { throw error }
+            _ = try await patchSettings(SettingsPatch(fuelTimeZone: zone))
+            return try await client.post("cargo/\(id)/quick-eat", body: stamped)
+        }
     }
 
     func refreshCargoNutrition(id: String) async throws -> CargoNutritionRefreshResponse {

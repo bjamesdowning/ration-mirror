@@ -1,6 +1,12 @@
 import { useEffect, useState } from "react";
 import type { DayIntakeRow } from "~/components/manifest/DayView";
 import { diaryOperationKey } from "~/lib/nutrition/fuel-capture";
+import {
+	deviceFuelTimeZone,
+	FUEL_ZONE_UNUSABLE,
+	retryFuelZoneOnce,
+	withDeviceFuelZone,
+} from "~/lib/nutrition/fuel-zone-client";
 
 type RecentFood = {
 	name: string;
@@ -64,6 +70,7 @@ function draftFromRow(row: DayIntakeRow): LogDraft {
 async function readError(response: Response): Promise<string> {
 	try {
 		const body = (await response.json()) as { error?: string; code?: string };
+		if (body.code === "fuel_timezone_required") return FUEL_ZONE_UNUSABLE;
 		return body.error || body.code || "Could not save that log.";
 	} catch {
 		return "Could not save that log.";
@@ -320,6 +327,10 @@ export function LogToFuelDialog({
 			setError("Enter kcal, protein, carbs, and fat.");
 			return;
 		}
+		if (!deviceFuelTimeZone()) {
+			setError(FUEL_ZONE_UNUSABLE);
+			return;
+		}
 		setSaving(true);
 		setError(null);
 		const payload = draft.savedFoodId
@@ -347,17 +358,19 @@ export function LogToFuelDialog({
 						: {}),
 				};
 		try {
-			const response = await fetch(
-				intake ? `/api/nutrition/diary/${intake.id}` : "/api/nutrition/diary",
-				{
-					method: intake ? "PATCH" : "POST",
-					headers: {
-						"Content-Type": "application/json",
-						"Idempotency-Key": draft.operationKey,
+			const send = () =>
+				fetch(
+					intake ? `/api/nutrition/diary/${intake.id}` : "/api/nutrition/diary",
+					{
+						method: intake ? "PATCH" : "POST",
+						headers: {
+							"Content-Type": "application/json",
+							"Idempotency-Key": draft.operationKey,
+						},
+						body: JSON.stringify(withDeviceFuelZone(payload)),
 					},
-					body: JSON.stringify(payload),
-				},
-			);
+				);
+			const response = await retryFuelZoneOnce(await send(), send);
 			if (!response.ok) {
 				setError(await readError(response));
 				return;

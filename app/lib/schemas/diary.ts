@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { FuelTimeZoneSchema } from "./fuel";
 import { IntakeNotesSchema, SLOT_TYPES } from "./manifest";
 import { UuidSchema } from "./uuid";
 
@@ -40,6 +41,8 @@ export const DiaryFoodWriteSchema = z
 		idempotencyKey: UuidSchema,
 		operationKey: UuidSchema,
 		notes: IntakeNotesSchema.optional(),
+		/** Device IANA zone. The server stamps fuel_date. Not a client day. */
+		fuelTimeZone: FuelTimeZoneSchema.optional(),
 	})
 	.superRefine((value, ctx) => {
 		const hasAmount = value.amount != null;

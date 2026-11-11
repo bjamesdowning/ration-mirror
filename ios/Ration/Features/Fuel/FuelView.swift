@@ -5,7 +5,8 @@ import SwiftUI
 struct FuelView: View {
     @Environment(AppEnvironment.self) private var env
     var onOpenSettings: () -> Void = {}
-    var onOpenGroupSettings: () -> Void = {}
+    var fuelDockActive = false
+    @State private var showingMacros = false
     @State private var day: FuelDayResponse?
     @State private var loaded = false
     @State private var cameraDenied = false
@@ -27,23 +28,10 @@ struct FuelView: View {
     @State private var reviewFat = ""
     @State private var photoRequestId: String?
     @State private var photoTask: Task<Void, Never>?
-    @State private var zone = ""
-
     var body: some View {
         NavigationStack {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                HStack {
-                    Text("Fuel").rationTitle()
-                    Spacer()
-                    NavigationLink {
-                        MacrosHistoryView(showsNotes: false)
-                    } label: {
-                        Label("Macros", systemImage: "chart.bar.fill")
-                            .frame(minWidth: 44, minHeight: 44)
-                    }
-                    .accessibilityLabel("Macros")
-                }
                 if let day {
                     weekStrip(day)
                     DatePicker(
@@ -58,24 +46,37 @@ struct FuelView: View {
                         .font(Typography.body())
                         .minimumScaleFactor(0.7)
                         .accessibilityLabel(FuelActionPolicy.counterLabel(used: day.used, limit: day.limit))
-                    if day.goal == nil {
-                        Button("No goals · Set targets") { showingGoals = true }
-                            .frame(minHeight: 44)
+                    if let totals = day.totals {
+                        DayNutrientStrip(
+                            totals: NutritionDayTotals(
+                                date: day.date,
+                                energyKcal: totals.energyKcal,
+                                proteinG: totals.proteinG,
+                                carbsG: totals.carbsG,
+                                fatG: totals.fatG,
+                                fiberG: totals.fiberG,
+                                coverageAvg: 0,
+                                entryCount: day.items.count
+                            ),
+                            goal: day.goal.map {
+                                NutritionSummary.Goal(
+                                    dailyEnergyKcal: $0.dailyEnergyKcal,
+                                    proteinG: $0.proteinG,
+                                    carbsG: $0.carbsG,
+                                    fatG: $0.fatG,
+                                    fiberG: $0.fiberG,
+                                    effectiveFrom: day.date,
+                                    effectiveTo: nil
+                                )
+                            },
+                            onTap: { showingGoals = true }
+                        )
                     }
                     Picker("Day layout", selection: layoutBinding(day.diaryLayout)) {
                         Text("Timeline").tag("timeline")
                         Text("Slots").tag("slots")
                     }
                     .pickerStyle(.segmented)
-                    if day.fuelTimeZone == nil {
-                        TextField("Time zone", text: $zone)
-                            .textInputAutocapitalization(.never)
-                            .autocorrectionDisabled()
-                        Button("Save time zone") {
-                            Task { await saveZone() }
-                        }
-                        .frame(minHeight: 44)
-                    }
                 } else if !loaded {
                     ProgressView()
                 }
@@ -83,12 +84,14 @@ struct FuelView: View {
                     Text("You're offline. Fuel writes, scans, and barcodes stay off until the connection returns.")
                         .rationCaption()
                 }
-                if let message {
+                if message == "Fuel did not load." {
+                    Text(message ?? "")
+                        .rationCaption()
+                    Button("Retry") { Task { await load(date: LocalDay.todayISO()) } }
+                        .frame(minHeight: 44)
+                } else if let message {
                     Text(message).rationCaption()
                 }
-                actionButton("Add Fuel", action: .add)
-                actionButton("Scan to Fuel", action: .scan)
-                actionButton("Barcode to Fuel", action: .barcode)
                 if let day {
                     Text(day.diaryLayout == "slots" ? "Slots" : "Timeline")
                         .rationCaption()
@@ -119,11 +122,32 @@ struct FuelView: View {
             .padding()
         }
         .navigationTitle("Fuel")
+        .ceramicPageChrome()
         .toolbar {
             GlobalPageToolbar(
-                onOpenGroupSettings: onOpenGroupSettings,
+                accessories: [
+                    PageCapsuleAccessory(
+                        id: "macros",
+                        systemImage: "chart.bar.fill",
+                        label: "Macros",
+                        action: { showingMacros = true }
+                    )
+                ],
                 onOpenSettings: onOpenSettings
             )
+        }
+        .navigationDestination(isPresented: $showingMacros) {
+            MacrosHistoryView(showsNotes: false)
+        }
+        .tabDockAction(
+            tag: .hub,
+            isActive: fuelDockActive && env.network.isOnline && day != nil
+        ) {
+            IconFABMenuCore(systemImage: "plus.circle.fill", accessibilityLabel: "Fuel actions") {
+                Button("Add Fuel", systemImage: "plus") { Task { await perform(.add) } }
+                Button("Scan to Fuel", systemImage: "camera.viewfinder") { Task { await perform(.scan) } }
+                Button("Barcode to Fuel", systemImage: "barcode.viewfinder") { Task { await perform(.barcode) } }
+            }
         }
         .sheet(isPresented: $showingAdd) { addSheet }
         .sheet(isPresented: $showingPaywall) { PaywallView(context: .settings()) }
@@ -144,6 +168,12 @@ struct FuelView: View {
         }
         .sheet(isPresented: $showingTypedBarcode) { typedBarcode }
         .task { await reloadAndHandleDeepLink() }
+        .onChange(of: env.deepLinkRouter.fuelGoalsPending) { _, pending in
+            if pending { Task { await reloadAndHandleDeepLink() } }
+        }
+        .onChange(of: env.deepLinkRouter.fuelCreatePending) { _, pending in
+            if pending != nil { Task { await reloadAndHandleDeepLink() } }
+        }
         .onDisappear { photoTask?.cancel() }
         }
     }
@@ -174,12 +204,6 @@ struct FuelView: View {
             get: { current },
             set: { next in Task { await saveLayout(next) } }
         )
-    }
-
-    private func actionButton(_ title: String, action: FuelCreateAction) -> some View {
-        Button(title) { Task { await perform(action) } }
-            .frame(maxWidth: .infinity, minHeight: 44)
-            .accessibilityLabel(title)
     }
 
     private func reloadAndHandleDeepLink() async {
@@ -235,20 +259,29 @@ struct FuelView: View {
             cameraDenied: cameraDenied
         )
         switch decision {
-        case .openPurchase:
-            showingPaywall = true
-        case .openForm:
-            showingAdd = true
-        case .openCamera:
-            showingScanCamera = true
-        case .cameraOff:
-            message = "The camera is off. Scan to Fuel does not upload."
-        case .openBarcodeCamera:
-            showingBarcodeCamera = true
-        case .openTypedBarcode:
-            showingTypedBarcode = true
         case .disabledOffline:
             message = "You're offline."
+        case .openPurchase:
+            showingPaywall = true
+        case .cameraOff:
+            message = "The camera is off. Scan to Fuel does not upload."
+        case .openForm, .openCamera, .openBarcodeCamera, .openTypedBarcode:
+            guard FuelDeviceZone.candidate != nil else {
+                message = FuelDeviceZone.unusableMessage
+                return
+            }
+            switch decision {
+            case .openForm:
+                showingAdd = true
+            case .openCamera:
+                showingScanCamera = true
+            case .openBarcodeCamera:
+                showingBarcodeCamera = true
+            case .openTypedBarcode:
+                showingTypedBarcode = true
+            default:
+                break
+            }
         }
     }
 
@@ -461,17 +494,6 @@ struct FuelView: View {
             await load(date: day?.date ?? LocalDay.todayISO())
         } catch {
             message = "Day layout was not saved."
-        }
-    }
-
-    private func saveZone() async {
-        let trimmed = zone.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty else { return }
-        do {
-            _ = try await env.api.patchSettings(SettingsPatch(fuelTimeZone: trimmed))
-            await load(date: day?.date ?? LocalDay.todayISO())
-        } catch {
-            message = "Set a time zone before logging."
         }
     }
 

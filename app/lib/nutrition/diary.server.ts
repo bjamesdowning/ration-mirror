@@ -19,9 +19,9 @@ import {
 } from "./fast-log-flag.server";
 import { listFdcPortions } from "./fdc-portion.server";
 import {
+	ensureFuelTimeZone,
 	personIsCrew,
 	releaseFuelSlot,
-	requireFuelTimeZone,
 	reserveFuelSlot,
 	stampFuelDate,
 } from "./fuel-cap.server";
@@ -672,7 +672,7 @@ export async function logDiaryFood(
 	env: Env,
 	principal: NutritionPrincipal,
 	flags: NutritionFlagContext,
-	input: DiaryFoodWrite & { now?: Date },
+	input: DiaryFoodWrite & { now?: Date; pinnedFuelDate?: string },
 ): Promise<DiaryLogResult> {
 	const prepared = await prepareWrite(
 		env,
@@ -782,11 +782,14 @@ export async function logDiaryFood(
 	let reservedFuelDate: string | null = null;
 	if (await isNutritionFuelPageEnabled(env, flags)) {
 		try {
-			const fuelDate = await stampFuelDate(
-				env.DB,
-				principal.userId,
-				food.occurredAt,
-			);
+			const fuelDate = input.pinnedFuelDate
+				? input.pinnedFuelDate
+				: await stampFuelDate(
+						env.DB,
+						principal.userId,
+						food.occurredAt,
+						input.fuelTimeZone,
+					);
 			const crew = await personIsCrew(env.DB, principal.userId, now);
 			await reserveFuelSlot(env.DB, principal.userId, fuelDate, crew);
 			reservedFuelDate = fuelDate;
@@ -967,7 +970,11 @@ export async function updateDiaryFood(
 	let keptFuelDate: string | null = null;
 	if (await isNutritionFuelPageEnabled(env, flags)) {
 		try {
-			const zone = await requireFuelTimeZone(env.DB, principal.userId);
+			const zone = await ensureFuelTimeZone(
+				env.DB,
+				principal.userId,
+				input.fuelTimeZone,
+			);
 			keptFuelDate = assertFuelDateUnchanged(
 				current.fuelDate,
 				food.occurredAt,

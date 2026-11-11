@@ -83,6 +83,7 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 							notes: parsed.notes,
 						},
 					],
+					fuelTimeZone: parsed.fuelTimeZone,
 				},
 			);
 			const item = result.items[0];

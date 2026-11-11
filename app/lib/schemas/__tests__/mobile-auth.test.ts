@@ -115,6 +115,16 @@ describe("MobileSettingsPatchSchema", () => {
 		expect(parsed.manifestSettings?.calendarSpan).toBe(7);
 	});
 
+	it("accepts calendar span 1 and keeps week start", () => {
+		const parsed = MobileSettingsPatchSchema.parse({
+			manifestSettings: { weekStart: "monday", calendarSpan: 1 },
+		});
+		expect(parsed.manifestSettings).toEqual({
+			weekStart: "monday",
+			calendarSpan: 1,
+		});
+	});
+
 	it("accepts restartOnboarding flag", () => {
 		const parsed = MobileSettingsPatchSchema.parse({
 			restartOnboarding: true,

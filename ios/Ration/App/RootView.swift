@@ -91,7 +91,8 @@ struct MainTabView: View {
     @Environment(AppEnvironment.self) private var env
     @Environment(\.scenePhase) private var scenePhase
     @State private var showingSettings = false
-    @State private var showingGroupSettings = false
+    @State private var settingsSegment: SettingsHubSegment = .profile
+    @State private var showingHub = true
     @State private var showingNutritionGoals = false
     @State private var showingScan = false
     @State private var orgGeneration = 0
@@ -107,14 +108,28 @@ struct MainTabView: View {
         CopilotAutoExpandPolicy.isCopilotExhausted(status: env.ask.model.status)
     }
 
+    private var fuelPage: Bool {
+        env.session.clientFlags.isNutritionFuelPageEnabled
+    }
+
+    private var hubOverlayVisible: Bool {
+        fuelPage && showingHub
+    }
+
+    private var dockTab: MainTab {
+        HubShellPolicy.dockTab(showingHub: hubOverlayVisible, selected: selectedTab)
+    }
+
     private var showCopilotBar: Bool {
         env.session.clientFlags.isRationCopilotEnabled
             && !showingSettings
-            && !showingGroupSettings
             && !showingScan
             && !env.ask.isSheetPresented
-            // Only suppress on Hub while editing — other tabs keep Copilot.
-            && !(isHubEditMode && selectedTab == .hub)
+    }
+
+    private func leaveHub(to tab: MainTab) {
+        showingHub = false
+        selectedTab = tab
     }
 
     private var canOpenScan: Bool {
@@ -126,12 +141,19 @@ struct MainTabView: View {
     }
 
     var body: some View {
+        ZStack {
         TabView(selection: $selectedTab) {
             Group {
                 if env.session.clientFlags.isNutritionFuelPageEnabled {
                     FuelView(
-                        onOpenSettings: { showingSettings = true },
-                        onOpenGroupSettings: { showingGroupSettings = true }
+                        onOpenSettings: {
+                            settingsSegment = .profile
+                            showingSettings = true
+                        },
+                        fuelDockActive: HubShellPolicy.fuelDockActive(
+                            showingHub: hubOverlayVisible,
+                            selected: selectedTab
+                        )
                     )
                 } else {
                     DashboardView(
@@ -142,12 +164,14 @@ struct MainTabView: View {
                     guard canOpenScan else { return }
                     showingScan = true
                 },
-                onOpenSettings: { showingSettings = true },
-                onOpenGroupSettings: { showingGroupSettings = true },
-                onOpenSupply: { selectedTab = .supply },
-                onOpenCargo: { selectedTab = .cargo },
-                onOpenGalley: { selectedTab = .galley },
-                onOpenManifest: { selectedTab = .manifest },
+                onOpenSettings: {
+                    settingsSegment = .profile
+                    showingSettings = true
+                },
+                onOpenSupply: { leaveHub(to: .supply) },
+                onOpenCargo: { leaveHub(to: .cargo) },
+                onOpenGalley: { leaveHub(to: .galley) },
+                onOpenManifest: { leaveHub(to: .manifest) },
                 onOpenNutritionGoals: { showingNutritionGoals = true }
             )
                 }
@@ -174,8 +198,10 @@ struct MainTabView: View {
                     guard canOpenScan else { return }
                     showingScan = true
                 },
-                onOpenSettings: { showingSettings = true },
-                onOpenGroupSettings: { showingGroupSettings = true }
+                onOpenSettings: {
+                    settingsSegment = .profile
+                    showingSettings = true
+                }
             )
                 .id(orgGeneration)
                 .tabItem { Label(String(localized: "Cargo"), systemImage: "shippingbox") }
@@ -184,8 +210,10 @@ struct MainTabView: View {
 
             GalleyView(
                 isTabActive: activatedTabs.contains(.galley),
-                onOpenSettings: { showingSettings = true },
-                onOpenGroupSettings: { showingGroupSettings = true }
+                onOpenSettings: {
+                    settingsSegment = .profile
+                    showingSettings = true
+                }
             )
                 .id(orgGeneration)
                 .tabItem { Label(String(localized: "Galley"), systemImage: "fork.knife") }
@@ -194,11 +222,13 @@ struct MainTabView: View {
 
             ManifestView(
                 isTabActive: activatedTabs.contains(.manifest),
-                onOpenSettings: { showingSettings = true },
-                onOpenGroupSettings: { showingGroupSettings = true },
+                onOpenSettings: {
+                    settingsSegment = .profile
+                    showingSettings = true
+                },
                 onOpenNutritionGoals: { showingNutritionGoals = true },
                 onPlanWeekComplete: { count in
-                    selectedTab = .manifest
+                    leaveHub(to: .manifest)
                     manifestSuccessMessage = "Added \(count) meals to Manifest"
                 }
             )
@@ -209,13 +239,19 @@ struct MainTabView: View {
 
             SupplyView(
                 isTabActive: activatedTabs.contains(.supply),
-                onOpenSettings: { showingSettings = true },
-                onOpenGroupSettings: { showingGroupSettings = true }
+                onOpenSettings: {
+                    settingsSegment = .profile
+                    showingSettings = true
+                }
             )
                 .id(orgGeneration)
                 .tabItem { Label(String(localized: "Supply"), systemImage: "cart") }
                 .tag(MainTab.supply)
                 .accessibilityIdentifier("tab.supply")
+        }
+        if hubOverlayVisible {
+            hubPage
+        }
         }
         .overlay(alignment: .bottom) {
             if showCopilotBar {
@@ -241,17 +277,7 @@ struct MainTabView: View {
         .environment(env.tabDock)
         .environment(\.currentMainTab, selectedTab)
         .sheet(isPresented: $showingSettings) {
-            SettingsView()
-        }
-        .sheet(isPresented: $showingGroupSettings) {
-            NavigationStack {
-                GroupSettingsView()
-                    .toolbar {
-                        ToolbarItem(placement: .cancellationAction) {
-                            Button("Done") { showingGroupSettings = false }
-                        }
-                    }
-            }
+            SettingsHubView(segment: settingsSegment)
         }
         .sheet(isPresented: $showingCopilotPaywall, onDismiss: {
             Task {
@@ -275,33 +301,10 @@ struct MainTabView: View {
         }) {
             NutritionGoalsView()
         }
-        .fullScreenCover(isPresented: Binding(
-            get: { env.hubCoverPresented },
-            set: { env.hubCoverPresented = $0 }
-        )) {
-            NavigationStack {
-                DashboardView(
-                    isTabActive: true,
-                    hubTabReselectToken: hubTabReselectToken,
-                    isHubEditMode: $isHubEditMode,
-                    onScan: {
-                        guard canOpenScan else { return }
-                        showingScan = true
-                    },
-                    onOpenSettings: { showingSettings = true },
-                    onOpenGroupSettings: { showingGroupSettings = true },
-                    onOpenSupply: { selectedTab = .supply },
-                    onOpenCargo: { selectedTab = .cargo },
-                    onOpenGalley: { selectedTab = .galley },
-                    onOpenManifest: { selectedTab = .manifest },
-                    onOpenNutritionGoals: { showingNutritionGoals = true }
-                )
-                .toolbar {
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button("Done") { env.hubCoverPresented = false }
-                            .accessibilityLabel("Hub")
-                    }
-                }
+        .onChange(of: env.hubCoverPresented) { _, open in
+            if open {
+                showingHub = true
+                env.hubCoverPresented = false
             }
         }
         .sheet(isPresented: Binding(
@@ -354,7 +357,7 @@ struct MainTabView: View {
                     .bottom,
                     CopilotDockLayout.toastBottomOffset(
                         isExpanded: env.copilotScroll.isExpanded,
-                        hasTabAction: env.tabDock.hasAction(for: selectedTab),
+                        hasTabAction: env.tabDock.hasAction(for: dockTab),
                         keyboardInset: 0
                     ) + env.copilotScroll.tabBarOverlap
                 )
@@ -363,10 +366,13 @@ struct MainTabView: View {
         .copilotKeyboardObserved(env.copilotScroll)
         .copilotKeyboardDismissOverlay(
             env.copilotScroll,
-            hasTabAction: env.tabDock.hasAction(for: selectedTab)
+            hasTabAction: env.tabDock.hasAction(for: dockTab)
         )
         .background {
-            TabBarReselectObserver { index in
+            TabBarReselectObserver(neutralizeSelection: hubOverlayVisible) { index in
+                if hubOverlayVisible {
+                    showingHub = false
+                }
                 if index == MainTab.hub.rawValue {
                     hubTabReselectToken += 1
                 }
@@ -379,8 +385,11 @@ struct MainTabView: View {
             env.copilotScroll.reservesDockSpace = shown
         }
         .onChange(of: selectedTab) { _, tab in
+            if fuelPage {
+                showingHub = false
+            }
             activatedTabs.insert(tab)
-            env.copilotScroll.setActiveTab(tab)
+            env.copilotScroll.setActiveTab(dockTab)
             env.copilotScroll.resetForTabChange()
             env.ask.updateAutoExpandPolicy(scrollContext: env.copilotScroll)
         }
@@ -408,7 +417,10 @@ struct MainTabView: View {
                 )
                 env.ask.updateAutoExpandPolicy(scrollContext: env.copilotScroll)
             }
-            env.copilotScroll.setActiveTab(selectedTab)
+            env.copilotScroll.setActiveTab(dockTab)
+            if fuelPage, env.deepLinkRouter.pending != nil {
+                showingHub = false
+            }
             env.deepLinkRouter.replayPending(
                 selectedTab: &selectedTab,
                 openAskSheet: {
@@ -436,6 +448,9 @@ struct MainTabView: View {
             guard destination != nil, env.launch.isStartupComplete,
                   env.session.activeOrganizationId != nil
             else { return }
+            if fuelPage {
+                showingHub = false
+            }
             env.deepLinkRouter.replayPending(
                 selectedTab: &selectedTab,
                 openAskSheet: {
@@ -476,11 +491,39 @@ struct MainTabView: View {
         }
     }
 
+    private var hubPage: some View {
+        VStack(spacing: 0) {
+            DashboardView(
+                isTabActive: true,
+                hubTabReselectToken: hubTabReselectToken,
+                isHubEditMode: $isHubEditMode,
+                hubDockVisible: true,
+                onScan: {
+                    guard canOpenScan else { return }
+                    showingScan = true
+                },
+                onOpenSettings: {
+                    settingsSegment = .profile
+                    showingSettings = true
+                },
+                onOpenSupply: { leaveHub(to: .supply) },
+                onOpenCargo: { leaveHub(to: .cargo) },
+                onOpenGalley: { leaveHub(to: .galley) },
+                onOpenManifest: { leaveHub(to: .manifest) },
+                onOpenNutritionGoals: { showingNutritionGoals = true }
+            )
+            Color.clear
+                .frame(height: env.copilotScroll.tabBarOverlap)
+                .allowsHitTesting(false)
+        }
+        .background(Theme.ceramic)
+    }
+
     private var copilotDock: some View {
         CopilotBottomDock(
             scrollContext: env.copilotScroll,
             tabDock: env.tabDock,
-            selectedTab: selectedTab,
+            selectedTab: dockTab,
             draft: Binding(
                 get: { env.ask.draft },
                 set: { env.ask.draft = $0 }

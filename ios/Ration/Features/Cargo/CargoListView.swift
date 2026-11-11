@@ -71,6 +71,7 @@ struct CargoListView: View {
                 }
             }
             .navigationTitle("Cargo")
+            .ceramicPageChrome()
             .searchable(text: $model.filters.search, prompt: "Search cargo")
             .onSubmit(of: .search) {
                 Task { await reload(forceRemoteSearch: true, organizationId: organizationId) }
@@ -92,7 +93,6 @@ struct CargoListView: View {
                     organizationId: organizationId,
                     isRefreshing: model.isRefreshing,
                     onOptions: { showingFilters = true },
-                    onOpenGroupSettings: onOpenGroupSettings,
                     onOpenSettings: onOpenSettings
                 )
             }

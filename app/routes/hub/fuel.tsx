@@ -16,6 +16,12 @@ import {
 } from "~/lib/nutrition/fast-log-flag.server";
 import { pollFuelPhoto } from "~/lib/nutrition/fuel-photo-client";
 import { loadFuelDay } from "~/lib/nutrition/fuel-read.server";
+import {
+	deviceFuelTimeZone,
+	FUEL_ZONE_UNUSABLE,
+	retryFuelZoneOnce,
+	withDeviceFuelZone,
+} from "~/lib/nutrition/fuel-zone-client";
 import { FUEL_PHOTO_MAX_BYTES } from "~/lib/schemas/fuel";
 import type { Route } from "./+types/fuel";
 
@@ -137,32 +143,39 @@ export default function FuelPage({ loaderData }: Route.ComponentProps) {
 		const energy = Number(form.get("energyKcal") ?? "0");
 		if (!name || !Number.isFinite(energy)) return;
 		setPendingName(name);
+		if (!deviceFuelTimeZone()) {
+			setError(FUEL_ZONE_UNUSABLE);
+			return;
+		}
 		setError(null);
 		const operationKey = crypto.randomUUID();
 		const controller = new AbortController();
 		const timer = setTimeout(() => controller.abort(), 15000);
 		try {
-			const response = await fetch("/api/nutrition/diary", {
-				method: "POST",
-				credentials: "same-origin",
-				headers: { "Content-Type": "application/json" },
-				signal: controller.signal,
-				body: JSON.stringify({
-					name,
-					occurredAt: new Date().toISOString(),
-					amount: 1,
-					unit: "serving",
-					macros: {
-						energyKcal: energy,
-						proteinG: Number(form.get("proteinG") ?? "0"),
-						carbsG: Number(form.get("carbsG") ?? "0"),
-						fatG: Number(form.get("fatG") ?? "0"),
-					},
-					idempotencyKey: operationKey,
-					operationKey,
-					compositionSource: "manual_macros",
-				}),
-			});
+			const payload = {
+				name,
+				occurredAt: new Date().toISOString(),
+				amount: 1,
+				unit: "serving",
+				macros: {
+					energyKcal: energy,
+					proteinG: Number(form.get("proteinG") ?? "0"),
+					carbsG: Number(form.get("carbsG") ?? "0"),
+					fatG: Number(form.get("fatG") ?? "0"),
+				},
+				idempotencyKey: operationKey,
+				operationKey,
+				compositionSource: "manual_macros" as const,
+			};
+			const send = () =>
+				fetch("/api/nutrition/diary", {
+					method: "POST",
+					credentials: "same-origin",
+					headers: { "Content-Type": "application/json" },
+					signal: controller.signal,
+					body: JSON.stringify(withDeviceFuelZone(payload)),
+				});
+			const response = await retryFuelZoneOnce(await send(), send);
 			if (!response.ok) {
 				setPendingName(null);
 				const body = (await response.json().catch(() => null)) as {
@@ -170,7 +183,7 @@ export default function FuelPage({ loaderData }: Route.ComponentProps) {
 				} | null;
 				if (body?.code === "fuel_daily_limit") navigate("/hub/pricing");
 				else if (body?.code === "fuel_timezone_required") {
-					setError("Set a time zone before logging.");
+					setError(FUEL_ZONE_UNUSABLE);
 				} else setError("That log was not saved.");
 				return;
 			}
@@ -564,6 +577,10 @@ function ScanToFuel({
 			onError("Use a JPEG, PNG, or WebP photo.");
 			return;
 		}
+		if (!deviceFuelTimeZone()) {
+			onError(FUEL_ZONE_UNUSABLE);
+			return;
+		}
 		setBusy(true);
 		onError("");
 		const bytes = new Uint8Array(await file.arrayBuffer());
@@ -573,17 +590,20 @@ function ScanToFuel({
 		pollAbort.current?.abort();
 		pollAbort.current = controller;
 		try {
-			const response = await fetch("/api/nutrition/diary/photo", {
-				method: "POST",
-				credentials: "same-origin",
-				headers: { "Content-Type": "application/json" },
-				signal: controller.signal,
-				body: JSON.stringify({
-					operationKey: crypto.randomUUID(),
-					contentType,
-					imageBase64: btoa(binary),
-				}),
-			});
+			const payload = {
+				operationKey: crypto.randomUUID(),
+				contentType,
+				imageBase64: btoa(binary),
+			};
+			const send = () =>
+				fetch("/api/nutrition/diary/photo", {
+					method: "POST",
+					credentials: "same-origin",
+					headers: { "Content-Type": "application/json" },
+					signal: controller.signal,
+					body: JSON.stringify(withDeviceFuelZone(payload)),
+				});
+			const response = await retryFuelZoneOnce(await send(), send);
 			const body = (await response.json().catch(() => null)) as {
 				code?: string;
 				requestId?: string;
@@ -787,12 +807,19 @@ function BarcodeToFuel({
 
 	async function lookup() {
 		if (!online) return;
-		const response = await fetch("/api/nutrition/diary/barcode", {
-			method: "POST",
-			credentials: "same-origin",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ barcode: code }),
-		});
+		if (!deviceFuelTimeZone()) {
+			onError(FUEL_ZONE_UNUSABLE);
+			return;
+		}
+		const payload = { barcode: code };
+		const send = () =>
+			fetch("/api/nutrition/diary/barcode", {
+				method: "POST",
+				credentials: "same-origin",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify(withDeviceFuelZone(payload)),
+			});
+		const response = await retryFuelZoneOnce(await send(), send);
 		const body = (await response.json().catch(() => null)) as {
 			code?: string;
 			found?: boolean;
@@ -823,26 +850,33 @@ function BarcodeToFuel({
 
 	async function confirm() {
 		if (!hit) return;
-		const response = await fetch("/api/nutrition/diary", {
-			method: "POST",
-			credentials: "same-origin",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({
-				name: hit.name,
-				occurredAt: new Date().toISOString(),
-				amount: 1,
-				unit: "serving",
-				macros: {
-					energyKcal: hit.energy,
-					proteinG: hit.protein,
-					carbsG: hit.carbs,
-					fatG: hit.fat,
-				},
-				idempotencyKey: crypto.randomUUID(),
-				operationKey: crypto.randomUUID(),
-				compositionSource: "usda",
-			}),
-		});
+		if (!deviceFuelTimeZone()) {
+			onError(FUEL_ZONE_UNUSABLE);
+			return;
+		}
+		const payload = {
+			name: hit.name,
+			occurredAt: new Date().toISOString(),
+			amount: 1,
+			unit: "serving",
+			macros: {
+				energyKcal: hit.energy,
+				proteinG: hit.protein,
+				carbsG: hit.carbs,
+				fatG: hit.fat,
+			},
+			idempotencyKey: crypto.randomUUID(),
+			operationKey: crypto.randomUUID(),
+			compositionSource: "usda" as const,
+		};
+		const send = () =>
+			fetch("/api/nutrition/diary", {
+				method: "POST",
+				credentials: "same-origin",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify(withDeviceFuelZone(payload)),
+			});
+		const response = await retryFuelZoneOnce(await send(), send);
 		const body = (await response.json().catch(() => null)) as {
 			code?: string;
 		} | null;

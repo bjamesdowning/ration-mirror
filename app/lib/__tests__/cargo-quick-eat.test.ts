@@ -3,7 +3,10 @@ import {
 	QuickEatValidationError,
 	quickEatFromCargo,
 } from "~/lib/cargo-quick-eat.server";
+import { isFeatureEnabled } from "~/lib/feature-flags/flags.server";
+import { FuelTimezoneRequiredError } from "~/lib/nutrition/fuel-errors";
 import { createMockEnv } from "~/test/helpers/mock-env";
+import { createSqliteD1 } from "~/test/helpers/sqlite-d1";
 
 const ensureProvisionFromCargo = vi.fn();
 const cookMealFromGalley = vi.fn();
@@ -198,5 +201,79 @@ describe("quickEatFromCargo", () => {
 		};
 		expect(secondCall.operationKey).toBe(expectedOp);
 		expect(secondCall.items[0]?.idempotencyKey).toBe(expectedItem);
+	});
+
+	it("does not cook when Fuel is on and the zone cannot be resolved", async () => {
+		vi.mocked(isFeatureEnabled).mockImplementation(
+			async (_env, flag) =>
+				flag === "nutrition-fast-log" ||
+				flag === "nutrition-manifest" ||
+				flag === "nutrition-fuel-page",
+		);
+		const { database: db } = createSqliteD1();
+		await db.exec(
+			"CREATE TABLE user (id TEXT PRIMARY KEY, tier TEXT, tier_expires_at INTEGER, settings TEXT)",
+		);
+		await db
+			.prepare(
+				"INSERT INTO user (id, tier, tier_expires_at, settings) VALUES ('user-1', 'free', NULL, '{}')",
+			)
+			.run();
+		const env = createMockEnv();
+		env.DB = db;
+		await expect(
+			quickEatFromCargo(
+				env,
+				"org-1",
+				principal,
+				{ userId: "user-1" } as never,
+				{
+					cargoId: "cargo-1",
+					quantity: 1,
+					unit: "unit",
+					date: "2026-08-11",
+					operationKey: OPERATION_KEY,
+					fuelTimeZone: "GMT",
+				},
+			),
+		).rejects.toBeInstanceOf(FuelTimezoneRequiredError);
+		expect(cookMealFromGalley).not.toHaveBeenCalled();
+		vi.mocked(isFeatureEnabled).mockImplementation(
+			async (_env, flag) => flag !== "nutrition-fuel-page",
+		);
+	});
+
+	it("cooks when Fuel is off without writing a zone", async () => {
+		const { database: db } = createSqliteD1();
+		await db.exec(
+			"CREATE TABLE user (id TEXT PRIMARY KEY, tier TEXT, tier_expires_at INTEGER, settings TEXT)",
+		);
+		await db
+			.prepare(
+				"INSERT INTO user (id, tier, tier_expires_at, settings) VALUES ('user-1', 'free', NULL, '{}')",
+			)
+			.run();
+		const env = createMockEnv();
+		env.DB = db;
+		await quickEatFromCargo(
+			env,
+			"org-1",
+			principal,
+			{ userId: "user-1" } as never,
+			{
+				cargoId: "cargo-1",
+				quantity: 1,
+				unit: "unit",
+				date: "2026-08-11",
+				operationKey: OPERATION_KEY,
+			},
+		);
+		expect(cookMealFromGalley).toHaveBeenCalled();
+		const row = await db
+			.prepare(
+				"SELECT json_extract(settings, '$.fuelTimeZone') AS zone FROM user WHERE id = 'user-1'",
+			)
+			.first<{ zone: string | null }>();
+		expect(row?.zone).toBeNull();
 	});
 });

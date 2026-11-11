@@ -140,6 +140,8 @@ export async function quickEatFromCargo(
 		logIntake?: boolean;
 		notes?: string | null;
 		source?: KitchenEventSource;
+		/** Device IANA zone. Not the cook date. */
+		fuelTimeZone?: string;
 	},
 ): Promise<QuickEatResult> {
 	await assertFeatureEnabled(env, "cargo-quick-eat", flagContext);
@@ -233,7 +235,13 @@ export async function quickEatFromCargo(
 		(await isFeatureEnabled(env, "nutrition-manifest", flagContext)) &&
 		(await isNutritionFuelPageEnabled(env, flagContext))
 	) {
-		await assertFuelCreateRoom(env.DB, principal.userId, new Date());
+		await assertFuelCreateRoom(
+			env.DB,
+			principal.userId,
+			new Date(),
+			new Date(),
+			input.fuelTimeZone,
+		);
 	}
 
 	const cookResult = await cookMealFromGalley(

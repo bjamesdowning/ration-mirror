@@ -67,6 +67,7 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 				operationKey: input.operationKey,
 				logIntake: input.logIntake,
 				notes: input.notes,
+				fuelTimeZone: input.fuelTimeZone,
 				source: "web",
 			},
 		);

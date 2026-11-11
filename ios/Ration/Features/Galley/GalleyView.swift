@@ -75,6 +75,7 @@ struct GalleyView: View {
                 }
             }
             .navigationTitle("Galley")
+            .ceramicPageChrome()
             .searchable(text: $model.filters.search, prompt: "Search galley")
             .toolbar {
                 GlobalPageToolbar(
@@ -83,7 +84,6 @@ struct GalleyView: View {
                     organizationId: organizationId,
                     isRefreshing: model.isRefreshing,
                     onOptions: { showingFilters = true },
-                    onOpenGroupSettings: onOpenGroupSettings,
                     onOpenSettings: onOpenSettings
                 )
             }

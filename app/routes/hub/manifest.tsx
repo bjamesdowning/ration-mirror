@@ -94,7 +94,8 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 	const weekStartPref: "sunday" | "monday" =
 		settings.manifestSettings?.weekStart ?? "sunday";
 	const showSnackSlot = settings.manifestSettings?.showSnackSlot ?? true;
-	const calendarSpan = (settings.manifestSettings?.calendarSpan ?? 5) as
+	const calendarSpan = (settings.manifestSettings?.calendarSpan ?? 7) as
+		| 1
 		| 3
 		| 5
 		| 7;
@@ -344,8 +345,8 @@ export async function action({ request, context }: Route.ActionArgs) {
 
 		const spanRaw = formData.get("span") as string;
 		const span =
-			spanRaw === "3" || spanRaw === "5" || spanRaw === "7"
-				? (+spanRaw as 3 | 5 | 7)
+			spanRaw === "1" || spanRaw === "3" || spanRaw === "5" || spanRaw === "7"
+				? (+spanRaw as 1 | 3 | 5 | 7)
 				: null;
 		if (span !== null) {
 			const currentSettings = await getUserSettings(
@@ -1529,7 +1530,7 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 						supplyDayInclusion={supplyDayInclusion}
 						onToggleSupplyInclusion={handleToggleSupplyInclusion}
 						togglingSupplyDate={togglingSupplyDate}
-						goalsChrome={showDayNutritionTotals}
+						goalsChrome={showDayNutritionTotals && !fuelPage}
 						goalTargets={showDayNutritionTotals ? goalTargets : null}
 						dayConsumedNutrients={
 							showDayNutritionTotals ? dayConsumedNutrients : undefined

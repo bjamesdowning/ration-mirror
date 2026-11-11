@@ -282,6 +282,22 @@ struct CargoQuickEatRequest: Encodable, Sendable {
     let operationKey: String
     var logIntake: Bool? = nil
     var notes: String? = nil
+    var fuelTimeZone: String? = nil
+
+    enum CodingKeys: String, CodingKey {
+        case quantity, unit, date, operationKey, logIntake, notes, fuelTimeZone
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(quantity, forKey: .quantity)
+        try container.encodeIfPresent(unit, forKey: .unit)
+        try container.encode(date, forKey: .date)
+        try container.encode(operationKey, forKey: .operationKey)
+        try container.encodeIfPresent(logIntake, forKey: .logIntake)
+        try container.encodeIfPresent(notes, forKey: .notes)
+        try container.encodeIfPresent(fuelTimeZone, forKey: .fuelTimeZone)
+    }
 }
 
 struct CargoQuickEatCargoSnapshot: Codable, Sendable {

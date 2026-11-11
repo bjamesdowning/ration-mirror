@@ -201,7 +201,9 @@ struct CargoQuickEatSheet: View {
             do {
                 try await persistUnitMassIfNeeded()
             } catch {
-                errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+                errorMessage = FuelDeviceZone.message(for: error)
+                    ?? (error as? APIError)?.errorDescription
+                    ?? error.localizedDescription
                 return
             }
         }

@@ -119,7 +119,7 @@ export const MobileSettingsPatchSchema = z
 			.object({
 				weekStart: z.enum(["sunday", "monday"]).optional(),
 				calendarSpan: z
-					.union([z.literal(3), z.literal(5), z.literal(7)])
+					.union([z.literal(1), z.literal(3), z.literal(5), z.literal(7)])
 					.optional(),
 			})
 			.optional(),

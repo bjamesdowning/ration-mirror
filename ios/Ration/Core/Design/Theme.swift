@@ -13,7 +13,7 @@ enum Theme {
     static let danger = Color(hex: 0xEF4444)
 
     /// Ceramic — primary background.
-    static let ceramic = adaptive(light: 0xF8F9FA, dark: 0x0D0D0D)
+    static let ceramic = adaptive(light: 0xF8F9FA, dark: 0x000000)
     /// Platinum — secondary background / cards.
     static let platinum = adaptive(light: 0xE6E6E6, dark: 0x1A1A1A)
     /// Carbon — primary text.

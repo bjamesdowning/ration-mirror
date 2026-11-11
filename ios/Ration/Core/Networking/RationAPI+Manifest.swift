@@ -68,16 +68,21 @@ extension RationAPI {
         amount: Double? = nil,
         unit: IntakeLoggedUnit? = nil
     ) async throws -> ManifestIntakeUpsertResponse {
-        try await client.post(
-            "manifest/entries/\(entryId)/intake",
-            body: ManifestIntakeUpsertRequest(
-                servings: servings,
-                amount: amount,
-                unit: unit,
-                idempotencyKey: idempotencyKey,
-                notes: notes
-            )
+        let body = ManifestIntakeUpsertRequest(
+            servings: servings,
+            amount: amount,
+            unit: unit,
+            idempotencyKey: idempotencyKey,
+            notes: notes,
+            fuelTimeZone: FuelDeviceZone.candidate
         )
+        do {
+            return try await client.post("manifest/entries/\(entryId)/intake", body: body)
+        } catch let error as APIError where error.code == "fuel_timezone_required" {
+            guard let zone = FuelDeviceZone.candidate else { throw error }
+            _ = try await patchSettings(SettingsPatch(fuelTimeZone: zone))
+            return try await client.post("manifest/entries/\(entryId)/intake", body: body)
+        }
     }
 
     func clearManifestIntake(

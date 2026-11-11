@@ -3,8 +3,8 @@ import UIKit
 import XCTest
 @testable import Ration
 
-/// Tab-bar selection stays forwarded through `TabBarReselectObserver`, and the
-/// group control keeps its own Hyper Green diamond on the iOS 26 toolbar.
+/// Tab-bar selection stays forwarded through `TabBarReselectObserver`.
+/// The group capsule is a photo, accessories, and a gear with no diamond.
 @MainActor
 final class TabBarAndGroupButtonTests: XCTestCase {
     func testShouldSelectTabForwardsPreviousAnswer() throws {
@@ -111,7 +111,7 @@ final class TabBarAndGroupButtonTests: XCTestCase {
         window.isHidden = true
     }
 
-    func testGroupButtonKeepsHyperGreenDiamond() throws {
+    func testGroupCapsuleHasNoDiamond() throws {
         let env = AppEnvironment()
         env.session.installSessionForTesting(try makeSignedInSession())
         XCTAssertFalse(env.session.clientFlags.isRationCopilotEnabled)
@@ -122,7 +122,6 @@ final class TabBarAndGroupButtonTests: XCTestCase {
                 Color.clear
                     .toolbar {
                         GlobalPageToolbar(
-                            onOpenGroupSettings: {},
                             onOpenSettings: {}
                         )
                     }
@@ -133,7 +132,7 @@ final class TabBarAndGroupButtonTests: XCTestCase {
         let window = try makeWindow(root: host)
         pump()
         let rendered = ImageRenderer(
-            content: OrgSwitcherBar(onTap: {})
+            content: OrgSwitcherBar(onSettings: {})
                 .padding(24)
                 .background(Color.white)
                 .environment(env)
@@ -145,24 +144,25 @@ final class TabBarAndGroupButtonTests: XCTestCase {
         if let data = image.pngData() {
             try? data.write(to: URL(fileURLWithPath: "/tmp/group-button.png"))
         }
-        XCTAssertTrue(
+        XCTAssertFalse(
             image.containsGreenDiamond(),
-            "Group settings diamond was not Hyper Green (image: \(image.size))"
+            "Group capsule still drew a Hyper Green diamond (image: \(image.size))"
         )
         XCTAssertNotNil(window.rootViewController)
         window.isHidden = true
     }
 
+    /// org-4's avatar palette is platinum, so a hyper-green pixel is a diamond.
     private func makeSignedInSession() throws -> SessionResponse {
         let json = """
         {
           "user": {"id": "user-1", "email": "cook@ration.app"},
-          "organization": {"id": "org-1", "name": "Galley", "credits": 12},
+          "organization": {"id": "org-4", "name": "Galley", "credits": 12},
           "credits": 12,
           "tier": "free",
           "isTierExpired": false,
           "organizations": [
-            {"id": "org-1", "name": "Galley", "credits": 12, "role": "owner", "isActive": true}
+            {"id": "org-4", "name": "Galley", "credits": 12, "role": "owner", "isActive": true}
           ],
           "clientFlags": {}
         }

@@ -35,6 +35,19 @@ describe("DiaryFoodWriteSchema", () => {
 		expect(parsed.macros).toBeUndefined();
 	});
 
+	it("accepts an optional IANA zone and rejects an abbreviation", () => {
+		expect(
+			DiaryFoodWriteSchema.parse({
+				...valid,
+				fuelTimeZone: "America/Los_Angeles",
+				manifestDate: "2026-06-22",
+			}).fuelTimeZone,
+		).toBe("America/Los_Angeles");
+		expect(
+			DiaryFoodWriteSchema.safeParse({ ...valid, fuelTimeZone: "PST" }).success,
+		).toBe(false);
+	});
+
 	it("accepts a cup label; conversion is decided from stored gram weights", () => {
 		expect(DiaryFoodWriteSchema.parse({ ...valid, unit: "cup" }).unit).toBe(
 			"cup",

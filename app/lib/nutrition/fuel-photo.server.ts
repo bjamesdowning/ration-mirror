@@ -30,7 +30,7 @@ import {
 	assertNutritionFuelPage,
 	assertNutritionPhotoLog,
 } from "./fast-log-flag.server";
-import { assertFuelCreateRoom } from "./fuel-cap.server";
+import { assertFuelCreateRoom, assertFuelDayRoom } from "./fuel-cap.server";
 import { FuelPhotoTooLargeError, FuelPhotoTypeError } from "./fuel-errors";
 import { fuelPhotoClientStatus } from "./fuel-photo-status";
 import type { FoodLogLine } from "./propose-food-log.server";
@@ -231,6 +231,7 @@ export async function submitFuelPhoto(
 		bytes: ArrayBuffer;
 		contentType: string;
 		now?: Date;
+		fuelTimeZone?: string | null;
 	},
 	deps: FuelPhotoDeps = {},
 ): Promise<{ requestId: string; status: "queued"; replayed: boolean }> {
@@ -282,7 +283,13 @@ export async function submitFuelPhoto(
 
 	const rate = await checkRateLimit(env.RATION_KV, "scan", principal.userId);
 	if (!rate.allowed) throw rateLimitResponse(rate);
-	await assertFuelCreateRoom(env.DB, principal.userId, now, now);
+	const room = await assertFuelCreateRoom(
+		env.DB,
+		principal.userId,
+		now,
+		now,
+		input.fuelTimeZone,
+	);
 	const balance = await checkBalance(env, principal.organizationId);
 	if (balance < AI_COSTS.SCAN) {
 		throw new InsufficientCreditsError(AI_COSTS.SCAN, balance);
@@ -311,7 +318,7 @@ export async function submitFuelPhoto(
 			operationType: "fuel_photo",
 			status: "in_progress",
 			itemCount: 1,
-			resultJson: { requestId },
+			resultJson: { requestId, fuelDate: room.fuelDate },
 			createdAt: now,
 		});
 		await db.insert(schema.queueJob).values({
@@ -426,8 +433,32 @@ export async function confirmFuelPhoto(
 	});
 	if (status !== "ready_to_review") throw new DiaryFoodNotFoundError();
 	const occurredAt = input.occurredAt ? new Date(input.occurredAt) : now;
-	await assertFuelCreateRoom(env.DB, principal.userId, occurredAt, now);
-	return (deps.logIntake ?? logDiaryFood)(env, principal, flags, input);
+	const db = drizzle(env.DB, { schema });
+	const [operation] = await db
+		.select({ resultJson: schema.nutritionOperation.resultJson })
+		.from(schema.nutritionOperation)
+		.where(eq(schema.nutritionOperation.id, meta.operationId))
+		.limit(1);
+	const stored = operation?.resultJson?.fuelDate;
+	const pinned =
+		typeof stored === "string" && stored.length > 0
+			? stored
+			: (
+					await assertFuelCreateRoom(
+						env.DB,
+						principal.userId,
+						occurredAt,
+						now,
+						input.fuelTimeZone,
+					)
+				).fuelDate;
+	if (typeof stored === "string" && stored.length > 0) {
+		await assertFuelDayRoom(env.DB, principal.userId, stored, now);
+	}
+	return (deps.logIntake ?? logDiaryFood)(env, principal, flags, {
+		...input,
+		pinnedFuelDate: pinned,
+	});
 }
 
 export async function runFuelPhotoConsumerJob(

@@ -19,13 +19,15 @@ import {
 import { isNutritionFuelPageEnabled } from "~/lib/nutrition/fast-log-flag.server";
 import { resolveNutritionCapabilities } from "~/lib/nutrition/feature-policy.server";
 import {
+	ensureFuelTimeZone,
 	personIsCrew,
 	releaseFuelSlot,
-	requireFuelTimeZone,
 	reserveFuelSlot,
-	stampFuelDate,
 } from "~/lib/nutrition/fuel-cap.server";
-import { assertFuelDateUnchanged } from "~/lib/nutrition/fuel-date";
+import {
+	assertFuelDateUnchanged,
+	fuelDateForInstant,
+} from "~/lib/nutrition/fuel-date";
 import { previousUtcCalendarDay } from "~/lib/nutrition/goal-effective";
 import {
 	coerceIntakeLoggedUnit,
@@ -908,6 +910,8 @@ export async function logManifestIntakes(
 			/** Private Eat snippet; only persisted when nutrition-intake-notes is on. */
 			notes?: string | null;
 		}>;
+		/** Device IANA zone for this write. Not a client fuel_date. */
+		fuelTimeZone?: string | null;
 	},
 ): Promise<LogManifestIntakesResult> {
 	requireScope(principal, "nutrition:write");
@@ -1099,6 +1103,13 @@ export async function logManifestIntakes(
 		);
 		const newRows: Array<typeof schema.nutritionIntake.$inferInsert> = [];
 		const results: NutritionIntakeResult[] = [];
+		const fuelPageOn = await isNutritionFuelPageEnabled(env, flags);
+		const needsZone =
+			fuelPageOn &&
+			resolvedItems.some((item) => !byKey.has(item.idempotencyKey));
+		const fuelZone = needsZone
+			? await ensureFuelTimeZone(env.DB, principal.userId, input.fuelTimeZone)
+			: null;
 		for (const item of resolvedItems) {
 			const replayedRow = byKey.get(item.idempotencyKey);
 			if (replayedRow) {
@@ -1138,20 +1149,16 @@ export async function logManifestIntakes(
 				requestedNotes: item.requestedNotes,
 				priorNotes: prior?.notes ?? null,
 			});
-			const fuelPageOn = await isNutritionFuelPageEnabled(env, flags);
 			let fuelDate: string | null = null;
 			if (fuelPageOn && !prior) {
-				fuelDate = await stampFuelDate(
-					env.DB,
-					principal.userId,
-					item.occurredAt ?? committedAt,
-				);
+				if (!fuelZone) throw new Error("Fuel zone was not resolved");
+				fuelDate = fuelDateForInstant(item.occurredAt ?? committedAt, fuelZone);
 			} else if (fuelPageOn && prior) {
-				const zone = await requireFuelTimeZone(env.DB, principal.userId);
+				if (!fuelZone) throw new Error("Fuel zone was not resolved");
 				fuelDate = assertFuelDateUnchanged(
 					prior.fuelDate,
 					item.occurredAt ?? prior.occurredAt,
-					zone,
+					fuelZone,
 				);
 			} else if (prior?.fuelDate) {
 				fuelDate = prior.fuelDate;

@@ -193,30 +193,44 @@ struct MealsReadyWidget: View {
     let matches: [MealMatch]
     var itemLimit: Int = HubLayoutEngine.defaultDisplayLimit
     var onSelectMeal: ((Meal) -> Void)?
+    var onOpenList: (() -> Void)?
 
     init(
         title: String = "Meals ready",
         matches: [MealMatch],
         itemLimit: Int = HubLayoutEngine.defaultDisplayLimit,
-        onSelectMeal: ((Meal) -> Void)? = nil
+        onSelectMeal: ((Meal) -> Void)? = nil,
+        onOpenList: (() -> Void)? = nil
     ) {
         self.title = title
         self.matches = matches
         self.itemLimit = itemLimit
         self.onSelectMeal = onSelectMeal
+        self.onOpenList = onOpenList
     }
 
     var body: some View {
         GlassCard {
             VStack(alignment: .leading, spacing: 10) {
-                HubWidgetHeader(
-                    title: title,
-                    systemImage: "fork.knife",
-                    trailing: "\(matches.filter(\.canMake).count)"
-                )
+                Button {
+                    onOpenList?()
+                } label: {
+                    HubWidgetHeader(
+                        title: title,
+                        systemImage: "fork.knife",
+                        trailing: "\(matches.filter(\.canMake).count)"
+                    )
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(title)
                 let ready = matches.filter(\.canMake)
                 if ready.isEmpty {
-                    Text("No meals ready with current Cargo").rationCaption()
+                    Button {
+                        onOpenList?()
+                    } label: {
+                        Text("No meals ready with current Cargo").rationCaption()
+                    }
+                    .buttonStyle(.plain)
                 } else {
                     ForEach(ready.prefix(itemLimit)) { match in
                         Button {
@@ -248,14 +262,26 @@ struct MealsPartialWidget: View {
     let matches: [MealMatch]
     var itemLimit: Int = HubLayoutEngine.defaultDisplayLimit
     var onSelectMeal: ((Meal) -> Void)?
+    var onOpenList: (() -> Void)?
 
     var body: some View {
         GlassCard {
             VStack(alignment: .leading, spacing: 10) {
-                HubWidgetHeader(title: "Partial meals", systemImage: "chart.bar")
+                Button {
+                    onOpenList?()
+                } label: {
+                    HubWidgetHeader(title: "Partial meals", systemImage: "chart.bar")
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Partial meals")
                 let partial = matches.filter { !$0.canMake && $0.matchPercentage >= 50 }
                 if partial.isEmpty {
-                    Text("No partial matches").rationCaption()
+                    Button {
+                        onOpenList?()
+                    } label: {
+                        Text("No partial matches").rationCaption()
+                    }
+                    .buttonStyle(.plain)
                 } else {
                     ForEach(partial.prefix(itemLimit)) { match in
                         Button {
@@ -285,17 +311,29 @@ struct CargoExpiringWidget: View {
     let alertDays: Int
     var itemLimit: Int = HubLayoutEngine.defaultDisplayLimit
     var onSelectItem: ((CargoItem) -> Void)?
+    var onOpenList: (() -> Void)?
 
     var body: some View {
         GlassCard {
             VStack(alignment: .leading, spacing: 10) {
-                HubWidgetHeader(
-                    title: "Expiring",
-                    systemImage: "clock.badge.exclamationmark",
-                    trailing: "\(alertDays)d"
-                )
+                Button {
+                    onOpenList?()
+                } label: {
+                    HubWidgetHeader(
+                        title: "Expiring",
+                        systemImage: "clock.badge.exclamationmark",
+                        trailing: "\(alertDays)d"
+                    )
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Expiring Cargo")
                 if items.isEmpty {
-                    Text("Nothing expiring soon").rationCaption()
+                    Button {
+                        onOpenList?()
+                    } label: {
+                        Text("Nothing expiring soon").rationCaption()
+                    }
+                    .buttonStyle(.plain)
                 } else {
                     ForEach(items.prefix(itemLimit)) { item in
                         Button {

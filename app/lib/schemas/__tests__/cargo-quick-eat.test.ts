@@ -22,6 +22,28 @@ describe("CargoQuickEatRequestSchema", () => {
 		).toThrow();
 	});
 
+	it("accepts an optional IANA zone and does not treat date as a fuel day", () => {
+		const parsed = CargoQuickEatRequestSchema.parse({
+			quantity: 1,
+			date: "2026-08-11",
+			operationKey: "11111111-1111-4111-8111-111111111111",
+			fuelTimeZone: "America/Los_Angeles",
+		});
+		expect(parsed.date).toBe("2026-08-11");
+		expect(parsed.fuelTimeZone).toBe("America/Los_Angeles");
+	});
+
+	it("rejects an abbreviation as a fuel zone", () => {
+		expect(() =>
+			CargoQuickEatRequestSchema.parse({
+				quantity: 1,
+				date: "2026-08-11",
+				operationKey: "11111111-1111-4111-8111-111111111111",
+				fuelTimeZone: "PST",
+			}),
+		).toThrow();
+	});
+
 	it("rejects invalid date", () => {
 		expect(() =>
 			CargoQuickEatRequestSchema.parse({

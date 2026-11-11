@@ -16,9 +16,10 @@ struct DiaryFoodBody: Encodable, Sendable {
     let idempotencyKey: String
     let operationKey: String
     var compositionSource: String? = nil
+    var fuelTimeZone: String? = nil
 
     enum CodingKeys: String, CodingKey {
-        case name, occurredAt, amount, unit, macros, idempotencyKey, operationKey, compositionSource
+        case name, occurredAt, amount, unit, macros, idempotencyKey, operationKey, compositionSource, fuelTimeZone
     }
 
     func encode(to encoder: Encoder) throws {
@@ -31,6 +32,7 @@ struct DiaryFoodBody: Encodable, Sendable {
         try container.encode(idempotencyKey, forKey: .idempotencyKey)
         try container.encode(operationKey, forKey: .operationKey)
         try container.encodeIfPresent(compositionSource, forKey: .compositionSource)
+        try container.encodeIfPresent(fuelTimeZone, forKey: .fuelTimeZone)
     }
 }
 
@@ -107,6 +109,20 @@ struct SavedFoodLogBody: Encodable, Sendable {
     let occurredAt: String
     let idempotencyKey: String
     let operationKey: String
+    var fuelTimeZone: String? = nil
+
+    enum CodingKeys: String, CodingKey {
+        case savedFoodId, occurredAt, idempotencyKey, operationKey, fuelTimeZone
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(savedFoodId, forKey: .savedFoodId)
+        try container.encode(occurredAt, forKey: .occurredAt)
+        try container.encode(idempotencyKey, forKey: .idempotencyKey)
+        try container.encode(operationKey, forKey: .operationKey)
+        try container.encodeIfPresent(fuelTimeZone, forKey: .fuelTimeZone)
+    }
 }
 
 struct SaveFoodBody: Encodable, Sendable {
@@ -175,11 +191,19 @@ struct SavedFoodListResponse: Decodable, Sendable {
 
 extension RationAPI {
     func logDiaryFood(_ body: DiaryFoodBody) async throws -> DiaryWriteResponse {
-        try requireDiaryWrite(try await client.post("nutrition/diary", body: body))
+        var stamped = body
+        stamped.fuelTimeZone = stamped.fuelTimeZone ?? FuelDeviceZone.candidate
+        return try await retryingFuelZone {
+            try requireDiaryWrite(try await client.post("nutrition/diary", body: stamped))
+        }
     }
 
     func updateDiaryFood(id: String, body: DiaryFoodBody) async throws -> DiaryWriteResponse {
-        try requireDiaryWrite(try await client.patch("nutrition/diary/\(id)", body: body))
+        var stamped = body
+        stamped.fuelTimeZone = stamped.fuelTimeZone ?? FuelDeviceZone.candidate
+        return try await retryingFuelZone {
+            try requireDiaryWrite(try await client.patch("nutrition/diary/\(id)", body: stamped))
+        }
     }
 
     func voidDiaryFood(id: String, body: DiaryVoidBody) async throws -> DiaryWriteResponse {
@@ -191,7 +215,21 @@ extension RationAPI {
     }
 
     func logSavedFood(_ body: SavedFoodLogBody) async throws -> DiaryWriteResponse {
-        try requireDiaryWrite(try await client.post("nutrition/diary", body: body))
+        var stamped = body
+        stamped.fuelTimeZone = stamped.fuelTimeZone ?? FuelDeviceZone.candidate
+        return try await retryingFuelZone {
+            try requireDiaryWrite(try await client.post("nutrition/diary", body: stamped))
+        }
+    }
+
+    private func retryingFuelZone<T>(_ work: () async throws -> T) async throws -> T {
+        do {
+            return try await work()
+        } catch let error as APIError where error.code == "fuel_timezone_required" {
+            guard let zone = FuelDeviceZone.candidate else { throw error }
+            _ = try await patchSettings(SettingsPatch(fuelTimeZone: zone))
+            return try await work()
+        }
     }
 
     private func requireDiaryWrite(_ response: DiaryWriteResponse) throws -> DiaryWriteResponse {
@@ -219,7 +257,10 @@ extension RationAPI {
     }
 
     func lookupFoodBarcode(_ barcode: String) async throws -> FoodBarcodeLookupResponse {
-        try await client.post("nutrition/diary/barcode", body: FoodBarcodeBody(barcode: barcode))
+        let body = FoodBarcodeBody(barcode: barcode, fuelTimeZone: FuelDeviceZone.candidate)
+        return try await retryingFuelZone {
+            try await client.post("nutrition/diary/barcode", body: body)
+        }
     }
 
     func fuelDay(date: String) async throws -> FuelDayResponse {
@@ -227,7 +268,11 @@ extension RationAPI {
     }
 
     func submitFuelPhoto(_ body: FuelPhotoSubmitBody) async throws -> FuelPhotoQueuedResponse {
-        try await client.post("nutrition/diary/photo", body: body)
+        var stamped = body
+        stamped.fuelTimeZone = stamped.fuelTimeZone ?? FuelDeviceZone.candidate
+        return try await retryingFuelZone {
+            try await client.post("nutrition/diary/photo", body: stamped)
+        }
     }
 
     func fuelPhotoStatus(_ requestId: String) async throws -> FuelPhotoStatusResponse {
@@ -311,6 +356,17 @@ struct HealthExportPendingResponse: Decodable, Sendable {
 
 struct FoodBarcodeBody: Encodable, Sendable {
     let barcode: String
+    var fuelTimeZone: String? = nil
+
+    enum CodingKeys: String, CodingKey {
+        case barcode, fuelTimeZone
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(barcode, forKey: .barcode)
+        try container.encodeIfPresent(fuelTimeZone, forKey: .fuelTimeZone)
+    }
 }
 
 struct FoodBarcodeLookupResponse: Decodable, Sendable {
@@ -359,6 +415,7 @@ struct FuelDayResponse: Decodable, Sendable {
         let proteinG: Double
         let carbsG: Double
         let fatG: Double
+        let fiberG: Double?
     }
 
     struct Item: Decodable, Identifiable, Sendable {
@@ -390,6 +447,19 @@ struct FuelPhotoSubmitBody: Encodable, Sendable {
     let operationKey: String
     let contentType: String
     let imageBase64: String
+    var fuelTimeZone: String? = nil
+
+    enum CodingKeys: String, CodingKey {
+        case operationKey, contentType, imageBase64, fuelTimeZone
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(operationKey, forKey: .operationKey)
+        try container.encode(contentType, forKey: .contentType)
+        try container.encode(imageBase64, forKey: .imageBase64)
+        try container.encodeIfPresent(fuelTimeZone, forKey: .fuelTimeZone)
+    }
 }
 
 struct FuelPhotoQueuedResponse: Decodable, Sendable {

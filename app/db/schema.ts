@@ -1746,6 +1746,8 @@ export const nutritionOperation = sqliteTable(
 			draftId?: string;
 			/** Fuel photo job id. No image bytes or food name. */
 			requestId?: string;
+			/** Fuel day computed at photo submit. Confirm does not recompute it. */
+			fuelDate?: string;
 			credits?: number;
 			kitchenItemId?: string;
 			target?: "cargo" | "meal";

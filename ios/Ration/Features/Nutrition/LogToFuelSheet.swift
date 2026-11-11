@@ -331,7 +331,7 @@ struct LogToFuelSheet: View {
             saving = false
         } catch {
             saving = false
-            errorMessage = error.localizedDescription
+            errorMessage = FuelDeviceZone.message(for: error) ?? error.localizedDescription
         }
     }
 
@@ -409,7 +409,7 @@ struct LogToFuelSheet: View {
             onClose()
         } catch {
             saving = false
-            errorMessage = error.localizedDescription
+            errorMessage = FuelDeviceZone.message(for: error) ?? error.localizedDescription
         }
     }
 
@@ -427,7 +427,7 @@ struct LogToFuelSheet: View {
             onClose()
         } catch {
             saving = false
-            errorMessage = error.localizedDescription
+            errorMessage = FuelDeviceZone.message(for: error) ?? error.localizedDescription
         }
     }
 }

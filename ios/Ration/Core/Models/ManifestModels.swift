@@ -431,9 +431,10 @@ struct ManifestIntakeUpsertRequest: Encodable, Sendable {
     var unit: IntakeLoggedUnit? = nil
     let idempotencyKey: String
     var notes: String? = nil
+    var fuelTimeZone: String? = nil
 
     enum CodingKeys: String, CodingKey {
-        case servings, amount, unit, idempotencyKey, notes
+        case servings, amount, unit, idempotencyKey, notes, fuelTimeZone
     }
 
     func encode(to encoder: Encoder) throws {
@@ -443,6 +444,7 @@ struct ManifestIntakeUpsertRequest: Encodable, Sendable {
         try c.encodeIfPresent(unit, forKey: .unit)
         try c.encode(idempotencyKey, forKey: .idempotencyKey)
         try c.encodeIfPresent(notes, forKey: .notes)
+        try c.encodeIfPresent(fuelTimeZone, forKey: .fuelTimeZone)
     }
 }
 

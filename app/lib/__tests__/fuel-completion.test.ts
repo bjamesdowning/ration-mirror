@@ -11,7 +11,11 @@ import { postFoodBarcode } from "~/lib/nutrition/diary-http.server";
 import { isNutritionFuelPageEnabled } from "~/lib/nutrition/fast-log-flag.server";
 import { lookupFoodBarcode } from "~/lib/nutrition/food-barcode.server";
 import { readFuelUsed } from "~/lib/nutrition/fuel-cap.server";
-import { FuelDailyLimitError } from "~/lib/nutrition/fuel-errors";
+import { fuelDateForInstant } from "~/lib/nutrition/fuel-date";
+import {
+	FuelDailyLimitError,
+	FuelTimezoneRequiredError,
+} from "~/lib/nutrition/fuel-errors";
 import {
 	confirmFuelPhoto,
 	runFuelPhotoConsumerJob,
@@ -340,7 +344,7 @@ describe("fuel writers at the cap", () => {
 			.prepare(
 				"INSERT INTO nutrition_fuel_day (user_id, fuel_date, used) VALUES (?, ?, 3)",
 			)
-			.bind("user-1", "2026-11-10")
+			.bind("user-1", fuelDateForInstant(new Date(), "Europe/Dublin"))
 			.run();
 		const request = new Request("https://ration.test/barcode", {
 			method: "POST",
@@ -359,7 +363,7 @@ describe("fuel writers at the cap", () => {
 			.prepare(
 				"INSERT INTO nutrition_fuel_day (user_id, fuel_date, used) VALUES (?, ?, 3)",
 			)
-			.bind("principal-9", "2026-11-10")
+			.bind("principal-9", fuelDateForInstant(new Date(), "Europe/Dublin"))
 			.run();
 		const [lookup] = createFoodLogToolDefs(envFor(db) as never);
 		const ctx = {
@@ -410,6 +414,29 @@ describe("fuel photo queue", () => {
 				},
 			),
 		).rejects.toBeInstanceOf(FuelDailyLimitError);
+		expect(put).not.toHaveBeenCalled();
+	});
+
+	it("does not upload when no fuel zone can be resolved", async () => {
+		const { db } = await database();
+		await db
+			.prepare("UPDATE user SET settings = '{}' WHERE id = ?")
+			.bind("user-1")
+			.run();
+		const put = vi.fn();
+		await expect(
+			submitFuelPhoto(
+				envFor(db, { STORAGE: { put, delete: vi.fn() } }),
+				owner,
+				{},
+				{
+					operationKey: crypto.randomUUID(),
+					contentType: "image/jpeg",
+					bytes: new Uint8Array([1, 2, 3]).buffer,
+					now,
+				},
+			),
+		).rejects.toBeInstanceOf(FuelTimezoneRequiredError);
 		expect(put).not.toHaveBeenCalled();
 	});
 

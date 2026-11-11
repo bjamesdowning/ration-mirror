@@ -4,6 +4,7 @@ import UIKit
 /// Observes UIKit tab bar re-taps. SwiftUI `TabView` does not fire selection changes when
 /// the already-selected tab is tapped again; this bridge surfaces those events.
 struct TabBarReselectObserver: UIViewControllerRepresentable {
+    var neutralizeSelection: Bool = false
     var onReselect: (Int) -> Void
 
     func makeCoordinator() -> Coordinator {
@@ -19,6 +20,7 @@ struct TabBarReselectObserver: UIViewControllerRepresentable {
 
     func updateUIViewController(_ uiViewController: UIViewController, context: Context) {
         context.coordinator.onReselect = onReselect
+        context.coordinator.neutralizeSelection = neutralizeSelection
         context.coordinator.attachIfNeeded(from: uiViewController)
     }
 
@@ -28,7 +30,10 @@ struct TabBarReselectObserver: UIViewControllerRepresentable {
 
     final class Coordinator: NSObject, UITabBarControllerDelegate {
         var onReselect: (Int) -> Void
+        var neutralizeSelection = false
         private weak var tabBarController: UITabBarController?
+        private var savedStandardAppearance: UITabBarAppearance?
+        private var savedScrollEdgeAppearance: UITabBarAppearance?
         private weak var previousDelegate: UITabBarControllerDelegate?
         private var lastSelectedIndex: Int?
         /// `didSelect` and `didSelectTab` can both run for one tap. The first one decides the reselect.
@@ -64,6 +69,36 @@ struct TabBarReselectObserver: UIViewControllerRepresentable {
                     previousDelegate = current
                 }
                 tab.delegate = self
+            }
+            applySelectionAppearance(tab)
+        }
+
+        func applySelectionAppearance(_ tab: UITabBarController) {
+            let bar = tab.tabBar
+            if savedStandardAppearance == nil {
+                savedStandardAppearance = bar.standardAppearance
+                savedScrollEdgeAppearance = bar.scrollEdgeAppearance
+            }
+            guard neutralizeSelection else {
+                if let savedStandardAppearance {
+                    bar.standardAppearance = savedStandardAppearance
+                }
+                bar.scrollEdgeAppearance = savedScrollEdgeAppearance
+                return
+            }
+            let appearance = UITabBarAppearance()
+            appearance.configureWithDefaultBackground()
+            let normal = appearance.stackedLayoutAppearance.normal
+            appearance.stackedLayoutAppearance.selected.iconColor = normal.iconColor
+            appearance.stackedLayoutAppearance.selected.titleTextAttributes = normal.titleTextAttributes
+            appearance.inlineLayoutAppearance.selected.iconColor = appearance.inlineLayoutAppearance.normal.iconColor
+            appearance.inlineLayoutAppearance.selected.titleTextAttributes = appearance.inlineLayoutAppearance.normal.titleTextAttributes
+            appearance.compactInlineLayoutAppearance.selected.iconColor = appearance.compactInlineLayoutAppearance.normal.iconColor
+            appearance.compactInlineLayoutAppearance.selected.titleTextAttributes = appearance.compactInlineLayoutAppearance.normal.titleTextAttributes
+            bar.standardAppearance = appearance
+            bar.scrollEdgeAppearance = appearance
+            for item in bar.items ?? [] {
+                item.accessibilityTraits.remove(.selected)
             }
         }
 

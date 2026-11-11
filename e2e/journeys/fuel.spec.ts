@@ -84,10 +84,6 @@ test.describe("fuel daily cap", () => {
 	test("logs three meals and the fourth opens purchase", async ({ page }) => {
 		test.setTimeout(60_000);
 		await grant(page, "intake");
-		const zone = await page.request.post("/hub/settings", {
-			form: { intent: "update-fuel-timezone", fuelTimeZone: "Europe/Dublin" },
-		});
-		expect(zone.ok()).toBeTruthy();
 		await page.goto("/hub/fuel");
 		for (let n = 0; n < 6; n += 1) {
 			const voids = page.getByRole("button", { name: /^Void / });

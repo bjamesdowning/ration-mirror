@@ -1,4 +1,4 @@
-export type CalendarSpan = 3 | 5 | 7;
+export type CalendarSpan = 1 | 3 | 5 | 7;
 
 interface CalendarSpanPickerProps {
 	currentSpan: CalendarSpan;
@@ -12,6 +12,7 @@ export function CalendarSpanPicker({
 	onChange,
 	fullWidth = false,
 }: CalendarSpanPickerProps) {
+	const spans: CalendarSpan[] = currentSpan === 1 ? [1, 3, 5, 7] : [3, 5, 7];
 	return (
 		<fieldset
 			className={`flex items-center rounded-lg overflow-hidden border border-platinum dark:border-white/10 m-0 p-0 ${
@@ -20,7 +21,7 @@ export function CalendarSpanPicker({
 			aria-label="Calendar span"
 		>
 			<legend className="sr-only">Number of days shown in Manifest</legend>
-			{([3, 5, 7] as const).map((span) => (
+			{spans.map((span) => (
 				<button
 					key={span}
 					type="button"

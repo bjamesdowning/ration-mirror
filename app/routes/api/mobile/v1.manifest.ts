@@ -51,10 +51,10 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 			const settings = await getUserSettings(context.cloudflare.env.DB, userId);
 			const weekStart =
 				(settings.manifestSettings as { weekStart?: "sunday" | "monday" })
-					?.weekStart ?? "monday";
+					?.weekStart ?? "sunday";
 			const span =
-				(settings.manifestSettings as { calendarSpan?: 3 | 5 | 7 })
-					?.calendarSpan ?? 5;
+				(settings.manifestSettings as { calendarSpan?: 1 | 3 | 5 | 7 })
+					?.calendarSpan ?? 7;
 			const anchor = await kitchenTodayForOrganization(
 				context.cloudflare.env.DB,
 				organizationId,

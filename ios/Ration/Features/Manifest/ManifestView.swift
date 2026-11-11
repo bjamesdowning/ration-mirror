@@ -11,6 +11,7 @@ struct ManifestView: View {
     var onPlanWeekComplete: (Int) -> Void = { _ in }
     @State private var model = ManifestViewModel()
     @State private var showingAddEntry = false
+    @State private var addEntrySlot: String?
     @State private var addEntryPrefillMealId: String?
     @State private var showingPlanWeek = false
     @State private var showingOptions = false
@@ -56,10 +57,6 @@ struct ManifestView: View {
             calendarSpan: model.calendarSpan,
             weekStartPref: model.weekStartPref
         )
-    }
-
-    private var showTodayToolbarButton: Bool {
-        model.rangeStart != todayNavigationAnchor
     }
 
     private func jumpToToday() {
@@ -198,35 +195,17 @@ struct ManifestView: View {
                 }
             }
             .navigationTitle("Manifest")
+            .ceramicPageChrome()
             .toolbar {
-                if model.manifest != nil, showTodayToolbarButton {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Button("Today") {
-                            jumpToToday()
-                        }
-                        .disabled(model.isWeekNavigationBusy)
-                        .accessibilityLabel("Jump to today")
-                    }
-                }
                 GlobalPageToolbar(
                     syncDomain: SnapshotDomain.manifest,
                     organizationId: organizationId,
                     syncUserId: userId,
                     isRefreshing: model.isRefreshing,
                     onOptions: { showingOptions = true },
-                    onOpenGroupSettings: onOpenGroupSettings,
+                    accessories: manifestAccessories,
                     onOpenSettings: onOpenSettings
                 )
-                if !env.session.clientFlags.isNutritionFuelPageEnabled {
-                    ToolbarItem(placement: .topBarLeading) {
-                        Button {
-                            showingMacros = true
-                        } label: {
-                            Image(systemName: "chart.bar.fill")
-                        }
-                        .accessibilityLabel("Macros")
-                    }
-                }
             }
             .dataSyncBanner(
                 domain: SnapshotDomain.manifest,
@@ -275,7 +254,8 @@ struct ManifestView: View {
             .sheet(isPresented: $showingAddEntry) {
                 AddManifestEntrySheet(
                     defaultDate: model.selectedDay,
-                    preselectedMealId: addEntryPrefillMealId
+                    preselectedMealId: addEntryPrefillMealId,
+                    preselectedSlot: addEntrySlot
                 ) { mealId, date, slot in
                     guard let organizationId = env.session.activeOrganizationId else {
                         return "Organization not ready."
@@ -296,7 +276,10 @@ struct ManifestView: View {
                     )
                     return ok ? nil : model.errorMessage
                 }
-                .onDisappear { addEntryPrefillMealId = nil }
+                .onDisappear {
+                    addEntryPrefillMealId = nil
+                    addEntrySlot = nil
+                }
             }
             .sheet(isPresented: $showingPlanWeek) {
                 PlanWeekSheet { count in
@@ -344,6 +327,7 @@ struct ManifestView: View {
               let userId
         else { return }
         env.configureNutritionScope()
+        model.loadsNutritionSummary = !env.session.clientFlags.isNutritionFuelPageEnabled
         model.refreshOutcomes = env.refreshOutcomes
         await env.loadSnapshot(organizationId: organizationId, domain: SnapshotDomain.manifest) {
             await model.load(
@@ -396,12 +380,128 @@ struct ManifestView: View {
         return Dictionary(days.map { ($0.date, $0) }, uniquingKeysWith: { first, _ in first })
     }
 
+    private var manifestAccessories: [PageCapsuleAccessory] {
+        var items: [PageCapsuleAccessory] = []
+        if !env.session.clientFlags.isNutritionFuelPageEnabled {
+            items.append(
+                PageCapsuleAccessory(
+                    id: "macros",
+                    systemImage: "chart.bar.fill",
+                    label: "Macros",
+                    action: { showingMacros = true }
+                )
+            )
+        }
+        if model.manifest != nil {
+            let showingToday = model.rangeStart == todayNavigationAnchor
+            items.append(
+                PageCapsuleAccessory(
+                    id: "today",
+                    systemImage: "calendar",
+                    label: "Today",
+                    hint: showingToday ? nil : "Jump to today",
+                    value: showingToday ? "Showing today" : nil,
+                    isEnabled: !showingToday && !model.isWeekNavigationBusy,
+                    action: { jumpToToday() }
+                )
+            )
+        }
+        return items
+    }
+
     @ViewBuilder
+    private func manifestDayCards(_ manifest: ManifestResponse, organizationId: String) -> some View {
+        let dates = ManifestDateHelpers.calendarDates(
+            span: model.calendarSpan,
+            anchor: model.rangeStart,
+            weekStartPref: model.weekStartPref
+        )
+        let order = ["breakfast", "lunch", "snack", "dinner"]
+        ForEach(dates, id: \.self) { day in
+            Section {
+                HStack {
+                    Text(ManifestDateHelpers.smartLabel(isoDate: day)).rationHeadline()
+                    Spacer()
+                    ManifestDaySupplyToggle(
+                        includedInSupply: model.isDayIncludedInSupply(day),
+                        disabled: !env.network.isOnline || model.isTogglingSupplyDay
+                    ) {
+                        Task {
+                            await model.toggleSupplyDay(
+                                day,
+                                api: env.api,
+                                online: env.network.isOnline
+                            )
+                        }
+                    }
+                }
+            }
+            .listRowBackground(Theme.surface)
+            Section {
+                ForEach(order, id: \.self) { slot in
+                    let rows = manifest.entries.filter { entry in
+                        entry.date == day && entry.slotType == slot
+                    }
+                    if rows.isEmpty {
+                        Button(slotTitle(slot)) {
+                            model.selectedDay = day
+                            addEntrySlot = slot
+                            showingAddEntry = true
+                        }
+                        .frame(minHeight: 44)
+                        .listRowBackground(Theme.surface)
+                    } else {
+                        ForEach(rows) { entry in
+                            manifestEntry(entry, organizationId: organizationId)
+                        }
+                    }
+                }
+                let other = manifest.entries.filter { entry in
+                    entry.date == day && !order.contains(entry.slotType)
+                }
+                ForEach(other) { entry in
+                    manifestEntry(entry, organizationId: organizationId)
+                }
+            }
+        }
+    }
+
+    private func slotTitle(_ slot: String) -> String {
+        switch slot {
+        case "breakfast": return "Breakfast"
+        case "lunch": return "Lunch"
+        case "snack": return "Snack"
+        default: return "Dinner"
+        }
+    }
+
+    private func manifestEntry(_ entry: ManifestEntry, organizationId: String) -> some View {
+        ManifestEntryRow(
+            entry: entry,
+            onCook: { Task { await handlePrepare(entry) } },
+            onLogServing: { pendingEatEntry = entry },
+            onEditServing: { pendingEatEntry = entry }
+        )
+        .listRowBackground(Theme.surface)
+        .destructiveTrailingSwipe {
+            Task {
+                guard let userId else { return }
+                await model.deleteEntry(
+                    entry,
+                    api: env.api,
+                    snapshots: env.snapshots,
+                    online: env.network.isOnline,
+                    organizationId: organizationId,
+                    userId: userId
+                )
+            }
+        }
+    }
+
     private func content(_ manifest: ManifestResponse, organizationId: String) -> some View {
-        let entryDates = Set(manifest.entries.map(\.date))
         let dayEntries = manifest.entries.filter { $0.date == model.selectedDay }
 
-        List {
+        return List {
             if !model.isLoading {
                 ListCountHeader(count: manifestEntryCount)
             }
@@ -410,11 +510,14 @@ struct ManifestView: View {
                 rangeStart: model.rangeStart,
                 selectedDay: $model.selectedDay,
                 weekStartPref: model.weekStartPref,
-                entryDates: entryDates,
                 isLoading: model.isWeekNavigationBusy,
                 nutritionByDate: nutritionByDate,
-                nutritionGoal: model.nutritionSummary?.goal,
-                onTapNutrientLine: onOpenNutritionGoals,
+                nutritionGoal: env.session.clientFlags.isNutritionFuelPageEnabled
+                    ? nil
+                    : model.nutritionSummary?.goal,
+                onTapNutrientLine: env.session.clientFlags.isNutritionFuelPageEnabled
+                    ? nil
+                    : onOpenNutritionGoals,
                 onOpenCalendar: { showingJumpCalendar = true }
             ) { start in
                 guard let userId else { return }
@@ -441,68 +544,7 @@ struct ManifestView: View {
                 ErrorBanner(message: errorMessage).listRowBackground(Color.clear)
             }
 
-            if dayEntries.isEmpty {
-                Text(model.offlineBannerMessage != nil
-                    ? "Offline — showing cached plan. Meals for this day may be incomplete."
-                    : "No meals planned for this day. Tap + to schedule one.")
-                    .rationCaption()
-                    .foregroundStyle(Theme.muted)
-                    .listRowBackground(Color.clear)
-            } else {
-                Section {
-                    HStack {
-                        Text(ManifestDateHelpers.smartLabel(isoDate: model.selectedDay))
-                            .rationHeadline()
-                        Spacer()
-                        ManifestDaySupplyToggle(
-                            includedInSupply: model.isDayIncludedInSupply(model.selectedDay),
-                            disabled: !env.network.isOnline || model.isTogglingSupplyDay
-                        ) {
-                            Task {
-                                await model.toggleSupplyDay(
-                                    model.selectedDay,
-                                    api: env.api,
-                                    online: env.network.isOnline
-                                )
-                            }
-                        }
-                    }
-                } header: {
-                    EmptyView()
-                }
-                .listRowBackground(Theme.surface)
-
-                Section {
-                    ForEach(dayEntries) { entry in
-                        ManifestEntryRow(
-                            entry: entry,
-                            onCook: {
-                                Task { await handlePrepare(entry) }
-                            },
-                            onLogServing: {
-                                pendingEatEntry = entry
-                            },
-                            onEditServing: {
-                                pendingEatEntry = entry
-                            }
-                        )
-                        .listRowBackground(Theme.surface)
-                        .destructiveTrailingSwipe {
-                            Task {
-                                guard let userId else { return }
-                                await model.deleteEntry(
-                                    entry,
-                                    api: env.api,
-                                    snapshots: env.snapshots,
-                                    online: env.network.isOnline,
-                                    organizationId: organizationId,
-                                    userId: userId
-                                )
-                            }
-                        }
-                    }
-                }
-            }
+            manifestDayCards(manifest, organizationId: organizationId)
 
             // Personal diary (incl. cross-kitchen rows) — independent of planned meals today.
             let intakeRows: [(id: String, name: String, organizationName: String?, intake: ManifestPersonalIntake, personalLog: Bool, loggedAmount: Double?, loggedUnit: String?, occurredAt: Date, slotType: String?)] = {

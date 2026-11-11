@@ -4,6 +4,7 @@ import UIKit
 struct GroupSettingsView: View {
     @Environment(AppEnvironment.self) private var env
     @Environment(\.dismiss) private var dismiss
+    var embedded = false
     @State private var model = GroupSettingsViewModel()
     @State private var paywallContext: PaywallContext?
     @State private var showingDeleteConfirm = false
@@ -60,7 +61,7 @@ struct GroupSettingsView: View {
                 content
             }
         }
-        .navigationTitle("Group Settings")
+        .navigationTitle(embedded ? "" : "Group Settings")
         .navigationBarTitleDisplayMode(.inline)
         .background(Theme.ceramic)
         .task { await model.load(api: env.api) }

@@ -59,8 +59,11 @@ struct ManifestOptionsSheet: View {
                         Text("Monday").tag("monday")
                     }
                     Picker("Calendar span", selection: $selectedCalendarSpan) {
+                        Text("1 day").tag(1)
                         Text("3 days").tag(3)
-                        Text("5 days").tag(5)
+                        if selectedCalendarSpan == 5 {
+                            Text("5 days").tag(5)
+                        }
                         Text("7 days").tag(7)
                     }
                     Button("Save calendar settings") {

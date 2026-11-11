@@ -49,6 +49,7 @@ final class ManifestViewModel {
     }
 
     /// Day-keyed nutrient totals for the visible range.
+    var loadsNutritionSummary = true
     private(set) var nutritionSummary: NutritionSummary?
     /// True when `nutritionSummary` is shown from offline/private cache.
     private(set) var nutritionSummaryOffline = false
@@ -504,6 +505,10 @@ final class ManifestViewModel {
         nutrition: NutritionStore,
         userId: String
     ) async {
+        guard loadsNutritionSummary else {
+            nutritionSummary = nil
+            return
+        }
         nutrition.configure(userId: userId)
         let endDate = ManifestDateHelpers.addDays(rangeStart, days: max(calendarSpan - 1, 0))
         let summary = await nutrition.loadSummary(

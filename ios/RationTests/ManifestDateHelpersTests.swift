@@ -193,6 +193,26 @@ final class ManifestDateHelpersTests: XCTestCase {
         XCTAssertTrue(visible.contains(picked))
     }
 
+    func testCalendarDatesSpanOneIsOnlyTheAnchor() {
+        let dates = ManifestDateHelpers.calendarDates(
+            span: 1,
+            anchor: "2026-11-11",
+            weekStartPref: "monday"
+        )
+        XCTAssertEqual(dates, ["2026-11-11"])
+    }
+
+    func testCalendarDatesSpanSevenUsesWeekStart() {
+        let dates = ManifestDateHelpers.calendarDates(
+            span: 7,
+            anchor: "2026-11-11",
+            weekStartPref: "sunday"
+        )
+        XCTAssertEqual(dates.first, "2026-11-08")
+        XCTAssertEqual(dates.count, 7)
+        XCTAssertEqual(dates.last, "2026-11-14")
+    }
+
     func testParseYearMonth() {
         let parsed = ManifestDateHelpers.parseYearMonth("2026-08-09")
         XCTAssertEqual(parsed.year, 2026)

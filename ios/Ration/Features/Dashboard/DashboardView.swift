@@ -7,6 +7,8 @@ struct DashboardView: View {
     /// Bumped when the Hub tab is re-tapped while already selected (exits edit mode).
     var hubTabReselectToken: Int = 0
     @Binding var isHubEditMode: Bool
+    /// False while the Fuel tab owns the shared hub dock slot.
+    var hubDockVisible: Bool = true
     var onScan: () -> Void = {}
     var onOpenSettings: () -> Void = {}
     var onOpenGroupSettings: () -> Void = {}
@@ -108,12 +110,13 @@ struct DashboardView: View {
                 }
             }
             .navigationTitle(model.isEditMode ? "Edit Hub" : "Hub")
+            .ceramicPageChrome()
             .toolbar {
                 GlobalPageToolbar(
                     syncDomain: SnapshotDomain.hub,
                     organizationId: organizationId,
                     isRefreshing: model.isRefreshing,
-                    onOpenGroupSettings: onOpenGroupSettings,
+                    showsHubButton: false,
                     onOpenSettings: onOpenSettings
                 )
                 if case .loaded = model.state, model.isEditMode {
@@ -185,7 +188,11 @@ struct DashboardView: View {
         }
         .tabDockAction(
             tag: .hub,
-            isActive: !model.isEditMode && HubCapturePolicy.menuActive(hubMenuVisibility)
+            isActive: HubShellPolicy.hubDockActive(
+                showingHub: hubDockVisible,
+                editing: model.isEditMode,
+                menu: HubCapturePolicy.menuActive(hubMenuVisibility)
+            )
         ) {
             IconFABMenuCore(systemImage: "plus.circle.fill", accessibilityLabel: "Hub actions") {
                 ForEach(HubCapturePolicy.visibleLabels(hubMenuVisibility), id: \.self) { label in
@@ -292,25 +299,35 @@ struct DashboardView: View {
         case .hubStats:
             HubStatsWidget(data: data, size: size, onOpenCargo: onOpenCargo, onOpenExpiring: onOpenCargo, onOpenGalley: onOpenGalley, onOpenSupply: onOpenSupply)
         case .mealsReady:
-            MealsReadyWidget(matches: data.mealMatches, itemLimit: itemLimit) { meal in
-                env.openDeepLink(.meal(id: meal.id))
-            }
+            MealsReadyWidget(
+                matches: data.mealMatches,
+                itemLimit: itemLimit,
+                onSelectMeal: { meal in env.openDeepLink(.meal(id: meal.id)) },
+                onOpenList: onOpenGalley
+            )
         case .mealsPartial:
-            MealsPartialWidget(matches: data.partialMealMatches, itemLimit: itemLimit) { meal in
-                env.openDeepLink(.meal(id: meal.id))
-            }
+            MealsPartialWidget(
+                matches: data.partialMealMatches,
+                itemLimit: itemLimit,
+                onSelectMeal: { meal in env.openDeepLink(.meal(id: meal.id)) },
+                onOpenList: onOpenGalley
+            )
         case .snacksReady:
-            MealsReadyWidget(title: "Snacks ready", matches: data.snackMatches, itemLimit: itemLimit) { meal in
-                env.openDeepLink(.meal(id: meal.id))
-            }
+            MealsReadyWidget(
+                title: "Snacks ready",
+                matches: data.snackMatches,
+                itemLimit: itemLimit,
+                onSelectMeal: { meal in env.openDeepLink(.meal(id: meal.id)) },
+                onOpenList: onOpenGalley
+            )
         case .cargoExpiring:
             CargoExpiringWidget(
                 items: data.expiringItems,
                 alertDays: data.expirationAlertDays,
-                itemLimit: itemLimit
-            ) { item in
-                env.openDeepLink(.cargoItem(id: item.id))
-            }
+                itemLimit: itemLimit,
+                onSelectItem: { item in env.openDeepLink(.cargoItem(id: item.id)) },
+                onOpenList: onOpenCargo
+            )
         case .supplyPreview:
             SupplyPreviewWidget(
                 list: data.latestSupplyList,
@@ -369,7 +386,18 @@ struct DashboardView: View {
                 summary: data.nutritionTrends,
                 size: size,
                 filters: widget.filters,
-                onOpenGoals: onOpenNutritionGoals
+                onOpenGoals: {
+                    switch HubWidgetRoute.fuelTrends(
+                        fuelPageOn: env.session.clientFlags.isNutritionFuelPageEnabled
+                    ) {
+                    case .fuel:
+                        env.openDeepLink(.fuel)
+                    case .nutritionGoals:
+                        onOpenNutritionGoals()
+                    case .supply, .none:
+                        break
+                    }
+                }
             )
         }
     }

@@ -142,6 +142,14 @@ describe("getCalendarDates", () => {
 		});
 	});
 
+	describe("1-day span", () => {
+		it("returns the anchor date only", () => {
+			expect(getCalendarDates(1, "2025-01-08", "sunday")).toEqual([
+				"2025-01-08",
+			]);
+		});
+	});
+
 	describe("7-day span", () => {
 		it("returns full week Sunday-Saturday when weekStart is sunday", () => {
 			const dates = getCalendarDates(7, "2025-01-08", "sunday"); // Wed

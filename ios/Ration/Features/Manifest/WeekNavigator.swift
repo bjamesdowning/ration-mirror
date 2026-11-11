@@ -288,7 +288,6 @@ struct WeekNavigator: View {
     let rangeStart: String
     @Binding var selectedDay: String
     var weekStartPref: String = "sunday"
-    var entryDates: Set<String> = []
     var isLoading: Bool = false
     /// Optional day-keyed nutrient totals. Empty hides the line.
     var nutritionByDate: [String: NutritionDayTotals] = [:]
@@ -325,14 +324,6 @@ struct WeekNavigator: View {
 
     private var rangeEnd: String {
         ManifestDateHelpers.addDays(rangeStart, days: max(calendarSpan - 1, 0))
-    }
-
-    private var visibleDays: [String] {
-        ManifestDateHelpers.calendarDates(
-            span: calendarSpan,
-            anchor: rangeStart,
-            weekStartPref: weekStartPref
-        )
     }
 
     private var dayTotalsForStrip: NutritionDayTotals {
@@ -381,15 +372,6 @@ struct WeekNavigator: View {
             // Button in the row on a single tap — Prev then Next → always lands forward.
             .buttonStyle(.borderless)
 
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 6) {
-                    ForEach(visibleDays, id: \.self) { day in
-                        dayPill(day)
-                    }
-                }
-                .buttonStyle(.borderless)
-            }
-
             if shouldShowNutrientStrip {
                 dayNutrientStrip(dayTotalsForStrip)
             }
@@ -424,10 +406,30 @@ struct WeekNavigator: View {
 
     @ViewBuilder
     private func dayNutrientStrip(_ totals: NutritionDayTotals) -> some View {
-        if let goal = nutritionGoal, goal.hasAnyManifestTarget {
-            goalProgressStrip(day: totals, goal: goal)
-        } else if let onTapNutrientLine {
-            Button(action: onTapNutrientLine) {
+        DayNutrientStrip(totals: totals, goal: nutritionGoal, onTap: onTapNutrientLine)
+    }
+
+    private func navigate(toRaw raw: String) {
+        let target = ManifestDateHelpers.normalizedNavigationStart(
+            raw,
+            calendarSpan: calendarSpan,
+            weekStartPref: weekStartPref
+        )
+        onNavigate(target)
+    }
+}
+
+/// Energy bar and macro dials shared by Manifest and Fuel.
+struct DayNutrientStrip: View {
+    let totals: NutritionDayTotals
+    let goal: NutritionSummary.Goal?
+    let onTap: (() -> Void)?
+
+    var body: some View {
+        if let goal, goal.hasAnyManifestTarget {
+            progress(day: totals, goal: goal)
+        } else if let onTap {
+            Button(action: onTap) {
                 Text("No goals · Set targets")
                     .font(Typography.dataCaption())
                     .foregroundStyle(Theme.muted)
@@ -438,15 +440,13 @@ struct WeekNavigator: View {
         }
     }
 
-    @ViewBuilder
-    private func goalProgressStrip(day: NutritionDayTotals, goal: NutritionSummary.Goal) -> some View {
+    private func progress(day: NutritionDayTotals, goal: NutritionSummary.Goal) -> some View {
         let lines = NutritionGoalProgress.manifestStripLines(day: day, goal: goal)
         let energy = lines.first { $0.key == "energy" }
         let macros = lines.filter { $0.key != "energy" }
-
-        VStack(alignment: .leading, spacing: 8) {
+        return VStack(alignment: .leading, spacing: 8) {
             if let energy {
-                nutrientTapWrap {
+                tappable {
                     VStack(alignment: .leading, spacing: 6) {
                         HStack(spacing: 8) {
                             Label(energy.displayText, systemImage: "bolt.fill")
@@ -463,7 +463,7 @@ struct WeekNavigator: View {
             if !macros.isEmpty {
                 HStack(alignment: .top, spacing: 8) {
                     ForEach(macros, id: \.key) { line in
-                        nutrientTapWrap {
+                        tappable {
                             MacroProgressDial(
                                 label: line.label,
                                 actualText: "\(Int(line.actual.rounded()))",
@@ -481,50 +481,13 @@ struct WeekNavigator: View {
     }
 
     @ViewBuilder
-    private func nutrientTapWrap<Content: View>(@ViewBuilder content: () -> Content) -> some View {
-        if let onTapNutrientLine {
-            Button(action: onTapNutrientLine, label: content)
+    private func tappable<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        if let onTap {
+            Button(action: onTap, label: content)
                 .buttonStyle(.borderless)
                 .accessibilityHint("Opens Nutrition Goals")
         } else {
             content()
         }
-    }
-
-    private func navigate(toRaw raw: String) {
-        let target = ManifestDateHelpers.normalizedNavigationStart(
-            raw,
-            calendarSpan: calendarSpan,
-            weekStartPref: weekStartPref
-        )
-        onNavigate(target)
-    }
-
-    private func dayPill(_ day: String) -> some View {
-        let isSelected = day == selectedDay
-        let hasMeals = entryDates.contains(day)
-        let isToday = day == ManifestDateHelpers.todayISO()
-        return Button {
-            selectedDay = day
-        } label: {
-            VStack(spacing: 4) {
-                Text(ManifestDateHelpers.smartLabel(isoDate: day))
-                    .font(Typography.caption())
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-                Circle()
-                    .fill(hasMeals ? Theme.hyperGreen : Color.clear)
-                    .frame(width: 6, height: 6)
-            }
-            .foregroundStyle(isSelected || isToday ? Theme.onHyperGreen : Theme.carbon)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(isSelected || isToday ? Theme.hyperGreen : Theme.platinum)
-            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-        }
-        .buttonStyle(.borderless)
-        .accessibilityLabel(ManifestDateHelpers.smartLabel(isoDate: day))
-        .accessibilityValue(hasMeals ? "Has meals" : "No meals")
-        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 }

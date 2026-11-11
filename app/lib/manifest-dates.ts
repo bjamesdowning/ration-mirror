@@ -89,13 +89,15 @@ export function addDays(date: string, days: number): string {
 	return toISODateString(d);
 }
 
+export type CalendarSpan = 1 | 3 | 5 | 7;
+
 /**
  * Returns an array of YYYY-MM-DD strings for the calendar span.
- * - 3 / 5: anchorDate is the first visible day; returns [anchor, anchor+1, ..., anchor+(span-1)].
+ * - 1 / 3 / 5: anchorDate is the first visible day; returns [anchor, ..., anchor+(span-1)].
  * - 7: anchorDate can be any day; returns the full week (Sunday-Saturday or Monday-Sunday per weekStartPref).
  */
 export function getCalendarDates(
-	span: 3 | 5 | 7,
+	span: CalendarSpan,
 	anchorDate: string,
 	weekStartPref: "sunday" | "monday",
 ): string[] {
@@ -157,7 +159,7 @@ export function resolveSupplyManifestWindow(
 
 export type ManifestSupplyWindowDefaults = {
 	weekStart?: "sunday" | "monday";
-	calendarSpan?: 3 | 5 | 7;
+	calendarSpan?: CalendarSpan;
 };
 
 /**
@@ -168,7 +170,7 @@ export function resolveManifestSupplyWindow(
 		| {
 				manifestSettings?: {
 					weekStart?: "sunday" | "monday";
-					calendarSpan?: 3 | 5 | 7;
+					calendarSpan?: CalendarSpan;
 				};
 		  }
 		| null

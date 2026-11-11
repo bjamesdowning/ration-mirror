@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Standard page toolbar: org switcher leading; sync indicator, options + profile trailing.
+/// Standard page toolbar: photo, accessories, and gear leading; sync, filters, and Hub trailing.
 struct GlobalPageToolbar: ToolbarContent {
     var hasActiveFilters: Bool = false
     var syncDomain: String?
@@ -9,13 +9,15 @@ struct GlobalPageToolbar: ToolbarContent {
     var syncUserId: String? = nil
     var isRefreshing: Bool = false
     var onOptions: (() -> Void)?
-    var onOpenGroupSettings: () -> Void
+    var accessories: [PageCapsuleAccessory] = []
+    /// Hub is absent on the Hub page and whenever the Fuel page flag is off.
+    var showsHubButton: Bool = true
     var onOpenSettings: () -> Void
     @Environment(AppEnvironment.self) private var env
 
     var body: some ToolbarContent {
         ToolbarItem(placement: .topBarLeading) {
-            OrgSwitcherBar(onTap: onOpenGroupSettings)
+            OrgSwitcherBar(accessories: accessories, onSettings: onOpenSettings)
         }
         ToolbarItem(placement: .topBarTrailing) {
             HStack(spacing: 12) {
@@ -47,7 +49,7 @@ struct GlobalPageToolbar: ToolbarContent {
                 if let onOptions {
                     PageOptionsButton(hasActiveFilters: hasActiveFilters, action: onOptions)
                 }
-                if env.session.clientFlags.isNutritionFuelPageEnabled {
+                if showsHubButton, env.session.clientFlags.isNutritionFuelPageEnabled {
                     Button {
                         env.openHubCover()
                     } label: {
@@ -56,7 +58,6 @@ struct GlobalPageToolbar: ToolbarContent {
                     }
                     .accessibilityLabel("Hub")
                 }
-                ProfileAvatarButton(imageURL: env.session.userImageURL, action: onOpenSettings)
             }
         }
     }

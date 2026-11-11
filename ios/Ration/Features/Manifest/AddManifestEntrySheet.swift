@@ -9,15 +9,18 @@ struct AddManifestEntrySheet: View {
     @State private var model = AddManifestEntryViewModel()
     let defaultDate: String?
     let preselectedMealId: String?
+    let preselectedSlot: String?
     let onSave: (String, String, String) async -> String?
 
     init(
         defaultDate: String?,
         preselectedMealId: String? = nil,
+        preselectedSlot: String? = nil,
         onSave: @escaping (String, String, String) async -> String?
     ) {
         self.defaultDate = defaultDate
         self.preselectedMealId = preselectedMealId
+        self.preselectedSlot = preselectedSlot
         self.onSave = onSave
     }
 
@@ -73,7 +76,9 @@ struct AddManifestEntrySheet: View {
                 if let defaultDate, let parsed = Self.parseISODate(defaultDate) {
                     model.date = parsed
                 }
-                if model.slotType == "dinner" || preselectedMealId != nil {
+                if let preselectedSlot {
+                    model.slotType = preselectedSlot
+                } else if model.slotType == "dinner" || preselectedMealId != nil {
                     model.slotType = AddManifestEntryViewModel.inferSlotType()
                 }
                 await model.loadMeals(api: env.api)

@@ -6,7 +6,7 @@ import {
 import { addDays, getWeekEnd, getWeekStart } from "~/lib/manifest-dates";
 
 interface WeekNavigatorProps {
-	calendarSpan: 3 | 5 | 7;
+	calendarSpan: 1 | 3 | 5 | 7;
 	currentRangeStart: string;
 	today: string;
 	weekStartPref: "sunday" | "monday";

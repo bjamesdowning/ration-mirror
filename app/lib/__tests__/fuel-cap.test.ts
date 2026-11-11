@@ -2,12 +2,17 @@ import { describe, expect, it } from "vitest";
 import {
 	assertFuelCreateRoom,
 	completedFuelReplay,
+	ensureFuelTimeZone,
 	personIsCrew,
 	readFuelUsed,
 	releaseFuelSlot,
 	reserveFuelSlot,
+	stampFuelDate,
 } from "~/lib/nutrition/fuel-cap.server";
-import { FuelDailyLimitError } from "~/lib/nutrition/fuel-errors";
+import {
+	FuelDailyLimitError,
+	FuelTimezoneRequiredError,
+} from "~/lib/nutrition/fuel-errors";
 import { photoConfirmSlotCount } from "~/lib/nutrition/fuel-photo.server";
 import { createSqliteD1 } from "~/test/helpers/sqlite-d1";
 
@@ -125,6 +130,100 @@ describe("fuel cap", () => {
 		});
 		expect(await readFuelUsed(db, "user-1", "2026-11-10")).toBe(1);
 		await expect(completedFuelReplay(db, "other", "op-1")).resolves.toBeNull();
+	});
+
+	it("stores a valid candidate and stamps that zone, not a client day", async () => {
+		const db = await seed("free", "");
+		const occurredAt = new Date("2026-11-11T07:30:00.000Z");
+		const fuelDate = await stampFuelDate(
+			db,
+			"user-1",
+			occurredAt,
+			"America/Los_Angeles",
+		);
+		expect(fuelDate).toBe("2026-11-10");
+		const row = await db
+			.prepare(
+				"SELECT json_extract(settings, '$.fuelTimeZone') AS zone FROM user WHERE id = ?",
+			)
+			.bind("user-1")
+			.first<{ zone: string }>();
+		expect(row?.zone).toBe("America/Los_Angeles");
+	});
+
+	it("updates the stored zone for a later row and does not rewrite the first stamp", async () => {
+		const db = await seed("free", "America/Los_Angeles");
+		const first = await stampFuelDate(
+			db,
+			"user-1",
+			new Date("2026-11-11T07:30:00.000Z"),
+			"America/Los_Angeles",
+		);
+		const second = await stampFuelDate(
+			db,
+			"user-1",
+			new Date("2026-11-11T07:30:00.000Z"),
+			"Europe/Dublin",
+		);
+		expect(first).toBe("2026-11-10");
+		expect(second).toBe("2026-11-11");
+		const row = await db
+			.prepare(
+				"SELECT json_extract(settings, '$.fuelTimeZone') AS zone FROM user WHERE id = ?",
+			)
+			.bind("user-1")
+			.first<{ zone: string }>();
+		expect(row?.zone).toBe("Europe/Dublin");
+	});
+
+	it("rejects GMT without replacing a stored zone", async () => {
+		const db = await seed();
+		await expect(ensureFuelTimeZone(db, "user-1", "GMT")).resolves.toBe(
+			"Europe/Dublin",
+		);
+		const row = await db
+			.prepare(
+				"SELECT json_extract(settings, '$.fuelTimeZone') AS zone FROM user WHERE id = ?",
+			)
+			.bind("user-1")
+			.first<{ zone: string }>();
+		expect(row?.zone).toBe("Europe/Dublin");
+	});
+
+	it("returns fuel_timezone_required when no candidate and no stored zone exist", async () => {
+		const db = await seed("free", "");
+		await expect(ensureFuelTimeZone(db, "user-1", null)).rejects.toBeInstanceOf(
+			FuelTimezoneRequiredError,
+		);
+	});
+
+	it("returns a completed replay without writing a zone", async () => {
+		const db = await seed("free", "");
+		await db.exec(`
+			CREATE TABLE nutrition_operation (
+				user_id text,
+				operation_key text,
+				status text,
+				result_json text
+			);
+		`);
+		await db
+			.prepare(
+				`INSERT INTO nutrition_operation (user_id, operation_key, status, result_json)
+				 VALUES (?, ?, 'completed', ?)`,
+			)
+			.bind("user-1", "op-replay", JSON.stringify({ intakeId: "intake-9" }))
+			.run();
+		await expect(
+			completedFuelReplay(db, "user-1", "op-replay"),
+		).resolves.toEqual({ intakeId: "intake-9" });
+		const row = await db
+			.prepare(
+				"SELECT json_extract(settings, '$.fuelTimeZone') AS zone FROM user WHERE id = ?",
+			)
+			.bind("user-1")
+			.first<{ zone: string | null }>();
+		expect(row?.zone ?? "").toBe("");
 	});
 
 	it("counts a photo confirm as one slot however many foods were seen", () => {

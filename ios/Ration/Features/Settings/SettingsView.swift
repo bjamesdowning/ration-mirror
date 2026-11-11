@@ -4,6 +4,7 @@ struct SettingsView: View {
     @Environment(AppEnvironment.self) private var env
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
+    var embedded = false
     @State private var model = SettingsSessionViewModel()
     @State private var healthExportMessage: String?
     @State private var showingPaywall = false
@@ -11,35 +12,45 @@ struct SettingsView: View {
     @State private var showingNutritionGoals = false
 
     var body: some View {
-        NavigationStack {
-            Group {
-                if let session = model.session {
-                    content(session)
-                } else if model.isLoading {
-                    LoadingView()
-                } else {
-                    sessionErrorState
-                }
+        Group {
+            if embedded {
+                settingsRoot
+            } else {
+                NavigationStack { settingsRoot }
             }
-            .navigationTitle(String(localized: "Account"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
+        }
+        .task { await model.load(api: env.api) }
+    }
+
+    private var settingsRoot: some View {
+        Group {
+            if let session = model.session {
+                content(session)
+            } else if model.isLoading {
+                LoadingView()
+            } else {
+                sessionErrorState
+            }
+        }
+        .navigationTitle(embedded ? "" : String(localized: "Account"))
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if !embedded {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Done") { dismiss() }
                 }
             }
-            .background(Theme.ceramic)
-            .sheet(isPresented: $showingPaywall) {
-                PaywallView(context: .settings())
-            }
-            .sheet(isPresented: $showingPrivacy) { PrivacySettingsView() }
-            .sheet(isPresented: $showingNutritionGoals, onDismiss: {
-                env.lifecycle.bumpRefresh(forTab: .manifest)
-            }) {
-                NutritionGoalsView()
-            }
         }
-        .task { await model.load(api: env.api) }
+        .background(Theme.ceramic)
+        .sheet(isPresented: $showingPaywall) {
+            PaywallView(context: .settings())
+        }
+        .sheet(isPresented: $showingPrivacy) { PrivacySettingsView() }
+        .sheet(isPresented: $showingNutritionGoals, onDismiss: {
+            env.lifecycle.bumpRefresh(forTab: .manifest)
+        }) {
+            NutritionGoalsView()
+        }
     }
 
     private var sessionErrorState: some View {
@@ -125,6 +136,7 @@ struct SettingsView: View {
             Section("Nutrition") {
                 Button("Nutrition Goals") {
                     if env.session.clientFlags.isNutritionFuelPageEnabled {
+                        dismiss()
                         env.openDeepLink(.fuelGoals)
                     } else {
                         showingNutritionGoals = true

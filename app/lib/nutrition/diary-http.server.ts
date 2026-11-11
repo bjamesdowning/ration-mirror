@@ -14,6 +14,7 @@ import {
 	FUEL_PHOTO_MAX_BYTES,
 	FuelBarcodeSchema,
 	FuelPhotoContentTypeSchema,
+	FuelTimeZoneSchema,
 } from "~/lib/schemas/fuel";
 import { UuidSchema } from "~/lib/schemas/uuid";
 import {
@@ -119,6 +120,7 @@ export async function postDiaryLog(
 
 const FoodBarcodeSchema = z.object({
 	barcode: FuelBarcodeSchema,
+	fuelTimeZone: FuelTimeZoneSchema.optional(),
 });
 
 const ProposeFoodLogSchema = z.object({
@@ -156,7 +158,13 @@ export async function postFoodBarcode(
 		throw data({ code: "invalid_request" }, { status: 400 });
 	}
 	if (await isNutritionFuelPageEnabled(env, flags)) {
-		await assertFuelCreateRoom(env.DB, principal.userId, new Date());
+		await assertFuelCreateRoom(
+			env.DB,
+			principal.userId,
+			new Date(),
+			new Date(),
+			parsed.data.fuelTimeZone,
+		);
 	}
 	return lookupFoodBarcode(env, parsed.data.barcode);
 }
@@ -295,6 +303,7 @@ const FuelPhotoSubmitSchema = z.object({
 	operationKey: UuidSchema,
 	contentType: FuelPhotoContentTypeSchema,
 	imageBase64: z.string().min(1),
+	fuelTimeZone: FuelTimeZoneSchema.optional(),
 });
 
 export async function postFuelPhoto(
@@ -326,6 +335,7 @@ export async function postFuelPhoto(
 			operationKey: parsed.data.operationKey,
 			contentType: parsed.data.contentType,
 			bytes,
+			fuelTimeZone: parsed.data.fuelTimeZone,
 		});
 	} catch (error) {
 		mapFuelPhotoConsent(error);

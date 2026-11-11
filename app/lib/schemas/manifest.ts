@@ -5,6 +5,7 @@ import {
 	INTAKE_SERVINGS_MIN,
 	type IntakeLoggedUnit,
 } from "~/lib/nutrition/intake-amount";
+import { FuelTimeZoneSchema } from "./fuel";
 import { INJECTION_PATTERNS } from "./meal";
 
 export const SLOT_TYPES = ["breakfast", "lunch", "dinner", "snack"] as const;
@@ -138,6 +139,8 @@ export const ManifestPersonalIntakeUpsertSchema = z
 		idempotencyKey: z.string().uuid(),
 		/** Optional Eat snippet; persisted only when `nutrition-intake-notes` is on. */
 		notes: IntakeNotesSchema,
+		/** Device IANA zone. The server stamps fuel_date. Not a client day. */
+		fuelTimeZone: FuelTimeZoneSchema.optional(),
 	})
 	.strict()
 	.superRefine(refineIntakeAmountFields);

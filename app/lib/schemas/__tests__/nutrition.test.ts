@@ -403,6 +403,23 @@ describe("Cook and Eat request schemas", () => {
 		expect(mass.unit).toBe("g");
 	});
 
+	it("accepts an optional fuel zone and still rejects an unknown key", async () => {
+		const { ManifestPersonalIntakeUpsertSchema } = await import("../manifest");
+		const parsed = ManifestPersonalIntakeUpsertSchema.parse({
+			servings: 1,
+			idempotencyKey: "22222222-2222-4222-8222-222222222222",
+			fuelTimeZone: "America/Los_Angeles",
+		});
+		expect(parsed.fuelTimeZone).toBe("America/Los_Angeles");
+		expect(() =>
+			ManifestPersonalIntakeUpsertSchema.parse({
+				servings: 1,
+				idempotencyKey: "22222222-2222-4222-8222-222222222222",
+				fuel_date: "2026-11-10",
+			}),
+		).toThrow();
+	});
+
 	it("rejects client-provided consent on the Eat write", async () => {
 		const { ManifestPersonalIntakeUpsertSchema } = await import("../manifest");
 		expect(() =>

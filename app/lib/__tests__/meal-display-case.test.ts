@@ -10,6 +10,7 @@ import {
 	createProvisionFromCargo,
 	updateMeal,
 } from "../meals.server";
+import { convertQuantity } from "../units";
 
 const databases: Array<ReturnType<typeof createSqliteD1>["sqlite"]> = [];
 
@@ -179,6 +180,44 @@ describe("meal display case", () => {
 			.run();
 		const created = await createProvisionFromCargo(db, "org-1", "cargo-1");
 		expect(created.provision?.name).toBe("Greek Yogurt");
+		expect(created.provision?.servings).toBe(1);
+		expect(created.provision?.ingredients[0]?.quantity).toBe(1);
+		expect(created.provision?.ingredients[0]?.unit).toBe("g");
+	});
+
+	it("promotes 15 g stored as ounces to that ounce quantity, not 4", async () => {
+		const ounces = convertQuantity(15, "g", "oz");
+		expect(ounces).not.toBeNull();
+		if (ounces == null) return;
+		const db = setupMealDb();
+		await db
+			.prepare(
+				`INSERT INTO cargo (id, organization_id, name, quantity, unit, domain)
+				 VALUES ('cargo-oz', 'org-1', 'Carrot', ?, 'oz', 'food')`,
+			)
+			.bind(ounces)
+			.run();
+		const created = await createProvisionFromCargo(db, "org-1", "cargo-oz");
+		expect(created.alreadyExisted).toBe(false);
+		expect(created.provision?.servings).toBe(1);
+		expect(created.provision?.ingredients[0]?.unit).toBe("oz");
+		expect(created.provision?.ingredients[0]?.quantity).toBeCloseTo(ounces, 8);
+		expect(created.provision?.ingredients[0]?.quantity).not.toBe(4);
+	});
+
+	it("promotes 15 g stored as grams to 15, not 100", async () => {
+		const db = setupMealDb();
+		await db
+			.prepare(
+				`INSERT INTO cargo (id, organization_id, name, quantity, unit, domain)
+				 VALUES ('cargo-g', 'org-1', 'Carrot', 15, 'g', 'food')`,
+			)
+			.run();
+		const created = await createProvisionFromCargo(db, "org-1", "cargo-g");
+		expect(created.alreadyExisted).toBe(false);
+		expect(created.provision?.servings).toBe(1);
+		expect(created.provision?.ingredients[0]?.quantity).toBe(15);
+		expect(created.provision?.ingredients[0]?.unit).toBe("g");
 	});
 
 	it("sorts the meal picker case-insensitively without rewriting names", async () => {

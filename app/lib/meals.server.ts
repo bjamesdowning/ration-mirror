@@ -55,10 +55,7 @@ import {
 	type OriginatingFlagDims,
 	scheduleMealNutritionRecompute,
 } from "./nutrition/recompute-outbox.server";
-import {
-	isStockShapedProvision,
-	resolveProvisionUnitPortionFromRaw,
-} from "./provision-portion";
+import { resolveProvisionUnitPortionFromRaw } from "./provision-portion";
 import {
 	chunkArray,
 	chunkedQuery,
@@ -86,6 +83,7 @@ import {
 import { trackD1BatchSize, trackWriteOperation } from "./telemetry.server";
 import {
 	convertIngredientAmount,
+	normalizeUnitAlias,
 	type SupportedUnit,
 	toSupportedUnit,
 } from "./units";
@@ -1850,10 +1848,46 @@ export async function cookMeal(
 	};
 }
 
+/** Absolute tolerance for matching an invented household default (4, 100, 0.1, 0.25). */
+const PROVISION_DEFAULT_QUANTITY_EPS = 1e-6;
+
+function provisionQuantitiesMatch(left: number, right: number): boolean {
+	return (
+		Number.isFinite(left) &&
+		Number.isFinite(right) &&
+		Math.abs(left - right) <= PROVISION_DEFAULT_QUANTITY_EPS
+	);
+}
+
+/**
+ * True when the ingredient is exactly a `resolveProvisionUnitPortion` default
+ * (4 oz, 100 g, 1 unit, and the other household values) in that unit.
+ */
+function isInventedDefaultPortion(quantity: number, unitRaw: string): boolean {
+	const portion = resolveProvisionUnitPortionFromRaw(unitRaw);
+	return (
+		normalizeUnitAlias(unitRaw) === portion.unit &&
+		provisionQuantitiesMatch(quantity, portion.quantity)
+	);
+}
+
+function cargoStockMatchesIngredient(
+	ingredientQuantity: number,
+	ingredientUnit: string,
+	cargoQuantity: number,
+	cargoUnit: string,
+): boolean {
+	return (
+		normalizeUnitAlias(ingredientUnit) === normalizeUnitAlias(cargoUnit) &&
+		provisionQuantitiesMatch(ingredientQuantity, cargoQuantity)
+	);
+}
+
 /**
  * Creates a provision from an existing cargo item, linking via cargoId.
- * Prevents duplicates: if a provision already has an ingredient pointing to
- * this cargo item, returns the existing provision with alreadyExisted=true.
+ * The ingredient quantity and unit are the cargo row's stored stock.
+ * `meal.servings` stays 1. Household portion defaults are not written here.
+ * If a provision already links this cargo item, returns it with alreadyExisted=true.
  */
 export async function createProvisionFromCargo(
 	db: D1Database,
@@ -1923,7 +1957,8 @@ export async function createProvisionFromCargo(
 		mealTagRows = tagIds.map((tagId) => ({ mealId, tagId }));
 	}
 
-	const unitPortion = resolveProvisionUnitPortionFromRaw(cargoItem.unit);
+	const stockQuantity = cargoItem.quantity;
+	const stockUnit = normalizeUnitAlias(cargoItem.unit);
 
 	// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types complex
 	const batch: any[] = [
@@ -1941,8 +1976,8 @@ export async function createProvisionFromCargo(
 				{
 					cargoId,
 					ingredientName: cargoItem.name,
-					quantity: unitPortion.quantity,
-					unit: unitPortion.unit,
+					quantity: stockQuantity,
+					unit: stockUnit,
 				},
 				0,
 				ingredientId,
@@ -1982,8 +2017,11 @@ export async function createProvisionFromCargo(
 }
 
 /**
- * If a cargo-linked provision still stores full pantry stock as one serving,
- * rewrite the ingredient to a unit portion. Returns whether a write occurred.
+ * If a cargo-linked provision's ingredient is still exactly an invented
+ * household default and the cargo stock differs, rewrite that ingredient to
+ * the cargo quantity and unit and schedule nutrition recompute.
+ * Stock quantities and edits away from the default are left alone. This does
+ * not write 4 oz or 100 g back onto a row. Returns whether a write occurred.
  */
 export async function normalizeProvisionPortionIfNeeded(
 	env: Env,
@@ -1996,61 +2034,82 @@ export async function normalizeProvisionPortionIfNeeded(
 	flagContext?: FlagshipEvaluationContext,
 ): Promise<{ normalized: boolean }> {
 	const d1 = drizzle(env.DB);
-	const [row] = await d1
-		.select({
-			mealId: meal.id,
-			servings: meal.servings,
-			ingredientId: mealIngredient.id,
-			ingredientQuantity: mealIngredient.quantity,
-			ingredientUnit: mealIngredient.unit,
-			ingredientName: mealIngredient.ingredientName,
-		})
-		.from(meal)
-		.innerJoin(mealIngredient, eq(mealIngredient.mealId, meal.id))
-		.where(
-			and(
-				eq(meal.id, provisionMealId),
-				eq(meal.organizationId, organizationId),
-				eq(meal.type, "provision"),
-			),
-		)
-		.orderBy(mealIngredient.orderIndex)
-		.limit(1);
+	// Separate reads so each statement has one `id` column.
+	const [mealRows, ingredientRows] = await d1.batch([
+		d1
+			.select({
+				mealId: meal.id,
+				servings: meal.servings,
+			})
+			.from(meal)
+			.where(
+				and(
+					eq(meal.id, provisionMealId),
+					eq(meal.organizationId, organizationId),
+					eq(meal.type, "provision"),
+				),
+			)
+			.limit(1),
+		d1
+			.select({
+				ingredientId: mealIngredient.id,
+				ingredientQuantity: mealIngredient.quantity,
+				ingredientUnit: mealIngredient.unit,
+				ingredientName: mealIngredient.ingredientName,
+			})
+			.from(mealIngredient)
+			.where(eq(mealIngredient.mealId, provisionMealId))
+			.orderBy(mealIngredient.orderIndex)
+			.limit(1),
+	]);
+	const row = mealRows[0];
+	const ingredient = ingredientRows[0];
 
-	if (!row) {
+	if (!row || !ingredient) {
 		return { normalized: false };
 	}
 
+	if ((row.servings ?? 1) !== 1) {
+		return { normalized: false };
+	}
+	if (!Number.isFinite(cargoItem.quantity) || cargoItem.quantity <= 0) {
+		return { normalized: false };
+	}
 	if (
-		!isStockShapedProvision({
-			mealServings: row.servings ?? 1,
-			ingredientQuantity: row.ingredientQuantity,
-			ingredientUnit: row.ingredientUnit,
-			cargoQuantity: cargoItem.quantity,
-			cargoUnit: cargoItem.unit,
-		})
+		!isInventedDefaultPortion(
+			ingredient.ingredientQuantity,
+			ingredient.ingredientUnit,
+		)
+	) {
+		return { normalized: false };
+	}
+	if (
+		cargoStockMatchesIngredient(
+			ingredient.ingredientQuantity,
+			ingredient.ingredientUnit,
+			cargoItem.quantity,
+			cargoItem.unit,
+		)
 	) {
 		return { normalized: false };
 	}
 
-	const unitPortion = resolveProvisionUnitPortionFromRaw(
-		row.ingredientUnit || cargoItem.unit,
-	);
+	const stockUnit = normalizeUnitAlias(cargoItem.unit);
 	const base = computeBaseFields(
-		unitPortion.quantity,
-		unitPortion.unit,
-		row.ingredientName,
+		cargoItem.quantity,
+		stockUnit,
+		ingredient.ingredientName,
 	);
 
 	await d1
 		.update(mealIngredient)
 		.set({
-			quantity: unitPortion.quantity,
-			unit: unitPortion.unit,
+			quantity: cargoItem.quantity,
+			unit: stockUnit,
 			baseQuantity: base.baseQuantity,
 			baseUnit: base.baseUnit,
 		})
-		.where(eq(mealIngredient.id, row.ingredientId));
+		.where(eq(mealIngredient.id, ingredient.ingredientId));
 
 	const ctx = flagContext ?? buildSystemFlagContext(env);
 	await scheduleMealNutritionRecompute(
@@ -2072,7 +2131,8 @@ export async function normalizeProvisionPortionIfNeeded(
 }
 
 /**
- * Ensure a cargo-linked unit-portion provision exists (create or reuse + normalize).
+ * Ensure a cargo-linked provision exists. Creates one from the cargo stock,
+ * or reuses the linked row and heals an invented default portion.
  */
 export async function ensureProvisionFromCargo(
 	env: Env,

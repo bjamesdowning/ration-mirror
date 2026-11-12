@@ -1,6 +1,7 @@
 import SwiftUI
 
-/// "Eat" — private plate-up sheet. Logs the caller's own serving after Cook;
+/// Private plate-up sheet. Flag off the title is Eat. Flag on the title is Fuel.
+/// Logs the caller's own serving after Cook;
 /// never touches Cargo, other members' data, or shared plan state.
 struct ManifestPlateUpSheet: View {
     let entry: ManifestEntry
@@ -106,7 +107,11 @@ struct ManifestPlateUpSheet: View {
                         massUnit: massUnit
                     )
                 } header: {
-                    Text("How much did you eat?")
+                    Text(
+                        PlanFuelNames.snapshot(
+                            planFuelActions: env.session.clientFlags.isPlanFuelActionsEnabled
+                        ).plateUpAmountHeader
+                    )
                 }
 
                 Section {
@@ -157,7 +162,11 @@ struct ManifestPlateUpSheet: View {
                     }
                 }
             }
-            .navigationTitle("Eat")
+            .navigationTitle(
+                PlanFuelNames.snapshot(
+                    planFuelActions: env.session.clientFlags.isPlanFuelActionsEnabled
+                ).plateUpTitle
+            )
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

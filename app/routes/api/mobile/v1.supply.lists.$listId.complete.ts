@@ -21,13 +21,14 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 		const listId = params.listId;
 		if (!listId) throw data({ error: "List ID required" }, { status: 400 });
 		const env = context.cloudflare.env;
+		const flagContext = buildMobileFlagContext(request, env, {
+			user: { id: userId },
+		});
 		await resolveSupplyListTarget({
 			env,
 			organizationId,
 			listId,
-			flagContext: buildMobileFlagContext(request, env, {
-				user: { id: userId },
-			}),
+			flagContext,
 			allowedStates: ["live"],
 			message: LIVE_ONLY_DOCK_MESSAGE,
 		});
@@ -35,6 +36,7 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 		const result = await completeSupplyList(env, organizationId, listId, {
 			unitMode: resolveUnitDisplayMode(userSettings),
 			userId,
+			flagContext,
 		});
 		return {
 			success: true,

@@ -14,6 +14,7 @@ struct CargoListView: View {
     @State private var restockItem: CargoItem?
     @State private var eatItem: CargoItem?
     @State private var fuelPresentation = FuelAddPresentation()
+    @State private var fuelUndo: ManifestUndoToast?
     @State private var paywallContext: PaywallContext?
     @State private var path: [CargoDetailRoute] = []
 
@@ -162,13 +163,16 @@ struct CargoListView: View {
                         }
                     ) { submission in
                         let attempt = fuelPresentation.submit()
-                        _ = try await env.api.addCargoToFuel(
+                        let saved = try await env.api.addCargoToFuel(
                             id: item.id,
                             quantity: submission.quantity,
                             operationKey: attempt.operationKey,
                             notes: submission.notes,
                             energyKcal: submission.energyKcal
                         )
+                        if let token = saved.undoToken, !token.isEmpty {
+                            fuelUndo = ManifestUndoToast(token: token, message: "Serving logged")
+                        }
                         env.notifyCargoDataChanged()
                         await reload()
                     }
@@ -183,6 +187,16 @@ struct CargoListView: View {
             }
             .navigationDestination(for: CargoDetailRoute.self) { route in
                 CargoDetailView(itemId: route.id)
+            }
+            .overlay(alignment: .bottom) {
+                if let toast = fuelUndo {
+                    UndoToast(
+                        message: toast.message,
+                        onUndo: { Task { await undoFuelLog() } },
+                        onDismiss: { fuelUndo = nil }
+                    )
+                    .padding(.bottom, 24)
+                }
             }
         }
         .onChange(of: env.deepLinkRouter.cargoItemPending, initial: true) { _, _ in

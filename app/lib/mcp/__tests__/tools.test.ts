@@ -1567,6 +1567,49 @@ describe("MCP tools", () => {
 				expect.objectContaining({ trigger: "mcp_sync_supply" }),
 				"metric",
 				"user-test-123",
+				false,
+			);
+		});
+
+		it("passes cargo plan lines when plan-fuel-actions is on", async () => {
+			vi.mocked(isFeatureEnabled).mockImplementation(async (_env, flag) => {
+				return (
+					flag === "nutrition-fast-log" ||
+					flag === "nutrition-fuel-page" ||
+					flag === "plan-fuel-actions"
+				);
+			});
+			vi.mocked(createSupplyListFromSelectedMeals).mockResolvedValueOnce({
+				list: { id: "l1" },
+				summary: {
+					addedItems: 1,
+					newLines: 1,
+					removedLines: 0,
+					changedLines: 0,
+					coveredByCargo: 0,
+					skippedItems: 0,
+					mealsProcessed: 0,
+					totalIngredients: 0,
+				},
+			} as never);
+			vi.mocked(getSupplyListById).mockResolvedValueOnce({
+				id: "l1",
+				items: [{}],
+			} as never);
+			const server = makeServer();
+			const result = await getToolHandler(
+				server,
+				"sync_supply_from_selected_meals",
+			)({});
+			expect(parseOk(result).itemCount).toBe(1);
+			expect(createSupplyListFromSelectedMeals).toHaveBeenCalledWith(
+				expect.anything(),
+				"org-test-123",
+				undefined,
+				expect.objectContaining({ trigger: "mcp_sync_supply" }),
+				"metric",
+				"user-test-123",
+				true,
 			);
 		});
 	});

@@ -56,6 +56,7 @@ import { buildWebFlagContext } from "~/lib/feature-flags/context.server";
 import { log } from "~/lib/logging.server";
 import { getManifestWeekMealsForSupply } from "~/lib/manifest.server";
 import { getActiveMealSelections } from "~/lib/meal-selection.server";
+import { isPlanFuelActionsEnabled } from "~/lib/nutrition/fast-log-flag.server";
 import {
 	canManageGroupSupplySettings,
 	getMemberRole,
@@ -261,6 +262,11 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 export async function action({ request, context }: Route.ActionArgs) {
 	const { groupId, session } = await requireActiveGroup(context, request);
 	const userId = session.user.id;
+	const flagContext = buildWebFlagContext(
+		request,
+		context.cloudflare.env,
+		session,
+	);
 
 	try {
 		const formData = await request.formData();
@@ -287,6 +293,10 @@ export async function action({ request, context }: Route.ActionArgs) {
 				intent: "update-list",
 			});
 			try {
+				const includeCargoPlanLines = await isPlanFuelActionsEnabled(
+					context.cloudflare.env,
+					flagContext,
+				);
 				const result = await createSupplyListFromSelectedMeals(
 					context.cloudflare.env,
 					groupId,
@@ -294,6 +304,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 					telemetryContext,
 					unitDisplayMode,
 					userId,
+					includeCargoPlanLines,
 				);
 				emitSupplySyncInfo("supply_sync.action.success", telemetryContext, {
 					intent: "update-list",
@@ -335,11 +346,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 				env: context.cloudflare.env,
 				organizationId: groupId,
 				listId,
-				flagContext: buildWebFlagContext(
-					request,
-					context.cloudflare.env,
-					session,
-				),
+				flagContext,
 				allowedStates: ["live"],
 				message: LIVE_ONLY_DOCK_MESSAGE,
 			});
@@ -353,7 +360,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 				context.cloudflare.env,
 				groupId,
 				listId,
-				{ unitMode: unitDisplayMode, userId },
+				{ unitMode: unitDisplayMode, userId, flagContext },
 			);
 			return { success: true, docked: result.docked };
 		}

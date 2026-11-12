@@ -48,13 +48,14 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 	}
 
 	try {
+		const flagContext = buildWebFlagContext(request, context.cloudflare.env, {
+			user,
+		});
 		await resolveSupplyListTarget({
 			env: context.cloudflare.env,
 			organizationId: groupId,
 			listId,
-			flagContext: buildWebFlagContext(request, context.cloudflare.env, {
-				user,
-			}),
+			flagContext,
 			allowedStates: ["live"],
 			message: LIVE_ONLY_DOCK_MESSAGE,
 		});
@@ -68,7 +69,7 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 			context.cloudflare.env,
 			groupId,
 			listId,
-			{ unitMode: unitDisplayMode, userId: user.id },
+			{ unitMode: unitDisplayMode, userId: user.id, flagContext },
 		);
 
 		return {

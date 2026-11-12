@@ -20,6 +20,7 @@ import {
 } from "../../manifest-bulk-submit.server";
 import { cookManifestEntries } from "../../manifest-cook.server";
 import { MEAL_MATCH_CANDIDATE_CAP, matchMeals } from "../../matching.server";
+import { isPlanFuelActionsEnabled } from "../../nutrition/fast-log-flag.server";
 import { kitchenTodayForOrganization } from "../../org-supply-settings.server";
 import { UuidSchema } from "../../schemas/uuid";
 import { createSupplyListFromSelectedMeals } from "../../supply.server";
@@ -171,6 +172,10 @@ export function createManifestToolDefs(env: McpToolsEnv) {
 					);
 					let supplySynced = false;
 					if (a.syncSupply) {
+						const includeCargoPlanLines = await isPlanFuelActionsEnabled(
+							env,
+							resolveAgentFlagContext(env, ctx),
+						);
 						await createSupplyListFromSelectedMeals(
 							env,
 							ctx.organizationId,
@@ -181,6 +186,7 @@ export function createManifestToolDefs(env: McpToolsEnv) {
 							},
 							"metric",
 							ctx.userId,
+							includeCargoPlanLines,
 						);
 						supplySynced = true;
 					}

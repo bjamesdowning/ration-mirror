@@ -9,6 +9,7 @@ import {
 	validateMealOwnership,
 } from "../../meal-selection.server";
 import { createMeal, deleteMeal, updateMeal } from "../../meals.server";
+import { isPlanFuelActionsEnabled } from "../../nutrition/fast-log-flag.server";
 import { kitchenTodayForOrganization } from "../../org-supply-settings.server";
 import { parseDirections } from "../../schemas/directions";
 import { SLOT_TYPES } from "../../schemas/manifest";
@@ -191,6 +192,10 @@ export function createGalleyToolDefs(env: McpToolsEnv) {
 				}
 				let supplySynced = false;
 				if (a.syncSupply) {
+					const includeCargoPlanLines = await isPlanFuelActionsEnabled(
+						env,
+						resolveAgentFlagContext(env, ctx),
+					);
 					const { createSupplyListFromSelectedMeals } = await import(
 						"../../supply.server"
 					);
@@ -204,6 +209,7 @@ export function createGalleyToolDefs(env: McpToolsEnv) {
 						},
 						"metric",
 						ctx.userId,
+						includeCargoPlanLines,
 					);
 					supplySynced = true;
 				}

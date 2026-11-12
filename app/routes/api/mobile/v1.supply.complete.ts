@@ -1,6 +1,7 @@
 import { data } from "react-router";
 import { getUserSettings } from "~/lib/auth.server";
 import { handleApiError } from "~/lib/error-handler";
+import { buildMobileFlagContext } from "~/lib/feature-flags/context.server";
 import { requireMobileActiveGroup } from "~/lib/mobile/auth.server";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import { completeSupplyList } from "~/lib/supply.server";
@@ -48,12 +49,17 @@ export async function action({ request, context }: Route.ActionArgs) {
 			userId,
 		);
 		const unitDisplayMode = resolveUnitDisplayMode(userSettings);
+		const flagContext = buildMobileFlagContext(
+			request,
+			context.cloudflare.env,
+			{ user: { id: userId } },
+		);
 
 		const result = await completeSupplyList(
 			context.cloudflare.env,
 			organizationId,
 			listId,
-			{ unitMode: unitDisplayMode, userId },
+			{ unitMode: unitDisplayMode, userId, flagContext },
 		);
 		return { success: true, docked: result.docked };
 	} catch (e) {

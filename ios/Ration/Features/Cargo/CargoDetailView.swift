@@ -113,12 +113,27 @@ struct CargoDetailView: View {
         }
         .sheet(isPresented: $showingQuickEat) {
             if let item = model.item, env.session.clientFlags.isPlanFuelActionsEnabled {
-                PlanFuelAmountSheet(title: "Add to Fuel", unit: item.unit, start: min(1, item.quantity)) { quantity in
+                PlanFuelAmountSheet(
+                    title: FuelAmountEntry.title(
+                        planFuelActionsEnabled: env.session.clientFlags.isPlanFuelActionsEnabled
+                    ),
+                    unit: item.unit,
+                    start: min(1, item.quantity),
+                    energy: { quantity in
+                        CargoEatMacroEstimate.scaled(
+                            nutrition: item.nutrition,
+                            quantity: quantity,
+                            unit: item.unit
+                        ).energyKcal
+                    }
+                ) { submission in
                     let attempt = fuelPresentation.submit()
                     _ = try await env.api.addCargoToFuel(
                         id: item.id,
-                        quantity: quantity,
-                        operationKey: attempt.operationKey
+                        quantity: submission.quantity,
+                        operationKey: attempt.operationKey,
+                        notes: submission.notes,
+                        energyKcal: submission.energyKcal
                     )
                     env.notifyCargoDataChanged()
                     await model.load(id: itemId, api: env.api)

@@ -125,20 +125,41 @@ extension RationAPI {
     }
 
     func cookCargoLine(id: String) async throws -> CargoLineCookResponse {
-        try await client.post("manifest/cargo-lines/\(id)/cook", body: EmptyBody())
+        try await client.post(CargoManifestRoutes.cookPath(id), body: EmptyBody())
+    }
+
+    func updateCargoLine(
+        id: String,
+        date: String,
+        slotType: String,
+        quantity: Double
+    ) async throws -> CargoLineResponse {
+        try await client.patch(
+            CargoManifestRoutes.linePath(id),
+            body: CargoLineUpdateBody(date: date, slotType: slotType, quantity: quantity)
+        )
+    }
+
+    /// Removes the plan row only. Does not restore a cook and does not void a Fuel log.
+    func deleteCargoLine(id: String) async throws -> CargoLineDeleteResponse {
+        try await client.delete(CargoManifestRoutes.linePath(id))
     }
 
     func addCargoToFuel(
         id: String,
         quantity: Double,
-        operationKey: String
+        operationKey: String,
+        notes: String? = nil,
+        energyKcal: Double? = nil
     ) async throws -> CargoFuelResponse {
         let body = FuelWriteBody(
             quantity: quantity,
             operationKey: operationKey,
             idempotencyKey: operationKey,
             occurredAt: Self.nowStamp(),
-            fuelTimeZone: FuelDeviceZone.candidate
+            fuelTimeZone: FuelDeviceZone.candidate,
+            notes: notes,
+            energyKcal: energyKcal
         )
         return try await postAddingFuelZone("cargo/\(id)/add-to-fuel", body: body)
     }
@@ -147,7 +168,9 @@ extension RationAPI {
         id: String,
         servings: Double,
         operationKey: String,
-        confirmInsufficient: Bool
+        confirmInsufficient: Bool,
+        notes: String? = nil,
+        energyKcal: Double? = nil
     ) async throws -> MealFuelResult {
         let body = MealFuelBody(
             servings: servings,
@@ -155,7 +178,9 @@ extension RationAPI {
             operationKey: operationKey,
             idempotencyKey: operationKey,
             occurredAt: Self.nowStamp(),
-            fuelTimeZone: FuelDeviceZone.candidate
+            fuelTimeZone: FuelDeviceZone.candidate,
+            notes: notes,
+            energyKcal: energyKcal
         )
         return try await postAddingFuelZone("meals/\(id)/add-to-fuel", body: body)
     }
@@ -192,8 +217,18 @@ private struct CargoLineCreateBody: Encodable {
     let quantity: Double
 }
 
+private struct CargoLineUpdateBody: Encodable {
+    let date: String
+    let slotType: String
+    let quantity: Double
+}
+
 struct CargoLineResponse: Decodable {
     let line: ManifestCargoLine
+}
+
+struct CargoLineDeleteResponse: Decodable, Sendable {
+    let deleted: Bool
 }
 
 struct CargoLineCookResponse: Decodable {
@@ -207,9 +242,11 @@ private struct FuelWriteBody: Encodable {
     let idempotencyKey: String
     let occurredAt: String
     let fuelTimeZone: String?
+    let notes: String?
+    let energyKcal: Double?
 
     enum CodingKeys: String, CodingKey {
-        case quantity, operationKey, idempotencyKey, occurredAt, fuelTimeZone
+        case quantity, operationKey, idempotencyKey, occurredAt, fuelTimeZone, notes, energyKcal
     }
 
     func encode(to encoder: Encoder) throws {
@@ -219,6 +256,8 @@ private struct FuelWriteBody: Encodable {
         try container.encode(idempotencyKey, forKey: .idempotencyKey)
         try container.encode(occurredAt, forKey: .occurredAt)
         try container.encodeIfPresent(fuelTimeZone, forKey: .fuelTimeZone)
+        try container.encodeIfPresent(notes, forKey: .notes)
+        try container.encodeIfPresent(energyKcal, forKey: .energyKcal)
     }
 }
 
@@ -252,9 +291,12 @@ private struct MealFuelBody: Encodable {
     let idempotencyKey: String
     let occurredAt: String
     let fuelTimeZone: String?
+    let notes: String?
+    let energyKcal: Double?
 
     enum CodingKeys: String, CodingKey {
         case servings, confirmInsufficient, operationKey, idempotencyKey, occurredAt, fuelTimeZone
+        case notes, energyKcal
     }
 
     func encode(to encoder: Encoder) throws {
@@ -265,6 +307,8 @@ private struct MealFuelBody: Encodable {
         try container.encode(idempotencyKey, forKey: .idempotencyKey)
         try container.encode(occurredAt, forKey: .occurredAt)
         try container.encodeIfPresent(fuelTimeZone, forKey: .fuelTimeZone)
+        try container.encodeIfPresent(notes, forKey: .notes)
+        try container.encodeIfPresent(energyKcal, forKey: .energyKcal)
     }
 }
 

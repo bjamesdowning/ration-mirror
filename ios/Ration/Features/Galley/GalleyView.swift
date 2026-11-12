@@ -34,7 +34,7 @@ struct GalleyView: View {
     @State private var fuelMealId: String?
     @State private var fuelPresentation = FuelAddPresentation()
     @State private var pendingFuelMealId: String?
-    @State private var pendingFuelServings: Double?
+    @State private var pendingFuel: FuelAmountSubmission?
     @State private var fuelConfirmationMessage: String?
     @State private var showFuelConfirmation = false
     @State private var paywallContext: PaywallContext?
@@ -195,9 +195,7 @@ struct GalleyView: View {
                 set: { if !$0 { fuelMealId = nil } }
             )) {
                 if let fuelMealId {
-                    PlanFuelAmountSheet(title: "Add to Fuel", unit: "serving", start: 1) { servings in
-                        try await self.logMealFuel(mealId: fuelMealId, servings: servings)
-                    }
+                    fuelAmountSheet(mealId: fuelMealId)
                 }
             }
             .onChange(of: model.filters.search) { _, _ in
@@ -353,7 +351,7 @@ struct GalleyView: View {
             Button("Cancel", role: .cancel) {
                 fuelPresentation.declineShortPantry()
                 pendingFuelMealId = nil
-                pendingFuelServings = nil
+                pendingFuel = nil
                 fuelConfirmationMessage = nil
             }
         } message: {
@@ -660,13 +658,37 @@ struct GalleyView: View {
     }
 
     @MainActor
-    private func logMealFuel(mealId: String, servings: Double) async throws {
+    private func mealForFuel(_ mealId: String) -> Meal? {
+        if let meal = model.meals.first(where: { $0.id == mealId }) { return meal }
+        return model.matches.first(where: { $0.meal.id == mealId })?.meal
+    }
+
+    private func fuelAmountSheet(mealId: String) -> some View {
+        let meal = mealForFuel(mealId)
+        return PlanFuelAmountSheet(
+            title: FuelAmountEntry.title(
+                planFuelActionsEnabled: env.session.clientFlags.isPlanFuelActionsEnabled
+            ),
+            unit: "serving",
+            start: 1,
+            energy: { servings in
+                guard let per = meal?.nutrition?.perServing?.energyKcal else { return nil }
+                return per * servings
+            }
+        ) { submission in
+            try await self.logMealFuel(mealId: mealId, submission: submission)
+        }
+    }
+
+    private func logMealFuel(mealId: String, submission: FuelAmountSubmission) async throws {
         let attempt = fuelPresentation.submit()
         let result = try await env.api.addMealToFuel(
             id: mealId,
-            servings: servings,
+            servings: submission.quantity,
             operationKey: attempt.operationKey,
-            confirmInsufficient: attempt.confirmInsufficient
+            confirmInsufficient: attempt.confirmInsufficient,
+            notes: submission.notes,
+            energyKcal: submission.energyKcal
         )
         switch result {
         case .saved:
@@ -674,7 +696,7 @@ struct GalleyView: View {
         case .needsConfirmation(let missing):
             let message = FuelAddShortPantry.message(missing, mode: env.unitDisplayMode.mode)
             pendingFuelMealId = mealId
-            pendingFuelServings = servings
+            pendingFuel = submission
             fuelConfirmationMessage = message
             showFuelConfirmation = true
             throw FuelNeedsConfirmation(message: message)
@@ -683,12 +705,12 @@ struct GalleyView: View {
 
     @MainActor
     private func confirmFuelDespiteShortfall() async {
-        guard let mealId = pendingFuelMealId, let servings = pendingFuelServings else { return }
+        guard let mealId = pendingFuelMealId, let submission = pendingFuel else { return }
         do {
-            try await logMealFuel(mealId: mealId, servings: servings)
+            try await logMealFuel(mealId: mealId, submission: submission)
             fuelMealId = nil
             pendingFuelMealId = nil
-            pendingFuelServings = nil
+            pendingFuel = nil
             fuelConfirmationMessage = nil
         } catch is FuelNeedsConfirmation {
         } catch {

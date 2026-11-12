@@ -25,6 +25,11 @@ struct ManifestView: View {
     @State private var showPrepareConfirmation = false
     @State private var pendingEatEntry: ManifestEntry?
     @State private var editingEntry: ManifestEntry?
+    @State private var editingCargoLine: ManifestCargoLine?
+    @State private var fuelCargoLine: ManifestCargoLine?
+    @State private var fuelCargoNutrition: NutritionSnapshot?
+    @State private var cargoFuelKey = UUID().uuidString
+    @State private var cookingCargoLineIds: Set<String> = []
     @State private var showFuelLog = false
     @State private var fuelExisting: LogToFuelExisting?
 
@@ -172,6 +177,35 @@ struct ManifestView: View {
                         servingsOverride: servings
                     )
                     await reload()
+                }
+            }
+            .sheet(item: $editingCargoLine) { line in
+                CargoLineEditSheet(line: line) { date, slot, quantity in
+                    _ = try await env.api.updateCargoLine(
+                        id: line.id,
+                        date: date,
+                        slotType: slot,
+                        quantity: quantity
+                    )
+                    await reload()
+                }
+            }
+            .sheet(item: $fuelCargoLine) { line in
+                PlanFuelAmountSheet(
+                    title: FuelAmountEntry.title(
+                        planFuelActionsEnabled: env.session.clientFlags.isPlanFuelActionsEnabled
+                    ),
+                    unit: line.unit,
+                    start: line.quantity,
+                    energy: { quantity in
+                        CargoEatMacroEstimate.scaled(
+                            nutrition: fuelCargoNutrition,
+                            quantity: quantity,
+                            unit: line.unit
+                        ).energyKcal
+                    }
+                ) { submission in
+                    try await logCookedCargo(line, submission: submission)
                 }
             }
             .sheet(item: $pendingEatEntry) { entry in
@@ -468,7 +502,11 @@ struct ManifestView: View {
                     let rows = manifest.entries.filter { entry in
                         entry.date == day && entry.slotType == slot
                     }
-                    if rows.isEmpty {
+                    let lines = cargoLines(manifest, day: day, slot: slot)
+                    if CargoManifestSlot.showsEmptyMealButton(
+                        mealCount: rows.count,
+                        cargoLineCount: lines.count
+                    ) {
                         Button(slotTitle(slot)) {
                             model.selectedDay = day
                             addEntrySlot = slot
@@ -476,12 +514,12 @@ struct ManifestView: View {
                         }
                         .frame(minHeight: 44)
                         .listRowBackground(Theme.surface)
-                    } else {
+                    } else if !rows.isEmpty {
                         ForEach(rows) { entry in
                             manifestEntry(entry, organizationId: organizationId)
                         }
                     }
-                    ForEach(cargoLines(manifest, day: day, slot: slot)) { line in
+                    ForEach(lines) { line in
                         cargoLineRow(line)
                     }
                 }
@@ -510,28 +548,111 @@ struct ManifestView: View {
     }
 
     private func cargoLineRow(_ line: ManifestCargoLine) -> some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(line.cargoName).rationBody()
-                Text("\(FuelLogWrite.amountDisplay(line.quantity, unit: line.unit)) \(line.unit)")
-                    .rationCaption()
-            }
-            Spacer()
-            if line.cookedAt == nil {
-                Button("Cook") {
-                    Task {
-                        _ = try? await env.api.cookCargoLine(id: line.id)
-                        env.notifyCargoDataChanged()
-                        await reload()
-                    }
+        HStack(spacing: 12) {
+            Button {
+                env.openDeepLink(.cargoItem(id: line.cargoId))
+            } label: {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(line.cargoName).rationBody()
+                    Text("\(FuelLogWrite.amountDisplay(line.quantity, unit: line.unit)) \(line.unit)")
+                        .rationCaption()
                 }
-            } else {
-                Image(systemName: "flame.fill")
-                    .foregroundStyle(Theme.hyperGreen)
-                    .accessibilityLabel("Cooked")
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
+            .buttonStyle(.plain)
+            .accessibilityLabel(line.cargoName)
+            Button {
+                Task { await cookOrFuelCargo(line) }
+            } label: {
+                Image(systemName: line.cookedAt == nil ? "fork.knife.circle.fill" : "flame.fill")
+                    .font(Typography.mono(28))
+                    .foregroundStyle(Theme.hyperGreen)
+                    .frame(
+                        minWidth: CargoManifestSlot.controlPoints,
+                        minHeight: CargoManifestSlot.controlPoints
+                    )
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(line.cookedAt == nil ? "Cook" : "Fuel")
         }
+        .frame(minHeight: CargoManifestSlot.controlPoints)
         .listRowBackground(Theme.surface)
+        .modifier(ManifestLineSwipe(
+            planFuelActions: env.session.clientFlags.isPlanFuelActionsEnabled,
+            cooked: line.cookedAt != nil,
+            onEdit: { editingCargoLine = line },
+            onSoft: { Task { await cookOrFuelCargo(line) } },
+            onDelete: { Task { await deleteCargoPlanLine(line) } }
+        ))
+    }
+
+    private func cookOrFuelCargo(_ line: ManifestCargoLine) async {
+        if line.cookedAt != nil {
+            await openCargoFuel(line)
+            return
+        }
+        var inFlight = cookingCargoLineIds
+        guard inFlight.insert(line.id).inserted else { return }
+        cookingCargoLineIds = inFlight
+        defer {
+            var remaining = cookingCargoLineIds
+            remaining.remove(line.id)
+            cookingCargoLineIds = remaining
+        }
+        do {
+            let cooked = try await env.api.cookCargoLine(id: line.id)
+            Haptics.success()
+            model.errorMessage = nil
+            env.notifyCargoDataChanged()
+            await reload()
+            await openCargoFuel(cooked.line)
+        } catch {
+            model.errorMessage = CargoManifestLineFailure.message(for: error)
+        }
+    }
+
+    private func openCargoFuel(_ line: ManifestCargoLine) async {
+        cargoFuelKey = UUID().uuidString
+        do {
+            fuelCargoNutrition = try await env.api.cargoItem(id: line.cargoId).item.nutrition
+        } catch {
+            fuelCargoNutrition = nil
+        }
+        fuelCargoLine = line
+    }
+
+    /// Logs the cooked line. Does not call addCargoToFuel, so Cargo is not deducted again.
+    private func logCookedCargo(
+        _ line: ManifestCargoLine,
+        submission: FuelAmountSubmission
+    ) async throws {
+        let body = CargoManifestFuelLog.body(
+            name: line.cargoName,
+            quantity: submission.quantity,
+            unit: line.unit,
+            notes: submission.notes,
+            nutrition: fuelCargoNutrition,
+            editedEnergy: submission.energyKcal,
+            operationKey: cargoFuelKey,
+            occurredAt: ISO8601DateFormatter().string(from: Date())
+        )
+        _ = try await env.api.logDiaryFood(body)
+        await reload()
+    }
+
+    /// Deletes the plan row only. Does not restore a cook and does not void a Fuel log.
+    private func deleteCargoPlanLine(_ line: ManifestCargoLine) async {
+        do {
+            let result = try await env.api.deleteCargoLine(id: line.id)
+            guard result.deleted else {
+                model.errorMessage = "Plan line not found"
+                return
+            }
+            model.errorMessage = nil
+            await reload()
+        } catch {
+            model.errorMessage = CargoManifestLineFailure.message(for: error)
+        }
     }
 
     private func manifestEntry(_ entry: ManifestEntry, organizationId: String) -> some View {

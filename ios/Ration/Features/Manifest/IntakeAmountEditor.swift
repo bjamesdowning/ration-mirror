@@ -7,6 +7,13 @@ struct IntakeAmountEditor: View {
     var gramsPerServing: Double?
     var massUnit: IntakeLoggedUnit
     var enabled: Bool = true
+    /// Cargo unit. The amount stays in this unit and is not snapped to 0.25.
+    var directUnit: String? = nil
+
+    private var usesDirectQuantity: Bool {
+        guard let directUnit else { return false }
+        return !directUnit.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
 
     private var massEnabled: Bool { IntakeAmount.canLogByMass(gramsPerServing) }
     private var servingHint: String? {
@@ -21,14 +28,16 @@ struct IntakeAmountEditor: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             QuantityStepperField(
-                value: amountBinding,
-                unit: unitLabel,
+                value: usesDirectQuantity ? directAmountBinding : amountBinding,
+                unit: usesDirectQuantity ? (directUnit ?? unitLabel) : unitLabel,
                 range: 0.01...100_000,
-                step: IntakeAmount.step(for: unit),
+                step: usesDirectQuantity
+                    ? IntakeAmount.step(forDirectUnit: directUnit ?? "")
+                    : IntakeAmount.step(for: unit),
                 accessibilityIdentifier: "manifest.eat.amount"
             )
             .disabled(!enabled)
-            if massEnabled {
+            if massEnabled, !usesDirectQuantity {
                 Picker("Unit", selection: unitBinding) {
                     Text("Servings").tag(IntakeLoggedUnit.serving)
                     Text(massUnit.rawValue).tag(massUnit)
@@ -37,11 +46,22 @@ struct IntakeAmountEditor: View {
                 .disabled(!enabled)
                 .accessibilityLabel("Amount unit")
             }
-            if let servingHint {
+            if let servingHint, !usesDirectQuantity {
                 Text(servingHint)
                     .rationCaption()
             }
         }
+    }
+
+    private var directAmountBinding: Binding<Double> {
+        Binding(
+            get: { amount },
+            set: { next in
+                let accepted = IntakeAmount.acceptedDirectQuantity(next, unit: directUnit ?? "")
+                amount = accepted
+                servings = accepted
+            }
+        )
     }
 
     private var amountBinding: Binding<Double> {

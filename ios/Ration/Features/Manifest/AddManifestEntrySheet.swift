@@ -66,7 +66,11 @@ struct AddManifestEntrySheet: View {
                     }
                 }
             }
-            .navigationTitle("Add to plan")
+            .navigationTitle(
+                PlanFuelNames.snapshot(
+                    planFuelActions: env.session.clientFlags.isPlanFuelActionsEnabled
+                ).addSheetTitle
+            )
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

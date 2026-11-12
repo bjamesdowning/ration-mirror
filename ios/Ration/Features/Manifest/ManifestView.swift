@@ -35,6 +35,10 @@ struct ManifestView: View {
         )
     }
 
+    private var planFuelNames: PlanFuelNames.Snapshot {
+        PlanFuelNames.snapshot(planFuelActions: env.session.clientFlags.isPlanFuelActionsEnabled)
+    }
+
     private var organizationId: String? {
         env.session.activeOrganizationId
     }
@@ -90,7 +94,7 @@ struct ManifestView: View {
                             fuelExisting = nil
                             showFuelLog = true
                         } label: {
-                            Label("Log to Fuel", systemImage: "fork.knife")
+                            Label("Log to Fuel", systemImage: planFuelNames.logToFuelSymbol)
                         }
                         .disabled(!env.network.isOnline)
                     }
@@ -389,7 +393,7 @@ struct ManifestView: View {
                     title: "Plan your next meal",
                     message: "Schedule meals from Galley to close your weekly loop."
                 )
-                Button("Add to plan") { showingAddEntry = true }
+                Button(planFuelNames.emptyState) { showingAddEntry = true }
                     .buttonStyle(SecondaryButtonStyle())
                     .disabled(!env.network.isOnline)
             }

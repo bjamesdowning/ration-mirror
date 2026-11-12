@@ -35,7 +35,12 @@ struct DashboardView: View {
         switch label {
         case HubCapturePolicy.logToFuel:
             Button { showLogToFuel = true } label: {
-                Label(label, systemImage: "fork.knife")
+                Label(
+                    label,
+                    systemImage: PlanFuelNames.snapshot(
+                        planFuelActions: env.session.clientFlags.isPlanFuelActionsEnabled
+                    ).logToFuelSymbol
+                )
             }
         case HubCapturePolicy.scanToCargo:
             Button(action: onScan) {

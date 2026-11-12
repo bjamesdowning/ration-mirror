@@ -641,7 +641,7 @@ struct ManifestView: View {
             occurredAt: ISO8601DateFormatter().string(from: Date())
         )
         let saved = try await env.api.logDiaryFood(body)
-        setUndo(token: saved.operationId, message: "Serving logged")
+        setUndo(token: saved.undoToken ?? saved.operationId, message: "Serving logged")
         await reload()
     }
 

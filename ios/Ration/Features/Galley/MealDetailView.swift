@@ -16,6 +16,10 @@ struct MealDetailView: View {
     @State private var cookMessage: String?
     @State private var showingEdit = false
     @State private var showingFuel = false
+    @State private var fuelPresentation = FuelAddPresentation()
+    @State private var pendingFuelServings: Double?
+    @State private var fuelConfirmationMessage: String?
+    @State private var showFuelConfirmation = false
     @State private var showingDeleteConfirm = false
     @State private var isSelectedForSupply = false
     @State private var isTogglingSupply = false
@@ -79,8 +83,7 @@ struct MealDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $showingFuel) {
             PlanFuelAmountSheet(title: "Add to Fuel", unit: "serving", start: 1) { servings in
-                _ = try await env.api.addMealToFuel(id: mealId, servings: servings, confirmInsufficient: true)
-                env.notifyCargoDataChanged()
+                try await self.logMealFuel(servings: servings)
             }
         }
         .overlay(alignment: .bottom) {
@@ -156,6 +159,19 @@ struct MealDetailView: View {
         } message: {
             Text(cookConfirmationMessage ?? "Missing ingredients. Cook anyway?")
         }
+        .alert("Insufficient cargo", isPresented: $showFuelConfirmation) {
+            Button("Add anyway") {
+                fuelPresentation.confirmShortPantry()
+                Task { await confirmFuelDespiteShortfall() }
+            }
+            Button("Cancel", role: .cancel) {
+                fuelPresentation.declineShortPantry()
+                pendingFuelServings = nil
+                fuelConfirmationMessage = nil
+            }
+        } message: {
+            Text(fuelConfirmationMessage ?? "Missing ingredients. Add to Fuel anyway?")
+        }
         .sheet(item: $pendingEatEntry) { entry in
             ManifestPlateUpSheet(
                 entry: entry,
@@ -188,6 +204,7 @@ struct MealDetailView: View {
         case .cook:
             Button {
                 if env.session.clientFlags.isPlanFuelActionsEnabled {
+                    fuelPresentation.begin()
                     showingFuel = true
                 } else {
                     Task { await cook() }
@@ -389,6 +406,42 @@ struct MealDetailView: View {
             Haptics.light()
         } catch {
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+        }
+    }
+
+    @MainActor
+    private func logMealFuel(servings: Double) async throws {
+        let attempt = fuelPresentation.submit()
+        let result = try await env.api.addMealToFuel(
+            id: mealId,
+            servings: servings,
+            operationKey: attempt.operationKey,
+            confirmInsufficient: attempt.confirmInsufficient
+        )
+        switch result {
+        case .saved:
+            env.notifyCargoDataChanged()
+        case .needsConfirmation(let missing):
+            let message = FuelAddShortPantry.message(missing, mode: env.unitDisplayMode.mode)
+            pendingFuelServings = servings
+            fuelConfirmationMessage = message
+            showFuelConfirmation = true
+            throw FuelNeedsConfirmation(message: message)
+        }
+    }
+
+    @MainActor
+    private func confirmFuelDespiteShortfall() async {
+        guard let servings = pendingFuelServings else { return }
+        do {
+            try await logMealFuel(servings: servings)
+            showingFuel = false
+            pendingFuelServings = nil
+            fuelConfirmationMessage = nil
+        } catch is FuelNeedsConfirmation {
+        } catch {
+            fuelConfirmationMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+            showFuelConfirmation = true
         }
     }
 

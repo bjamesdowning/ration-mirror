@@ -128,26 +128,50 @@ extension RationAPI {
         try await client.post("manifest/cargo-lines/\(id)/cook", body: EmptyBody())
     }
 
-    func addCargoToFuel(id: String, quantity: Double) async throws -> CargoFuelResponse {
-        let key = UUID().uuidString
-        return try await client.post(
-            "cargo/\(id)/add-to-fuel",
-            body: FuelWriteBody(quantity: quantity, operationKey: key, idempotencyKey: key, occurredAt: Self.nowStamp())
+    func addCargoToFuel(
+        id: String,
+        quantity: Double,
+        operationKey: String
+    ) async throws -> CargoFuelResponse {
+        let body = FuelWriteBody(
+            quantity: quantity,
+            operationKey: operationKey,
+            idempotencyKey: operationKey,
+            occurredAt: Self.nowStamp(),
+            fuelTimeZone: FuelDeviceZone.candidate
         )
+        return try await postAddingFuelZone("cargo/\(id)/add-to-fuel", body: body)
     }
 
-    func addMealToFuel(id: String, servings: Double, confirmInsufficient: Bool) async throws -> MealFuelResponse {
-        let key = UUID().uuidString
-        return try await client.post(
-            "meals/\(id)/add-to-fuel",
-            body: MealFuelBody(
-                servings: servings,
-                confirmInsufficient: confirmInsufficient,
-                operationKey: key,
-                idempotencyKey: key,
-                occurredAt: Self.nowStamp()
-            )
+    func addMealToFuel(
+        id: String,
+        servings: Double,
+        operationKey: String,
+        confirmInsufficient: Bool
+    ) async throws -> MealFuelResult {
+        let body = MealFuelBody(
+            servings: servings,
+            confirmInsufficient: confirmInsufficient,
+            operationKey: operationKey,
+            idempotencyKey: operationKey,
+            occurredAt: Self.nowStamp(),
+            fuelTimeZone: FuelDeviceZone.candidate
         )
+        return try await postAddingFuelZone("meals/\(id)/add-to-fuel", body: body)
+    }
+
+    /// One retry after the device zone is saved. A second `fuel_timezone_required` is returned as-is.
+    private func postAddingFuelZone<T: Decodable>(
+        _ path: String,
+        body: some Encodable
+    ) async throws -> T {
+        do {
+            return try await client.post(path, body: body)
+        } catch let error as APIError where error.code == "fuel_timezone_required" {
+            guard let zone = FuelDeviceZone.candidate else { throw error }
+            _ = try await patchSettings(SettingsPatch(fuelTimeZone: zone))
+            return try await client.post(path, body: body)
+        }
     }
 
     private static func nowStamp() -> String {
@@ -182,11 +206,43 @@ private struct FuelWriteBody: Encodable {
     let operationKey: String
     let idempotencyKey: String
     let occurredAt: String
+    let fuelTimeZone: String?
+
+    enum CodingKeys: String, CodingKey {
+        case quantity, operationKey, idempotencyKey, occurredAt, fuelTimeZone
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(quantity, forKey: .quantity)
+        try container.encode(operationKey, forKey: .operationKey)
+        try container.encode(idempotencyKey, forKey: .idempotencyKey)
+        try container.encode(occurredAt, forKey: .occurredAt)
+        try container.encodeIfPresent(fuelTimeZone, forKey: .fuelTimeZone)
+    }
 }
 
-struct CargoFuelResponse: Decodable {
+struct CargoFuelResponse: Decodable, Equatable, Sendable {
     let intakeId: String
-    let cargoId: String
+    let deducted: Double?
+
+    enum CodingKeys: String, CodingKey {
+        case intakeId, deducted
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let intakeId = try container.decode(String.self, forKey: .intakeId)
+        guard !intakeId.isEmpty else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .intakeId,
+                in: container,
+                debugDescription: "intakeId is empty"
+            )
+        }
+        self.intakeId = intakeId
+        deducted = try container.decodeIfPresent(Double.self, forKey: .deducted)
+    }
 }
 
 private struct MealFuelBody: Encodable {
@@ -195,10 +251,116 @@ private struct MealFuelBody: Encodable {
     let operationKey: String
     let idempotencyKey: String
     let occurredAt: String
+    let fuelTimeZone: String?
+
+    enum CodingKeys: String, CodingKey {
+        case servings, confirmInsufficient, operationKey, idempotencyKey, occurredAt, fuelTimeZone
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(servings, forKey: .servings)
+        try container.encode(confirmInsufficient, forKey: .confirmInsufficient)
+        try container.encode(operationKey, forKey: .operationKey)
+        try container.encode(idempotencyKey, forKey: .idempotencyKey)
+        try container.encode(occurredAt, forKey: .occurredAt)
+        try container.encodeIfPresent(fuelTimeZone, forKey: .fuelTimeZone)
+    }
 }
 
-struct MealFuelResponse: Decodable {
-    let intakeId: String?
-    let mealId: String?
-    let requiresConfirmation: Bool?
+enum MealFuelResult: Decodable, Sendable {
+    case saved(intakeId: String, mealId: String)
+    case needsConfirmation(missingIngredients: [MissingIngredientDetail])
+
+    private enum CodingKeys: String, CodingKey {
+        case intakeId, mealId, requiresConfirmation, missingIngredients
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        guard container.contains(.requiresConfirmation) else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .requiresConfirmation,
+                in: container,
+                debugDescription: "requiresConfirmation is required"
+            )
+        }
+        if try container.decode(Bool.self, forKey: .requiresConfirmation) {
+            self = .needsConfirmation(
+                missingIngredients: try container.decode([MissingIngredientDetail].self, forKey: .missingIngredients)
+            )
+            return
+        }
+        let intakeId = try container.decode(String.self, forKey: .intakeId)
+        let mealId = try container.decode(String.self, forKey: .mealId)
+        guard !intakeId.isEmpty, !mealId.isEmpty else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .intakeId,
+                in: container,
+                debugDescription: "saved Fuel log needs intakeId and mealId"
+            )
+        }
+        self = .saved(intakeId: intakeId, mealId: mealId)
+    }
+}
+
+/// One Add to Fuel sheet. Later submits, including a short-pantry retry, keep this key.
+struct FuelAddAttempt: Equatable, Sendable {
+    let operationKey: String
+    let confirmInsufficient: Bool
+}
+
+struct FuelAddPresentation: Equatable, Sendable {
+    private(set) var operationKey: String
+    private(set) var confirmInsufficient: Bool
+
+    init(operationKey: String = UUID().uuidString) {
+        self.operationKey = operationKey
+        self.confirmInsufficient = false
+    }
+
+    mutating func begin(operationKey: String = UUID().uuidString) {
+        self.operationKey = operationKey
+        self.confirmInsufficient = false
+    }
+
+    func submit() -> FuelAddAttempt {
+        FuelAddAttempt(operationKey: operationKey, confirmInsufficient: confirmInsufficient)
+    }
+
+    mutating func confirmShortPantry() {
+        confirmInsufficient = true
+    }
+
+    mutating func declineShortPantry() {
+        confirmInsufficient = false
+    }
+}
+
+struct FuelNeedsConfirmation: LocalizedError, Equatable {
+    let message: String
+
+    var errorDescription: String? { message }
+}
+
+enum FuelAddShortPantry {
+    static func message(_ missing: [MissingIngredientDetail], mode: UnitDisplayMode) -> String {
+        let lines = missing.map { ingredient in
+            let required = QuantityPresenter.present(
+                quantity: ingredient.required,
+                unit: ingredient.unit,
+                ingredientName: ingredient.name,
+                mode: mode
+            )
+            let available = QuantityPresenter.present(
+                quantity: ingredient.available,
+                unit: ingredient.unit,
+                ingredientName: ingredient.name,
+                mode: mode
+            )
+            return "\(ingredient.name.capitalized): need \(required), have \(available)"
+        }
+        let noun = missing.count == 1 ? "ingredient" : "ingredients"
+        return "Missing \(missing.count) \(noun).\n\(lines.joined(separator: "\n"))\n\nAdd to Fuel anyway and deduct what's available?"
+    }
 }

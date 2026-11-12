@@ -13,6 +13,7 @@ struct CargoListView: View {
     @State private var editingItem: CargoItem?
     @State private var restockItem: CargoItem?
     @State private var eatItem: CargoItem?
+    @State private var fuelPresentation = FuelAddPresentation()
     @State private var paywallContext: PaywallContext?
     @State private var path: [CargoDetailRoute] = []
 
@@ -147,7 +148,12 @@ struct CargoListView: View {
             .sheet(item: $eatItem) { item in
                 if env.session.clientFlags.isPlanFuelActionsEnabled {
                     PlanFuelAmountSheet(title: "Add to Fuel", unit: item.unit, start: min(1, item.quantity)) { quantity in
-                        _ = try await env.api.addCargoToFuel(id: item.id, quantity: quantity)
+                        let attempt = fuelPresentation.submit()
+                        _ = try await env.api.addCargoToFuel(
+                            id: item.id,
+                            quantity: quantity,
+                            operationKey: attempt.operationKey
+                        )
                         env.notifyCargoDataChanged()
                         await reload()
                     }
@@ -214,12 +220,19 @@ struct CargoListView: View {
         model.filters.selectedTags = [slug]
     }
 
+    private func presentEat(_ item: CargoItem) {
+        if env.session.clientFlags.isPlanFuelActionsEnabled {
+            fuelPresentation.begin()
+        }
+        eatItem = item
+    }
+
     private func applyPendingCargoEatIfNeeded() {
         guard currentMainTab == .cargo, let id = env.deepLinkRouter.cargoEatPending else { return }
         env.deepLinkRouter.acknowledgeCargoEat()
         Task {
             if let detail = try? await env.api.cargoItem(id: id) {
-                eatItem = detail.item
+                presentEat(detail.item)
             }
         }
     }
@@ -338,7 +351,7 @@ struct CargoListView: View {
                         .cargoTrailingSwipeActions(
                             softLabel: env.session.clientFlags.isPlanFuelActionsEnabled ? "Add to Fuel" : "Eat",
                             softSystemImage: env.session.clientFlags.isPlanFuelActionsEnabled ? "flame.fill" : "carrot.fill",
-                            onEat: { eatItem = item },
+                            onEat: { presentEat(item) },
                             onDelete: {
                                 model.runMutation {
                                     await model.delete(item, api: env.api)
@@ -368,7 +381,7 @@ struct CargoListView: View {
                             onEat: {
                                 Task {
                                     if let item = await resolveSearchCargoItem(result) {
-                                        eatItem = item
+                                        presentEat(item)
                                     }
                                 }
                             },

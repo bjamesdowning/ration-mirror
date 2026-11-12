@@ -10,6 +10,7 @@ struct CargoDetailView: View {
     @State private var showingDeleteConfirm = false
     @State private var showingRestockQuantity = false
     @State private var showingQuickEat = false
+    @State private var fuelPresentation = FuelAddPresentation()
     @State private var showingPlan = false
     @State private var showingRefreshNutritionConfirm = false
     @State private var connectedMealsSort: ConnectedMealsSort = .alphabetical
@@ -113,7 +114,12 @@ struct CargoDetailView: View {
         .sheet(isPresented: $showingQuickEat) {
             if let item = model.item, env.session.clientFlags.isPlanFuelActionsEnabled {
                 PlanFuelAmountSheet(title: "Add to Fuel", unit: item.unit, start: min(1, item.quantity)) { quantity in
-                    _ = try await env.api.addCargoToFuel(id: item.id, quantity: quantity)
+                    let attempt = fuelPresentation.submit()
+                    _ = try await env.api.addCargoToFuel(
+                        id: item.id,
+                        quantity: quantity,
+                        operationKey: attempt.operationKey
+                    )
                     env.notifyCargoDataChanged()
                     await model.load(id: itemId, api: env.api)
                 }
@@ -178,7 +184,12 @@ struct CargoDetailView: View {
             }
             .disabled(model.item == nil)
         case .eat:
-            Button { showingQuickEat = true } label: {
+            Button {
+                if env.session.clientFlags.isPlanFuelActionsEnabled {
+                    fuelPresentation.begin()
+                }
+                showingQuickEat = true
+            } label: {
                 Label {
                     Text(env.session.clientFlags.isPlanFuelActionsEnabled ? "Add to Fuel" : "Eat")
                 } icon: {

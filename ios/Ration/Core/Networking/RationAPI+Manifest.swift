@@ -234,6 +234,7 @@ struct CargoLineDeleteResponse: Decodable, Sendable {
 struct CargoLineCookResponse: Decodable {
     let line: ManifestCargoLine
     let alreadyCooked: Bool
+    let undoToken: String?
 }
 
 private struct FuelWriteBody: Encodable {
@@ -264,9 +265,10 @@ private struct FuelWriteBody: Encodable {
 struct CargoFuelResponse: Decodable, Equatable, Sendable {
     let intakeId: String
     let deducted: Double?
+    let undoToken: String?
 
     enum CodingKeys: String, CodingKey {
-        case intakeId, deducted
+        case intakeId, deducted, undoToken
     }
 
     init(from decoder: Decoder) throws {
@@ -281,6 +283,7 @@ struct CargoFuelResponse: Decodable, Equatable, Sendable {
         }
         self.intakeId = intakeId
         deducted = try container.decodeIfPresent(Double.self, forKey: .deducted)
+        undoToken = try container.decodeIfPresent(String.self, forKey: .undoToken)
     }
 }
 
@@ -313,11 +316,11 @@ private struct MealFuelBody: Encodable {
 }
 
 enum MealFuelResult: Decodable, Sendable {
-    case saved(intakeId: String, mealId: String)
+    case saved(intakeId: String, mealId: String, undoToken: String?)
     case needsConfirmation(missingIngredients: [MissingIngredientDetail])
 
     private enum CodingKeys: String, CodingKey {
-        case intakeId, mealId, requiresConfirmation, missingIngredients
+        case intakeId, mealId, requiresConfirmation, missingIngredients, undoToken
     }
 
     init(from decoder: Decoder) throws {
@@ -344,7 +347,8 @@ enum MealFuelResult: Decodable, Sendable {
                 debugDescription: "saved Fuel log needs intakeId and mealId"
             )
         }
-        self = .saved(intakeId: intakeId, mealId: mealId)
+        let undoToken = try container.decodeIfPresent(String.self, forKey: .undoToken)
+        self = .saved(intakeId: intakeId, mealId: mealId, undoToken: undoToken)
     }
 }
 

@@ -183,6 +183,7 @@ struct PlanFuelAmountSheet: View {
         )
         do {
             try await onSave(submission)
+            Haptics.success()
             dismiss()
         } catch {
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription

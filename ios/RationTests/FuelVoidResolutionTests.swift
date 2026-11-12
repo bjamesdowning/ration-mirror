@@ -2,6 +2,27 @@ import XCTest
 @testable import Ration
 
 final class FuelVoidResolutionTests: XCTestCase {
+    func testVoidPayloadWithIntakeIdRemovesTheRow() throws {
+        let body = Data(
+            """
+            {"intakeId":"intake-1","operationId":"op-1","replayed":false,"voided":true}
+            """.utf8
+        )
+        let saved = try JSON.decoder.decode(DiaryWriteResponse.self, from: body)
+        XCTAssertEqual(saved.operationId, "op-1")
+        XCTAssertEqual(FuelVoidResolution.decide(intakeId: saved.intakeId), .remove)
+    }
+
+    func testHtmlBodyIsNotASuccessfulVoid() {
+        XCTAssertThrowsError(
+            try JSON.decoder.decode(DiaryWriteResponse.self, from: Data("<!doctype html>".utf8))
+        )
+        XCTAssertEqual(
+            FuelVoidResolution.decide(APIError.decoding("html")),
+            .keep(message: unexpected)
+        )
+    }
+
     func testIntakeIdRemovesTheRow() {
         XCTAssertEqual(FuelVoidResolution.decide(intakeId: "intake-1"), .remove)
         XCTAssertEqual(FuelVoidResolution.decide(intakeId: ""), .keep(message: unexpected))

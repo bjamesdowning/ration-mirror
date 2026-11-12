@@ -220,6 +220,66 @@ struct ManifestCargoLine: Codable, Identifiable, Sendable {
     let unit: String
     let notes: String?
     let cookedAt: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case id, cargoId, cargoName, date, slotType, quantity, unit, notes, cookedAt
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        cargoId = try container.decode(String.self, forKey: .cargoId)
+        cargoName = try container.decode(String.self, forKey: .cargoName)
+        date = try container.decode(String.self, forKey: .date)
+        slotType = try container.decode(String.self, forKey: .slotType)
+        quantity = try Self.quantity(from: container)
+        unit = try container.decode(String.self, forKey: .unit)
+        notes = try container.decodeIfPresent(String.self, forKey: .notes)
+        cookedAt = try Self.cookedAt(from: container)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(cargoId, forKey: .cargoId)
+        try container.encode(cargoName, forKey: .cargoName)
+        try container.encode(date, forKey: .date)
+        try container.encode(slotType, forKey: .slotType)
+        try container.encode(quantity, forKey: .quantity)
+        try container.encode(unit, forKey: .unit)
+        try container.encodeIfPresent(notes, forKey: .notes)
+        try container.encodeIfPresent(cookedAt, forKey: .cookedAt)
+    }
+
+    /// D1 REAL values sometimes arrive as strings. A string quantity used to fail the cook response.
+    private static func quantity(from container: KeyedDecodingContainer<CodingKeys>) throws -> Double {
+        if let value = try? container.decode(Double.self, forKey: .quantity), value.isFinite {
+            return value
+        }
+        if let text = try? container.decode(String.self, forKey: .quantity),
+           let value = Double(text), value.isFinite {
+            return value
+        }
+        throw DecodingError.dataCorruptedError(
+            forKey: .quantity,
+            in: container,
+            debugDescription: "quantity is not a number"
+        )
+    }
+
+    private static func cookedAt(from container: KeyedDecodingContainer<CodingKeys>) throws -> String? {
+        guard container.contains(.cookedAt), try !container.decodeNil(forKey: .cookedAt) else {
+            return nil
+        }
+        if let text = try? container.decode(String.self, forKey: .cookedAt) {
+            return text
+        }
+        let raw = try container.decode(Double.self, forKey: .cookedAt)
+        let seconds = raw > 1_000_000_000_000 ? raw / 1000 : raw
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter.string(from: Date(timeIntervalSince1970: seconds))
+    }
 }
 
 struct ManifestResponse: Codable, Sendable {

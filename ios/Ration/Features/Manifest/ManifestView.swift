@@ -553,7 +553,10 @@ struct ManifestView: View {
                 env.openDeepLink(.cargoItem(id: line.cargoId))
             } label: {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(line.cargoName).rationBody()
+                    Text(line.cargoName)
+                        .rationBody()
+                        .strikethrough(CargoManifestSlot.struckThrough(cookedAt: line.cookedAt))
+                        .foregroundStyle(line.cookedAt == nil ? Theme.carbon : Theme.muted)
                     Text("\(FuelLogWrite.amountDisplay(line.quantity, unit: line.unit)) \(line.unit)")
                         .rationCaption()
                 }
@@ -604,6 +607,7 @@ struct ManifestView: View {
             Haptics.success()
             model.errorMessage = nil
             env.notifyCargoDataChanged()
+            setUndo(token: cooked.undoToken, message: "Cooked")
             await reload()
             await openCargoFuel(cooked.line)
         } catch {
@@ -636,7 +640,8 @@ struct ManifestView: View {
             operationKey: cargoFuelKey,
             occurredAt: ISO8601DateFormatter().string(from: Date())
         )
-        _ = try await env.api.logDiaryFood(body)
+        let saved = try await env.api.logDiaryFood(body)
+        setUndo(token: saved.undoToken ?? saved.operationId, message: "Serving logged")
         await reload()
     }
 

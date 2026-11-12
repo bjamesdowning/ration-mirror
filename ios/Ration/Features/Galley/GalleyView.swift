@@ -691,8 +691,13 @@ struct GalleyView: View {
             energyKcal: submission.energyKcal
         )
         switch result {
-        case .saved:
+        case .saved(_, _, let undoToken):
             env.notifyCargoDataChanged()
+            if let undoToken, !undoToken.isEmpty {
+                cookSuccessMessage = "Serving logged"
+                cookUndoToken = undoToken
+                showCookUndo = true
+            }
         case .needsConfirmation(let missing):
             let message = FuelAddShortPantry.message(missing, mode: env.unitDisplayMode.mode)
             pendingFuelMealId = mealId

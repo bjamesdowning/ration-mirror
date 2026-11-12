@@ -11,6 +11,11 @@ enum CargoManifestSlot {
     static func showsEmptyMealButton(mealCount: Int, cargoLineCount: Int) -> Bool {
         mealCount == 0 && cargoLineCount == 0
     }
+
+    /// Cooked cargo rows strike through the same way meal rows do.
+    static func struckThrough(cookedAt: String?) -> Bool {
+        cookedAt != nil
+    }
 }
 
 /// Routes a cargo Manifest line already has on the server.

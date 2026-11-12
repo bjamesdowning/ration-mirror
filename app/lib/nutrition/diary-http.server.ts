@@ -67,11 +67,13 @@ export async function beginDiaryRequest(
 		surface === "web"
 			? buildWebFlagContext(request, env, session)
 			: buildMobileFlagContext(request, env, session);
+	const bearer =
+		request.headers.get("Authorization")?.startsWith("Bearer ") === true;
 	const principal: NutritionPrincipal = {
 		userId: auth.userId,
 		organizationId: auth.groupId,
 		surface,
-		authMethod: "session",
+		authMethod: bearer ? "mobile_bearer" : "session",
 		scopes: ["nutrition:read", "nutrition:write"],
 		requestId: request.headers.get("cf-ray") ?? crypto.randomUUID(),
 	};

@@ -45,6 +45,8 @@ struct DiaryVoidBody: Encodable, Sendable {
 
 struct DiaryWriteResponse: Decodable, Sendable {
     let intakeId: String?
+    let operationId: String?
+    let undoToken: String?
     let replayed: Bool?
     let credits: Int?
     let voided: Bool?
@@ -52,12 +54,14 @@ struct DiaryWriteResponse: Decodable, Sendable {
     let code: String?
 
     enum CodingKeys: String, CodingKey {
-        case intakeId, replayed, credits, voided, error, code
+        case intakeId, operationId, undoToken, replayed, credits, voided, error, code
     }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         intakeId = try container.decodeIfPresent(String.self, forKey: .intakeId)
+        operationId = try container.decodeIfPresent(String.self, forKey: .operationId)
+        undoToken = try container.decodeIfPresent(String.self, forKey: .undoToken)
         replayed = try container.decodeIfPresent(Bool.self, forKey: .replayed)
         voided = try container.decodeIfPresent(Bool.self, forKey: .voided)
         error = try container.decodeIfPresent(String.self, forKey: .error)

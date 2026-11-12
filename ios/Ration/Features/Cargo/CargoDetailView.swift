@@ -11,6 +11,7 @@ struct CargoDetailView: View {
     @State private var showingRestockQuantity = false
     @State private var showingQuickEat = false
     @State private var fuelPresentation = FuelAddPresentation()
+    @State private var fuelUndo: ManifestUndoToast?
     @State private var showingPlan = false
     @State private var showingRefreshNutritionConfirm = false
     @State private var connectedMealsSort: ConnectedMealsSort = .alphabetical
@@ -128,13 +129,16 @@ struct CargoDetailView: View {
                     }
                 ) { submission in
                     let attempt = fuelPresentation.submit()
-                    _ = try await env.api.addCargoToFuel(
+                    let saved = try await env.api.addCargoToFuel(
                         id: item.id,
                         quantity: submission.quantity,
                         operationKey: attempt.operationKey,
                         notes: submission.notes,
                         energyKcal: submission.energyKcal
                     )
+                    if let token = saved.undoToken, !token.isEmpty {
+                        fuelUndo = ManifestUndoToast(token: token, message: "Serving logged")
+                    }
                     env.notifyCargoDataChanged()
                     await model.load(id: itemId, api: env.api)
                 }
@@ -149,6 +153,16 @@ struct CargoDetailView: View {
         }
         .sheet(item: $paywallContext) { ctx in
             PaywallView(context: ctx)
+        }
+        .overlay(alignment: .bottom) {
+            if let toast = fuelUndo {
+                UndoToast(
+                    message: toast.message,
+                    onUndo: { Task { await undoFuelLog() } },
+                    onDismiss: { fuelUndo = nil }
+                )
+                .padding(.bottom, 24)
+            }
         }
         .confirmationDialog("Delete this cargo item?", isPresented: $showingDeleteConfirm, titleVisibility: .visible) {
             Button("Delete", role: .destructive) {
@@ -182,6 +196,19 @@ struct CargoDetailView: View {
             showsMarkEmpty: (model.item?.quantity ?? 0) > 0,
             planFuelActions: env.session.clientFlags.isPlanFuelActionsEnabled
         )
+    }
+
+    private func undoFuelLog() async {
+        guard let token = fuelUndo?.token else { return }
+        fuelUndo = nil
+        do {
+            _ = try await env.api.undoAction(token: token)
+            Haptics.light()
+            env.notifyCargoDataChanged()
+            await model.load(id: itemId, api: env.api)
+        } catch {
+            model.errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+        }
     }
 
     @ViewBuilder

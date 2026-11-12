@@ -69,11 +69,12 @@ final class AddToFuelClientContractTests: XCTestCase {
             """.utf8
         )
         let saved = try JSON.decoder.decode(MealFuelResult.self, from: savedBody)
-        guard case .saved(let decodedIntake, let decodedMeal) = saved else {
+        guard case .saved(let decodedIntake, let decodedMeal, let undoToken) = saved else {
             return XCTFail("Expected a saved log")
         }
         XCTAssertEqual(decodedIntake, intakeId)
         XCTAssertEqual(decodedMeal, mealId)
+        XCTAssertNil(undoToken)
 
         XCTAssertThrowsError(
             try JSON.decoder.decode(

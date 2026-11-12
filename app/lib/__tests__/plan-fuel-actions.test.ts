@@ -190,6 +190,40 @@ describe("addCargoToFuel", () => {
 		);
 	});
 
+	it("stores an undo token that is not the nutrition operation id", async () => {
+		limit.mockResolvedValue([cargoRow(carrotSnapshot)]);
+		logDiaryFood.mockResolvedValue({
+			intakeId: "intake-1",
+			operationId: "55555555-5555-4555-8555-555555555555",
+		});
+		vi.mocked(env.RATION_KV.put).mockClear();
+
+		const result = await addCargoToFuel(
+			env,
+			orgId,
+			cargoId,
+			100,
+			principal,
+			flags,
+			{ ...write, notes: "crispy", energyKcal: 407 },
+		);
+
+		expect(result.intakeId).toBe("intake-1");
+		expect(result.undoToken).toEqual(expect.any(String));
+		expect(result.undoToken).not.toBe(
+			"55555555-5555-4555-8555-555555555555",
+		);
+		expect(logDiaryFood.mock.calls[0]?.[3]).toMatchObject({
+			notes: "crispy",
+			macros: { energyKcal: 407 },
+		});
+		const stored = vi.mocked(env.RATION_KV.put).mock.calls.at(-1)?.[1];
+		expect(String(stored)).toContain('"kind":"fuel_action"');
+		expect(String(stored)).toContain(
+			"55555555-5555-4555-8555-555555555555",
+		);
+	});
+
 	it("does not log 100 cups when 100 g has a one-cup perServing", async () => {
 		limit.mockResolvedValue([cargoRow(cupSnapshot)]);
 

@@ -25,6 +25,7 @@ struct MealDetailView: View {
     @State private var isTogglingSupply = false
     @State private var cookUndoToken: String?
     @State private var showCookUndo = false
+    @State private var undoToastMessage = "Ingredients deducted from Cargo"
     @State private var cookConfirmationMessage: String?
     @State private var showCookConfirmation = false
     @State private var pendingEatEntry: ManifestEntry?
@@ -101,7 +102,7 @@ struct MealDetailView: View {
         .overlay(alignment: .bottom) {
             if showCookUndo, cookUndoToken != nil {
                 UndoToast(
-                    message: "Ingredients deducted from Cargo",
+                    message: undoToastMessage,
                     onUndo: { Task { await undoCook() } },
                     onDismiss: {
                         showCookUndo = false
@@ -434,8 +435,13 @@ struct MealDetailView: View {
             energyKcal: submission.energyKcal
         )
         switch result {
-        case .saved:
+        case .saved(_, _, let undoToken):
             env.notifyCargoDataChanged()
+            if let undoToken, !undoToken.isEmpty {
+                undoToastMessage = "Serving logged"
+                cookUndoToken = undoToken
+                showCookUndo = true
+            }
         case .needsConfirmation(let missing):
             let message = FuelAddShortPantry.message(missing, mode: env.unitDisplayMode.mode)
             pendingFuel = submission
@@ -494,6 +500,7 @@ struct MealDetailView: View {
                 message += " · Added to today's Manifest"
             }
             cookMessage = message
+            undoToastMessage = "Ingredients deducted from Cargo"
             cookUndoToken = result.undoToken
             showCookUndo = result.undoToken != nil
             env.notifyCargoDataChanged()

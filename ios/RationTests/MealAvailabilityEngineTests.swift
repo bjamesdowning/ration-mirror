@@ -51,7 +51,8 @@ final class MealAvailabilityEngineTests: XCTestCase {
         let rows = MealAvailabilityEngine.availabilityRows(
             meal: meal,
             match: nil,
-            desiredServings: 2
+            desiredServings: 2,
+            mode: .original
         )
         XCTAssertEqual(rows.count, 1)
         XCTAssertEqual(rows[0].status, .partial)
@@ -111,12 +112,63 @@ final class MealAvailabilityEngineTests: XCTestCase {
         let rows = MealAvailabilityEngine.availabilityRows(
             meal: meal,
             match: match,
-            desiredServings: 2
+            desiredServings: 2,
+            mode: .original
         )
         XCTAssertEqual(rows[0].status, .partial)
         XCTAssertNotNil(rows[0].subtitle)
         XCTAssertEqual(rows[1].status, .missing)
         XCTAssertNotNil(rows[1].subtitle)
+    }
+
+    func testFourOuncesMetricNeedMatchesIngredientLine() {
+        let name = "butter"
+        let ingredientLine = QuantityPresenter.presentStored(
+            quantity: 4,
+            unit: "oz",
+            baseQuantity: nil,
+            baseUnit: nil,
+            ingredientName: name,
+            mode: .metric
+        )
+        let meal = makeTestMeal(ingredients: [
+            MealIngredient(
+                id: "i1",
+                mealId: "m1",
+                cargoId: nil,
+                resolvedCargoId: nil,
+                ingredientName: name,
+                quantity: 4,
+                unit: "oz",
+                baseQuantity: nil,
+                baseUnit: nil,
+                isOptional: false,
+                orderIndex: 0
+            ),
+        ])
+        let match = MealMatch(
+            meal: meal,
+            matchPercentage: 0,
+            canMake: false,
+            availableIngredients: [],
+            missingIngredients: [
+                MissingIngredientMatch(
+                    name: name,
+                    requiredQuantity: 4,
+                    unit: "oz",
+                    isOptional: false
+                ),
+            ]
+        )
+        let rows = MealAvailabilityEngine.availabilityRows(
+            meal: meal,
+            match: match,
+            desiredServings: 2,
+            mode: .metric
+        )
+        XCTAssertEqual(rows[0].status, .missing)
+        XCTAssertEqual(ingredientLine, "113 g")
+        XCTAssertEqual(rows[0].subtitle, "Need \(ingredientLine)")
     }
 
     private func makeTestMeal(ingredients: [MealIngredient]) -> Meal {

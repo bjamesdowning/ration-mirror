@@ -56,7 +56,7 @@ struct SavedListItemRow: View {
                     .foregroundStyle(Theme.muted)
             }
             Spacer()
-            Text("\(format(item.quantity)) \(item.unit)")
+            Text("\(SavedListLogic.formatAmount(item.quantity, unit: item.unit)) \(item.unit)")
                 .rationCaption()
                 .foregroundStyle(Theme.muted)
         }
@@ -94,9 +94,5 @@ struct SavedListItemRow: View {
     private var statusText: String {
         let line = SavedListLogic.statusLine(for: item)
         return line.isEmpty ? "Not on Live" : line
-    }
-
-    private func format(_ value: Double) -> String {
-        value.rounded() == value ? String(Int(value)) : String(value)
     }
 }

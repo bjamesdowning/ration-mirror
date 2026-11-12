@@ -183,10 +183,15 @@ struct LogToFuelSheet: View {
         }
     }
 
+    /// Editable amount. Servings stay fractional; the digits come from the presenter formatter.
+    private func amountText(_ value: Double, unit: String) -> String {
+        QuantityPresentation.formatNumber(value, unit: unit, wholeCounts: false)
+    }
+
     private func prefill() {
         guard let existing else { return }
         name = existing.name
-        amount = String(existing.amount)
+        amount = amountText(existing.amount, unit: existing.unit)
         unit = existing.unit
         energy = String(existing.energyKcal)
         protein = String(existing.proteinG)
@@ -198,7 +203,7 @@ struct LogToFuelSheet: View {
     private func apply(_ food: RecentFuelFood) {
         savedFoodId = nil
         name = food.name
-        amount = String(food.amount)
+        amount = amountText(food.amount, unit: food.unit)
         unit = food.unit
         energy = String(food.energyKcal)
         protein = String(food.proteinG)
@@ -209,8 +214,9 @@ struct LogToFuelSheet: View {
     private func applySaved(_ food: SavedFoodRow) {
         savedFoodId = food.id
         name = food.name
-        amount = String(food.defaultAmount ?? 1)
-        unit = food.defaultUnit ?? "serving"
+        let savedUnit = food.defaultUnit ?? "serving"
+        amount = amountText(food.defaultAmount ?? 1, unit: savedUnit)
+        unit = savedUnit
         energy = String(food.energyKcal)
         protein = String(food.proteinG)
         carbs = String(food.carbsG)

@@ -53,6 +53,7 @@ import {
 	sumConvertedToTarget,
 } from "./matching.server";
 import { projectNutritionSnapshotToLegacy } from "./nutrition/adapters";
+import { isPlanFuelActionsEnabled } from "./nutrition/fast-log-flag.server";
 import type { AnyNutritionSnapshot } from "./nutrition/types";
 import { getOrganizationMetadata } from "./org-supply-settings.server";
 import {
@@ -2614,6 +2615,9 @@ export async function reconcileSupplyAfterDock(
 	cargoSelectionsReduced: number;
 }> {
 	const unitMode = options.unitMode ?? "metric";
+	const includeCargoPlanLines = options.flagContext
+		? await isPlanFuelActionsEnabled(env, options.flagContext)
+		: false;
 	return retryOnD1Contention(async () => {
 		const cargoResult = await fulfillCargoSelectionsFromDockedSupplyItems(
 			env.DB,
@@ -2631,6 +2635,7 @@ export async function reconcileSupplyAfterDock(
 			},
 			unitMode,
 			options.userId,
+			includeCargoPlanLines,
 		);
 
 		return {

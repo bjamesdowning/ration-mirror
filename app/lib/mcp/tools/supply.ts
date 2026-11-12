@@ -2,6 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { getUserSettings } from "../../auth.server";
 import { isFeatureEnabled } from "../../feature-flags/flags.server";
+import { isPlanFuelActionsEnabled } from "../../nutrition/fast-log-flag.server";
 import { UNIT_FIELD_DESCRIPTION, UuidSchema } from "../../schemas/uuid";
 import {
 	addSupplyItem,
@@ -251,6 +252,10 @@ export function createSupplyToolDefs(env: McpToolsEnv) {
 			rateLimitCategory: "mcp_supply_sync",
 			audit: true,
 			handler: async (ctx, a) => {
+				const includeCargoPlanLines = await isPlanFuelActionsEnabled(
+					env,
+					resolveAgentFlagContext(env, ctx),
+				);
 				const result = await createSupplyListFromSelectedMeals(
 					env,
 					ctx.organizationId,
@@ -258,6 +263,7 @@ export function createSupplyToolDefs(env: McpToolsEnv) {
 					{ trigger: "mcp_sync_supply", organizationId: ctx.organizationId },
 					a.unitMode ?? "metric",
 					ctx.userId,
+					includeCargoPlanLines,
 				);
 				const list = result.list;
 				if (!list) {
@@ -335,7 +341,11 @@ export function createSupplyToolDefs(env: McpToolsEnv) {
 					env,
 					ctx.organizationId,
 					list.id,
-					{ unitMode: unitDisplayMode, userId: ctx.userId },
+					{
+						unitMode: unitDisplayMode,
+						userId: ctx.userId,
+						flagContext: resolveAgentFlagContext(env, ctx),
+					},
 				);
 				return ok("complete_supply_list", result);
 			},

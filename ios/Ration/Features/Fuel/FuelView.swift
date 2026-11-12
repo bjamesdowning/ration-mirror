@@ -435,18 +435,25 @@ struct FuelView: View {
     private func voidItem(_ item: FuelDayResponse.Item) async {
         guard voidingIds.insert(item.id).inserted else { return }
         defer { voidingIds.remove(item.id) }
+        let decision: FuelVoidDecision
         do {
-            _ = try await env.api.voidDiaryFood(
+            let saved = try await env.api.voidDiaryFood(
                 id: item.id,
                 body: DiaryVoidBody(confirm: true, operationKey: UUID().uuidString)
             )
-            acceptVoid(item)
+            decision = FuelVoidResolution.decide(intakeId: saved.intakeId)
         } catch {
-            if let api = error as? APIError, api.statusCode == 404 || api.code == "not_found" {
-                acceptVoid(item)
-            } else {
-                await handleWrite(error)
-            }
+            decision = FuelVoidResolution.decide(error)
+        }
+        switch decision {
+        case .remove:
+            acceptVoid(item)
+        case .keep(let message):
+            self.message = message
+        case .paywall:
+            showingAdd = false
+            editingDraft = nil
+            showingPaywall = true
         }
     }
 

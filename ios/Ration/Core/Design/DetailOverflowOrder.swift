@@ -22,6 +22,7 @@ enum DetailOverflowOrder {
 
 enum CargoOverflowAction: String, Hashable {
     case eat
+    case plan
     case galley
     case edit
     case markEmpty
@@ -31,8 +32,10 @@ enum CargoOverflowAction: String, Hashable {
 
 enum CargoOverflowMenu {
     /// Source order is the menu as it stood before Delete and Edit were pinned.
-    static func ordered(showsMarkEmpty: Bool) -> [CargoOverflowAction] {
-        var actions: [CargoOverflowAction] = [.eat, .galley, .edit]
+    static func ordered(showsMarkEmpty: Bool, planFuelActions: Bool = false) -> [CargoOverflowAction] {
+        var actions: [CargoOverflowAction] = planFuelActions
+            ? [.eat, .plan, .galley, .edit]
+            : [.eat, .galley, .edit]
         if showsMarkEmpty {
             actions.append(.markEmpty)
         }

@@ -24,6 +24,7 @@ struct ManifestView: View {
     @State private var prepareConfirmationMessage: String?
     @State private var showPrepareConfirmation = false
     @State private var pendingEatEntry: ManifestEntry?
+    @State private var editingEntry: ManifestEntry?
     @State private var showFuelLog = false
     @State private var fuelExisting: LogToFuelExisting?
 
@@ -144,6 +145,9 @@ struct ManifestView: View {
                 env.deepLinkRouter.acknowledgeManifestAddEntry()
             }
             .refreshable { await reload() }
+            .onChange(of: env.manifestDataRevision) { _, _ in
+                Task { await reload() }
+            }
             .alert("Insufficient cargo", isPresented: $showPrepareConfirmation) {
                 Button("Continue anyway") {
                     Task { await confirmPrepareDespiteShortfall() }
@@ -154,6 +158,17 @@ struct ManifestView: View {
                 }
             } message: {
                 Text(prepareConfirmationMessage ?? "Missing ingredients. Continue anyway?")
+            }
+            .sheet(item: $editingEntry) { entry in
+                ManifestLineEditSheet(entry: entry) { date, slot, servings in
+                    try await env.api.updateManifestEntry(
+                        id: entry.id,
+                        date: date,
+                        slotType: slot,
+                        servingsOverride: servings
+                    )
+                    await reload()
+                }
             }
             .sheet(item: $pendingEatEntry) { entry in
                 ManifestPlateUpSheet(
@@ -262,7 +277,7 @@ struct ManifestView: View {
                     defaultDate: model.selectedDay,
                     preselectedMealId: addEntryPrefillMealId,
                     preselectedSlot: addEntrySlot
-                ) { mealId, date, slot in
+                ) { mealId, date, slot, servings in
                     guard let organizationId = env.session.activeOrganizationId else {
                         return "Organization not ready."
                     }
@@ -273,6 +288,7 @@ struct ManifestView: View {
                         mealId: mealId,
                         date: date,
                         slotType: slot,
+                        servingsOverride: servings,
                         api: env.api,
                         snapshots: env.snapshots,
                         online: env.network.isOnline,
@@ -461,6 +477,9 @@ struct ManifestView: View {
                             manifestEntry(entry, organizationId: organizationId)
                         }
                     }
+                    ForEach(cargoLines(manifest, day: day, slot: slot)) { line in
+                        cargoLineRow(line)
+                    }
                 }
                 let other = manifest.entries.filter { entry in
                     entry.date == day && !order.contains(entry.slotType)
@@ -481,6 +500,36 @@ struct ManifestView: View {
         }
     }
 
+    private func cargoLines(_ manifest: ManifestResponse, day: String, slot: String) -> [ManifestCargoLine] {
+        guard env.session.clientFlags.isPlanFuelActionsEnabled else { return [] }
+        return (manifest.cargoLines ?? []).filter { $0.date == day && $0.slotType == slot }
+    }
+
+    private func cargoLineRow(_ line: ManifestCargoLine) -> some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(line.cargoName).rationBody()
+                Text("\(FuelLogWrite.amountDisplay(line.quantity, unit: line.unit)) \(line.unit)")
+                    .rationCaption()
+            }
+            Spacer()
+            if line.cookedAt == nil {
+                Button("Cook") {
+                    Task {
+                        _ = try? await env.api.cookCargoLine(id: line.id)
+                        env.notifyCargoDataChanged()
+                        await reload()
+                    }
+                }
+            } else {
+                Image(systemName: "flame.fill")
+                    .foregroundStyle(Theme.hyperGreen)
+                    .accessibilityLabel("Cooked")
+            }
+        }
+        .listRowBackground(Theme.surface)
+    }
+
     private func manifestEntry(_ entry: ManifestEntry, organizationId: String) -> some View {
         ManifestEntryRow(
             entry: entry,
@@ -489,19 +538,31 @@ struct ManifestView: View {
             onEditServing: { pendingEatEntry = entry }
         )
         .listRowBackground(Theme.surface)
-        .destructiveTrailingSwipe {
-            Task {
-                guard let userId else { return }
-                await model.deleteEntry(
-                    entry,
-                    api: env.api,
-                    snapshots: env.snapshots,
-                    online: env.network.isOnline,
-                    organizationId: organizationId,
-                    userId: userId
-                )
+        .modifier(ManifestLineSwipe(
+            planFuelActions: env.session.clientFlags.isPlanFuelActionsEnabled,
+            cooked: entry.isCooked,
+            onEdit: { editingEntry = entry },
+            onSoft: {
+                if entry.isCooked {
+                    pendingEatEntry = entry
+                } else {
+                    Task { await handlePrepare(entry) }
+                }
+            },
+            onDelete: {
+                Task {
+                    guard let userId else { return }
+                    await model.deleteEntry(
+                        entry,
+                        api: env.api,
+                        snapshots: env.snapshots,
+                        online: env.network.isOnline,
+                        organizationId: organizationId,
+                        userId: userId
+                    )
+                }
             }
-        }
+        ))
     }
 
     private func content(_ manifest: ManifestResponse, organizationId: String) -> some View {

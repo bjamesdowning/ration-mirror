@@ -10,6 +10,7 @@ struct CargoDetailView: View {
     @State private var showingDeleteConfirm = false
     @State private var showingRestockQuantity = false
     @State private var showingQuickEat = false
+    @State private var showingPlan = false
     @State private var showingRefreshNutritionConfirm = false
     @State private var connectedMealsSort: ConnectedMealsSort = .alphabetical
     @State private var expandedMealIds: Set<String> = []
@@ -101,8 +102,22 @@ struct CargoDetailView: View {
                 }
             }
         }
-        .sheet(isPresented: $showingQuickEat) {
+        .sheet(isPresented: $showingPlan) {
             if let item = model.item {
+                CargoPlanSheet(cargoId: item.id, unit: item.unit) { date, slot, quantity in
+                    _ = try await env.api.addCargoLine(cargoId: item.id, date: date, slotType: slot, quantity: quantity)
+                    env.notifyManifestDataChanged()
+                }
+            }
+        }
+        .sheet(isPresented: $showingQuickEat) {
+            if let item = model.item, env.session.clientFlags.isPlanFuelActionsEnabled {
+                PlanFuelAmountSheet(title: "Add to Fuel", unit: item.unit, start: min(1, item.quantity)) { quantity in
+                    _ = try await env.api.addCargoToFuel(id: item.id, quantity: quantity)
+                    env.notifyCargoDataChanged()
+                    await model.load(id: itemId, api: env.api)
+                }
+            } else if let item = model.item {
                 CargoQuickEatSheet(item: item) { quantity, notes in
                     await model.quickEat(quantity: quantity, notes: notes, api: env.api)
                 } onFinished: { _ in
@@ -142,7 +157,10 @@ struct CargoDetailView: View {
     }
 
     private var cargoOverflowActions: [CargoOverflowAction] {
-        CargoOverflowMenu.ordered(showsMarkEmpty: (model.item?.quantity ?? 0) > 0)
+        CargoOverflowMenu.ordered(
+            showsMarkEmpty: (model.item?.quantity ?? 0) > 0,
+            planFuelActions: env.session.clientFlags.isPlanFuelActionsEnabled
+        )
     }
 
     @ViewBuilder
@@ -162,14 +180,19 @@ struct CargoDetailView: View {
         case .eat:
             Button { showingQuickEat = true } label: {
                 Label {
-                    Text("Eat")
+                    Text(env.session.clientFlags.isPlanFuelActionsEnabled ? "Add to Fuel" : "Eat")
                 } icon: {
-                    Image(systemName: "carrot")
+                    Image(systemName: env.session.clientFlags.isPlanFuelActionsEnabled ? "flame.fill" : "carrot")
                         .symbolRenderingMode(.monochrome)
                 }
             }
             .tint(Theme.warning)
             .disabled(model.item == nil || model.isQuickEating || !env.network.isOnline)
+        case .plan:
+            Button { showingPlan = true } label: {
+                Label("Add to Manifest", systemImage: "calendar")
+            }
+            .disabled(model.item == nil || !env.network.isOnline)
         case .galley:
             Button {
                 Task { await handlePromote() }

@@ -620,6 +620,7 @@ final class ManifestViewModel {
         mealId: String,
         date: String,
         slotType: String,
+        servingsOverride: Int? = nil,
         api: RationAPI,
         snapshots: SnapshotStore,
         online: Bool,
@@ -636,7 +637,12 @@ final class ManifestViewModel {
         defer { isSavingEntry = false }
         do {
             _ = try await api.addManifestEntry(
-                ManifestEntryCreate(mealId: mealId, date: date, slotType: slotType)
+                ManifestEntryCreate(
+                    mealId: mealId,
+                    date: date,
+                    slotType: slotType,
+                    servingsOverride: servingsOverride
+                )
             )
             Haptics.success()
             await load(

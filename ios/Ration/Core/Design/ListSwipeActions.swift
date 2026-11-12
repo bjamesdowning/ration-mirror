@@ -77,12 +77,14 @@ extension View {
     /// Cargo: Eat (yellow, full-swipe) + Delete (red). Uses SF Symbol so tint matches Cook.
     /// Eat shows at qty 0 too.
     func cargoTrailingSwipeActions(
+        softLabel: String = "Eat",
+        softSystemImage: String = "carrot.fill",
         onEat: @escaping () -> Void,
         onDelete: @escaping () -> Void
     ) -> some View {
         inventorySoftHardTrailingSwipe(
-            softLabel: "Eat",
-            softSystemImage: "carrot.fill",
+            softLabel: softLabel,
+            softSystemImage: softSystemImage,
             onSoft: onEat,
             onDelete: onDelete
         )
@@ -90,13 +92,30 @@ extension View {
 
     /// Galley: Cook (yellow, full-swipe) + Delete (red).
     func galleyTrailingSwipeActions(
+        softLabel: String = "Cook",
+        softSystemImage: String = "flame",
         onCook: @escaping () -> Void,
         onDelete: @escaping () -> Void
     ) -> some View {
         inventorySoftHardTrailingSwipe(
-            softLabel: "Cook",
-            softSystemImage: "flame",
+            softLabel: softLabel,
+            softSystemImage: softSystemImage,
             onSoft: onCook,
+            onDelete: onDelete
+        )
+    }
+
+    /// Manifest: Cook or Fuel (yellow, full-swipe) + Delete.
+    func manifestTrailingSwipeActions(
+        softLabel: String,
+        softSystemImage: String,
+        onSoft: @escaping () -> Void,
+        onDelete: @escaping () -> Void
+    ) -> some View {
+        inventorySoftHardTrailingSwipe(
+            softLabel: softLabel,
+            softSystemImage: softSystemImage,
+            onSoft: onSoft,
             onDelete: onDelete
         )
     }

@@ -15,6 +15,7 @@ struct MealDetailView: View {
     @State private var errorMessage: String?
     @State private var cookMessage: String?
     @State private var showingEdit = false
+    @State private var showingFuel = false
     @State private var showingDeleteConfirm = false
     @State private var isSelectedForSupply = false
     @State private var isTogglingSupply = false
@@ -76,6 +77,12 @@ struct MealDetailView: View {
         .background(Theme.ceramic)
         .navigationTitle(MealNameDisplay.text((meal ?? initialMeal).name))
         .navigationBarTitleDisplayMode(.inline)
+        .sheet(isPresented: $showingFuel) {
+            PlanFuelAmountSheet(title: "Add to Fuel", unit: "serving", start: 1) { servings in
+                _ = try await env.api.addMealToFuel(id: mealId, servings: servings, confirmInsufficient: true)
+                env.notifyCargoDataChanged()
+            }
+        }
         .overlay(alignment: .bottom) {
             if showCookUndo, cookUndoToken != nil {
                 UndoToast(
@@ -179,8 +186,17 @@ struct MealDetailView: View {
             }
             .disabled(meal == nil && initialMeal.organizationId.isEmpty)
         case .cook:
-            Button { Task { await cook() } } label: {
-                Label("Cook meal", systemImage: "flame")
+            Button {
+                if env.session.clientFlags.isPlanFuelActionsEnabled {
+                    showingFuel = true
+                } else {
+                    Task { await cook() }
+                }
+            } label: {
+                Label(
+                    env.session.clientFlags.isPlanFuelActionsEnabled ? "Add to Fuel" : "Cook meal",
+                    systemImage: env.session.clientFlags.isPlanFuelActionsEnabled ? "flame.fill" : "flame"
+                )
             }
         case .manifest:
             Button {
@@ -191,7 +207,7 @@ struct MealDetailView: View {
                     )
                 )
             } label: {
-                Label("Add to Manifest", systemImage: "calendar.badge.plus")
+                Label("Add to Manifest", systemImage: "calendar")
             }
         case .supply:
             Button { Task { await toggleSupply() } } label: {

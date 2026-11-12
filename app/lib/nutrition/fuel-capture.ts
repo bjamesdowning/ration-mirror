@@ -7,6 +7,9 @@ import { isVersionAtLeast } from "~/lib/client-version";
  */
 export const NUTRITION_FAST_LOG_IOS_MIN = "1.6.0";
 
+/** Plan-or-log actions. iOS below 1.6.16 fails closed. Not iosAlwaysOn. */
+export const PLAN_FUEL_ACTIONS_IOS_MIN = "1.6.16";
+
 export const FUEL_CAPTURE_SCAN_TO_CARGO = "Scan to Cargo";
 export const FUEL_CAPTURE_LOG_TO_FUEL = "Log to Fuel";
 
@@ -35,6 +38,24 @@ export function nutritionFastLogClientAllowed(
 	const version = context.clientVersion;
 	if (typeof version !== "string") return false;
 	return isVersionAtLeast(version, NUTRITION_FAST_LOG_IOS_MIN);
+}
+
+export function planFuelActionsClientAllowed(
+	context: ClientVersionContext,
+): boolean {
+	if (context.clientPlatform !== "ios") return true;
+	const version = context.clientVersion;
+	if (typeof version !== "string") return false;
+	return isVersionAtLeast(version, PLAN_FUEL_ACTIONS_IOS_MIN);
+}
+
+/** A second void of a row that is already voided. */
+export function secondVoidDecision(
+	alreadyVoided: boolean,
+	actionsEnabled: boolean,
+): "void" | "replay" | "missing" {
+	if (!alreadyVoided) return "void";
+	return actionsEnabled ? "replay" : "missing";
 }
 
 /** One existing control. The sheet is absent when the flag or the iOS version says no. */

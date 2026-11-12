@@ -7,9 +7,11 @@ import {
 	isNutritionHealthExportEnabled,
 	isNutritionPhotoLogEnabled,
 	isNutritionSavedFoodEnabled,
+	isPlanFuelActionsEnabled,
 	NUTRITION_FAST_LOG_IOS_MIN,
 	nutritionFastLogClientAllowed,
 } from "../fast-log-flag.server";
+import { secondVoidDecision } from "../fuel-capture";
 
 vi.mock("~/lib/feature-flags/flags.server", () => ({
 	isFeatureEnabled: vi.fn(),
@@ -141,5 +143,50 @@ describe("nutrition-fast-log client gate", () => {
 		await expect(
 			isNutritionFuelPageEnabled({} as Env, { clientPlatform: "web" }),
 		).resolves.toBe(true);
+	});
+});
+
+describe("plan-fuel-actions", () => {
+	it("fails closed below iOS 1.6.16 even when Flagship is on", async () => {
+		vi.mocked(isFeatureEnabled).mockClear();
+		vi.mocked(isFeatureEnabled).mockResolvedValue(true);
+		await expect(
+			isPlanFuelActionsEnabled({} as Env, {
+				clientPlatform: "ios",
+				clientVersion: "1.5.12",
+			}),
+		).resolves.toBe(false);
+		await expect(
+			isPlanFuelActionsEnabled({} as Env, {
+				clientPlatform: "ios",
+				clientVersion: "1.6.15",
+			}),
+		).resolves.toBe(false);
+		expect(isFeatureEnabled).not.toHaveBeenCalled();
+	});
+
+	it("is on for iOS 1.6.16 and web only when all three flags are on", async () => {
+		vi.mocked(isFeatureEnabled).mockResolvedValue(true);
+		await expect(
+			isPlanFuelActionsEnabled({} as Env, {
+				clientPlatform: "ios",
+				clientVersion: "1.6.16",
+			}),
+		).resolves.toBe(true);
+		await expect(
+			isPlanFuelActionsEnabled({} as Env, { clientPlatform: "web" }),
+		).resolves.toBe(true);
+		vi.mocked(isFeatureEnabled).mockImplementation(
+			async (_env, key) => key !== "nutrition-fuel-page",
+		);
+		await expect(
+			isPlanFuelActionsEnabled({} as Env, { clientPlatform: "mcp" }),
+		).resolves.toBe(false);
+	});
+
+	it("replays a second void only when the flag is on", () => {
+		expect(secondVoidDecision(false, true)).toBe("void");
+		expect(secondVoidDecision(true, true)).toBe("replay");
+		expect(secondVoidDecision(true, false)).toBe("missing");
 	});
 });

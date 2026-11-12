@@ -32,6 +32,7 @@ describe("getClientSafeFlags", () => {
 			nutritionPhotoLog: false,
 			nutritionHealthExport: false,
 			nutritionFuelPage: false,
+			planFuelActions: false,
 			shareExtensionImport: false,
 			featureEnablementConsent: false,
 			supplyMultiLists: false,

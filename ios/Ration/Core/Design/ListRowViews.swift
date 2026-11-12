@@ -311,7 +311,7 @@ struct ManifestEntryRow: View {
             .accessibilityLabel(ManifestEntryActionPolicy.accessibilityLabel(for: action))
         case .logServing:
             Button(action: onLogServing) {
-                Image(systemName: "plus.circle.fill")
+                Image(systemName: env.session.clientFlags.isPlanFuelActionsEnabled ? "flame.fill" : "plus.circle.fill")
                     .font(Typography.mono(consumeIconPoints))
                     .foregroundStyle(Theme.hyperGreen)
                     .frame(minWidth: 44, minHeight: 44)

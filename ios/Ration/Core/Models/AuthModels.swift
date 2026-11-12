@@ -77,6 +77,7 @@ struct ClientFlags: Codable, Sendable, Equatable {
     var nutritionGoals: Bool?
     var nutritionFastLog: Bool?
     var nutritionFuelPage: Bool?
+    var planFuelActions: Bool?
     var nutritionSavedFood: Bool?
     var nutritionBarcodeDiary: Bool?
     var nutritionPhotoLog: Bool?
@@ -100,6 +101,9 @@ struct ClientFlags: Codable, Sendable, Equatable {
     var isNutritionFastLogEnabled: Bool { nutritionFastLog == true }
     var isNutritionFuelPageEnabled: Bool {
         nutritionFuelPage == true && nutritionFastLog == true
+    }
+    var isPlanFuelActionsEnabled: Bool {
+        planFuelActions == true && isNutritionFuelPageEnabled
     }
     var isNutritionSavedFoodEnabled: Bool { nutritionSavedFood == true }
     var isNutritionBarcodeDiaryEnabled: Bool { nutritionBarcodeDiary == true }

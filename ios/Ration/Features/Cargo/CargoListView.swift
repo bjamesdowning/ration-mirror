@@ -145,11 +145,19 @@ struct CargoListView: View {
                 }
             }
             .sheet(item: $eatItem) { item in
+                if env.session.clientFlags.isPlanFuelActionsEnabled {
+                    PlanFuelAmountSheet(title: "Add to Fuel", unit: item.unit, start: min(1, item.quantity)) { quantity in
+                        _ = try await env.api.addCargoToFuel(id: item.id, quantity: quantity)
+                        env.notifyCargoDataChanged()
+                        await reload()
+                    }
+                } else {
                 CargoQuickEatSheet(item: item) { quantity, notes in
                     await model.quickEat(item, quantity: quantity, notes: notes, api: env.api)
                 } onFinished: { _ in
                     env.notifyCargoDataChanged()
                     Task { await reload() }
+                }
                 }
             }
             .navigationDestination(for: CargoDetailRoute.self) { route in
@@ -328,6 +336,8 @@ struct CargoListView: View {
                             onEdit: { editingItem = item }
                         )
                         .cargoTrailingSwipeActions(
+                            softLabel: env.session.clientFlags.isPlanFuelActionsEnabled ? "Add to Fuel" : "Eat",
+                            softSystemImage: env.session.clientFlags.isPlanFuelActionsEnabled ? "flame.fill" : "carrot.fill",
                             onEat: { eatItem = item },
                             onDelete: {
                                 model.runMutation {
@@ -353,6 +363,8 @@ struct CargoListView: View {
                             }
                         )
                         .cargoTrailingSwipeActions(
+                            softLabel: env.session.clientFlags.isPlanFuelActionsEnabled ? "Add to Fuel" : "Eat",
+                            softSystemImage: env.session.clientFlags.isPlanFuelActionsEnabled ? "flame.fill" : "carrot.fill",
                             onEat: {
                                 Task {
                                     if let item = await resolveSearchCargoItem(result) {

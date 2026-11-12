@@ -436,20 +436,21 @@ struct FuelDayResponse: Decodable, Sendable {
         let servings: Double?
         let loggedAmount: Double?
         let loggedUnit: String?
+        let entryId: String?
     }
 
     let date: String
     let week: [String]
     let weekStart: String
     let loggedDates: [String]
-    let used: Int
+    var used: Int
     let limit: Int?
     let crew: Bool
     let diaryLayout: String
     let fuelTimeZone: String?
     let goal: Goal?
     let totals: Totals?
-    let items: [Item]
+    var items: [Item]
 }
 
 struct FuelPhotoSubmitBody: Encodable, Sendable {

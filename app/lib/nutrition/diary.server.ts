@@ -16,6 +16,7 @@ import {
 	assertNutritionFastLog,
 	assertNutritionSavedFood,
 	isNutritionFuelPageEnabled,
+	isPlanFuelActionsEnabled,
 } from "./fast-log-flag.server";
 import { listFdcPortions } from "./fdc-portion.server";
 import {
@@ -25,6 +26,7 @@ import {
 	reserveFuelSlot,
 	stampFuelDate,
 } from "./fuel-cap.server";
+import { secondVoidDecision } from "./fuel-capture";
 import { assertFuelDateUnchanged } from "./fuel-date";
 import { diaryCompositionStamp } from "./health-exportability";
 import {
@@ -1096,7 +1098,23 @@ export async function voidDiaryFood(
 		};
 	}
 	const current = await loadOwned(db, principal.userId, intakeId);
-	if (!current || current.voidedAt) throw new DiaryFoodNotFoundError();
+	const alreadyVoided = Boolean(current?.voidedAt);
+	const replaySecond =
+		secondVoidDecision(
+			alreadyVoided,
+			alreadyVoided ? await isPlanFuelActionsEnabled(env, flags) : false,
+		) === "replay";
+	if (!current || current.voidedAt) {
+		if (replaySecond && current) {
+			return {
+				operationId: crypto.randomUUID(),
+				intakeId,
+				replayed: true,
+				voided: true,
+			};
+		}
+		throw new DiaryFoodNotFoundError();
+	}
 	const operationId = crypto.randomUUID();
 	await reserveOperation(db, principal, {
 		operationId,

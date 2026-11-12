@@ -17,12 +17,14 @@ import {
 } from "~/lib/manifest-wire.server";
 import { requireMobileActiveGroup } from "~/lib/mobile/auth.server";
 import { getNutritionConsentStatus } from "~/lib/nutrition/consent.server";
+import { isPlanFuelActionsEnabled } from "~/lib/nutrition/fast-log-flag.server";
 import { toManifestDayIntake } from "~/lib/nutrition/fuel-capture";
 import {
 	attachPersonalIntakeToEntries,
 	getHistory,
 } from "~/lib/nutrition/service.server";
 import { kitchenTodayForOrganization } from "~/lib/org-supply-settings.server";
+import { listCargoLinesForRange } from "~/lib/plan-fuel-actions.server";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import {
 	MealPlanEntryCreateSchema,
@@ -161,6 +163,19 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 			supplyDayInclusion[date] = false;
 		}
 
+		const showCargoLines = await isPlanFuelActionsEnabled(
+			context.cloudflare.env,
+			flagContext,
+		);
+		const cargoLines = showCargoLines
+			? await listCargoLinesForRange(
+					context.cloudflare.env.DB,
+					plan.id,
+					parsed.data.startDate,
+					parsed.data.endDate,
+				)
+			: undefined;
+
 		return {
 			plan: {
 				id: plan.id,
@@ -169,6 +184,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 			startDate: parsed.data.startDate,
 			endDate: parsed.data.endDate,
 			entries: serializeManifestEntriesForWire(entries),
+			...(cargoLines ? { cargoLines } : {}),
 			supplyDayInclusion,
 			...(intakeConsentGranted !== undefined ? { intakeConsentGranted } : {}),
 			...(dayIntakeRows !== undefined ? { dayIntakeRows } : {}),

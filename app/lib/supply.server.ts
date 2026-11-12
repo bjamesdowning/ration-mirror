@@ -1,11 +1,24 @@
-import { and, desc, eq, gt, inArray, lte, or, sql } from "drizzle-orm";
+import {
+	and,
+	desc,
+	eq,
+	gt,
+	gte,
+	inArray,
+	isNull,
+	lte,
+	or,
+	sql,
+} from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import {
 	activeMealSelection,
 	cargo,
 	ledger,
+	manifestCargoLine,
 	meal,
 	mealIngredient,
+	mealPlan,
 	supplyItem,
 	supplyList,
 	supplySnooze,
@@ -2177,6 +2190,7 @@ async function materializeSupplyFromSelections(
 	mealsProcessed: number,
 	telemetryContext?: SupplySyncTelemetryContext,
 	unitMode: UnitDisplayMode = "metric",
+	extraCargo: SupplyContribution[] = [],
 ): Promise<{
 	list: NonNullable<Awaited<ReturnType<typeof getSupplyListById>>>;
 	summary: GenerationSummary;
@@ -2244,6 +2258,7 @@ async function materializeSupplyFromSelections(
 	const merged = mergeContributionsByKey([
 		...mealContributions,
 		...cargoContributions,
+		...extraCargo,
 	]);
 	const itemsToInsert = contributionsToSupplyRows(
 		supplyListData.id,
@@ -2362,6 +2377,57 @@ async function materializeSupplyFromSelections(
  *     (prevents double-counting when a user plans a meal AND marks it in Galley)
  *   - Plus Cargo restock selections (active_cargo_selection)
  */
+async function cargoPlanLineContributions(
+	d1: ReturnType<typeof drizzle>,
+	organizationId: string,
+	window: { startDate: string; endDate: string },
+): Promise<SupplyContribution[]> {
+	const [plan] = await d1
+		.select({ id: mealPlan.id })
+		.from(mealPlan)
+		.where(
+			and(
+				eq(mealPlan.organizationId, organizationId),
+				eq(mealPlan.isArchived, false),
+			),
+		)
+		.limit(1);
+	if (!plan) return [];
+	const rows = await d1
+		.select({
+			cargoId: manifestCargoLine.cargoId,
+			quantity: manifestCargoLine.quantity,
+			unit: manifestCargoLine.unit,
+			name: cargo.name,
+			domain: cargo.domain,
+		})
+		.from(manifestCargoLine)
+		.innerJoin(cargo, eq(cargo.id, manifestCargoLine.cargoId))
+		.where(
+			and(
+				eq(manifestCargoLine.planId, plan.id),
+				isNull(manifestCargoLine.cookedAt),
+				gte(manifestCargoLine.date, window.startDate),
+				lte(manifestCargoLine.date, window.endDate),
+				eq(cargo.organizationId, organizationId),
+			),
+		);
+	return rows.map((row) => {
+		const unit = toSupportedUnit(row.unit ?? "unit");
+		const base = computeBaseFields(row.quantity, unit, row.name);
+		return {
+			name: row.name,
+			normalizedName: normalizeForCargoDedup(row.name),
+			baseQuantity: base.baseQuantity,
+			baseUnit: base.baseUnit as BaseUnit,
+			domain: row.domain ?? "food",
+			sourceOrigins: ["cargo"],
+			sourceMealIds: [],
+			sourceCargoId: row.cargoId,
+		};
+	});
+}
+
 export async function createSupplyListFromSelectedMeals(
 	env: Env,
 	organizationId: string,
@@ -2369,6 +2435,7 @@ export async function createSupplyListFromSelectedMeals(
 	telemetryContext?: SupplySyncTelemetryContext,
 	unitMode: UnitDisplayMode = "metric",
 	_userId?: string,
+	includeCargoPlanLines = false,
 ): Promise<{
 	list: ReturnType<typeof getSupplyListById> extends Promise<infer T>
 		? T
@@ -2447,6 +2514,10 @@ export async function createSupplyListFromSelectedMeals(
 			);
 			const ingredientQueryDurationMs = Date.now() - ingredientQueryStartedAtMs;
 
+			const extraCargo = includeCargoPlanLines
+				? await cargoPlanLineContributions(d1, organizationId, manifestWindow)
+				: [];
+
 			const syncResult = await materializeSupplyFromSelections(
 				env,
 				organizationId,
@@ -2454,6 +2525,7 @@ export async function createSupplyListFromSelectedMeals(
 				unified.length,
 				telemetry,
 				unitMode,
+				extraCargo,
 			);
 
 			emitSupplySyncInfo(

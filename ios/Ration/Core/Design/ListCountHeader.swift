@@ -2,8 +2,21 @@ import SwiftUI
 
 /// Trailing list header showing server total inventory as `"{n} items"`.
 struct ListCountHeader: View {
-    let count: Int
+    private let text: String
+    private let accessibility: String
     var isLoading: Bool = false
+
+    init(count: Int, isLoading: Bool = false) {
+        text = ListCountLabel.format(count)
+        accessibility = ListCountLabel.accessibilityLabel(count)
+        self.isLoading = isLoading
+    }
+
+    init(text: String, isLoading: Bool = false) {
+        self.text = text
+        accessibility = text
+        self.isLoading = isLoading
+    }
 
     var body: some View {
         HStack {
@@ -12,12 +25,14 @@ struct ListCountHeader: View {
                 ProgressView()
                     .controlSize(.mini)
             } else {
-                Text(ListCountLabel.format(count))
+                Text(text)
                     .rationCaption()
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
             }
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(ListCountLabel.accessibilityLabel(count))
+        .accessibilityLabel(accessibility)
         .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 0, trailing: 16))
         .listRowBackground(Color.clear)
         .listRowSeparator(.hidden)

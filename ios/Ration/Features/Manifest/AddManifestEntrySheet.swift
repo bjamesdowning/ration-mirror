@@ -10,13 +10,14 @@ struct AddManifestEntrySheet: View {
     let defaultDate: String?
     let preselectedMealId: String?
     let preselectedSlot: String?
-    let onSave: (String, String, String) async -> String?
+    let onSave: (String, String, String, Int?) async -> String?
+    @State private var servings = 1
 
     init(
         defaultDate: String?,
         preselectedMealId: String? = nil,
         preselectedSlot: String? = nil,
-        onSave: @escaping (String, String, String) async -> String?
+        onSave: @escaping (String, String, String, Int?) async -> String?
     ) {
         self.defaultDate = defaultDate
         self.preselectedMealId = preselectedMealId
@@ -42,6 +43,11 @@ struct AddManifestEntrySheet: View {
                             ForEach(model.meals) { meal in
                                 Text(MealNameDisplay.text(meal.name)).tag(Optional(meal.id))
                             }
+                        }
+                    }
+                    if env.session.clientFlags.isPlanFuelActionsEnabled {
+                        Section("Servings") {
+                            Stepper("Servings: \(servings)", value: $servings, in: 1...24)
                         }
                     }
                     Section("When") {
@@ -89,7 +95,8 @@ struct AddManifestEntrySheet: View {
     @MainActor
     private func save() async {
         guard let mealId = model.selectedMealId else { return }
-        if let error = await onSave(mealId, model.isoDate(), model.slotType) {
+        let planned = env.session.clientFlags.isPlanFuelActionsEnabled ? servings : nil
+        if let error = await onSave(mealId, model.isoDate(), model.slotType, planned) {
             model.errorMessage = error
         } else {
             dismiss()

@@ -210,11 +210,24 @@ struct ManifestDayIntakeRow: Codable, Sendable, Equatable, Identifiable {
     }
 }
 
+struct ManifestCargoLine: Codable, Identifiable, Sendable {
+    let id: String
+    let cargoId: String
+    let cargoName: String
+    let date: String
+    let slotType: String
+    let quantity: Double
+    let unit: String
+    let notes: String?
+    let cookedAt: String?
+}
+
 struct ManifestResponse: Codable, Sendable {
     let plan: MealPlanSummary
     let startDate: String
     let endDate: String
     let entries: [ManifestEntry]
+    var cargoLines: [ManifestCargoLine]? = nil
     /// Dates excluded from Supply sync (`false` = off supply). Omitted dates default to included.
     let supplyDayInclusion: [String: Bool]?
     var intakeConsentGranted: Bool? = nil

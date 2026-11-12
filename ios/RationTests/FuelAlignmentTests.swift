@@ -175,6 +175,21 @@ final class FuelAlignmentTests: XCTestCase {
         XCTAssertEqual(object?["notes"] as? String, "leftover")
     }
 
+    func testMacroDisplayRoundsAndUntouchedSaveKeepsTheStoredDouble() {
+        XCTAssertEqual(FuelLogWrite.macroDisplay(13.129190700000002), "13.1")
+        XCTAssertEqual(FuelLogWrite.amountDisplay(13.129190700000002, unit: "g"), "13.1")
+        let original = 13.129190700000002
+        let display = FuelLogWrite.macroDisplay(original)
+        XCTAssertEqual(
+            FuelLogWrite.storedValue(original: original, display: display, edited: display),
+            original
+        )
+        XCTAssertEqual(
+            FuelLogWrite.storedValue(original: original, display: display, edited: "14"),
+            14
+        )
+    }
+
     func testOlderFuelItemsStillDecode() throws {
         let item = try JSONDecoder().decode(
             FuelDayResponse.Item.self,

@@ -8,9 +8,16 @@ import { isFeatureEnabled } from "~/lib/feature-flags/flags.server";
 import {
 	NUTRITION_FAST_LOG_IOS_MIN,
 	nutritionFastLogClientAllowed,
+	PLAN_FUEL_ACTIONS_IOS_MIN,
+	planFuelActionsClientAllowed,
 } from "./fuel-capture";
 
-export { NUTRITION_FAST_LOG_IOS_MIN, nutritionFastLogClientAllowed };
+export {
+	NUTRITION_FAST_LOG_IOS_MIN,
+	nutritionFastLogClientAllowed,
+	PLAN_FUEL_ACTIONS_IOS_MIN,
+	planFuelActionsClientAllowed,
+};
 
 export async function isNutritionFastLogEnabled(
 	env: Env,
@@ -206,5 +213,50 @@ export function assertNutritionFuelPage(
 		context,
 		"nutrition-fuel-page",
 		"Fuel is unavailable.",
+	);
+}
+
+/** Parents nutrition-fast-log and nutrition-fuel-page must be on. iOS below 1.6.16 fails closed. */
+export async function isPlanFuelActionsEnabled(
+	env: Env,
+	context: FlagshipEvaluationContext,
+): Promise<boolean> {
+	if (!planFuelActionsClientAllowed(context)) return false;
+	if (!nutritionFastLogClientAllowed(context)) return false;
+	const [fastLog, fuelPage, actions] = await Promise.all([
+		isFeatureEnabled(env, "nutrition-fast-log", context),
+		isFeatureEnabled(env, "nutrition-fuel-page", context),
+		isFeatureEnabled(env, "plan-fuel-actions", context),
+	]);
+	return fastLog && fuelPage && actions;
+}
+
+export async function assertPlanFuelActions(
+	env: Env,
+	context: FlagshipEvaluationContext,
+): Promise<void> {
+	if (!planFuelActionsClientAllowed(context)) {
+		throw data(
+			{
+				error: "Plan and Fuel actions require iOS 1.6.16 or later.",
+				code: FEATURE_DISABLED_CODE,
+			},
+			{ status: 403 },
+		);
+	}
+	if (!(await isNutritionFuelPageEnabled(env, context))) {
+		throw data(
+			{
+				error: "Fuel is unavailable.",
+				code: FEATURE_DISABLED_CODE,
+			},
+			{ status: 403 },
+		);
+	}
+	await assertFeatureEnabled(
+		env,
+		"plan-fuel-actions",
+		context,
+		"Plan and Fuel actions are unavailable.",
 	);
 }

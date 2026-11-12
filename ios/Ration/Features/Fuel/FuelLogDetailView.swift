@@ -56,6 +56,32 @@ struct FuelLogWrite: Identifiable, Equatable {
     static func field(_ value: Double) -> String {
         value.rounded() == value ? String(Int(value)) : String(value)
     }
+
+    /// One decimal for kcal and grams. Trailing zeros drop.
+    static func macroDisplay(_ value: Double) -> String {
+        let rounded = (value * 10).rounded() / 10
+        if rounded.rounded() == rounded { return String(Int(rounded)) }
+        return String(format: "%.1f", rounded)
+    }
+
+    static func amountDisplay(_ value: Double, unit: String) -> String {
+        switch unit {
+        case "g":
+            return macroDisplay(value)
+        case "oz":
+            let rounded = (value * 100).rounded() / 100
+            if rounded.rounded() == rounded { return String(Int(rounded)) }
+            return String(format: "%.2f", rounded)
+        default:
+            return QuantityEntry.format(value)
+        }
+    }
+
+    /// Unedited text keeps the stored double. Edited text parses what was typed.
+    static func storedValue(original: Double, display: String, edited: String) -> Double? {
+        if edited == display { return original }
+        return Double(edited)
+    }
 }
 
 struct FuelLogDetailView: View {
@@ -109,17 +135,17 @@ struct FuelLogDetailView: View {
 
     private var amountLine: String? {
         if let amount = item.loggedAmount, let unit = item.loggedUnit, !unit.isEmpty {
-            return "\(FuelLogWrite.field(amount)) \(unit)"
+            return "\(FuelLogWrite.amountDisplay(amount, unit: unit)) \(unit)"
         }
         if let servings = item.servings {
             let noun = servings == 1 ? "serving" : "servings"
-            return "\(FuelLogWrite.field(servings)) \(noun)"
+            return "\(FuelLogWrite.amountDisplay(servings, unit: "serving")) \(noun)"
         }
         return nil
     }
 
     private func grams(_ value: Double) -> String {
-        "\(FuelLogWrite.field(value)) g"
+        "\(FuelLogWrite.macroDisplay(value)) g"
     }
 
     private func detailRow(_ title: String, _ value: String) -> some View {
@@ -149,33 +175,41 @@ struct FuelLogEditSheet: View {
         self.draft = draft
         self.onSave = onSave
         _name = State(initialValue: draft.name)
-        _calories = State(initialValue: FuelLogWrite.field(draft.energy))
-        _protein = State(initialValue: FuelLogWrite.field(draft.protein))
-        _carbs = State(initialValue: FuelLogWrite.field(draft.carbs))
-        _fat = State(initialValue: FuelLogWrite.field(draft.fat))
-        _amount = State(initialValue: FuelLogWrite.field(draft.amount))
-        _unit = State(initialValue: draft.unit)
+        _calories = State(initialValue: FuelLogWrite.macroDisplay(draft.energy))
+        _protein = State(initialValue: FuelLogWrite.macroDisplay(draft.protein))
+        _carbs = State(initialValue: FuelLogWrite.macroDisplay(draft.carbs))
+        _fat = State(initialValue: FuelLogWrite.macroDisplay(draft.fat))
+        _amount = State(initialValue: FuelLogWrite.amountDisplay(draft.amount, unit: draft.unit))
+        _unit = State(initialValue: draft.unit == "serving" || draft.unit == "g" || draft.unit == "oz" ? draft.unit : "serving")
         _notes = State(initialValue: draft.notes ?? "")
     }
 
     var body: some View {
         NavigationStack {
             Form {
-                TextField("Name", text: $name)
-                TextField("Calories", text: $calories)
-                    .keyboardType(.decimalPad)
-                TextField("Protein", text: $protein)
-                    .keyboardType(.decimalPad)
-                TextField("Carbs", text: $carbs)
-                    .keyboardType(.decimalPad)
-                TextField("Fat", text: $fat)
-                    .keyboardType(.decimalPad)
-                TextField("Amount", text: $amount)
-                    .keyboardType(.decimalPad)
-                TextField("Unit", text: $unit)
+                Section("Food") {
+                    LabeledContent("Name") {
+                        TextField("Name", text: $name)
+                            .multilineTextAlignment(.trailing)
+                    }
+                    LabeledContent("Amount") {
+                        TextField("Amount", text: $amount)
+                            .keyboardType(.decimalPad)
+                            .multilineTextAlignment(.trailing)
+                    }
+                    Picker("Unit", selection: $unit) {
+                        Text("serving").tag("serving")
+                        Text("g").tag("g")
+                        Text("oz").tag("oz")
+                    }
+                }
+                Section("Nutrition") {
+                    labeledNumber("Calories (kcal)", text: $calories)
+                    labeledNumber("Protein (g)", text: $protein)
+                    labeledNumber("Carbs (g)", text: $carbs)
+                    labeledNumber("Fat (g)", text: $fat)
+                }
                 IntakeNotesField(notes: $notes)
-                Button("Save") { save() }
-                    .frame(minHeight: 44)
             }
             .navigationTitle("Edit")
             .navigationBarTitleDisplayMode(.inline)
@@ -183,20 +217,51 @@ struct FuelLogEditSheet: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Close") { dismiss() }
                 }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") { save() }
+                }
             }
+        }
+    }
+
+    private func labeledNumber(_ title: String, text: Binding<String>) -> some View {
+        LabeledContent(title) {
+            TextField(title, text: text)
+                .keyboardType(.decimalPad)
+                .multilineTextAlignment(.trailing)
         }
     }
 
     private func save() {
         guard
-            let energy = Double(calories), energy >= 0,
-            let proteinValue = Double(protein), proteinValue >= 0,
-            let carbsValue = Double(carbs), carbsValue >= 0,
-            let fatValue = Double(fat), fatValue >= 0,
-            let amountValue = Double(amount), amountValue > 0
+            let energy = FuelLogWrite.storedValue(
+                original: draft.energy,
+                display: FuelLogWrite.macroDisplay(draft.energy),
+                edited: calories
+            ), energy >= 0,
+            let proteinValue = FuelLogWrite.storedValue(
+                original: draft.protein,
+                display: FuelLogWrite.macroDisplay(draft.protein),
+                edited: protein
+            ), proteinValue >= 0,
+            let carbsValue = FuelLogWrite.storedValue(
+                original: draft.carbs,
+                display: FuelLogWrite.macroDisplay(draft.carbs),
+                edited: carbs
+            ), carbsValue >= 0,
+            let fatValue = FuelLogWrite.storedValue(
+                original: draft.fat,
+                display: FuelLogWrite.macroDisplay(draft.fat),
+                edited: fat
+            ), fatValue >= 0,
+            let amountValue = FuelLogWrite.storedValue(
+                original: draft.amount,
+                display: FuelLogWrite.amountDisplay(draft.amount, unit: draft.unit),
+                edited: amount
+            ), amountValue > 0
         else { return }
-        let trimmedUnit = unit.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, !trimmedUnit.isEmpty else { return }
+        guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        guard unit == "serving" || unit == "g" || unit == "oz" else { return }
         var next = draft
         next.name = name.trimmingCharacters(in: .whitespacesAndNewlines)
         next.energy = energy
@@ -204,7 +269,7 @@ struct FuelLogEditSheet: View {
         next.carbs = carbsValue
         next.fat = fatValue
         next.amount = amountValue
-        next.unit = trimmedUnit
+        next.unit = unit
         next.notes = IntakeNotesField.payload(from: notes)
         onSave(next)
     }

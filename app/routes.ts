@@ -495,6 +495,10 @@ export default [
 		"routes/api/mobile/v1.cargo.$id.quick-eat.ts",
 	),
 	route(
+		"api/mobile/v1/cargo/:id/add-to-fuel",
+		"routes/api/mobile/v1.cargo.$id.add-to-fuel.ts",
+	),
+	route(
 		"api/mobile/v1/cargo/:id/nutrition/refresh",
 		"routes/api/mobile/v1.cargo.$id.nutrition.refresh.ts",
 	),
@@ -605,6 +609,18 @@ export default [
 		"routes/api/mobile/v1.manifest.consume.ts",
 	),
 	route("api/mobile/v1/manifest/cook", "routes/api/mobile/v1.manifest.cook.ts"),
+	route(
+		"api/mobile/v1/manifest/cargo-lines",
+		"routes/api/mobile/v1.manifest.cargo-lines.ts",
+	),
+	route(
+		"api/mobile/v1/manifest/cargo-lines/:id/cook",
+		"routes/api/mobile/v1.manifest.cargo-lines.$id.cook.ts",
+	),
+	route(
+		"api/mobile/v1/manifest/cargo-lines/:id",
+		"routes/api/mobile/v1.manifest.cargo-lines.$id.ts",
+	),
 	route(
 		"api/mobile/v1/manifest/plan-week",
 		"routes/api/mobile/v1.manifest.plan-week.ts",
@@ -721,6 +737,10 @@ export default [
 	route(
 		"api/mobile/v1/meals/:id/cook",
 		"routes/api/mobile/v1.meals.$id.cook.ts",
+	),
+	route(
+		"api/mobile/v1/meals/:id/add-to-fuel",
+		"routes/api/mobile/v1.meals.$id.add-to-fuel.ts",
 	),
 	route(
 		"api/mobile/v1/meals/:id/toggle-active",

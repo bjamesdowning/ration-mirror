@@ -52,6 +52,7 @@ final class AppEnvironment {
     let lifecycle: AppLifecycleCoordinator
     let refreshOutcomes: SnapshotRefreshOutcomeStore
     private(set) var cargoDataRevision = 0
+    private(set) var manifestDataRevision = 0
     private(set) var updateRequirement: AppUpdateRequirement?
 
     init() {
@@ -140,6 +141,10 @@ final class AppEnvironment {
 
     func notifyCargoDataChanged() {
         cargoDataRevision += 1
+    }
+
+    func notifyManifestDataChanged() {
+        manifestDataRevision += 1
     }
 
     var hubCoverPresented = false

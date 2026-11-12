@@ -211,6 +211,14 @@ export const FLAG_REGISTRY: Record<string, FlagRegistryEntry> = {
 		clientKey: "nutritionFuelPage",
 		iosAlwaysOn: false,
 	},
+	"plan-fuel-actions": {
+		defaultEnabled: false,
+		description:
+			"Cargo and Galley plan-or-log actions, Manifest cook-then-log, and cargo plan lines. On only when nutrition-fast-log and nutrition-fuel-page are on. iOS below 1.6.16 fails closed",
+		clientVisible: true,
+		clientKey: "planFuelActions",
+		iosAlwaysOn: false,
+	},
 	"feature-enablement-consent": {
 		defaultEnabled: false,
 		description:

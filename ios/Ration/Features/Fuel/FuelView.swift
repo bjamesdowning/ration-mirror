@@ -30,20 +30,23 @@ struct FuelView: View {
     @State private var photoRequestId: String?
     @State private var photoTask: Task<Void, Never>?
     @State private var generation = 0
+    @State private var removedIds: Set<String> = []
+    @State private var voidingIds: Set<String> = []
     @State private var failedTarget: String?
     @State private var showingCalendar = false
     @State private var isNavigating = false
     var body: some View {
         NavigationStack(path: $path) {
         List {
+            if loaded, let day {
+                ListCountHeader(text: FuelActionPolicy.counterLabel(used: day.used, limit: day.limit))
+                fuelRocker(day)
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+            }
             Section {
                 VStack(alignment: .leading, spacing: 16) {
                     if let day {
-                        fuelRocker(day)
-                        Text(FuelActionPolicy.counterLabel(used: day.used, limit: day.limit))
-                            .font(Typography.body())
-                            .minimumScaleFactor(0.7)
-                            .accessibilityLabel(FuelActionPolicy.counterLabel(used: day.used, limit: day.limit))
                         FuelDaySummary(model: summary(for: day)) { showingGoals = true }
                     } else if !loaded {
                         ProgressView()
@@ -127,6 +130,11 @@ struct FuelView: View {
                         Task { await voidItem(item) }
                     }
                 )
+            } else {
+                Color.clear
+                    .onAppear {
+                        path.removeAll { $0.id == route.id }
+                    }
             }
         }
         .navigationDestination(isPresented: $showingMacros) {
@@ -294,8 +302,13 @@ struct FuelView: View {
             if token == generation { isNavigating = false }
         }
         do {
-            let next = try await env.api.fuelDay(date: date)
+            var next = try await env.api.fuelDay(date: date)
             guard token == generation else { return }
+            let hidden = next.items.filter { removedIds.contains($0.id) }
+            if !hidden.isEmpty {
+                next.items.removeAll { removedIds.contains($0.id) }
+                next.used = min(next.used, max(0, next.used - hidden.count))
+            }
             day = next
             loaded = true
             failedTarget = nil
@@ -420,15 +433,41 @@ struct FuelView: View {
     }
 
     private func voidItem(_ item: FuelDayResponse.Item) async {
+        guard voidingIds.insert(item.id).inserted else { return }
+        defer { voidingIds.remove(item.id) }
         do {
             _ = try await env.api.voidDiaryFood(
                 id: item.id,
                 body: DiaryVoidBody(confirm: true, operationKey: UUID().uuidString)
             )
-            await load(date: day?.date ?? LocalDay.todayISO())
+            acceptVoid(item)
         } catch {
-            await handleWrite(error)
+            if let api = error as? APIError, api.statusCode == 404 || api.code == "not_found" {
+                acceptVoid(item)
+            } else {
+                await handleWrite(error)
+            }
         }
+    }
+
+    private func acceptVoid(_ item: FuelDayResponse.Item) {
+        removedIds.insert(item.id)
+        path.removeAll { $0.id == item.id }
+        if var current = day {
+            let had = current.items.contains { $0.id == item.id }
+            current.items.removeAll { $0.id == item.id }
+            if had { current.used = max(0, current.used - 1) }
+            day = current
+        }
+        if itemHasPlanLine(item) {
+            env.notifyManifestDataChanged()
+        }
+        Task { await load(date: day?.date ?? LocalDay.todayISO()) }
+    }
+
+    private func itemHasPlanLine(_ item: FuelDayResponse.Item) -> Bool {
+        if let entryId = item.entryId, !entryId.isEmpty { return true }
+        return false
     }
 
     private func lookupBarcode() async {

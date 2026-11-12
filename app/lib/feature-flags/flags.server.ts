@@ -1,5 +1,8 @@
 import { isVersionAtLeast } from "~/lib/client-version";
-import { nutritionFastLogClientAllowed } from "~/lib/nutrition/fuel-capture";
+import {
+	nutritionFastLogClientAllowed,
+	planFuelActionsClientAllowed,
+} from "~/lib/nutrition/fuel-capture";
 import type { FlagshipEvaluationContext } from "./context.server";
 import { FLAG_REGISTRY, type FlagKey, getClientFlagKey } from "./registry";
 
@@ -148,6 +151,10 @@ export function applyClientFlagDependencies(
 		result.nutritionFuelPage =
 			result.nutritionFastLog === true && result.nutritionFuelPage === true;
 	}
+	if ("planFuelActions" in result) {
+		result.planFuelActions =
+			result.nutritionFuelPage === true && result.planFuelActions === true;
+	}
 	return result;
 }
 
@@ -172,6 +179,13 @@ export async function getClientSafeFlags(
 					flag === "nutrition-health-export" ||
 					flag === "nutrition-fuel-page") &&
 				!nutritionFastLogClientAllowed(context)
+			) {
+				result[clientKey] = false;
+				return;
+			}
+			if (
+				flag === "plan-fuel-actions" &&
+				!planFuelActionsClientAllowed(context)
 			) {
 				result[clientKey] = false;
 				return;

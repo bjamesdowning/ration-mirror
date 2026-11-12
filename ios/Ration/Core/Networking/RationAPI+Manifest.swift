@@ -99,4 +99,106 @@ extension RationAPI {
             query: [URLQueryItem(name: "operationKey", value: operationKey)]
         )
     }
+
+    func updateManifestEntry(
+        id: String,
+        date: String,
+        slotType: String,
+        servingsOverride: Int
+    ) async throws -> ManifestEntryCreateResponse {
+        try await client.patch(
+            "manifest/entries/\(id)",
+            body: ManifestEntryUpdateBody(date: date, slotType: slotType, servingsOverride: servingsOverride)
+        )
+    }
+
+    func addCargoLine(
+        cargoId: String,
+        date: String,
+        slotType: String,
+        quantity: Double
+    ) async throws -> CargoLineResponse {
+        try await client.post(
+            "manifest/cargo-lines",
+            body: CargoLineCreateBody(cargoId: cargoId, date: date, slotType: slotType, quantity: quantity)
+        )
+    }
+
+    func cookCargoLine(id: String) async throws -> CargoLineCookResponse {
+        try await client.post("manifest/cargo-lines/\(id)/cook", body: EmptyBody())
+    }
+
+    func addCargoToFuel(id: String, quantity: Double) async throws -> CargoFuelResponse {
+        let key = UUID().uuidString
+        return try await client.post(
+            "cargo/\(id)/add-to-fuel",
+            body: FuelWriteBody(quantity: quantity, operationKey: key, idempotencyKey: key, occurredAt: Self.nowStamp())
+        )
+    }
+
+    func addMealToFuel(id: String, servings: Double, confirmInsufficient: Bool) async throws -> MealFuelResponse {
+        let key = UUID().uuidString
+        return try await client.post(
+            "meals/\(id)/add-to-fuel",
+            body: MealFuelBody(
+                servings: servings,
+                confirmInsufficient: confirmInsufficient,
+                operationKey: key,
+                idempotencyKey: key,
+                occurredAt: Self.nowStamp()
+            )
+        )
+    }
+
+    private static func nowStamp() -> String {
+        ISO8601DateFormatter().string(from: Date())
+    }
+}
+
+private struct ManifestEntryUpdateBody: Encodable {
+    let date: String
+    let slotType: String
+    let servingsOverride: Int
+}
+
+private struct CargoLineCreateBody: Encodable {
+    let cargoId: String
+    let date: String
+    let slotType: String
+    let quantity: Double
+}
+
+struct CargoLineResponse: Decodable {
+    let line: ManifestCargoLine
+}
+
+struct CargoLineCookResponse: Decodable {
+    let line: ManifestCargoLine
+    let alreadyCooked: Bool
+}
+
+private struct FuelWriteBody: Encodable {
+    let quantity: Double
+    let operationKey: String
+    let idempotencyKey: String
+    let occurredAt: String
+}
+
+struct CargoFuelResponse: Decodable {
+    let intakeId: String
+    let cargoId: String
+}
+
+private struct MealFuelBody: Encodable {
+    let servings: Double
+    let confirmInsufficient: Bool
+    let operationKey: String
+    let idempotencyKey: String
+    let occurredAt: String
+}
+
+struct MealFuelResponse: Decodable {
+    let intakeId: String?
+    let mealId: String?
+    let requiresConfirmation: Bool?
 }

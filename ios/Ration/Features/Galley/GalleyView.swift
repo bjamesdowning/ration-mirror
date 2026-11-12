@@ -31,6 +31,7 @@ struct GalleyView: View {
     @State private var cookUndoToken: String?
     @State private var showCookUndo = false
     @State private var editingMeal: Meal?
+    @State private var fuelMealId: String?
     @State private var paywallContext: PaywallContext?
     @State private var pendingEatEntry: ManifestEntry?
 
@@ -183,6 +184,17 @@ struct GalleyView: View {
             }
             .sheet(item: $editingMeal) { meal in
                 MealFormView(mode: .edit(meal)) { await reload() }
+            }
+            .sheet(isPresented: Binding(
+                get: { fuelMealId != nil },
+                set: { if !$0 { fuelMealId = nil } }
+            )) {
+                if let fuelMealId {
+                    PlanFuelAmountSheet(title: "Add to Fuel", unit: "serving", start: 1) { servings in
+                        _ = try await env.api.addMealToFuel(id: fuelMealId, servings: servings, confirmInsufficient: true)
+                        env.notifyCargoDataChanged()
+                    }
+                }
             }
             .onChange(of: model.filters.search) { _, _ in
                 guard let organizationId else { return }
@@ -506,7 +518,15 @@ struct GalleyView: View {
                         onEdit: { editingMeal = meal }
                     )
                     .galleyTrailingSwipeActions(
-                        onCook: { Task { await handleCook(mealId: meal.id) } },
+                        softLabel: env.session.clientFlags.isPlanFuelActionsEnabled ? "Add to Fuel" : "Cook",
+                        softSystemImage: env.session.clientFlags.isPlanFuelActionsEnabled ? "flame.fill" : "flame",
+                        onCook: {
+                            if env.session.clientFlags.isPlanFuelActionsEnabled {
+                                fuelMealId = meal.id
+                            } else {
+                                Task { await handleCook(mealId: meal.id) }
+                            }
+                        },
                         onDelete: {
                             model.runMutation {
                                 guard let organizationId else { return }
@@ -582,7 +602,15 @@ struct GalleyView: View {
                         onEdit: { editingMeal = match.meal }
                     )
                     .galleyTrailingSwipeActions(
-                        onCook: { Task { await handleCook(mealId: match.meal.id) } },
+                        softLabel: env.session.clientFlags.isPlanFuelActionsEnabled ? "Add to Fuel" : "Cook",
+                        softSystemImage: env.session.clientFlags.isPlanFuelActionsEnabled ? "flame.fill" : "flame",
+                        onCook: {
+                            if env.session.clientFlags.isPlanFuelActionsEnabled {
+                                fuelMealId = match.meal.id
+                            } else {
+                                Task { await handleCook(mealId: match.meal.id) }
+                            }
+                        },
                         onDelete: {
                             model.runMutation {
                                 guard let organizationId else { return }

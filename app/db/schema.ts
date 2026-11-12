@@ -999,6 +999,42 @@ export const mealPlanEntry = sqliteTable(
 	],
 );
 
+export const manifestCargoLine = sqliteTable(
+	"manifest_cargo_line",
+	{
+		id: text("id")
+			.primaryKey()
+			.$defaultFn(() => crypto.randomUUID()),
+		planId: text("plan_id")
+			.notNull()
+			.references(() => mealPlan.id, { onDelete: "cascade" }),
+		cargoId: text("cargo_id")
+			.notNull()
+			.references(() => cargo.id, { onDelete: "cascade" }),
+		date: text("date").notNull(),
+		slotType: text("slot_type").notNull().default("dinner"),
+		orderIndex: integer("order_index").notNull().default(0),
+		quantity: real("quantity").notNull(),
+		unit: text("unit").notNull(),
+		notes: text("notes"),
+		cookedAt: integer("cooked_at", { mode: "timestamp" }),
+		cookedByUserId: text("cooked_by_user_id").references(() => user.id, {
+			onDelete: "set null",
+		}),
+		createdAt: integer("created_at", { mode: "timestamp" })
+			.notNull()
+			.default(sql`(unixepoch())`),
+	},
+	(table) => [
+		index("mcl_plan_date_idx").on(table.planId, table.date),
+		index("mcl_plan_date_slot_idx").on(
+			table.planId,
+			table.date,
+			table.slotType,
+		),
+	],
+);
+
 export const mealPlanEntryRelations = relations(mealPlanEntry, ({ one }) => ({
 	plan: one(mealPlan, {
 		fields: [mealPlanEntry.planId],

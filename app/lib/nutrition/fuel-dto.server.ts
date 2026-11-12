@@ -17,6 +17,7 @@ export type FuelItemSource = {
 	servings?: number | null;
 	loggedAmount?: number | null;
 	loggedUnit?: string | null;
+	entryId?: string | null;
 };
 
 export type PublishableFuelItem = {
@@ -31,6 +32,7 @@ export type PublishableFuelItem = {
 	servings: number | null;
 	loggedAmount: number | null;
 	loggedUnit: string | null;
+	entryId?: string;
 	/** Present only when the caller asks. Flag-off JSON has no note text. */
 	notes?: string | null;
 };
@@ -87,6 +89,9 @@ export function selectPublishableFuelItems(
 			loggedAmount: finiteOrNull(item.loggedAmount),
 			loggedUnit: textOrNull(item.loggedUnit),
 		};
+		if (typeof item.entryId === "string" && item.entryId.length > 0) {
+			row.entryId = item.entryId;
+		}
 		if (options.includeNotes) {
 			row.notes = textOrNull(item.notes);
 		}

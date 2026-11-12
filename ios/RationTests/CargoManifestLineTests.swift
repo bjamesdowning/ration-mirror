@@ -146,7 +146,7 @@ private final class CargoManifestURLProtocol: URLProtocol {
 
         if mobile.hasSuffix("/cook") {
             if Self.mode == .conflict {
-                respond(status: 409, body: #"{"error":"Cargo item is not available to cook"}#")
+                respond(status: 409, body: #"{"error":"Cargo item is not available to cook"}"#)
             } else {
                 respond(status: 200, body: Self.cookedLine)
             }
@@ -156,7 +156,7 @@ private final class CargoManifestURLProtocol: URLProtocol {
         if mobile == CargoManifestRoutes.diaryPath {
             respond(
                 status: 200,
-                body: #"{"intakeId":"cccccccc-cccc-4ccc-8ccc-cccccccccccc"}#"
+                body: #"{"intakeId":"cccccccc-cccc-4ccc-8ccc-cccccccccccc"}"#
             )
             return
         }
@@ -169,14 +169,14 @@ private final class CargoManifestURLProtocol: URLProtocol {
                 }
                 respond(status: 200, body: Self.cookedLine.replacingOccurrences(of: "\"alreadyCooked\":false,", with: ""))
             } else if method == "DELETE" {
-                respond(status: 200, body: #"{"deleted":true}#")
+                respond(status: 200, body: #"{"deleted":true}"#)
             } else {
-                respond(status: 500, body: #"{"error":"unexpected method"}#")
+                respond(status: 500, body: #"{"error":"unexpected method"}"#)
             }
             return
         }
 
-        respond(status: 500, body: #"{"error":"unexpected \#(mobile)"}#")
+        respond(status: 500, body: #"{"error":"unexpected \#(mobile)"}"#)
     }
 
     override func stopLoading() {}

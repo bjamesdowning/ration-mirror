@@ -227,6 +227,7 @@ struct CargoPlanSheet: View {
                         Task {
                             do {
                                 try await onSave(Self.iso(date), slot, quantity)
+                                Haptics.success()
                                 dismiss()
                             } catch {
                                 errorMessage = "Could not add this to Manifest."
@@ -335,5 +336,83 @@ struct ManifestLineSwipe: ViewModifier {
         } else {
             content.destructiveTrailingSwipe(onDelete: onDelete)
         }
+    }
+}
+
+/// Edit a cargo plan line. PATCH sends date, slot, and quantity only.
+struct CargoLineEditSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let line: ManifestCargoLine
+    let onSave: (String, String, Double) async throws -> Void
+    @State private var date: Date
+    @State private var slot: String
+    @State private var quantity: Double
+    @State private var errorMessage: String?
+
+    init(line: ManifestCargoLine, onSave: @escaping (String, String, Double) async throws -> Void) {
+        self.line = line
+        self.onSave = onSave
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        formatter.timeZone = .current
+        _date = State(initialValue: formatter.date(from: line.date) ?? Date())
+        _slot = State(initialValue: line.slotType)
+        _quantity = State(initialValue: line.quantity > 0 ? line.quantity : 1)
+    }
+
+    private var quantityLower: Double {
+        min(0.25, line.quantity > 0 ? line.quantity : 0.25)
+    }
+
+    private var quantityUpper: Double {
+        max(99, line.quantity)
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                DatePicker("Date", selection: $date, displayedComponents: .date)
+                Picker("Slot", selection: $slot) {
+                    ForEach(["breakfast", "lunch", "dinner", "snack"], id: \.self) { item in
+                        Text(item.capitalized).tag(item)
+                    }
+                }
+                Stepper(value: $quantity, in: quantityLower...quantityUpper, step: 0.25) {
+                    Text("\(FuelLogWrite.amountDisplay(quantity, unit: line.unit)) \(line.unit)")
+                }
+                if let errorMessage {
+                    Text(errorMessage).rationCaption()
+                }
+            }
+            .navigationTitle("Edit")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Close") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        Task { await save() }
+                    }
+                }
+            }
+        }
+    }
+
+    @MainActor
+    private func save() async {
+        do {
+            try await onSave(Self.iso(date), slot, quantity)
+            dismiss()
+        } catch {
+            errorMessage = CargoManifestLineFailure.message(for: error)
+        }
+    }
+
+    private static func iso(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        formatter.timeZone = .current
+        return formatter.string(from: date)
     }
 }

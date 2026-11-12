@@ -125,7 +125,24 @@ extension RationAPI {
     }
 
     func cookCargoLine(id: String) async throws -> CargoLineCookResponse {
-        try await client.post("manifest/cargo-lines/\(id)/cook", body: EmptyBody())
+        try await client.post(CargoManifestRoutes.cookPath(id), body: EmptyBody())
+    }
+
+    func updateCargoLine(
+        id: String,
+        date: String,
+        slotType: String,
+        quantity: Double
+    ) async throws -> CargoLineResponse {
+        try await client.patch(
+            CargoManifestRoutes.linePath(id),
+            body: CargoLineUpdateBody(date: date, slotType: slotType, quantity: quantity)
+        )
+    }
+
+    /// Removes the plan row only. Does not restore a cook and does not void a Fuel log.
+    func deleteCargoLine(id: String) async throws -> CargoLineDeleteResponse {
+        try await client.delete(CargoManifestRoutes.linePath(id))
     }
 
     func addCargoToFuel(
@@ -200,8 +217,18 @@ private struct CargoLineCreateBody: Encodable {
     let quantity: Double
 }
 
+private struct CargoLineUpdateBody: Encodable {
+    let date: String
+    let slotType: String
+    let quantity: Double
+}
+
 struct CargoLineResponse: Decodable {
     let line: ManifestCargoLine
+}
+
+struct CargoLineDeleteResponse: Decodable, Sendable {
+    let deleted: Bool
 }
 
 struct CargoLineCookResponse: Decodable {

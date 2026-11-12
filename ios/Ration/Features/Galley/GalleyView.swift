@@ -32,6 +32,11 @@ struct GalleyView: View {
     @State private var showCookUndo = false
     @State private var editingMeal: Meal?
     @State private var fuelMealId: String?
+    @State private var fuelPresentation = FuelAddPresentation()
+    @State private var pendingFuelMealId: String?
+    @State private var pendingFuelServings: Double?
+    @State private var fuelConfirmationMessage: String?
+    @State private var showFuelConfirmation = false
     @State private var paywallContext: PaywallContext?
     @State private var pendingEatEntry: ManifestEntry?
 
@@ -191,8 +196,7 @@ struct GalleyView: View {
             )) {
                 if let fuelMealId {
                     PlanFuelAmountSheet(title: "Add to Fuel", unit: "serving", start: 1) { servings in
-                        _ = try await env.api.addMealToFuel(id: fuelMealId, servings: servings, confirmInsufficient: true)
-                        env.notifyCargoDataChanged()
+                        try await self.logMealFuel(mealId: fuelMealId, servings: servings)
                     }
                 }
             }
@@ -340,6 +344,20 @@ struct GalleyView: View {
             }
         } message: {
             Text(cookConfirmationMessage ?? "Missing ingredients. Cook anyway?")
+        }
+        .alert("Insufficient cargo", isPresented: $showFuelConfirmation) {
+            Button("Add anyway") {
+                fuelPresentation.confirmShortPantry()
+                Task { await confirmFuelDespiteShortfall() }
+            }
+            Button("Cancel", role: .cancel) {
+                fuelPresentation.declineShortPantry()
+                pendingFuelMealId = nil
+                pendingFuelServings = nil
+                fuelConfirmationMessage = nil
+            }
+        } message: {
+            Text(fuelConfirmationMessage ?? "Missing ingredients. Add to Fuel anyway?")
         }
         .sheet(item: $pendingEatEntry) { entry in
             ManifestPlateUpSheet(
@@ -522,7 +540,7 @@ struct GalleyView: View {
                         softSystemImage: env.session.clientFlags.isPlanFuelActionsEnabled ? "flame.fill" : "flame",
                         onCook: {
                             if env.session.clientFlags.isPlanFuelActionsEnabled {
-                                fuelMealId = meal.id
+                                presentAddToFuel(meal.id)
                             } else {
                                 Task { await handleCook(mealId: meal.id) }
                             }
@@ -606,7 +624,7 @@ struct GalleyView: View {
                         softSystemImage: env.session.clientFlags.isPlanFuelActionsEnabled ? "flame.fill" : "flame",
                         onCook: {
                             if env.session.clientFlags.isPlanFuelActionsEnabled {
-                                fuelMealId = match.meal.id
+                                presentAddToFuel(match.meal.id)
                             } else {
                                 Task { await handleCook(mealId: match.meal.id) }
                             }
@@ -634,6 +652,49 @@ struct GalleyView: View {
         .scrollDismissesKeyboard(.interactively)
         .copilotDockScrollMargins()
         .copilotScrollTracked(tab: .galley, isActive: isTabActive)
+    }
+
+    private func presentAddToFuel(_ mealId: String) {
+        fuelPresentation.begin()
+        fuelMealId = mealId
+    }
+
+    @MainActor
+    private func logMealFuel(mealId: String, servings: Double) async throws {
+        let attempt = fuelPresentation.submit()
+        let result = try await env.api.addMealToFuel(
+            id: mealId,
+            servings: servings,
+            operationKey: attempt.operationKey,
+            confirmInsufficient: attempt.confirmInsufficient
+        )
+        switch result {
+        case .saved:
+            env.notifyCargoDataChanged()
+        case .needsConfirmation(let missing):
+            let message = FuelAddShortPantry.message(missing, mode: env.unitDisplayMode.mode)
+            pendingFuelMealId = mealId
+            pendingFuelServings = servings
+            fuelConfirmationMessage = message
+            showFuelConfirmation = true
+            throw FuelNeedsConfirmation(message: message)
+        }
+    }
+
+    @MainActor
+    private func confirmFuelDespiteShortfall() async {
+        guard let mealId = pendingFuelMealId, let servings = pendingFuelServings else { return }
+        do {
+            try await logMealFuel(mealId: mealId, servings: servings)
+            fuelMealId = nil
+            pendingFuelMealId = nil
+            pendingFuelServings = nil
+            fuelConfirmationMessage = nil
+        } catch is FuelNeedsConfirmation {
+        } catch {
+            fuelConfirmationMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+            showFuelConfirmation = true
+        }
     }
 
     private func handleCook(mealId: String, servings: Int? = nil, confirmInsufficient: Bool = false) async {

@@ -40,7 +40,7 @@ struct PlanFuelAmountSheet: View {
                                 try await onSave(amount)
                                 dismiss()
                             } catch {
-                                errorMessage = "Could not add this to Fuel."
+                                errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
                             }
                         }
                     }

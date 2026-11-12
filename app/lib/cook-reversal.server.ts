@@ -16,6 +16,8 @@ import type { UndoRecord } from "./undo-token.server";
  *   listed in `deleteManifestEntryIds`.
  * - `manifest_intake`: void the new personal row and optionally restore the replaced row;
  *   never restores Cargo or clears Prepared state
+ * - `fuel_action`: restore the Cargo deduction and void the Fuel log it created
+ * Cargo line ids, when present, clear cookedAt so a cooked row can be cooked again.
  */
 export async function applyUndoRecord(
 	db: D1Database,
@@ -32,6 +34,7 @@ export async function applyUndoRecord(
 		| "intakeIds"
 		| "restoreIntakeId"
 		| "operationId"
+		| "cargoLineIds"
 	>,
 	options?: { kv?: KVNamespace },
 ): Promise<void> {
@@ -166,6 +169,24 @@ export async function applyUndoRecord(
 		// Intentionally does NOT touch nutrition_intake — other members' Eat rows stay.
 	}
 
+	if (record.kind === "fuel_action" && record.operationId && record.intakeIds?.length) {
+		const now = new Date();
+		stmts.push(
+			d1
+				.update(schema.nutritionIntake)
+				.set({ voidedAt: now, voidedByUserId: record.userId })
+				.where(
+					and(
+						eq(schema.nutritionIntake.userId, record.userId),
+						eq(schema.nutritionIntake.organizationId, organizationId),
+						eq(schema.nutritionIntake.operationId, record.operationId),
+						inArray(schema.nutritionIntake.id, record.intakeIds),
+						isNull(schema.nutritionIntake.voidedAt),
+					),
+				),
+		);
+	}
+
 	if (record.kind === "manifest_intake") {
 		if (!record.operationId) {
 			throw new Error("Invalid nutrition undo record");
@@ -211,6 +232,20 @@ export async function applyUndoRecord(
 	if (record.kind !== "manifest_intake" && record.eventIds?.length) {
 		stmts.push(
 			...buildKitchenEventDeleteStmts(d1, organizationId, record.eventIds),
+		);
+	}
+
+	if (record.planId && record.cargoLineIds?.length) {
+		stmts.push(
+			d1
+				.update(schema.manifestCargoLine)
+				.set({ cookedAt: null, cookedByUserId: null })
+				.where(
+					and(
+						eq(schema.manifestCargoLine.planId, record.planId),
+						inArray(schema.manifestCargoLine.id, record.cargoLineIds),
+					),
+				),
 		);
 	}
 

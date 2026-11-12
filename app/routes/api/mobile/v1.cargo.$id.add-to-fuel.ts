@@ -11,6 +11,7 @@ import type { NutritionPrincipal } from "~/lib/nutrition/service.server";
 import { addCargoToFuel } from "~/lib/plan-fuel-actions.server";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import { FuelTimeZoneSchema } from "~/lib/schemas/fuel";
+import { IntakeNotesSchema } from "~/lib/schemas/manifest";
 import { UuidSchema } from "~/lib/schemas/uuid";
 import { methodNotAllowed, withDiary } from "../nutrition.diary.shared";
 import type { Route } from "./+types/v1.cargo.$id.add-to-fuel";
@@ -21,6 +22,8 @@ const Body = z.object({
 	idempotencyKey: UuidSchema.optional(),
 	fuelTimeZone: FuelTimeZoneSchema.optional(),
 	occurredAt: z.string().optional(),
+	notes: IntakeNotesSchema.optional(),
+	energyKcal: z.number().finite().nonnegative().optional(),
 });
 
 /**
@@ -109,6 +112,8 @@ async function commitFuel(
 			idempotencyKey: body.idempotencyKey ?? body.operationKey,
 			fuelTimeZone: body.fuelTimeZone,
 			occurredAt: body.occurredAt ?? new Date().toISOString(),
+			notes: body.notes,
+			energyKcal: body.energyKcal,
 		},
 	);
 }

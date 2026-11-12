@@ -5,6 +5,7 @@ import { requireMobileActiveGroup } from "~/lib/mobile/auth.server";
 import { assertPlanFuelActions } from "~/lib/nutrition/fast-log-flag.server";
 import { cookCargoLine } from "~/lib/plan-fuel-actions.server";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
+import { tryStoreUndoToken } from "~/lib/undo-token.server";
 import type { Route } from "./+types/v1.manifest.cargo-lines.$id.cook";
 
 /** POST /api/mobile/v1/manifest/cargo-lines/:id/cook — deduct the planned quantity once. */
@@ -34,12 +35,31 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 				"Too many requests. Please try again later.",
 			);
 		}
-		return await cookCargoLine(
+		const result = await cookCargoLine(
 			context.cloudflare.env.DB,
 			organizationId,
 			userId,
 			lineId,
 		);
+		if (!result.cooked) return result;
+		const undoToken = await tryStoreUndoToken(
+			context.cloudflare.env.RATION_KV,
+			{
+				userId,
+				organizationId,
+				kind: "cook",
+				deductions: [
+					{
+						cargoId: result.line.cargoId,
+						quantity: result.line.quantity,
+					},
+				],
+				planId: result.line.planId,
+				cargoLineIds: [result.line.id],
+				eventIds: [],
+			},
+		);
+		return undoToken ? { ...result, undoToken } : result;
 	} catch (error) {
 		return handleApiError(error);
 	}

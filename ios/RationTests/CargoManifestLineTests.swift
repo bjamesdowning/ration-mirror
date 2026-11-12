@@ -81,6 +81,32 @@ final class CargoManifestLineTests: XCTestCase {
         XCTAssertFalse(calls.contains { $0.mobilePath.contains("undo") })
     }
 
+    func testCookedCargoRowStrikesThrough() {
+        XCTAssertTrue(CargoManifestSlot.struckThrough(cookedAt: "2026-11-12T13:00:00.000Z"))
+        XCTAssertFalse(CargoManifestSlot.struckThrough(cookedAt: nil))
+    }
+
+    func testCookPayloadWithStringQuantityStillDecodes() throws {
+        let body = Data(
+            """
+            {"cooked":true,"alreadyCooked":false,"undoToken":"undo-1","line":{"id":"\(lineId)","planId":"plan-1","cargoId":"dddddddd-dddd-4ddd-8ddd-dddddddddddd","cargoName":"Bacon","date":"2026-11-12","slotType":"breakfast","orderIndex":0,"quantity":"1","unit":"serving","notes":null,"cookedAt":1763000000000}}
+            """.utf8
+        )
+        let cooked = try JSON.decoder.decode(CargoLineCookResponse.self, from: body)
+        XCTAssertEqual(cooked.line.quantity, 1)
+        XCTAssertEqual(cooked.line.cargoName, "Bacon")
+        XCTAssertEqual(cooked.undoToken, "undo-1")
+        XCTAssertFalse(cooked.alreadyCooked)
+        XCTAssertNotNil(cooked.line.cookedAt)
+        XCTAssertTrue(CargoManifestSlot.struckThrough(cookedAt: cooked.line.cookedAt))
+    }
+
+    func testHtmlCookBodyIsAnUnexpectedResponse() {
+        XCTAssertThrowsError(
+            try JSON.decoder.decode(CargoLineCookResponse.self, from: Data("<!doctype html>".utf8))
+        )
+    }
+
     func testCargoOnlySlotDoesNotRenderEmptyMealButton() {
         XCTAssertFalse(CargoManifestSlot.showsEmptyMealButton(mealCount: 0, cargoLineCount: 1))
         XCTAssertFalse(CargoManifestSlot.showsEmptyMealButton(mealCount: 0, cargoLineCount: 3))

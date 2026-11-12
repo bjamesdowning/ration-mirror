@@ -198,6 +198,19 @@ struct CargoDetailView: View {
         )
     }
 
+    private func undoFuelLog() async {
+        guard let token = fuelUndo?.token else { return }
+        fuelUndo = nil
+        do {
+            _ = try await env.api.undoAction(token: token)
+            Haptics.light()
+            env.notifyCargoDataChanged()
+            await model.load(id: itemId, api: env.api)
+        } catch {
+            model.errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+        }
+    }
+
     @ViewBuilder
     private func cargoOverflowButton(_ action: CargoOverflowAction) -> some View {
         switch action {

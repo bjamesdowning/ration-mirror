@@ -249,6 +249,19 @@ struct CargoListView: View {
         model.filters.selectedTags = [slug]
     }
 
+    private func undoFuelLog() async {
+        guard let token = fuelUndo?.token else { return }
+        fuelUndo = nil
+        do {
+            _ = try await env.api.undoAction(token: token)
+            Haptics.light()
+            env.notifyCargoDataChanged()
+            await reload()
+        } catch {
+            model.errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+        }
+    }
+
     private func presentEat(_ item: CargoItem) {
         if env.session.clientFlags.isPlanFuelActionsEnabled {
             fuelPresentation.begin()

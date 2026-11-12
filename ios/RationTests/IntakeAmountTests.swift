@@ -94,6 +94,26 @@ final class IntakeAmountTests: XCTestCase {
         XCTAssertEqual(resolved.servings, 190.0 / 310.0, accuracy: 0.0001)
     }
 
+    func testGramAmountIsNotForcedOntoQuarterGrid() {
+        let resolved = IntakeAmount.clampedResolve(amount: 1.1, unit: .g, gramsPerServing: 100)
+        XCTAssertEqual(resolved.loggedUnit, .g)
+        XCTAssertEqual(resolved.loggedAmount, 1.1, accuracy: 0.0001)
+        let quarter = (1.1 / 0.25).rounded() * 0.25
+        XCTAssertNotEqual(resolved.loggedAmount, quarter, accuracy: 0.0001)
+        XCTAssertEqual(IntakeAmount.step(forDirectUnit: "g"), 10)
+        XCTAssertNotEqual(IntakeAmount.step(forDirectUnit: "g"), 0.25)
+        XCTAssertEqual(IntakeAmount.acceptedDirectQuantity(0.1, unit: "g"), 0.1, accuracy: 0.0001)
+    }
+
+    func testOnePointTwoFiveGramsStayExact() {
+        let resolved = IntakeAmount.resolve(amount: 1.25, unit: .g, gramsPerServing: 100)
+        XCTAssertEqual(resolved?.loggedUnit, .g)
+        XCTAssertEqual(resolved?.loggedAmount ?? -1, 1.25, accuracy: 0.0001)
+        XCTAssertNotEqual(resolved?.loggedAmount ?? -1, 1.3, accuracy: 0.0001)
+        XCTAssertEqual(IntakeAmount.formatLogged(amount: 1.25, unit: .g), "1.25 g")
+        XCTAssertEqual(IntakeAmount.acceptedDirectQuantity(1.25, unit: "g"), 1.25, accuracy: 0.0001)
+    }
+
     func testMacrosScaleWithSteppedQuantity() {
         let perServingKcal = 500.0
         let perServingProtein = 20.0

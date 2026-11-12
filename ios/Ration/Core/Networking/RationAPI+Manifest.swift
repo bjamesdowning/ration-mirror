@@ -131,14 +131,18 @@ extension RationAPI {
     func addCargoToFuel(
         id: String,
         quantity: Double,
-        operationKey: String
+        operationKey: String,
+        notes: String? = nil,
+        energyKcal: Double? = nil
     ) async throws -> CargoFuelResponse {
         let body = FuelWriteBody(
             quantity: quantity,
             operationKey: operationKey,
             idempotencyKey: operationKey,
             occurredAt: Self.nowStamp(),
-            fuelTimeZone: FuelDeviceZone.candidate
+            fuelTimeZone: FuelDeviceZone.candidate,
+            notes: notes,
+            energyKcal: energyKcal
         )
         return try await postAddingFuelZone("cargo/\(id)/add-to-fuel", body: body)
     }
@@ -147,7 +151,9 @@ extension RationAPI {
         id: String,
         servings: Double,
         operationKey: String,
-        confirmInsufficient: Bool
+        confirmInsufficient: Bool,
+        notes: String? = nil,
+        energyKcal: Double? = nil
     ) async throws -> MealFuelResult {
         let body = MealFuelBody(
             servings: servings,
@@ -155,7 +161,9 @@ extension RationAPI {
             operationKey: operationKey,
             idempotencyKey: operationKey,
             occurredAt: Self.nowStamp(),
-            fuelTimeZone: FuelDeviceZone.candidate
+            fuelTimeZone: FuelDeviceZone.candidate,
+            notes: notes,
+            energyKcal: energyKcal
         )
         return try await postAddingFuelZone("meals/\(id)/add-to-fuel", body: body)
     }
@@ -207,9 +215,11 @@ private struct FuelWriteBody: Encodable {
     let idempotencyKey: String
     let occurredAt: String
     let fuelTimeZone: String?
+    let notes: String?
+    let energyKcal: Double?
 
     enum CodingKeys: String, CodingKey {
-        case quantity, operationKey, idempotencyKey, occurredAt, fuelTimeZone
+        case quantity, operationKey, idempotencyKey, occurredAt, fuelTimeZone, notes, energyKcal
     }
 
     func encode(to encoder: Encoder) throws {
@@ -219,6 +229,8 @@ private struct FuelWriteBody: Encodable {
         try container.encode(idempotencyKey, forKey: .idempotencyKey)
         try container.encode(occurredAt, forKey: .occurredAt)
         try container.encodeIfPresent(fuelTimeZone, forKey: .fuelTimeZone)
+        try container.encodeIfPresent(notes, forKey: .notes)
+        try container.encodeIfPresent(energyKcal, forKey: .energyKcal)
     }
 }
 
@@ -252,9 +264,12 @@ private struct MealFuelBody: Encodable {
     let idempotencyKey: String
     let occurredAt: String
     let fuelTimeZone: String?
+    let notes: String?
+    let energyKcal: Double?
 
     enum CodingKeys: String, CodingKey {
         case servings, confirmInsufficient, operationKey, idempotencyKey, occurredAt, fuelTimeZone
+        case notes, energyKcal
     }
 
     func encode(to encoder: Encoder) throws {
@@ -265,6 +280,8 @@ private struct MealFuelBody: Encodable {
         try container.encode(idempotencyKey, forKey: .idempotencyKey)
         try container.encode(occurredAt, forKey: .occurredAt)
         try container.encodeIfPresent(fuelTimeZone, forKey: .fuelTimeZone)
+        try container.encodeIfPresent(notes, forKey: .notes)
+        try container.encodeIfPresent(energyKcal, forKey: .energyKcal)
     }
 }
 

@@ -189,6 +189,46 @@ final class AddToFuelClientContractTests: XCTestCase {
         XCTAssertEqual(AddToFuelURLProtocol.settingsPatches.count, 1)
     }
 
+    func testNotesAndEditedCaloriePreviewAreSent() async throws {
+        AddToFuelURLProtocol.mode = .cargoThenSuccess
+        let api = makeAPI()
+        let saved = try await api.addCargoToFuel(
+            id: "cargo-1",
+            quantity: 1.25,
+            operationKey: operationKey,
+            notes: "leftover",
+            energyKcal: 46
+        )
+        XCTAssertEqual(saved.intakeId, intakeId)
+        let posts = AddToFuelURLProtocol.fuelPosts
+        XCTAssertEqual(posts.count, 2)
+        XCTAssertEqual(posts.map(\.operationKey), [operationKey, operationKey])
+        XCTAssertEqual(posts.map(\.quantity), [1.25, 1.25])
+        XCTAssertEqual(posts.map(\.notes), ["leftover", "leftover"])
+        XCTAssertEqual(posts.map(\.energyKcal), [46, 46])
+
+        AddToFuelURLProtocol.reset()
+        AddToFuelURLProtocol.mode = .mealThenConfirmation
+        let meal = try await api.addMealToFuel(
+            id: mealId,
+            servings: 1.25,
+            operationKey: operationKey,
+            confirmInsufficient: false,
+            notes: "leftover",
+            energyKcal: 46
+        )
+        guard case .needsConfirmation = meal else {
+            return XCTFail("Confirmation was treated as a saved log")
+        }
+        let mealPosts = AddToFuelURLProtocol.fuelPosts
+        XCTAssertEqual(mealPosts.count, 2)
+        XCTAssertEqual(mealPosts.map(\.operationKey), [operationKey, operationKey])
+        XCTAssertEqual(mealPosts.map(\.servings), [1.25, 1.25])
+        XCTAssertEqual(mealPosts.map(\.notes), ["leftover", "leftover"])
+        XCTAssertEqual(mealPosts.map(\.energyKcal), [46, 46])
+        XCTAssertEqual(mealPosts.map(\.confirmInsufficient), [false, false])
+    }
+
     private func makeAPI() -> RationAPI {
         let config = URLSessionConfiguration.ephemeral
         config.protocolClasses = [AddToFuelURLProtocol.self]
@@ -200,11 +240,15 @@ final class AddToFuelClientContractTests: XCTestCase {
 }
 
 private struct PostedFuelBody: Decodable {
+    let quantity: Double?
+    let servings: Double?
     let operationKey: String
     let idempotencyKey: String
     let occurredAt: String
     let fuelTimeZone: String?
     let confirmInsufficient: Bool?
+    let notes: String?
+    let energyKcal: Double?
 }
 
 private struct PostedZonePatch: Decodable {

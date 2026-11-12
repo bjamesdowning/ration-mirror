@@ -17,7 +17,7 @@ struct MealDetailView: View {
     @State private var showingEdit = false
     @State private var showingFuel = false
     @State private var fuelPresentation = FuelAddPresentation()
-    @State private var pendingFuelServings: Double?
+    @State private var pendingFuel: FuelAmountSubmission?
     @State private var fuelConfirmationMessage: String?
     @State private var showFuelConfirmation = false
     @State private var showingDeleteConfirm = false
@@ -82,8 +82,20 @@ struct MealDetailView: View {
         .navigationTitle(MealNameDisplay.text((meal ?? initialMeal).name))
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $showingFuel) {
-            PlanFuelAmountSheet(title: "Add to Fuel", unit: "serving", start: 1) { servings in
-                try await self.logMealFuel(servings: servings)
+            PlanFuelAmountSheet(
+                title: FuelAmountEntry.title(
+                    planFuelActionsEnabled: env.session.clientFlags.isPlanFuelActionsEnabled
+                ),
+                unit: "serving",
+                start: 1,
+                energy: { servings in
+                    guard let per = (meal ?? initialMeal).nutrition?.perServing?.energyKcal else {
+                        return nil
+                    }
+                    return per * servings
+                }
+            ) { submission in
+                try await self.logMealFuel(submission)
             }
         }
         .overlay(alignment: .bottom) {
@@ -166,7 +178,7 @@ struct MealDetailView: View {
             }
             Button("Cancel", role: .cancel) {
                 fuelPresentation.declineShortPantry()
-                pendingFuelServings = nil
+                pendingFuel = nil
                 fuelConfirmationMessage = nil
             }
         } message: {
@@ -410,20 +422,22 @@ struct MealDetailView: View {
     }
 
     @MainActor
-    private func logMealFuel(servings: Double) async throws {
+    private func logMealFuel(_ submission: FuelAmountSubmission) async throws {
         let attempt = fuelPresentation.submit()
         let result = try await env.api.addMealToFuel(
             id: mealId,
-            servings: servings,
+            servings: submission.quantity,
             operationKey: attempt.operationKey,
-            confirmInsufficient: attempt.confirmInsufficient
+            confirmInsufficient: attempt.confirmInsufficient,
+            notes: submission.notes,
+            energyKcal: submission.energyKcal
         )
         switch result {
         case .saved:
             env.notifyCargoDataChanged()
         case .needsConfirmation(let missing):
             let message = FuelAddShortPantry.message(missing, mode: env.unitDisplayMode.mode)
-            pendingFuelServings = servings
+            pendingFuel = submission
             fuelConfirmationMessage = message
             showFuelConfirmation = true
             throw FuelNeedsConfirmation(message: message)
@@ -432,11 +446,11 @@ struct MealDetailView: View {
 
     @MainActor
     private func confirmFuelDespiteShortfall() async {
-        guard let servings = pendingFuelServings else { return }
+        guard let submission = pendingFuel else { return }
         do {
-            try await logMealFuel(servings: servings)
+            try await logMealFuel(submission)
             showingFuel = false
-            pendingFuelServings = nil
+            pendingFuel = nil
             fuelConfirmationMessage = nil
         } catch is FuelNeedsConfirmation {
         } catch {

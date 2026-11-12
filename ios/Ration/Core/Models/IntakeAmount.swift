@@ -10,7 +10,8 @@ enum IntakeAmount {
     static let servingsMin = 0.01
     static let servingsMax = 100.0
     static let servingsDecimals = 4
-    static let gramsDecimals = 1
+    /// Hundredths. One decimal schoolbook-rounds 1.25 g to 1.3 g.
+    static let gramsDecimals = 2
     static let ozDecimals = 2
     static let minGramsPerServingForMass = 10.0
     /// Matches `app/lib/units.ts` `OZ_PER_G = 1/28.3495`.
@@ -75,6 +76,37 @@ enum IntakeAmount {
         case .serving: return 0.25
         case .g: return 10
         case .oz: return 0.5
+        }
+    }
+
+    static func isGramUnit(_ unit: String) -> Bool {
+        switch unit.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+        case "g", "gram", "grams":
+            return true
+        default:
+            return false
+        }
+    }
+
+    /// Direct cargo quantity. Grams keep hundredths, so 1.25 g stays 1.25 g
+    /// and is not pulled onto the 0.25 serving grid.
+    static func acceptedDirectQuantity(_ amount: Double, unit: String) -> Double {
+        guard amount.isFinite, amount > 0 else { return amount }
+        if isGramUnit(unit) {
+            return roundLoggedAmount(amount, unit: .g)
+        }
+        return amount
+    }
+
+    static func step(forDirectUnit unit: String) -> Double {
+        if isGramUnit(unit) { return step(for: .g) }
+        switch unit.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+        case "oz", "ounce", "ounces":
+            return step(for: .oz)
+        case "serving", "servings":
+            return step(for: .serving)
+        default:
+            return QuantityEntry.step(for: unit)
         }
     }
 

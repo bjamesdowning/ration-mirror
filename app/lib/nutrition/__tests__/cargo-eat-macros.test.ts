@@ -100,4 +100,40 @@ describe("scaleCargoEatMacros", () => {
 			fatG: null,
 		});
 	});
+
+	it("converts ounces to grams with 28.3495", () => {
+		const macros = scaleCargoEatMacros({
+			nutrition: density,
+			quantity: 4,
+			unit: "oz",
+		});
+		const grams = 4 * 28.3495;
+		expect(macros.energyKcal).toBeCloseTo((89 * grams) / 100, 5);
+		expect(macros.carbG).toBeCloseTo((23 * grams) / 100, 5);
+	});
+
+	it("converts pounds to grams with 28.3495", () => {
+		const macros = scaleCargoEatMacros({
+			nutrition: density,
+			quantity: 1,
+			unit: "lb",
+		});
+		const grams = 16 * 28.3495;
+		expect(macros.energyKcal).toBeCloseTo((89 * grams) / 100, 5);
+		expect(macros.proteinG).toBeCloseTo((1.1 * grams) / 100, 5);
+	});
+
+	it("does not treat a fluid ounce as a weight ounce", () => {
+		const macros = scaleCargoEatMacros({
+			nutrition: density,
+			quantity: 1,
+			unit: "fl oz",
+		});
+		expect(macros).toEqual({
+			energyKcal: null,
+			proteinG: null,
+			carbG: null,
+			fatG: null,
+		});
+	});
 });

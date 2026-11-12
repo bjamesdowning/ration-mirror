@@ -64,6 +64,9 @@ function scaleBlock(
 	};
 }
 
+/** Grams per avoirdupois ounce. Matches `units.ts` and iOS `gramsPerOunce`. */
+const GRAMS_PER_OUNCE = 28.3495;
+
 function gramsForMassVolumeUnit(
 	quantity: number,
 	unit: SupportedUnit,
@@ -75,6 +78,10 @@ function gramsForMassVolumeUnit(
 		case "kg":
 		case "l":
 			return quantity * 1000;
+		case "oz":
+			return quantity * GRAMS_PER_OUNCE;
+		case "lb":
+			return quantity * 16 * GRAMS_PER_OUNCE;
 		default:
 			return null;
 	}

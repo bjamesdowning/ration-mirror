@@ -11,13 +11,17 @@ import {
 	applyCargoDeductions,
 	buildCargoDeductionStatements,
 } from "~/lib/cargo-deduction.server";
+import { applyUndoRecord } from "~/lib/cook-reversal.server";
 import type { FlagshipEvaluationContext } from "~/lib/feature-flags/context.server";
 import { ensureMealPlan } from "~/lib/manifest.server";
 import { getMealMissingIngredients } from "~/lib/matching.server";
 import { cookMeal } from "~/lib/meals.server";
+import { scaleCargoEatMacros } from "~/lib/nutrition/cargo-eat-macros";
 import { logDiaryFood } from "~/lib/nutrition/diary.server";
 import { toIsoDateString } from "~/lib/nutrition/dto.server";
+import { scaleNutrientValues } from "~/lib/nutrition/scale-nutrients";
 import type { NutritionPrincipal } from "~/lib/nutrition/service.server";
+import type { NutrientValues } from "~/lib/nutrition/types";
 import type { DiaryFoodWrite } from "~/lib/schemas/diary";
 import { SLOT_TYPES } from "~/lib/schemas/manifest";
 
@@ -64,6 +68,43 @@ function finiteMacro(value: number | null | undefined): number {
 	return typeof value === "number" && Number.isFinite(value) && value > 0
 		? value
 		: 0;
+}
+
+type DiaryMacros = NonNullable<DiaryFoodWrite["macros"]>;
+
+/** Diary columns are required numbers. Unknown nutrients stay 0, not a fabricated food. */
+function diaryMacrosFromNutrients(input: {
+	energyKcal?: number | null;
+	proteinG?: number | null;
+	carbG?: number | null;
+	fatG?: number | null;
+	fiberG?: number | null;
+}): DiaryMacros {
+	const fiber = input.fiberG;
+	return {
+		energyKcal: finiteMacro(input.energyKcal),
+		proteinG: finiteMacro(input.proteinG),
+		carbsG: finiteMacro(input.carbG),
+		fatG: finiteMacro(input.fatG),
+		...(typeof fiber === "number" && Number.isFinite(fiber) && fiber >= 0
+			? { fiberG: fiber }
+			: {}),
+	};
+}
+
+function diaryMacrosFromMealServing(
+	perServing: NutrientValues | null | undefined,
+	servings: number,
+): DiaryMacros {
+	if (!perServing) return diaryMacrosFromNutrients({});
+	const scaled = scaleNutrientValues(perServing, servings);
+	return diaryMacrosFromNutrients({
+		energyKcal: scaled.energyKcal,
+		proteinG: scaled.proteinG,
+		carbG: scaled.carbG,
+		fatG: scaled.fatG,
+		fiberG: scaled.fiberG,
+	});
 }
 
 export async function listCargoLinesForRange(
@@ -313,23 +354,6 @@ export async function cookCargoLine(
 	return { cooked: true, alreadyCooked: false, line: wire(now) };
 }
 
-function macrosFor(
-	perServing: {
-		energyKcal?: number | null;
-		proteinG?: number | null;
-		carbsG?: number | null;
-		fatG?: number | null;
-	} | null,
-	scale: number,
-) {
-	return {
-		energyKcal: finiteMacro(perServing?.energyKcal) * scale,
-		proteinG: finiteMacro(perServing?.proteinG) * scale,
-		carbsG: finiteMacro(perServing?.carbsG) * scale,
-		fatG: finiteMacro(perServing?.fatG) * scale,
-	};
-}
-
 export async function addCargoToFuel(
 	env: Env,
 	organizationId: string,
@@ -365,12 +389,22 @@ export async function addCargoToFuel(
 	// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
 	await d1.batch(deduct as [any, ...any[]]);
 	try {
-		const per = item.nutrition?.perServing ?? null;
+		const scaled = scaleCargoEatMacros({
+			nutrition: item.nutrition,
+			quantity,
+			unit: item.unit,
+			packageQuantity: before,
+		});
 		const logged = await logDiaryFood(env, principal, flags, {
 			name: item.name,
 			amount: quantity,
 			unit: item.unit,
-			macros: macrosFor(per, quantity),
+			macros: diaryMacrosFromNutrients({
+				energyKcal: scaled.energyKcal,
+				proteinG: scaled.proteinG,
+				carbG: scaled.carbG,
+				fatG: scaled.fatG,
+			}),
 			compositionSource: "manual_macros",
 			operationKey: write.operationKey,
 			idempotencyKey: write.idempotencyKey,
@@ -395,6 +429,28 @@ export async function addCargoToFuel(
 		}
 		throw error;
 	}
+}
+
+async function undoGalleyCook(
+	env: Env,
+	organizationId: string,
+	userId: string,
+	cooked: {
+		deductions: { cargoId: string; quantity: number }[];
+		eventIds: string[];
+	},
+): Promise<void> {
+	await applyUndoRecord(
+		env.DB,
+		organizationId,
+		{
+			kind: "cook",
+			userId,
+			deductions: cooked.deductions,
+			eventIds: cooked.eventIds,
+		},
+		{ kv: env.RATION_KV },
+	);
 }
 
 export async function addMealToFuel(
@@ -431,7 +487,7 @@ export async function addMealToFuel(
 	if (missing.length > 0 && !confirmInsufficient) {
 		return { requiresConfirmation: true, missingIngredients: missing };
 	}
-	await cookMeal(env, organizationId, mealId, {
+	const cooked = await cookMeal(env, organizationId, mealId, {
 		servings,
 		deductionMode: confirmInsufficient ? "partial" : "strict",
 		userId: principal.userId,
@@ -442,26 +498,32 @@ export async function addMealToFuel(
 		.select({
 			id: meal.id,
 			name: meal.name,
-			servings: meal.servings,
 			nutrition: meal.nutrition,
 		})
 		.from(meal)
 		.where(and(eq(meal.id, mealId), eq(meal.organizationId, organizationId)))
 		.limit(1);
-	if (!row) throw data({ error: "Meal not found" }, { status: 404 });
-	const base = row.servings && row.servings > 0 ? row.servings : 1;
-	const per = row.nutrition?.perServing ?? null;
-	const logged = await logDiaryFood(env, principal, flags, {
-		name: row.name,
-		amount: servings,
-		unit: "serving",
-		macros: macrosFor(per, servings / base),
-		compositionSource: "meal",
-		operationKey: write.operationKey,
-		idempotencyKey: write.idempotencyKey,
-		fuelTimeZone: write.fuelTimeZone,
-		occurredAt: write.occurredAt,
-	});
+	if (!row) {
+		await undoGalleyCook(env, organizationId, principal.userId, cooked);
+		throw data({ error: "Meal not found" }, { status: 404 });
+	}
+	let logged: Awaited<ReturnType<typeof logDiaryFood>>;
+	try {
+		logged = await logDiaryFood(env, principal, flags, {
+			name: row.name,
+			amount: servings,
+			unit: "serving",
+			macros: diaryMacrosFromMealServing(row.nutrition?.perServing, servings),
+			compositionSource: "meal",
+			operationKey: write.operationKey,
+			idempotencyKey: write.idempotencyKey,
+			fuelTimeZone: write.fuelTimeZone,
+			occurredAt: write.occurredAt,
+		});
+	} catch (error) {
+		await undoGalleyCook(env, organizationId, principal.userId, cooked);
+		throw error;
+	}
 	await d1
 		.update(nutritionIntake)
 		.set({ mealId: row.id })

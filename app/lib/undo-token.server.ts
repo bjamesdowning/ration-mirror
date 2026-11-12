@@ -7,7 +7,8 @@ export type UndoKind =
 	| "cook"
 	| "manifest_consume"
 	| "manifest_cook"
-	| "manifest_intake";
+	| "manifest_intake"
+	| "fuel_action";
 
 export interface UndoRecord {
 	userId: string;
@@ -35,6 +36,8 @@ export interface UndoRecord {
 	restoreIntakeId?: string | null;
 	/** Canonical nutrition operation that produced the intake mutation. */
 	operationId?: string;
+	/** Cargo Manifest lines whose cookedAt is cleared on undo. */
+	cargoLineIds?: string[];
 }
 
 function undoKey(token: string): string {

@@ -24,6 +24,7 @@ import type { NutritionPrincipal } from "~/lib/nutrition/service.server";
 import type { NutrientValues } from "~/lib/nutrition/types";
 import type { DiaryFoodWrite } from "~/lib/schemas/diary";
 import { SLOT_TYPES } from "~/lib/schemas/manifest";
+import { tryStoreUndoToken } from "~/lib/undo-token.server";
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -71,6 +72,50 @@ function finiteMacro(value: number | null | undefined): number {
 }
 
 type DiaryMacros = NonNullable<DiaryFoodWrite["macros"]>;
+
+function wireQuantity(value: number): number {
+	const quantity = Number(value);
+	return Number.isFinite(quantity) ? quantity : 0;
+}
+
+function overrideEnergy(macros: DiaryMacros, energyKcal?: number): DiaryMacros {
+	if (
+		typeof energyKcal !== "number" ||
+		!Number.isFinite(energyKcal) ||
+		energyKcal < 0
+	) {
+		return macros;
+	}
+	return { ...macros, energyKcal };
+}
+
+type FuelWrite = Pick<
+	DiaryFoodWrite,
+	"operationKey" | "idempotencyKey" | "fuelTimeZone" | "occurredAt" | "notes"
+> & { energyKcal?: number };
+
+async function storeFuelActionUndo(
+	env: Env,
+	organizationId: string,
+	userId: string,
+	input: {
+		deductions: { cargoId: string; quantity: number }[];
+		eventIds?: string[];
+		intakeId: string;
+		operationId: string | undefined;
+	},
+): Promise<string | undefined> {
+	if (!input.operationId) return undefined;
+	return tryStoreUndoToken(env.RATION_KV, {
+		userId,
+		organizationId,
+		kind: "fuel_action",
+		deductions: input.deductions,
+		eventIds: input.eventIds ?? [],
+		intakeIds: [input.intakeId],
+		operationId: input.operationId,
+	});
+}
 
 /** Diary columns are required numbers. Unknown nutrients stay 0, not a fabricated food. */
 function diaryMacrosFromNutrients(input: {
@@ -145,7 +190,7 @@ export async function listCargoLinesForRange(
 		date: row.date,
 		slotType: row.slotType,
 		orderIndex: row.orderIndex,
-		quantity: row.quantity,
+		quantity: wireQuantity(row.quantity),
 		unit: row.unit,
 		notes: row.notes,
 		cookedAt: row.cookedAt ? toIsoDateString(row.cookedAt) : null,
@@ -316,7 +361,7 @@ export async function cookCargoLine(
 		date: current.line.date,
 		slotType: current.line.slotType,
 		orderIndex: current.line.orderIndex,
-		quantity: current.line.quantity,
+		quantity: wireQuantity(current.line.quantity),
 		unit: current.line.unit,
 		notes: current.line.notes,
 		cookedAt: cookedAt ? toIsoDateString(cookedAt) : null,
@@ -361,11 +406,8 @@ export async function addCargoToFuel(
 	quantity: number,
 	principal: NutritionPrincipal,
 	flags: FlagshipEvaluationContext,
-	write: Pick<
-		DiaryFoodWrite,
-		"operationKey" | "idempotencyKey" | "fuelTimeZone" | "occurredAt"
-	>,
-): Promise<{ intakeId: string; deducted: number }> {
+	write: FuelWrite,
+): Promise<{ intakeId: string; deducted: number; undoToken?: string }> {
 	if (!(quantity > 0) || !Number.isFinite(quantity)) {
 		throw data(
 			{ error: "Quantity must be greater than zero" },
@@ -399,19 +441,37 @@ export async function addCargoToFuel(
 			name: item.name,
 			amount: quantity,
 			unit: item.unit,
-			macros: diaryMacrosFromNutrients({
-				energyKcal: scaled.energyKcal,
-				proteinG: scaled.proteinG,
-				carbG: scaled.carbG,
-				fatG: scaled.fatG,
-			}),
+			macros: overrideEnergy(
+				diaryMacrosFromNutrients({
+					energyKcal: scaled.energyKcal,
+					proteinG: scaled.proteinG,
+					carbG: scaled.carbG,
+					fatG: scaled.fatG,
+				}),
+				write.energyKcal,
+			),
 			compositionSource: "manual_macros",
+			notes: write.notes,
 			operationKey: write.operationKey,
 			idempotencyKey: write.idempotencyKey,
 			fuelTimeZone: write.fuelTimeZone,
 			occurredAt: write.occurredAt,
 		});
-		return { intakeId: logged.intakeId, deducted: quantity };
+		const undoToken = await storeFuelActionUndo(
+			env,
+			organizationId,
+			principal.userId,
+			{
+				deductions: [{ cargoId: item.id, quantity }],
+				intakeId: logged.intakeId,
+				operationId: logged.operationId,
+			},
+		);
+		return {
+			intakeId: logged.intakeId,
+			deducted: quantity,
+			...(undoToken ? { undoToken } : {}),
+		};
 	} catch (error) {
 		const [after] = await d1
 			.select({ quantity: cargo.quantity })
@@ -461,16 +521,18 @@ export async function addMealToFuel(
 	confirmInsufficient: boolean,
 	principal: NutritionPrincipal,
 	flags: FlagshipEvaluationContext,
-	write: Pick<
-		DiaryFoodWrite,
-		"operationKey" | "idempotencyKey" | "fuelTimeZone" | "occurredAt"
-	>,
+	write: FuelWrite,
 ): Promise<
 	| {
 			requiresConfirmation: true;
 			missingIngredients: Awaited<ReturnType<typeof getMealMissingIngredients>>;
 	  }
-	| { requiresConfirmation: false; intakeId: string; mealId: string }
+	| {
+			requiresConfirmation: false;
+			intakeId: string;
+			mealId: string;
+			undoToken?: string;
+	  }
 > {
 	if (!(servings > 0) || !Number.isFinite(servings)) {
 		throw data(
@@ -513,8 +575,12 @@ export async function addMealToFuel(
 			name: row.name,
 			amount: servings,
 			unit: "serving",
-			macros: diaryMacrosFromMealServing(row.nutrition?.perServing, servings),
+			macros: overrideEnergy(
+				diaryMacrosFromMealServing(row.nutrition?.perServing, servings),
+				write.energyKcal,
+			),
 			compositionSource: "meal",
+			notes: write.notes,
 			operationKey: write.operationKey,
 			idempotencyKey: write.idempotencyKey,
 			fuelTimeZone: write.fuelTimeZone,
@@ -528,9 +594,21 @@ export async function addMealToFuel(
 		.update(nutritionIntake)
 		.set({ mealId: row.id })
 		.where(eq(nutritionIntake.id, logged.intakeId));
+	const undoToken = await storeFuelActionUndo(
+		env,
+		organizationId,
+		principal.userId,
+		{
+			deductions: cooked.deductions,
+			eventIds: cooked.eventIds,
+			intakeId: logged.intakeId,
+			operationId: logged.operationId,
+		},
+	);
 	return {
 		requiresConfirmation: false,
 		intakeId: logged.intakeId,
 		mealId: row.id,
+		...(undoToken ? { undoToken } : {}),
 	};
 }

@@ -84,9 +84,11 @@ enum WidgetSnapshotLoader {
     }
 
     private static func store(state: String, snapshot: HomeWidgetSnapshot?, statusLine: String?) -> HomeWidgetCache {
+        let fuelBit = HomeWidgetCacheStore.load()?.planFuelActions
         let cache = HomeWidgetCache.empty(state: state, statusLine: statusLine)
         var stored = cache
         stored.snapshot = snapshot
+        stored.planFuelActions = fuelBit
         HomeWidgetCacheStore.save(stored)
         return stored
     }
@@ -146,12 +148,23 @@ enum WidgetMutations {
         guard started else { return }
         WidgetCenter.shared.reloadAllTimelines()
         do {
-            try await WidgetAPI.quickEat(
-                cargoId: food.cargoId,
-                unit: food.unit,
-                date: WidgetClock.localDateString(),
-                operationKey: UUID().uuidString
-            )
+            let operationKey = UUID().uuidString
+            switch WidgetEatRouting.route(planFuelActions: HomeWidgetCacheStore.load()?.planFuelActions) {
+            case .addToFuel:
+                try await WidgetAPI.addToFuel(
+                    cargoId: food.cargoId,
+                    quantity: food.stepQuantity,
+                    operationKey: operationKey,
+                    fuelTimeZone: WidgetAPI.deviceFuelTimeZone()
+                )
+            case .quickEat:
+                try await WidgetAPI.quickEat(
+                    cargoId: food.cargoId,
+                    unit: food.unit,
+                    date: WidgetClock.localDateString(),
+                    operationKey: operationKey
+                )
+            }
             let nextQuantity = max(0, food.quantity - food.stepQuantity)
             await mutate { cache in
                 cache.inFlightCargoIds.removeAll { $0 == food.cargoId }

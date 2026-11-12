@@ -52,6 +52,10 @@ vi.mock("~/lib/feature-flags/flags.server", () => ({
 	isFeatureEnabled: vi.fn().mockResolvedValue(false),
 }));
 
+vi.mock("~/lib/plan-fuel-actions.server", () => ({
+	addCargoToFuel: vi.fn(),
+}));
+
 vi.mock("~/lib/mcp/agent-flag-context", async () => {
 	const { APP_VERSION } = await import("~/lib/version");
 	return {
@@ -102,9 +106,27 @@ const eatResult = {
 	intakeServings: 1,
 };
 
+const FUEL_FLAGS = new Set([
+	"plan-fuel-actions",
+	"nutrition-fuel-page",
+	"nutrition-fast-log",
+]);
+
+async function mockFlags(planFuelActions: boolean) {
+	const { isFeatureEnabled } = await import("~/lib/feature-flags/flags.server");
+	vi.mocked(isFeatureEnabled).mockImplementation(async (_env, flag) => {
+		if (FUEL_FLAGS.has(flag)) return planFuelActions;
+		return true;
+	});
+}
+
 describe("quick_eat_cargo", () => {
-	beforeEach(() => {
+	beforeEach(async () => {
 		vi.clearAllMocks();
+		const { isFeatureEnabled } = await import(
+			"~/lib/feature-flags/flags.server"
+		);
+		vi.mocked(isFeatureEnabled).mockResolvedValue(false);
 	});
 
 	it("requires inventory, manifest, and nutrition write scopes", () => {
@@ -132,10 +154,7 @@ describe("quick_eat_cargo", () => {
 	});
 
 	it("eats an existing cargoId", async () => {
-		const { isFeatureEnabled } = await import(
-			"~/lib/feature-flags/flags.server"
-		);
-		vi.mocked(isFeatureEnabled).mockResolvedValue(true);
+		await mockFlags(false);
 		const { getCargoItem } = await import("~/lib/cargo.server");
 		vi.mocked(getCargoItem).mockResolvedValue({
 			id: CARGO_ID,
@@ -173,13 +192,61 @@ describe("quick_eat_cargo", () => {
 				source: "mcp",
 			}),
 		);
+		const { addCargoToFuel } = await import("~/lib/plan-fuel-actions.server");
+		expect(addCargoToFuel).not.toHaveBeenCalled();
+	});
+
+	it("logs Fuel and does not insert a snack when plan-fuel-actions is on", async () => {
+		await mockFlags(true);
+		const { getCargoItem } = await import("~/lib/cargo.server");
+		vi.mocked(getCargoItem).mockResolvedValue({
+			id: CARGO_ID,
+			name: "grapes",
+			quantity: 2,
+			unit: "unit",
+		} as never);
+		const { addCargoToFuel } = await import("~/lib/plan-fuel-actions.server");
+		vi.mocked(addCargoToFuel).mockResolvedValue({
+			intakeId: "intake-1",
+			deducted: 1,
+		});
+		const { quickEatFromCargo } = await import("~/lib/cargo-quick-eat.server");
+
+		const defs = createQuickEatToolDefs({} as never);
+		const tool = defs[0];
+		if (!tool) throw new Error("expected quick_eat_cargo");
+		const envelope = await tool.handler(baseCtx, {
+			cargoId: CARGO_ID,
+			quantity: 1,
+			operationKey: OP_KEY,
+		});
+		expect(envelope.ok).toBe(true);
+		if (!envelope.ok) return;
+		expect(envelope.data).toMatchObject({
+			eaten: true,
+			created: false,
+			intakeId: "intake-1",
+			deducted: 1,
+		});
+		expect(envelope.data).not.toHaveProperty("entry");
+		expect(envelope.data).not.toHaveProperty("provision");
+		expect(quickEatFromCargo).not.toHaveBeenCalled();
+		expect(addCargoToFuel).toHaveBeenCalledWith(
+			expect.anything(),
+			"org-1",
+			CARGO_ID,
+			1,
+			expect.objectContaining({ surface: "mcp" }),
+			expect.anything(),
+			expect.objectContaining({
+				operationKey: OP_KEY,
+				idempotencyKey: OP_KEY,
+			}),
+		);
 	});
 
 	it("creates a missing name then Quick Eats (net-zero restock line)", async () => {
-		const { isFeatureEnabled } = await import(
-			"~/lib/feature-flags/flags.server"
-		);
-		vi.mocked(isFeatureEnabled).mockResolvedValue(true);
+		await mockFlags(false);
 		const { fetchOrgCargoIndex } = await import("~/lib/cargo-index.server");
 		vi.mocked(fetchOrgCargoIndex).mockResolvedValue([]);
 		const { findSimilarCargoBatch } = await import("~/lib/vector.server");
@@ -229,10 +296,7 @@ describe("quick_eat_cargo", () => {
 	});
 
 	it("returns candidates without writing when the name is ambiguous", async () => {
-		const { isFeatureEnabled } = await import(
-			"~/lib/feature-flags/flags.server"
-		);
-		vi.mocked(isFeatureEnabled).mockResolvedValue(true);
+		await mockFlags(false);
 		const { fetchOrgCargoIndex } = await import("~/lib/cargo-index.server");
 		vi.mocked(fetchOrgCargoIndex).mockResolvedValue([
 			{
@@ -272,10 +336,7 @@ describe("quick_eat_cargo", () => {
 	});
 
 	it("does not eat or create when the only semantic hit is below 0.78", async () => {
-		const { isFeatureEnabled } = await import(
-			"~/lib/feature-flags/flags.server"
-		);
-		vi.mocked(isFeatureEnabled).mockResolvedValue(true);
+		await mockFlags(false);
 		const { fetchOrgCargoIndex } = await import("~/lib/cargo-index.server");
 		vi.mocked(fetchOrgCargoIndex).mockResolvedValue([]);
 		const { findSimilarCargoBatch } = await import("~/lib/vector.server");
@@ -327,10 +388,7 @@ describe("quick_eat_cargo", () => {
 	});
 
 	it("eats a lone semantic hit at the cook threshold", async () => {
-		const { isFeatureEnabled } = await import(
-			"~/lib/feature-flags/flags.server"
-		);
-		vi.mocked(isFeatureEnabled).mockResolvedValue(true);
+		await mockFlags(false);
 		const { fetchOrgCargoIndex } = await import("~/lib/cargo-index.server");
 		vi.mocked(fetchOrgCargoIndex).mockResolvedValue([]);
 		const { findSimilarCargoBatch } = await import("~/lib/vector.server");

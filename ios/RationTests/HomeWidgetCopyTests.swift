@@ -39,6 +39,25 @@ final class HomeWidgetCopyTests: XCTestCase {
         XCTAssertFalse(snapshot.eat.available)
     }
 
+    func testSnapshotWithoutFuelBitStaysOnQuickEat() throws {
+        let json = """
+        {"schema":2,"state":"ready","snapshot":null,"eatByTag":{},"fetchedAt":null,"tagFetchedAt":{},"statusLine":null,"inFlightCargoIds":[],"supplyHold":null,"eatHold":null}
+        """.data(using: .utf8)!
+        let cache = try JSONDecoder().decode(HomeWidgetCache.self, from: json)
+        XCTAssertNil(cache.planFuelActions)
+        XCTAssertEqual(WidgetEatRouting.route(planFuelActions: cache.planFuelActions), .quickEat)
+    }
+
+    func testFuelBitChoosesTheFuelRoute() throws {
+        XCTAssertEqual(WidgetEatRouting.route(planFuelActions: false), .quickEat)
+        XCTAssertEqual(WidgetEatRouting.route(planFuelActions: true), .addToFuel)
+        let json = """
+        {"schema":2,"state":"ready","snapshot":null,"eatByTag":{},"fetchedAt":null,"tagFetchedAt":{},"statusLine":null,"inFlightCargoIds":[],"supplyHold":null,"eatHold":null,"planFuelActions":true}
+        """.data(using: .utf8)!
+        let cache = try JSONDecoder().decode(HomeWidgetCache.self, from: json)
+        XCTAssertEqual(WidgetEatRouting.route(planFuelActions: cache.planFuelActions), .addToFuel)
+    }
+
     func testAPIBaseAllowsHttpsAndLocalhostOnly() {
         XCTAssertTrue(WidgetAPIBase.allows(URL(string: "https://ration.mayutic.com/api/mobile/v1")!))
         XCTAssertTrue(WidgetAPIBase.allows(URL(string: "http://localhost:5173/api/mobile/v1")!))

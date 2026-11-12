@@ -102,6 +102,45 @@ enum WidgetAPI {
         )
     }
 
+    /// Existing Fuel route. One step deducts once and logs. No provision, no snack.
+    static func addToFuel(
+        cargoId: String,
+        quantity: Double,
+        operationKey: String,
+        fuelTimeZone: String?
+    ) async throws {
+        var body: [String: Any] = [
+            "quantity": quantity,
+            "operationKey": operationKey,
+            "idempotencyKey": operationKey,
+            "occurredAt": isoStamp(),
+        ]
+        if let fuelTimeZone {
+            body["fuelTimeZone"] = fuelTimeZone
+        }
+        let _: Data = try await send(
+            path: "cargo/\(cargoId)/add-to-fuel",
+            method: "POST",
+            query: [],
+            body: body
+        )
+    }
+
+    private static func isoStamp() -> String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter.string(from: Date())
+    }
+
+    /// Device IANA zone. Abbreviations such as GMT are omitted.
+    static func deviceFuelTimeZone() -> String? {
+        let identifier = TimeZone.current.identifier
+        if identifier == "UTC" || identifier.contains("/") {
+            return identifier
+        }
+        return nil
+    }
+
     private static func send<T: Decodable>(
         path: String,
         method: String,

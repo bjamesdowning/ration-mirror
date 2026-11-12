@@ -55,6 +55,7 @@ final class SessionStore {
                 session?.flags.isShareExtensionImportEnabled == true,
                 forKey: SharedImportStore.flagKey
             )
+            await publishWidgetFuelFlag()
             return true
         } catch {
             // Keep prior session on transient failure.
@@ -117,6 +118,11 @@ final class SessionStore {
         orgSelectionOrganizations = nil
     }
 
+    /// Stamp the Fuel bit onto the widget snapshot. The widget does not read Flagship.
+    private func publishWidgetFuelFlag() async {
+        await HomeWidgetCacheStore.setPlanFuelActions(clientFlags.isPlanFuelActionsEnabled)
+    }
+
     func activateOrg(
         _ org: OrgMembership,
         api: RationAPI,
@@ -146,6 +152,7 @@ final class SessionStore {
             nutritionConsent?.configure(userId: userId, organizationId: organizationId)
         }
         orgGeneration += 1
+        await publishWidgetFuelFlag()
         await KitchenTimeZoneSync.sync(
             api: api,
             canCapture: activeOrg?.canManageSupplySettings == true

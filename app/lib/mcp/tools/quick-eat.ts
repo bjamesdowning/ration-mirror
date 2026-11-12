@@ -17,10 +17,16 @@ import {
 } from "../../cargo-quick-eat.server";
 import { normalizeForCargoKey } from "../../cargo-utils";
 import { isFeatureEnabled } from "../../feature-flags/flags.server";
+import { isPlanFuelActionsEnabled } from "../../nutrition/fast-log-flag.server";
+import {
+	FuelDailyLimitError,
+	FuelTimezoneRequiredError,
+} from "../../nutrition/fuel-errors";
 import { kitchenTodayForOrganization } from "../../org-supply-settings.server";
+import { addCargoToFuel } from "../../plan-fuel-actions.server";
 import { IntakeNotesSchema } from "../../schemas/manifest";
 import { UuidSchema } from "../../schemas/uuid";
-import { coerceToolUnit } from "../../units";
+import { coerceToolUnit, convertQuantity, toSupportedUnit } from "../../units";
 import { findSimilarCargoBatch } from "../../vector.server";
 import {
 	resolveAgentFlagContext,
@@ -76,7 +82,61 @@ type QuickEatCargoData =
 	| ({
 			eaten: true;
 			created: boolean;
-	  } & QuickEatResult);
+	  } & QuickEatResult)
+	| {
+			eaten: true;
+			created: boolean;
+			intakeId: string;
+			deducted: number;
+	  };
+
+function fuelActionError(error: unknown): ToolEnvelope<never> | null {
+	if (error instanceof FuelTimezoneRequiredError) {
+		return err("quick_eat_cargo", "invalid_input", error.message, {
+			recoveryHint:
+				"Set a time zone on Fuel, then retry the same operationKey.",
+		});
+	}
+	if (error instanceof FuelDailyLimitError) {
+		return err("quick_eat_cargo", "conflict", error.message, {
+			recoveryHint:
+				"The free daily Fuel limit is reached. Retry tomorrow, or use a Crew account.",
+		});
+	}
+	if (
+		error !== null &&
+		typeof error === "object" &&
+		"type" in error &&
+		(error as { type: string }).type === "DataWithResponseInit"
+	) {
+		const payload = (error as { data?: unknown }).data;
+		const status = (error as { init?: { status?: number } }).init?.status;
+		const message =
+			payload &&
+			typeof payload === "object" &&
+			"error" in payload &&
+			typeof (payload as { error: unknown }).error === "string"
+				? (payload as { error: string }).error
+				: "Could not log Fuel.";
+		if (status === 404) {
+			return err("quick_eat_cargo", "not_found", message, {
+				recoveryHint:
+					"Call list_inventory and retry with a cargoId that is still in Cargo.",
+			});
+		}
+		if (status === 409) {
+			return err("quick_eat_cargo", "conflict", message, {
+				recoveryHint:
+					"That amount is not in Cargo. Lower the quantity and retry the same operationKey.",
+			});
+		}
+		if (status === 403) {
+			return featureDisabled("quick_eat_cargo", message);
+		}
+		return err("quick_eat_cargo", "invalid_input", message);
+	}
+	return null;
+}
 
 function disambiguationOk(
 	candidates: QuickEatCandidate[],
@@ -99,7 +159,7 @@ export function createQuickEatToolDefs(env: McpToolsEnv) {
 	return [
 		defineSharedTool({
 			name: "quick_eat_cargo",
-			description: `Log that the caller personally ate a pantry item (Quick Eat). Resolves by cargoId or exact name. A semantic match is used only at or above the cook threshold (${STOCK_NAME_MATCH_THRESHOLD}); a weaker hit returns candidates and does not eat or create a line. If no pantry line matches, creates one for the eaten amount then deducts it (net 0, line kept as a restock reminder). Places a Manifest snack and optionally logs private intake. Use for 'I ate / just ate / had a snack of X'. Do not use adjust_cargo_item for personal eating. stockWasShort is expected when they ate more than stock. Requires cargo-quick-eat + nutrition-cook-log-split. Not medical advice.`,
+			description: `Log that the caller personally ate a pantry item. Resolves by cargoId or exact name. A semantic match is used only at or above the cook threshold (${STOCK_NAME_MATCH_THRESHOLD}); a weaker hit returns candidates and does not eat or create a line. If no pantry line matches, creates one for the eaten amount then deducts it (net 0, line kept as a restock reminder). When plan-fuel-actions is on, deducts that quantity once and logs Fuel. It does not create a provision or a Manifest snack. When that flag is off, Quick Eat places a Manifest snack and optionally logs private intake. Use for 'I ate / just ate / had a snack of X'. Do not use adjust_cargo_item for personal eating. stockWasShort applies to Quick Eat when they ate more than stock. Flag off requires cargo-quick-eat + nutrition-cook-log-split. Not medical advice.`,
 			inputSchema: z.object({
 				cargoId: UuidSchema.optional(),
 				name: z
@@ -154,16 +214,19 @@ export function createQuickEatToolDefs(env: McpToolsEnv) {
 				}
 
 				const flagContext = resolveAgentFlagContext(env, ctx);
-				const [quickEatOn, splitOn] = await Promise.all([
-					isFeatureEnabled(env, "cargo-quick-eat", flagContext),
-					isFeatureEnabled(env, "nutrition-cook-log-split", flagContext),
-				]);
-				if (!quickEatOn || !splitOn) {
-					return featureDisabled(
-						"quick_eat_cargo",
-						"Quick Eat is unavailable while cargo-quick-eat or nutrition-cook-log-split is off.",
-						"Enable those flags, or use adjust_cargo_item for pantry-only used/wasted without personal intake.",
-					);
+				const fuelActionsOn = await isPlanFuelActionsEnabled(env, flagContext);
+				if (!fuelActionsOn) {
+					const [quickEatOn, splitOn] = await Promise.all([
+						isFeatureEnabled(env, "cargo-quick-eat", flagContext),
+						isFeatureEnabled(env, "nutrition-cook-log-split", flagContext),
+					]);
+					if (!quickEatOn || !splitOn) {
+						return featureDisabled(
+							"quick_eat_cargo",
+							"Quick Eat is unavailable while cargo-quick-eat or nutrition-cook-log-split is off.",
+							"Enable those flags, or use adjust_cargo_item for pantry-only used/wasted without personal intake.",
+						);
+					}
 				}
 
 				let cargoId = a.cargoId;
@@ -289,6 +352,48 @@ export function createQuickEatToolDefs(env: McpToolsEnv) {
 
 				const principal = nutritionPrincipal(ctx);
 				try {
+					if (fuelActionsOn) {
+						const from = coerceToolUnit(a.unit ?? existing.unit).unit;
+						const to = toSupportedUnit(existing.unit);
+						const quantity = convertQuantity(a.quantity, from, to);
+						if (quantity == null || !(quantity > 0)) {
+							return err(
+								"quick_eat_cargo",
+								"invalid_input",
+								"Unit does not match this cargo item.",
+								{
+									recoveryHint:
+										"Use the cargo line's unit, or a unit in the same family, and retry the same operationKey.",
+								},
+							);
+						}
+						const logged = await addCargoToFuel(
+							env,
+							ctx.organizationId,
+							cargoId,
+							quantity,
+							principal,
+							flagContext,
+							{
+								operationKey: a.operationKey,
+								idempotencyKey: a.operationKey,
+								occurredAt: new Date().toISOString(),
+							},
+						);
+						return ok(
+							"quick_eat_cargo",
+							{
+								eaten: true,
+								created,
+								intakeId: logged.intakeId,
+								deducted: logged.deducted,
+							},
+							{
+								outcome: "committed",
+								requestId: principal.requestId,
+							},
+						);
+					}
 					const eaten = await quickEatFromCargo(
 						env,
 						ctx.organizationId,
@@ -320,6 +425,8 @@ export function createQuickEatToolDefs(env: McpToolsEnv) {
 						},
 					);
 				} catch (error) {
+					const mapped = fuelActionError(error);
+					if (mapped) return mapped;
 					if (error instanceof QuickEatNotFoundError) {
 						return err("quick_eat_cargo", "not_found", error.message);
 					}

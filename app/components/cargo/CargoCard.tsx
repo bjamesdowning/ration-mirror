@@ -63,10 +63,13 @@ export function CargoCard({
 				clientFlags?: {
 					cargoQuickEat?: boolean;
 					nutritionIntakeNotes?: boolean;
+					planFuelActions?: boolean;
 				};
 		  }
 		| undefined;
 	const cargoQuickEat = rootData?.clientFlags?.cargoQuickEat === true;
+	const planFuelActions = rootData?.clientFlags?.planFuelActions === true;
+	const showEat = planFuelActions || cargoQuickEat;
 	const nutritionIntakeNotes =
 		rootData?.clientFlags?.nutritionIntakeNotes === true;
 
@@ -202,8 +205,13 @@ export function CargoCard({
 		onClick: handleToggleRestock,
 	};
 	const cardActions = [
-		...(cargoQuickEat
-			? [{ label: "Eat", onClick: () => setShowQuickEat(true) }]
+		...(showEat
+			? [
+					{
+						label: planFuelActions ? "Fuel" : "Eat",
+						onClick: () => setShowQuickEat(true),
+					},
+				]
 			: []),
 		{ label: "Edit", onClick: () => setIsEditing(true) },
 		{
@@ -262,8 +270,12 @@ export function CargoCard({
 				<Toast
 					variant="success"
 					position="bottom-right"
-					title="Logged snack"
-					description="Added to today's Manifest"
+					title={planFuelActions ? "Logged to Fuel" : "Logged snack"}
+					description={
+						planFuelActions
+							? "Deducted from Cargo"
+							: "Added to today's Manifest"
+					}
 					onDismiss={eatToast.hide}
 				/>
 			)}
@@ -376,7 +388,7 @@ export function CargoCard({
 					isPending={isTogglingRestock}
 				/>
 			)}
-			{showQuickEat && cargoQuickEat && (
+			{showQuickEat && showEat && (
 				<CargoQuickEatDialog
 					cargoId={item.id}
 					name={item.name}
@@ -384,6 +396,7 @@ export function CargoCard({
 					unit={item.unit}
 					nutrition={item.nutrition as NutritionSnapshot | null}
 					notesEnabled={nutritionIntakeNotes}
+					planFuelActions={planFuelActions}
 					onClose={() => setShowQuickEat(false)}
 					onSuccess={() => eatToast.show()}
 				/>

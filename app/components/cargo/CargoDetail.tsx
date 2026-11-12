@@ -107,11 +107,14 @@ export function CargoDetail({
 					nutritionEngine?: boolean;
 					cargoQuickEat?: boolean;
 					nutritionIntakeNotes?: boolean;
+					planFuelActions?: boolean;
 				};
 		  }
 		| undefined;
 	const nutritionEngine = rootData?.clientFlags?.nutritionEngine === true;
 	const cargoQuickEat = rootData?.clientFlags?.cargoQuickEat === true;
+	const planFuelActions = rootData?.clientFlags?.planFuelActions === true;
+	const showEat = planFuelActions || cargoQuickEat;
 	const nutritionIntakeNotes =
 		rootData?.clientFlags?.nutritionIntakeNotes === true;
 	const [showQuickEat, setShowQuickEat] = useState(false);
@@ -305,17 +308,17 @@ export function CargoDetail({
 						</div>
 						<div className="flex gap-2" data-testid="detail-actions">
 							{orderOverflowActions([
-								...(cargoQuickEat
+								...(showEat
 									? [
 											{
-												label: "Eat",
+												label: planFuelActions ? "Fuel" : "Eat",
 												node: (
 													<button
 														type="button"
 														onClick={() => setShowQuickEat(true)}
 														className="px-3 py-1.5 text-sm rounded-lg border border-hyper-green/40 text-hyper-green hover:bg-hyper-green/5"
 													>
-														Eat
+														{planFuelActions ? "Fuel" : "Eat"}
 													</button>
 												),
 											},
@@ -500,7 +503,7 @@ export function CargoDetail({
 					isPending={restockFetcher.state !== "idle"}
 				/>
 			)}
-			{showQuickEat && cargoQuickEat && (
+			{showQuickEat && showEat && (
 				<CargoQuickEatDialog
 					cargoId={item.id}
 					name={item.name}
@@ -508,6 +511,7 @@ export function CargoDetail({
 					unit={item.unit}
 					nutrition={item.nutrition as NutritionSnapshot | null}
 					notesEnabled={nutritionIntakeNotes}
+					planFuelActions={planFuelActions}
 					onClose={() => setShowQuickEat(false)}
 					onSuccess={() => eatToast.show()}
 				/>
@@ -516,8 +520,12 @@ export function CargoDetail({
 				<Toast
 					variant="success"
 					position="bottom-right"
-					title="Logged snack"
-					description="Added to today's Manifest"
+					title={planFuelActions ? "Logged to Fuel" : "Logged snack"}
+					description={
+						planFuelActions
+							? "Deducted from Cargo"
+							: "Added to today's Manifest"
+					}
 					onDismiss={eatToast.hide}
 				/>
 			)}

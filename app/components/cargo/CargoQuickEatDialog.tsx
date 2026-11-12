@@ -2,9 +2,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useFetcher } from "react-router";
 import { getTodayISO } from "~/lib/manifest-dates";
 import { type NutritionSnapshot, scaleCargoEatMacros } from "~/lib/nutrition";
+import { cargoEatPostPath } from "~/lib/nutrition/cargo-eat-route";
+import { withDeviceFuelZone } from "~/lib/nutrition/fuel-zone-client";
 
 type QuickEatResponse = {
 	entry?: { id: string };
+	intakeId?: string;
 	intakeLogged?: boolean;
 	intakeSkipReason?: string | null;
 	error?: string;
@@ -18,6 +21,7 @@ type CargoQuickEatDialogProps = {
 	unit: string;
 	nutrition: NutritionSnapshot | null | undefined;
 	notesEnabled: boolean;
+	planFuelActions: boolean;
 	onClose: () => void;
 	onSuccess?: (result: QuickEatResponse) => void;
 };
@@ -51,6 +55,7 @@ export function CargoQuickEatDialog({
 	unit,
 	nutrition,
 	notesEnabled,
+	planFuelActions,
 	onClose,
 	onSuccess,
 }: CargoQuickEatDialogProps) {
@@ -86,12 +91,14 @@ export function CargoQuickEatDialog({
 
 	useEffect(() => {
 		if (fetcher.state !== "idle") return;
-		if (!fetcher.data?.entry?.id) return;
-		if (fetcher.data === handledSuccess.current) return;
-		handledSuccess.current = fetcher.data;
-		onSuccess?.(fetcher.data);
+		const result = fetcher.data;
+		const saved = result?.intakeId ?? result?.entry?.id;
+		if (!result || !saved) return;
+		if (result === handledSuccess.current) return;
+		handledSuccess.current = result;
+		onSuccess?.(result);
 		// Only auto-close when private intake actually landed (or was not requested).
-		if (fetcher.data.intakeLogged !== false) {
+		if (fetcher.data?.intakeId || fetcher.data?.intakeLogged !== false) {
 			onClose();
 		}
 	}, [fetcher.state, fetcher.data, onClose, onSuccess]);
@@ -113,15 +120,36 @@ export function CargoQuickEatDialog({
 		}
 	})();
 
+	const fuelBlocked = planFuelActions && (stockEmpty || amount > stockQuantity);
+
 	const handleSubmit = () => {
-		if (!(amount > 0) || isSaving) return;
+		if (!(amount > 0) || isSaving || fuelBlocked) return;
 		const trimmed = notes.trim();
+		const operationKey = crypto.randomUUID();
+		if (planFuelActions) {
+			fetcher.submit(
+				JSON.stringify(
+					withDeviceFuelZone({
+						quantity: amount,
+						operationKey,
+						idempotencyKey: operationKey,
+						occurredAt: new Date().toISOString(),
+					}),
+				),
+				{
+					method: "POST",
+					action: cargoEatPostPath(cargoId, true),
+					encType: "application/json",
+				},
+			);
+			return;
+		}
 		fetcher.submit(
 			JSON.stringify({
 				quantity: amount,
 				unit,
 				date: getTodayISO(),
-				operationKey: crypto.randomUUID(),
+				operationKey,
 				logIntake: true,
 				...(notesEnabled && trimmed.length > 0
 					? { notes: trimmed.slice(0, 280) }
@@ -129,7 +157,7 @@ export function CargoQuickEatDialog({
 			}),
 			{
 				method: "POST",
-				action: `/api/cargo/${cargoId}/quick-eat`,
+				action: cargoEatPostPath(cargoId, false),
 				encType: "application/json",
 			},
 		);
@@ -149,9 +177,13 @@ export function CargoQuickEatDialog({
 					<p className="text-[10px] font-mono uppercase tracking-wide text-muted">
 						Private log
 					</p>
-					<h2 className="text-lg font-bold text-carbon mt-1">Eat</h2>
+					<h2 className="text-lg font-bold text-carbon mt-1">
+						{planFuelActions ? "Fuel" : "Eat"}
+					</h2>
 					<p className="text-sm text-muted mt-2 capitalize">
-						{name} — snack on today&apos;s Manifest; optional private intake.
+						{planFuelActions
+							? `${name} — deduct this amount from Cargo and log it on Fuel.`
+							: `${name} — snack on today's Manifest; optional private intake.`}
 					</p>
 					<p className="text-[10px] text-muted mt-2">
 						Not medical advice. Goals and totals are planning aids only.
@@ -176,11 +208,15 @@ export function CargoQuickEatDialog({
 					/>
 					{stockEmpty ? (
 						<p className="text-xs text-muted">
-							Pantry empty — snack will still appear on Manifest.
+							{planFuelActions
+								? "Cargo is empty, so this cannot log to Fuel."
+								: "Pantry empty — snack will still appear on Manifest."}
 						</p>
 					) : amount > stockQuantity ? (
 						<p className="text-xs text-warning">
-							Only {stockQuantity} {unit} in pantry — extras won&apos;t deduct.
+							{planFuelActions
+								? `Fuel needs ${stockQuantity} ${unit} or less in Cargo.`
+								: `Only ${stockQuantity} ${unit} in pantry — extras won't deduct.`}
 						</p>
 					) : (
 						<p className="text-xs text-muted">
@@ -228,7 +264,7 @@ export function CargoQuickEatDialog({
 					)}
 				</div>
 
-				{notesEnabled ? (
+				{notesEnabled && !planFuelActions ? (
 					<label className="block space-y-2">
 						<span className="text-xs font-mono text-muted uppercase tracking-wide">
 							Notes (optional)
@@ -255,10 +291,20 @@ export function CargoQuickEatDialog({
 				<button
 					type="button"
 					onClick={skipMessage ? onClose : handleSubmit}
-					disabled={isSaving || (!(amount > 0) && !skipMessage)}
+					disabled={
+						isSaving ||
+						(!(amount > 0) && !skipMessage) ||
+						(fuelBlocked && !skipMessage)
+					}
 					className="w-full py-3 rounded-xl bg-hyper-green text-on-hyper-green font-bold disabled:opacity-60"
 				>
-					{isSaving ? "Saving…" : skipMessage ? "Done" : "Eat"}
+					{isSaving
+						? "Saving…"
+						: skipMessage
+							? "Done"
+							: planFuelActions
+								? "Fuel"
+								: "Eat"}
 				</button>
 				<button
 					type="button"

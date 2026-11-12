@@ -114,10 +114,13 @@ export function CargoListRow({
 				clientFlags?: {
 					cargoQuickEat?: boolean;
 					nutritionIntakeNotes?: boolean;
+					planFuelActions?: boolean;
 				};
 		  }
 		| undefined;
 	const cargoQuickEat = rootData?.clientFlags?.cargoQuickEat === true;
+	const planFuelActions = rootData?.clientFlags?.planFuelActions === true;
+	const showEat = planFuelActions || cargoQuickEat;
 	const nutritionIntakeNotes =
 		rootData?.clientFlags?.nutritionIntakeNotes === true;
 
@@ -266,8 +269,12 @@ export function CargoListRow({
 				<Toast
 					variant="success"
 					position="bottom-right"
-					title="Logged snack"
-					description="Added to today's Manifest"
+					title={planFuelActions ? "Logged to Fuel" : "Logged snack"}
+					description={
+						planFuelActions
+							? "Deducted from Cargo"
+							: "Added to today's Manifest"
+					}
 					onDismiss={eatToast.hide}
 				/>
 			)}
@@ -355,10 +362,10 @@ export function CargoListRow({
 				<div className="relative z-20 shrink-0" data-row-action>
 					<ActionMenu
 						actions={[
-							...(cargoQuickEat
+							...(showEat
 								? [
 										{
-											label: "Eat",
+											label: planFuelActions ? "Fuel" : "Eat",
 											onClick: () => setShowQuickEat(true),
 										},
 									]
@@ -420,7 +427,7 @@ export function CargoListRow({
 					isPending={restockFetcher.state !== "idle"}
 				/>
 			)}
-			{showQuickEat && cargoQuickEat && (
+			{showQuickEat && showEat && (
 				<CargoQuickEatDialog
 					cargoId={item.id}
 					name={item.name}
@@ -428,6 +435,7 @@ export function CargoListRow({
 					unit={item.unit}
 					nutrition={item.nutrition as NutritionSnapshot | null}
 					notesEnabled={nutritionIntakeNotes}
+					planFuelActions={planFuelActions}
 					onClose={() => setShowQuickEat(false)}
 					onSuccess={() => eatToast.show()}
 				/>

@@ -101,6 +101,8 @@ struct HomeWidgetCache: Codable, Equatable, Sendable {
     var inFlightCargoIds: [String]
     var supplyHold: WidgetHold?
     var eatHold: WidgetHold?
+    /// Written by the app from the session flag. Missing or false stays on Quick Eat.
+    var planFuelActions: Bool?
 
     static let currentSchema = 2
 
@@ -145,7 +147,8 @@ struct HomeWidgetCache: Codable, Equatable, Sendable {
         statusLine: nil,
         inFlightCargoIds: [],
         supplyHold: nil,
-        eatHold: nil
+        eatHold: nil,
+        planFuelActions: nil
     )
 
     var isReady: Bool { state == "ready" && snapshot != nil }
@@ -161,7 +164,8 @@ struct HomeWidgetCache: Codable, Equatable, Sendable {
             statusLine: statusLine,
             inFlightCargoIds: [],
             supplyHold: nil,
-            eatHold: nil
+            eatHold: nil,
+            planFuelActions: nil
         )
     }
 }
@@ -190,8 +194,30 @@ enum HomeWidgetCacheStore {
         try? FileManager.default.removeItem(at: url)
     }
 
+    /// The widget does not read Flagship. The signed-in app stamps this bit.
+    static func setPlanFuelActions(_ enabled: Bool) async {
+        _ = try? await AppGroupFileLock.perform("widget-snapshot.lock") { () -> Bool in
+            var cache = load() ?? .empty(state: "unavailable", statusLine: nil)
+            cache.planFuelActions = enabled
+            save(cache)
+            return true
+        }
+    }
+
     private static var fileURL: URL? {
         AppGroup.containerURL?.appendingPathComponent(fileName)
+    }
+}
+
+enum WidgetEatRoute: Equatable {
+    case quickEat
+    case addToFuel
+}
+
+enum WidgetEatRouting {
+    /// A snapshot without the bit, or with it false, stays on Quick Eat.
+    static func route(planFuelActions: Bool?) -> WidgetEatRoute {
+        planFuelActions == true ? .addToFuel : .quickEat
     }
 }
 

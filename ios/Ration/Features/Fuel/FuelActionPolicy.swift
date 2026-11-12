@@ -81,6 +81,42 @@ enum FuelActionPolicy {
     }
 }
 
+/// Fuel delete removes the row after a decoded intake id, or when the server
+/// says the row is already gone. Any other failure stays in the list and shows
+/// the server message. The daily cap still opens Crew purchase.
+enum FuelVoidDecision: Equatable {
+    case remove
+    case keep(message: String)
+    case paywall
+}
+
+enum FuelVoidResolution {
+    static func decide(intakeId: String?) -> FuelVoidDecision {
+        if let intakeId, !intakeId.isEmpty {
+            return .remove
+        }
+        let message = APIError.decoding("diary write missing intakeId").errorDescription
+            ?? "Unexpected response from server."
+        return .keep(message: message)
+    }
+
+    static func decide(_ error: Error) -> FuelVoidDecision {
+        guard let api = error as? APIError else {
+            if let text = (error as? LocalizedError)?.errorDescription, !text.isEmpty {
+                return .keep(message: text)
+            }
+            return .keep(message: error.localizedDescription)
+        }
+        if api.statusCode == 404 || api.code == "not_found" {
+            return .remove
+        }
+        if api.code == "fuel_daily_limit" {
+            return .paywall
+        }
+        return .keep(message: api.errorDescription ?? "Something went wrong. Please try again.")
+    }
+}
+
 enum FuelAccountDeletion {
     static let healthSamplesRemain =
         "Apple Health samples Ration already wrote stay in the Health app until you delete them there. A deletion started on another device cannot remove them."

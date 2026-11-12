@@ -271,7 +271,8 @@ struct MealDetailView: View {
         let rows = MealAvailabilityEngine.availabilityRows(
             meal: meal,
             match: matchResult,
-            desiredServings: desiredServings
+            desiredServings: desiredServings,
+            mode: env.unitDisplayMode.mode
         )
         return GlassCard {
             VStack(alignment: .leading, spacing: 10) {

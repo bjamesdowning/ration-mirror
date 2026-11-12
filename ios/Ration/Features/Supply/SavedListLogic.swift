@@ -54,7 +54,7 @@ enum SavedListLogic {
     static func statusLine(for item: SupplyItem, now: Date = Date()) -> String {
         var parts: [String] = []
         if let cargo = item.inCargo, cargo > 0 {
-            parts.append("In Cargo \(formatQuantity(cargo))")
+            parts.append("In Cargo \(formatAmount(cargo, unit: item.unit))")
         }
         if let bought = lastBought(item.lastDockedAt, now: now) {
             parts.append(bought)
@@ -62,7 +62,7 @@ enum SavedListLogic {
         if item.live?.state == "on_live" {
             let quantity = item.live?.quantity ?? item.quantity
             let unit = item.live?.unit ?? item.unit
-            parts.append("On Live \(formatQuantity(quantity)) \(unit)")
+            parts.append("On Live \(formatAmount(quantity, unit: unit)) \(unit)")
         }
         if item.live?.state == "in_cart" {
             parts.append("In cart")
@@ -92,8 +92,9 @@ enum SavedListLogic {
         return store.isEmpty ? base : "\(base) · \(store)"
     }
 
-    private static func formatQuantity(_ value: Double) -> String {
-        value.rounded() == value ? String(Int(value)) : String(value)
+    /// Saved-list amounts use the same numeric formatter as `QuantityPresenter`.
+    static func formatAmount(_ value: Double, unit: String) -> String {
+        QuantityPresentation.formatNumber(value, unit: unit)
     }
 
     private static func lastBought(_ iso: String?, now: Date) -> String? {

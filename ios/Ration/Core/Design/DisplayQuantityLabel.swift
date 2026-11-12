@@ -16,22 +16,13 @@ struct DisplayQuantityLabel: View {
     }
 
     private var formatted: String {
-        let mode = env.unitDisplayMode.mode
-        let name = ingredientName ?? unit
-        let sourceQty: Double
-        let sourceUnit: String
-        if mode == .original || baseQuantity == nil || baseUnit == nil {
-            sourceQty = quantity
-            sourceUnit = unit
-        } else {
-            sourceQty = baseQuantity ?? quantity
-            sourceUnit = baseUnit ?? unit
-        }
-        return QuantityPresenter.present(
-            quantity: sourceQty,
-            unit: sourceUnit,
-            ingredientName: name,
-            mode: mode,
+        QuantityPresenter.presentStored(
+            quantity: quantity,
+            unit: unit,
+            baseQuantity: baseQuantity,
+            baseUnit: baseUnit,
+            ingredientName: ingredientName ?? unit,
+            mode: env.unitDisplayMode.mode,
             approximate: approximate
         )
     }

@@ -48,9 +48,10 @@ enum QuantityPresentation {
     }
 
     /// Formats a numeric quantity for display with sensible precision.
-    static func formatNumber(_ qty: Double, unit: String) -> String {
+    /// `wholeCounts` is false for an editable amount such as a Fuel serving, which can be fractional.
+    static func formatNumber(_ qty: Double, unit: String, wholeCounts: Bool = true) -> String {
         let snapped = snapEpsilon(qty)
-        let isCount = RationUnits.group(for: unit) == .count
+        let isCount = wholeCounts && RationUnits.group(for: unit) == .count
         if isCount { return String(Int(snapped.rounded())) }
         if unit == "g", snapped >= 5 { return String(Int(snapped.rounded())) }
         if unit == "oz", snapped < 10 {

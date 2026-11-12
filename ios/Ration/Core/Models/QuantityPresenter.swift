@@ -19,15 +19,16 @@ enum UnitConversion {
         if fromBase != toBase {
             if (fromBase == "g" || fromBase == "oz") && (toBase == "g" || toBase == "oz") {
                 let grams: Double
+                let gramsPerOunce = IntakeAmount.gramsPerOunce
                 if from == "g" { grams = quantity }
                 else if from == "kg" { grams = quantity * 1000 }
-                else if from == "oz" { grams = quantity / 0.035274 }
-                else if from == "lb" { grams = quantity * 16 / 0.035274 }
+                else if from == "oz" { grams = quantity * gramsPerOunce }
+                else if from == "lb" { grams = quantity * 16 * gramsPerOunce }
                 else { return nil }
                 if to == "g" { return grams }
                 if to == "kg" { return grams / 1000 }
-                if to == "oz" { return grams * 0.035274 }
-                if to == "lb" { return grams * 0.035274 / 16 }
+                if to == "oz" { return grams / gramsPerOunce }
+                if to == "lb" { return grams / gramsPerOunce / 16 }
                 return nil
             }
             return nil
@@ -253,6 +254,34 @@ enum QuantityPresenter {
 
         qty = QuantityPresentation.snapEpsilon(qty)
         return QuantityPresentation.formatQuantity(qty, unit: unitOut, approximate: approx)
+    }
+
+    /// Same source selection as `DisplayQuantityLabel`: authored quantity in original mode, canonical base otherwise.
+    static func presentStored(
+        quantity: Double,
+        unit: String,
+        baseQuantity: Double?,
+        baseUnit: String?,
+        ingredientName: String,
+        mode: UnitDisplayMode,
+        approximate: Bool = false
+    ) -> String {
+        let sourceQty: Double
+        let sourceUnit: String
+        if mode == .original || baseQuantity == nil || baseUnit == nil {
+            sourceQty = quantity
+            sourceUnit = unit
+        } else {
+            sourceQty = baseQuantity ?? quantity
+            sourceUnit = baseUnit ?? unit
+        }
+        return present(
+            quantity: sourceQty,
+            unit: sourceUnit,
+            ingredientName: ingredientName,
+            mode: mode,
+            approximate: approximate
+        )
     }
 
     /// Unit-only presentation result for tests (mirrors web `presentQuantity` fields).

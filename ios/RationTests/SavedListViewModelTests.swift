@@ -35,4 +35,33 @@ final class SavedListViewModelTests: XCTestCase {
         )
         XCTAssertEqual(SavedListLogic.toast(for: undone), "Nothing new to add")
     }
+
+    func testNonIntegerSavedListQuantityDoesNotPrintRawDouble() {
+        let raw = 13.129190700000002
+        let text = SavedListLogic.formatAmount(raw, unit: "g")
+        XCTAssertEqual(text, QuantityPresentation.formatNumber(raw, unit: "g"))
+        XCTAssertEqual(text, "13")
+        XCTAssertNotEqual(text, String(raw))
+        XCTAssertFalse(text.contains("000002"))
+        let item = SupplyItem(
+            id: "1",
+            name: "butter",
+            quantity: raw,
+            unit: "g",
+            domain: "food",
+            isPurchased: false,
+            live: SavedListItemLive(
+                state: "on_live",
+                quantity: raw,
+                unit: "g",
+                manualOnly: nil,
+                liveItemId: nil
+            ),
+            inCargo: raw
+        )
+        let line = SavedListLogic.statusLine(for: item, now: Date(timeIntervalSince1970: 0))
+        XCTAssertFalse(line.contains("000002"))
+        XCTAssertTrue(line.contains("In Cargo 13"))
+        XCTAssertTrue(line.contains("On Live 13 g"))
+    }
 }

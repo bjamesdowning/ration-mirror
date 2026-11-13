@@ -4,6 +4,7 @@ import {
 	buildMobileFlagContext,
 	buildWebFlagContext,
 } from "~/lib/feature-flags/flags.server";
+import { InsufficientCreditsError } from "~/lib/ledger.server";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import {
 	DiaryFoodWriteSchema,
@@ -322,7 +323,13 @@ export async function postFuelPhoto(
 	if (!scanLimit.allowed) throw rateLimitResponse(scanLimit);
 	const contentLength = Number(request.headers.get("content-length") ?? "0");
 	if (contentLength > FUEL_PHOTO_MAX_BYTES * 2) {
-		throw data({ code: "photo_too_large" }, { status: 400 });
+		throw data(
+			{
+				error: "Photo must be 3 MiB or smaller.",
+				code: "photo_too_large",
+			},
+			{ status: 400 },
+		);
 	}
 	const parsed = FuelPhotoSubmitSchema.safeParse(await readBody(request));
 	if (!parsed.success) throw data({ code: "invalid_request" }, { status: 400 });
@@ -340,6 +347,17 @@ export async function postFuelPhoto(
 			fuelTimeZone: parsed.data.fuelTimeZone,
 		});
 	} catch (error) {
+		if (error instanceof InsufficientCreditsError) {
+			throw data(
+				{
+					error: "Insufficient credits",
+					code: "insufficient_credits",
+					required: error.required,
+					current: error.current,
+				},
+				{ status: 402 },
+			);
+		}
 		mapFuelPhotoConsent(error);
 	}
 }

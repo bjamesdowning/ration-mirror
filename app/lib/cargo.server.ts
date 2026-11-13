@@ -934,29 +934,29 @@ export async function ingestCargoItems(
 			const target = cargoById.get(r.targetId);
 			const newQty = quantityByCargoId.get(r.targetId);
 			if (!target || newQty === undefined) continue;
+			const mergedBase = computeBaseFields(newQty, target.unit, target.name);
+			// Derive density from the incoming package qty/unit, not merged total.
+			let mergeNutrition: NutritionSnapshot | undefined;
+			if (nutritionEngineOn && it.nutrition) {
+				mergeNutrition = scaleCargoNutritionToPackage(
+					{
+						...it.nutrition,
+						source: it.nutrition.source ?? "user_override",
+					},
+					it.quantity,
+					it.unit,
+					it.name,
+				);
+			} else if (
+				nutritionEngineOn &&
+				target.nutrition == null &&
+				mergeNutritionByTargetId.has(r.targetId)
+			) {
+				const snap = mergeNutritionByTargetId.get(r.targetId);
+				if (snap) mergeNutrition = snap;
+			}
 			if (!mergedTargetIds.has(r.targetId)) {
 				mergedTargetIds.add(r.targetId);
-				const mergedBase = computeBaseFields(newQty, target.unit, target.name);
-				// Derive density from the incoming package qty/unit, not merged total.
-				let mergeNutrition: NutritionSnapshot | undefined;
-				if (nutritionEngineOn && it.nutrition) {
-					mergeNutrition = scaleCargoNutritionToPackage(
-						{
-							...it.nutrition,
-							source: it.nutrition.source ?? "user_override",
-						},
-						it.quantity,
-						it.unit,
-						it.name,
-					);
-				} else if (
-					nutritionEngineOn &&
-					target.nutrition == null &&
-					mergeNutritionByTargetId.has(r.targetId)
-				) {
-					const snap = mergeNutritionByTargetId.get(r.targetId);
-					if (snap) mergeNutrition = snap;
-				}
 				batchOps.push(
 					d1
 						.update(cargo)

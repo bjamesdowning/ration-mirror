@@ -760,7 +760,7 @@ describe("import dispatch", () => {
 describe("queue lease", () => {
 	it("skips a live lease and recovers an expired one without a second model call", async () => {
 		const { database, sqlite } = shellDb();
-		const now = new Date("2026-11-13T12:00:00.000Z");
+		const now = new Date();
 		sqlite
 			.prepare(
 				`INSERT INTO queue_job (

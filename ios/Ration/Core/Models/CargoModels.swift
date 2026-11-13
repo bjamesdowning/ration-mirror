@@ -48,6 +48,29 @@ struct CargoItem: Codable, Sendable, Identifiable, Hashable {
         nutrition = CargoItem.decodeNutrition(from: c)
     }
 
+    enum CodingKeys: String, CodingKey {
+        case id, organizationId, name, quantity, unit, baseQuantity, baseUnit
+        case tags, domain, status, expiresAt, createdAt, updatedAt, nutrition
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(organizationId, forKey: .organizationId)
+        try c.encode(name, forKey: .name)
+        try c.encode(quantity, forKey: .quantity)
+        try c.encode(unit, forKey: .unit)
+        try c.encode(baseQuantity, forKey: .baseQuantity)
+        try c.encode(baseUnit, forKey: .baseUnit)
+        try c.encode(tags, forKey: .tags)
+        try c.encode(domain, forKey: .domain)
+        try c.encode(status, forKey: .status)
+        try c.encodeIfPresent(expiresAt, forKey: .expiresAt)
+        try c.encode(createdAt, forKey: .createdAt)
+        try c.encode(updatedAt, forKey: .updatedAt)
+        try c.encodeIfPresent(nutrition, forKey: .nutrition)
+    }
+
     /// Nutrition may be a snapshot object or a double-encoded JSON string.
     /// A bad snapshot must not fail the whole cargo row.
     private static func decodeNutrition(
@@ -273,6 +296,20 @@ struct ConnectedCargoMeal: Codable, Sendable, Identifiable {
         description = try c.decodeIfPresent(String.self, forKey: .description)
         tags = c.decodeTolerantTags(forKey: .tags)
         connectedIngredients = try c.decode([ConnectedCargoIngredient].self, forKey: .connectedIngredients)
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, type, description, tags, connectedIngredients
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(name, forKey: .name)
+        try c.encode(type, forKey: .type)
+        try c.encodeIfPresent(description, forKey: .description)
+        try c.encode(tags, forKey: .tags)
+        try c.encode(connectedIngredients, forKey: .connectedIngredients)
     }
 
     init(

@@ -1,3 +1,4 @@
+import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { McpToolContext } from "~/lib/mcp/auth";
 import { createFoodLogToolDefs } from "~/lib/mcp/tools/food-log";
@@ -7,20 +8,27 @@ import {
 	updateDiaryFood,
 	voidDiaryFood,
 } from "~/lib/nutrition/diary.server";
-import { postFoodBarcode } from "~/lib/nutrition/diary-http.server";
+import { postFoodBarcode, postFuelPhoto } from "~/lib/nutrition/diary-http.server";
+import { assertNutritionPhotoLog } from "~/lib/nutrition/fast-log-flag.server";
 import { isNutritionFuelPageEnabled } from "~/lib/nutrition/fast-log-flag.server";
 import { lookupFoodBarcode } from "~/lib/nutrition/food-barcode.server";
 import { readFuelUsed } from "~/lib/nutrition/fuel-cap.server";
 import { fuelDateForInstant } from "~/lib/nutrition/fuel-date";
 import {
 	FuelDailyLimitError,
+	FuelPhotoTooLargeError,
 	FuelTimezoneRequiredError,
 } from "~/lib/nutrition/fuel-errors";
 import {
+	collapseFuelPhotoLines,
 	confirmFuelPhoto,
+	FUEL_PHOTO_PROMPT,
+	readFuelPhoto,
 	runFuelPhotoConsumerJob,
 	submitFuelPhoto,
 } from "~/lib/nutrition/fuel-photo.server";
+import { FUEL_PHOTO_MAX_BYTES } from "~/lib/schemas/fuel";
+import { InsufficientCreditsError } from "~/lib/ledger.server";
 import type { NutritionPrincipal } from "~/lib/nutrition/service.server";
 import { createSqliteD1 } from "~/test/helpers/sqlite-d1";
 
@@ -655,5 +663,142 @@ describe("fuel photo queue", () => {
 		await runFuelPhotoConsumerJob(env, { requestId }, { analyze, refund, now });
 		expect(analyze).toHaveBeenCalledTimes(1);
 		expect(refund).toHaveBeenCalledTimes(1);
+		await expect(readFuelPhoto(env, "user-1", requestId, now)).resolves.toEqual(
+			expect.objectContaining({ status: "failed", lines: null }),
+		);
+	});
+
+	it("refuses an oversized photo before storing it", async () => {
+		const { db } = await database();
+		const put = vi.fn();
+		const bytes = new Uint8Array(FUEL_PHOTO_MAX_BYTES + 1);
+		await expect(
+			submitFuelPhoto(
+				envFor(db, { STORAGE: { put, delete: vi.fn() } }),
+				owner,
+				{},
+				{
+					operationKey: crypto.randomUUID(),
+					contentType: "image/jpeg",
+					bytes: bytes.buffer,
+					now,
+				},
+			),
+		).rejects.toBeInstanceOf(FuelPhotoTooLargeError);
+		expect(put).not.toHaveBeenCalled();
+	});
+
+	it("refuses the photo when photo log is off", async () => {
+		const { db } = await database();
+		vi.mocked(assertNutritionPhotoLog).mockRejectedValueOnce(
+			Object.assign(new Error("Photo food log is unavailable."), {
+				code: "FEATURE_DISABLED",
+				status: 403,
+			}),
+		);
+		const put = vi.fn();
+		await expect(
+			submitFuelPhoto(
+				envFor(db, { STORAGE: { put, delete: vi.fn() } }),
+				owner,
+				{},
+				{
+					operationKey: crypto.randomUUID(),
+					contentType: "image/jpeg",
+					bytes: new Uint8Array([1, 2, 3]).buffer,
+					now,
+				},
+			),
+		).rejects.toMatchObject({ code: "FEATURE_DISABLED" });
+		expect(put).not.toHaveBeenCalled();
+	});
+
+	it("refuses the photo when the balance is short of 2 credits", async () => {
+		const { db } = await database();
+		const { checkBalance } = await import("~/lib/ledger.server");
+		vi.mocked(checkBalance).mockResolvedValueOnce(1);
+		const put = vi.fn();
+		await expect(
+			submitFuelPhoto(
+				envFor(db, { STORAGE: { put, delete: vi.fn() } }),
+				owner,
+				{},
+				{
+					operationKey: crypto.randomUUID(),
+					contentType: "image/jpeg",
+					bytes: new Uint8Array([1, 2, 3]).buffer,
+					now,
+				},
+			),
+		).rejects.toBeInstanceOf(InsufficientCreditsError);
+		expect(put).not.toHaveBeenCalled();
+	});
+
+	it("returns insufficient credits when the balance is short of 2", async () => {
+		const { db } = await database();
+		const { checkBalance } = await import("~/lib/ledger.server");
+		vi.mocked(checkBalance).mockResolvedValueOnce(0);
+		const request = new Request("https://ration.test/api/nutrition/diary/photo", {
+			method: "POST",
+			headers: { "content-type": "application/json" },
+			body: JSON.stringify({
+				operationKey: crypto.randomUUID(),
+				contentType: "image/jpeg",
+				imageBase64: btoa("abc"),
+			}),
+		});
+		await expect(postFuelPhoto(request, envFor(db), owner, {})).rejects.toMatchObject(
+			{
+				data: { code: "insufficient_credits" },
+				init: { status: 402 },
+			},
+		);
+	});
+
+	it("rejects an envelope over twice the photo limit before decoding", async () => {
+		const { db } = await database();
+		const request = new Request("https://ration.test/api/nutrition/diary/photo", {
+			method: "POST",
+			headers: {
+				"content-length": String(FUEL_PHOTO_MAX_BYTES * 2 + 1),
+				"content-type": "application/json",
+			},
+			body: "{}",
+		});
+		await expect(
+			postFuelPhoto(request, envFor(db), owner, {}),
+		).rejects.toMatchObject({
+			data: { code: "photo_too_large" },
+		});
+	});
+
+	it("keeps one draft line for a plate, ingredients, one item, or a drink", () => {
+		expect(FUEL_PHOTO_PROMPT).toContain("prepared plate");
+		expect(FUEL_PHOTO_PROMPT).toContain("set of ingredients");
+		expect(FUEL_PHOTO_PROMPT).toContain("one ingredient");
+		expect(FUEL_PHOTO_PROMPT).toContain("drink");
+		expect(FUEL_PHOTO_PROMPT).toContain("visible size");
+		expect(FUEL_PHOTO_PROMPT).toContain("not medical advice");
+		expect(
+			collapseFuelPhotoLines([
+				{
+					name: "Stew",
+					amount: 1.5,
+					unit: "bowl",
+					energyKcal: 400,
+					proteinG: 20,
+					carbsG: 30,
+					fatG: 12,
+				},
+			]),
+		).toEqual(
+			expect.objectContaining({
+				name: "Stew",
+				amount: 1.5,
+				unit: "bowl",
+				energyKcal: 400,
+				compositionSource: "ai_estimate",
+			}),
+		);
 	});
 });

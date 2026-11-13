@@ -801,4 +801,109 @@ describe("fuel photo queue", () => {
 			}),
 		);
 	});
+
+	it("approves the edited estimate on the stored fuel date without another debit", async () => {
+		const { db, sqlite } = await database();
+		sqlite.exec(`
+			CREATE TABLE cargo (
+				id text primary key,
+				organization_id text,
+				quantity real
+			);
+			INSERT INTO cargo VALUES ('cargo-1', 'org-1', 4);
+		`);
+		const requestId = crypto.randomUUID();
+		const operationId = crypto.randomUUID();
+		const draftId = crypto.randomUUID();
+		const key = crypto.randomUUID();
+		const expires = Math.floor(now.getTime() / 1000) + 3600;
+		const meta = {
+			cost: 2,
+			imageKey: `fuel-photo/user-1/${requestId}`,
+			mimeType: "image/jpeg",
+			operationId,
+			draftId,
+			readyAt: occurredAt,
+		};
+		const { drizzle } = await import("drizzle-orm/d1");
+		const schema = await import("~/db/schema");
+		const orm = drizzle(db, { schema });
+		await orm.insert(schema.nutritionOperation).values({
+			id: operationId,
+			userId: "user-1",
+			organizationId: "org-1",
+			operationKey: crypto.randomUUID(),
+			requestHash: requestId,
+			operationType: "fuel_photo",
+			status: "completed",
+			itemCount: 1,
+			resultJson: { requestId, fuelDate: "2026-11-10" },
+			createdAt: now,
+		});
+		sqlite.exec(`
+			INSERT INTO queue_job VALUES (
+				'${requestId}', 'fuel_photo', 'org-1', 'user-1', 'completed',
+				'${JSON.stringify(meta).replaceAll("'", "''")}', NULL, NULL, NULL, ${expires}, ${expires}
+			);
+			INSERT INTO nutrition_food_draft VALUES (
+				'${draftId}', 'user-1', 'org-1', 'Kitchen', '${operationId}', 'custom',
+				'${JSON.stringify([{ name: "Soup", energyKcal: 120, proteinG: 4, carbsG: 10, fatG: 6, amount: 250, unit: "g" }]).replaceAll("'", "''")}',
+				2, ${expires}
+			);
+		`);
+		const { deductCredits } = await import("~/lib/ledger.server");
+		const saved = await confirmFuelPhoto(
+			envFor(db),
+			owner,
+			{},
+			requestId,
+			{
+				name: "Soup",
+				occurredAt,
+				amount: 250,
+				unit: "g",
+				macros: { energyKcal: 120, proteinG: 4, carbsG: 10, fatG: 6 },
+				idempotencyKey: key,
+				operationKey: key,
+				compositionSource: "ai_estimate",
+				fuelTimeZone: "Europe/Dublin",
+				now,
+			},
+		);
+		const row = await db
+			.prepare(
+				`SELECT meal_name_snapshot AS name, logged_amount AS amount, logged_unit AS unit,
+				 composition_source AS compositionSource, fuel_date AS fuelDate,
+				 energy_kcal AS energyKcal, protein_g AS proteinG, carbs_g AS carbsG, fat_g AS fatG
+				 FROM nutrition_intake WHERE id = ?`,
+			)
+			.bind(saved.intakeId)
+			.first<{
+				name: string;
+				amount: number;
+				unit: string;
+				compositionSource: string;
+				fuelDate: string;
+				energyKcal: number;
+				proteinG: number;
+				carbsG: number;
+				fatG: number;
+			}>();
+		expect(row).toEqual({
+			name: "Soup",
+			amount: 250,
+			unit: "g",
+			compositionSource: "ai_estimate",
+			fuelDate: "2026-11-10",
+			energyKcal: 120,
+			proteinG: 4,
+			carbsG: 10,
+			fatG: 6,
+		});
+		const cargo = await db
+			.prepare("SELECT quantity FROM cargo WHERE id = 'cargo-1'")
+			.first<{ quantity: number }>();
+		expect(cargo?.quantity).toBe(4);
+		expect(deductCredits).not.toHaveBeenCalled();
+	});
 });

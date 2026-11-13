@@ -186,6 +186,10 @@ extension KeyedDecodingContainer {
             formatter.formatOptions = [.withInternetDateTime]
             if let d = formatter.date(from: s) { return d }
         }
+        if let n = try? decode(Double.self, forKey: key), n.isFinite {
+            let seconds = abs(n) > 10_000_000_000 ? n / 1000 : n
+            return Date(timeIntervalSince1970: seconds)
+        }
         throw DecodingError.dataCorruptedError(
             forKey: key,
             in: self,

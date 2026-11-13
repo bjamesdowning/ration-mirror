@@ -33,19 +33,38 @@ struct CargoItem: Codable, Sendable, Identifiable, Hashable {
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decode(String.self, forKey: .id)
-        organizationId = try c.decode(String.self, forKey: .organizationId)
+        organizationId = try c.decodeIfPresent(String.self, forKey: .organizationId) ?? ""
         name = try c.decode(String.self, forKey: .name)
-        quantity = try c.decode(Double.self, forKey: .quantity)
+        quantity = try c.decodeTolerantDouble(forKey: .quantity)
         unit = try c.decode(String.self, forKey: .unit)
-        baseQuantity = try c.decodeIfPresent(Double.self, forKey: .baseQuantity) ?? quantity
+        baseQuantity = try c.decodeTolerantOptionalDouble(forKey: .baseQuantity) ?? quantity
         baseUnit = try c.decodeIfPresent(String.self, forKey: .baseUnit) ?? unit
         tags = c.decodeTolerantTags(forKey: .tags)
         domain = try c.decode(String.self, forKey: .domain)
-        status = try c.decode(String.self, forKey: .status)
-        expiresAt = try c.decodeIfPresent(Date.self, forKey: .expiresAt)
-        createdAt = try c.decode(Date.self, forKey: .createdAt)
-        updatedAt = try c.decode(Date.self, forKey: .updatedAt)
-        nutrition = try c.decodeIfPresent(NutritionSnapshot.self, forKey: .nutrition)
+        status = try c.decodeIfPresent(String.self, forKey: .status) ?? "stable"
+        expiresAt = try c.decodeTolerantOptionalDate(forKey: .expiresAt)
+        updatedAt = try c.decodeTolerantDate(forKey: .updatedAt)
+        createdAt = (try? c.decodeTolerantDate(forKey: .createdAt)) ?? updatedAt
+        nutrition = CargoItem.decodeNutrition(from: c)
+    }
+
+    /// Nutrition may be a snapshot object or a double-encoded JSON string.
+    /// A bad snapshot must not fail the whole cargo row.
+    private static func decodeNutrition(
+        from container: KeyedDecodingContainer<CodingKeys>
+    ) -> NutritionSnapshot? {
+        guard container.contains(.nutrition),
+              (try? container.decodeNil(forKey: .nutrition)) != true else {
+            return nil
+        }
+        if let snapshot = try? container.decode(NutritionSnapshot.self, forKey: .nutrition) {
+            return snapshot
+        }
+        guard let raw = try? container.decode(String.self, forKey: .nutrition),
+              let data = raw.data(using: .utf8) else {
+            return nil
+        }
+        return try? JSON.decoder.decode(NutritionSnapshot.self, from: data)
     }
 
     /// Optimistic Mark Empty — clears authored and base quantity, keeps the row.

@@ -358,15 +358,15 @@ struct NutrientValues: Codable, Sendable, Equatable, Hashable {
     /// Cargo override Zod requires all macro numbers and explicit null micros.
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        energyKcal = try c.decodeIfPresent(Double.self, forKey: .energyKcal)
-        proteinG = try c.decodeIfPresent(Double.self, forKey: .proteinG)
-        fatG = try c.decodeIfPresent(Double.self, forKey: .fatG)
-        carbG = try c.decodeIfPresent(Double.self, forKey: .carbG)
-        fiberG = try c.decodeIfPresent(Double.self, forKey: .fiberG)
-        sugarG = try c.decodeIfPresent(Double.self, forKey: .sugarG)
-        satFatG = try c.decodeIfPresent(Double.self, forKey: .satFatG)
-        sodiumMg = try c.decodeIfPresent(Double.self, forKey: .sodiumMg)
-        saltG = try c.decodeIfPresent(Double.self, forKey: .saltG)
+        energyKcal = try c.decodeTolerantOptionalDouble(forKey: .energyKcal)
+        proteinG = try c.decodeTolerantOptionalDouble(forKey: .proteinG)
+        fatG = try c.decodeTolerantOptionalDouble(forKey: .fatG)
+        carbG = try c.decodeTolerantOptionalDouble(forKey: .carbG)
+        fiberG = try c.decodeTolerantOptionalDouble(forKey: .fiberG)
+        sugarG = try c.decodeTolerantOptionalDouble(forKey: .sugarG)
+        satFatG = try c.decodeTolerantOptionalDouble(forKey: .satFatG)
+        sodiumMg = try c.decodeTolerantOptionalDouble(forKey: .sodiumMg)
+        saltG = try c.decodeTolerantOptionalDouble(forKey: .saltG)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -502,11 +502,17 @@ struct NutritionSnapshot: Codable, Sendable, Equatable, Hashable {
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         source = try c.decodeIfPresent(String.self, forKey: .source)
-        confidence = try c.decodeIfPresent(Double.self, forKey: .confidence)
-        verified = try c.decodeIfPresent(Bool.self, forKey: .verified)
+        confidence = try c.decodeTolerantOptionalDouble(forKey: .confidence)
+        if let flag = try? c.decode(Bool.self, forKey: .verified) {
+            verified = flag
+        } else if let n = try? c.decode(Int.self, forKey: .verified) {
+            verified = n != 0
+        } else {
+            verified = nil
+        }
         per100g = try c.decodeIfPresent(NutrientValues.self, forKey: .per100g)
         perServing = try c.decodeIfPresent(NutrientValues.self, forKey: .perServing)
-        fdcId = try c.decodeIfPresent(Int.self, forKey: .fdcId)
+        fdcId = try? c.decodeTolerantOptionalInt(forKey: .fdcId)
         description = try c.decodeIfPresent(String.self, forKey: .description)
     }
 

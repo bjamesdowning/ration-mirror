@@ -95,19 +95,28 @@ describe("GET /api/mobile/v1/cargo", () => {
 		expect(attachTagsToCargo).toHaveBeenCalledWith({}, [
 			{ id: "cargo_1", name: "Milk" },
 		]);
-		expect(result.items).toEqual([
+		const listed = result.items[0] as {
+			id: string;
+			name: string;
+			organizationId: string;
+			status: string;
+			createdAt: string;
+			nutrition: unknown;
+			tags: { slug: string; color: string | null }[];
+		};
+		expect(listed.id).toBe("cargo_1");
+		expect(listed.name).toBe("Milk");
+		expect(listed.organizationId).toBe("org_1");
+		expect(listed.status).toBe("stable");
+		expect(listed.nutrition).toBeNull();
+		expect(typeof listed.createdAt).toBe("string");
+		expect(listed.tags).toEqual([
 			{
-				id: "cargo_1",
-				name: "Milk",
-				tags: [
-					{
-						id: "tag_pink",
-						slug: "dairy",
-						name: "Dairy",
-						color: "#EC4899",
-						category: null,
-					},
-				],
+				id: "tag_pink",
+				slug: "dairy",
+				name: "Dairy",
+				color: "#EC4899",
+				category: null,
 			},
 		]);
 		expect(result.total).toBe(1);
@@ -202,5 +211,103 @@ describe("POST /api/mobile/v1/cargo", () => {
 				}),
 			}),
 		);
+	});
+
+	it("returns an iOS cargo item when a tagged override merges into an index row", async () => {
+		const updatedAt = new Date("2026-11-13T12:00:00.000Z");
+		addOrMergeItem.mockResolvedValue({
+			status: "merged",
+			item: {
+				id: "cargo_existing",
+				name: "yogurt",
+				domain: "food",
+				quantity: 2,
+				unit: "unit",
+				expiresAt: null,
+				updatedAt,
+				nutrition: JSON.stringify({
+					source: "user_override",
+					confidence: 1,
+					verified: true,
+					per100g: null,
+					perServing: {
+						energyKcal: 10,
+						proteinG: 200,
+						fatG: 200,
+						carbG: 200,
+						fiberG: null,
+						sugarG: null,
+						satFatG: null,
+						sodiumMg: null,
+						saltG: null,
+					},
+					fdcId: null,
+					description: null,
+				}),
+			},
+		});
+		attachTagsToCargo.mockImplementation(
+			async (_db: unknown, rows: unknown[]) =>
+				(rows as Array<Record<string, unknown>>).map((row) => ({
+					...row,
+					tags: [
+						{
+							id: "tag_1",
+							slug: "test",
+							name: "Test",
+							color: null,
+							category: null,
+						},
+					],
+				})),
+		);
+
+		const { action } = await import("~/routes/api/mobile/v1.cargo");
+		const result = (await action({
+			request: new Request("https://ration.mayutic.com/api/mobile/v1/cargo", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					name: "yogurt",
+					quantity: 1,
+					unit: "unit",
+					domain: "food",
+					tags: ["Test"],
+				}),
+			}),
+			context: {
+				cloudflare: {
+					env: {
+						DB: {},
+						RATION_KV: {},
+						FLAGSHIP_ENV: "dev",
+						CLOUDFLARE_ENV: "dev",
+					},
+					ctx: { waitUntil: vi.fn() },
+				},
+			} as never,
+			params: {},
+		} as never)) as {
+			item: {
+				organizationId: string;
+				status: string;
+				createdAt: string;
+				tags: { slug: string }[];
+				nutrition: {
+					source: string;
+					fdcId: number | null;
+					perServing: { energyKcal: number; proteinG: number };
+				};
+			};
+		};
+
+		expect(result.item.organizationId).toBe("org_1");
+		expect(result.item.status).toBe("stable");
+		expect(result.item.createdAt).toBe("2026-11-13T12:00:00.000Z");
+		expect(result.item.tags.map((tag) => tag.slug)).toEqual(["test"]);
+		expect(result.item.nutrition.source).toBe("user_override");
+		expect(result.item.nutrition.fdcId).toBeNull();
+		expect(result.item.nutrition.perServing.energyKcal).toBe(10);
+		expect(result.item.nutrition.perServing.proteinG).toBe(200);
 	});
 });

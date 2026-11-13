@@ -211,4 +211,104 @@ final class BaseLayerTests: XCTestCase {
         let url = URL(string: "evil://auth/callback?code=nope")!
         XCTAssertNil(RationApp.authCode(from: url))
     }
+
+    func testCreateResponseDecodesTaggedNutritionOverride() throws {
+        let data = """
+        {
+          "item": {
+            "id": "cargo_1",
+            "organizationId": "org_1",
+            "name": "yogurt",
+            "quantity": 1,
+            "unit": "unit",
+            "baseQuantity": 1,
+            "baseUnit": "unit",
+            "tags": [{ "id": "tag_1", "slug": "test", "name": "Test", "color": null, "category": null }],
+            "domain": "food",
+            "status": "stable",
+            "expiresAt": null,
+            "createdAt": "2026-11-13T12:00:00.000Z",
+            "updatedAt": "2026-11-13T12:00:00.000Z",
+            "nutrition": {
+              "source": "user_override",
+              "confidence": 1,
+              "verified": true,
+              "per100g": null,
+              "perServing": {
+                "energyKcal": 10,
+                "proteinG": 200,
+                "fatG": 200,
+                "carbG": 200,
+                "fiberG": null,
+                "sugarG": null,
+                "satFatG": null,
+                "sodiumMg": null,
+                "saltG": null
+              },
+              "fdcId": null,
+              "description": null
+            }
+          }
+        }
+        """.data(using: .utf8)!
+        let response = try JSON.decoder.decode(CreateCargoResponse.self, from: data)
+        XCTAssertEqual(response.item.tagSlugs, ["test"])
+        XCTAssertEqual(response.item.nutrition?.source, "user_override")
+        XCTAssertEqual(response.item.nutrition?.perServing?.energyKcal, 10)
+        XCTAssertEqual(response.item.nutrition?.perServing?.proteinG, 200)
+        XCTAssertEqual(response.item.nutrition?.perServing?.carbG, 200)
+        XCTAssertEqual(response.item.nutrition?.perServing?.fatG, 200)
+        XCTAssertNil(response.item.nutrition?.fdcId)
+    }
+
+    func testCreateResponseDecodesPlainItemWithoutTagOrOverride() throws {
+        let data = """
+        {
+          "item": {
+            "id": "cargo_plain",
+            "organizationId": "org_1",
+            "name": "salt",
+            "quantity": 1,
+            "unit": "unit",
+            "tags": [],
+            "domain": "food",
+            "status": "stable",
+            "expiresAt": null,
+            "createdAt": "2026-11-13T12:00:00.000Z",
+            "updatedAt": "2026-11-13T12:00:00.000Z",
+            "nutrition": null
+          }
+        }
+        """.data(using: .utf8)!
+        let response = try JSON.decoder.decode(CreateCargoResponse.self, from: data)
+        XCTAssertEqual(response.item.name, "salt")
+        XCTAssertEqual(response.item.tagSlugs, [])
+        XCTAssertNil(response.item.nutrition)
+    }
+
+    func testCreateResponseDecodesMergeRowAndStringNutrition() throws {
+        let data = """
+        {
+          "item": {
+            "id": "cargo_existing",
+            "name": "yogurt",
+            "quantity": 2,
+            "unit": "unit",
+            "domain": "food",
+            "tags": [{ "id": "tag_1", "slug": "test", "name": "Test", "color": null, "category": null }],
+            "expiresAt": null,
+            "updatedAt": "2026-11-13T12:00:00.000Z",
+            "nutrition": "{\\"source\\":\\"user_override\\",\\"confidence\\":1,\\"verified\\":1,\\"per100g\\":null,\\"perServing\\":{\\"energyKcal\\":10,\\"proteinG\\":200,\\"fatG\\":200,\\"carbG\\":200},\\"fdcId\\":\\"167512\\",\\"description\\":null}"
+          }
+        }
+        """.data(using: .utf8)!
+        let response = try JSON.decoder.decode(CreateCargoResponse.self, from: data)
+        XCTAssertEqual(response.item.organizationId, "")
+        XCTAssertEqual(response.item.status, "stable")
+        XCTAssertEqual(response.item.tagSlugs, ["test"])
+        XCTAssertEqual(response.item.nutrition?.source, "user_override")
+        XCTAssertEqual(response.item.nutrition?.perServing?.proteinG, 200)
+        XCTAssertEqual(response.item.nutrition?.fdcId, 167512)
+        XCTAssertEqual(response.item.nutrition?.verified, true)
+    }
 }

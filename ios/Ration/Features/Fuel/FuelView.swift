@@ -653,6 +653,10 @@ struct FuelView: View {
             } catch {
                 await MainActor.run { handlePhoto(error) }
             }
+        }
+    }
+
+    private func poll(_ requestId: String) async throws -> FuelPhotoStatusResponse {
         var last = FuelPhotoStatusResponse(requestId: requestId, status: "queued", lines: nil)
         for attempt in 1...40 {
             try Task.checkCancellation()

@@ -44,6 +44,7 @@ enum FuelActionDecision: Equatable {
     case openBarcodeCamera
     case openTypedBarcode
     case cameraOff
+    case photoLogOff
     case openPurchase
     case disabledOffline
 }
@@ -57,9 +58,11 @@ enum FuelActionPolicy {
         used: Int,
         limit: Int?,
         isOnline: Bool,
-        cameraDenied: Bool
+        cameraDenied: Bool,
+        photoLogEnabled: Bool = true
     ) -> FuelActionDecision {
         if !isOnline { return .disabledOffline }
+        if action == .scan, !photoLogEnabled { return .photoLogOff }
         if let limit, used >= limit { return .openPurchase }
         switch action {
         case .add:
@@ -114,6 +117,39 @@ enum FuelVoidResolution {
             return .paywall
         }
         return .keep(message: api.errorDescription ?? "Something went wrong. Please try again.")
+    }
+}
+
+/// Photo failures stay specific. The free-day cap is still Crew. A short balance is credits.
+enum FuelPhotoFailure: Equatable {
+    case crew
+    case credits
+    case message(String)
+}
+
+enum FuelPhotoFailureMapping {
+    static func decide(_ error: Error) -> FuelPhotoFailure {
+        guard let api = error as? APIError else {
+            let text = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            return .message(text)
+        }
+        if api.code == "fuel_daily_limit" { return .crew }
+        if api.statusCode == 402 || api.code == "insufficient_credits" { return .credits }
+        if api.code == "photo_too_large" {
+            return .message(api.errorDescription ?? "Photo must be 3 MiB or smaller.")
+        }
+        if api.code == "FEATURE_DISABLED" {
+            return .message("Photo food log is unavailable.")
+        }
+        if api.code == "consent_required"
+            || api.code == "ai_consent_required"
+            || api.code == "nutrition_consent_required" {
+            return .message(api.errorDescription ?? "Photo log needs consent.")
+        }
+        if api.statusCode == 429 {
+            return .message(api.errorDescription ?? "Too many requests. Please try again later.")
+        }
+        return .message(api.errorDescription ?? "That photo was not queued.")
     }
 }
 

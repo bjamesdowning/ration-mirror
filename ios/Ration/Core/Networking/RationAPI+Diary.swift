@@ -289,9 +289,13 @@ extension RationAPI {
     }
 
     func confirmFuelPhoto(requestId: String, body: DiaryFoodBody) async throws -> DiaryWriteResponse {
-        try requireDiaryWrite(
-            try await client.post("nutrition/diary/photo/\(requestId)/confirm", body: body)
-        )
+        var stamped = body
+        stamped.fuelTimeZone = stamped.fuelTimeZone ?? FuelDeviceZone.candidate
+        return try await retryingFuelZone {
+            try requireDiaryWrite(
+                try await client.post("nutrition/diary/photo/\(requestId)/confirm", body: stamped)
+            )
+        }
     }
 
     func proposeFoodLog(
@@ -484,6 +488,8 @@ struct FuelPhotoQueuedResponse: Decodable, Sendable {
 struct FuelPhotoStatusResponse: Decodable, Sendable {
     struct Line: Decodable, Sendable {
         let name: String?
+        let amount: Double?
+        let unit: String?
         let energyKcal: Double?
         let proteinG: Double?
         let carbsG: Double?

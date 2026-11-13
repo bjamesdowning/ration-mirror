@@ -13,6 +13,107 @@ export type FuelPhotoPollLine = {
 	fatG?: number;
 };
 
+export type FuelPhotoReviewDraft = {
+	name: string;
+	amount: string;
+	unit: string;
+	energy: string;
+	protein: string;
+	carbs: string;
+	fat: string;
+};
+
+export type FuelPhotoApproveBody = {
+	name: string;
+	occurredAt: string;
+	amount: number;
+	unit: string;
+	macros: {
+		energyKcal: number;
+		proteinG: number;
+		carbsG: number;
+		fatG: number;
+	};
+	idempotencyKey: string;
+	operationKey: string;
+	compositionSource: "ai_estimate";
+};
+
+function sumLine(
+	lines: FuelPhotoPollLine[],
+	pick: (line: FuelPhotoPollLine) => number | undefined,
+): number {
+	return lines.reduce((total, line) => total + Number(pick(line) ?? 0), 0);
+}
+
+function nonnegative(value: string): number | null {
+	const trimmed = value.trim();
+	if (trimmed.length === 0) return null;
+	const parsed = Number(trimmed);
+	if (!Number.isFinite(parsed) || parsed < 0) return null;
+	return parsed;
+}
+
+/** One review row from the draft lines. Amount and unit come from the first line. */
+export function fuelPhotoReviewFromLines(
+	lines: FuelPhotoPollLine[],
+): FuelPhotoReviewDraft {
+	const first = lines[0];
+	const amount = first?.amount;
+	const unit = first?.unit?.trim();
+	return {
+		name: lines.map((line) => line.name?.trim() || "Food").join(", "),
+		amount:
+			amount != null && Number.isFinite(amount) && amount > 0
+				? String(amount)
+				: "1",
+		unit: unit ? unit : "serving",
+		energy: String(sumLine(lines, (line) => line.energyKcal)),
+		protein: String(sumLine(lines, (line) => line.proteinG)),
+		carbs: String(sumLine(lines, (line) => line.carbsG)),
+		fat: String(sumLine(lines, (line) => line.fatG)),
+	};
+}
+
+/**
+ * Approve body for the edited estimate. Amount and unit are the review values,
+ * not a forced 1 serving. The caller stamps `fuelTimeZone`.
+ */
+export function fuelPhotoApproveBody(
+	review: FuelPhotoReviewDraft,
+	keys: { idempotencyKey: string; operationKey: string; occurredAt: string },
+): FuelPhotoApproveBody | null {
+	const name = review.name.trim();
+	const unit = review.unit.trim();
+	const amount = Number(review.amount);
+	const energyKcal = nonnegative(review.energy);
+	const proteinG = nonnegative(review.protein);
+	const carbsG = nonnegative(review.carbs);
+	const fatG = nonnegative(review.fat);
+	if (
+		name.length === 0 ||
+		unit.length === 0 ||
+		!Number.isFinite(amount) ||
+		amount <= 0 ||
+		energyKcal == null ||
+		proteinG == null ||
+		carbsG == null ||
+		fatG == null
+	) {
+		return null;
+	}
+	return {
+		name,
+		occurredAt: keys.occurredAt,
+		amount,
+		unit,
+		macros: { energyKcal, proteinG, carbsG, fatG },
+		idempotencyKey: keys.idempotencyKey,
+		operationKey: keys.operationKey,
+		compositionSource: "ai_estimate",
+	};
+}
+
 export type FuelPhotoPollResult = {
 	requestId: string;
 	status: string;
@@ -49,7 +150,8 @@ export function fuelPhotoClientFailure(
 ): FuelPhotoClientFailure {
 	const code = body?.code ?? "";
 	if (code === "fuel_daily_limit") return { kind: "crew" };
-	if (status === 402 || code === "insufficient_credits") return { kind: "credits" };
+	if (status === 402 || code === "insufficient_credits")
+		return { kind: "credits" };
 	if (code === "photo_too_large") {
 		return {
 			kind: "message",
@@ -136,7 +238,10 @@ export async function pollFuelPhoto(
 				body && "code" in body && typeof body.code === "string"
 					? body.code
 					: undefined;
-			if (response.status === 404 || (response.status >= 400 && response.status < 500)) {
+			if (
+				response.status === 404 ||
+				(response.status >= 400 && response.status < 500)
+			) {
 				return {
 					requestId,
 					status: "failed",

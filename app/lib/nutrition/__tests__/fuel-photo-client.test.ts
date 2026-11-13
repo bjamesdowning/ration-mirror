@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+	fuelPhotoApproveBody,
 	fuelPhotoClientFailure,
 	fuelPhotoPixelSize,
+	fuelPhotoReviewFromLines,
 } from "~/lib/nutrition/fuel-photo-client";
 
 describe("fuel photo client", () => {
@@ -50,5 +52,56 @@ describe("fuel photo client", () => {
 		expect(fuelPhotoClientFailure(403, { code: "fuel_daily_limit" })).toEqual({
 			kind: "crew",
 		});
+	});
+
+	it("approves the edited name, amount, unit, and four macros", () => {
+		const review = fuelPhotoReviewFromLines([
+			{
+				name: "Soup",
+				amount: 250,
+				unit: "g",
+				energyKcal: 120,
+				proteinG: 4,
+				carbsG: 10,
+				fatG: 6,
+			},
+		]);
+		review.name = "Tomato soup";
+		review.amount = "300";
+		review.unit = "ml";
+		review.energy = "140";
+		review.protein = "5";
+		review.carbs = "12";
+		review.fat = "7";
+		expect(
+			fuelPhotoApproveBody(review, {
+				idempotencyKey: "key",
+				operationKey: "key",
+				occurredAt: "2026-11-10T12:00:00.000Z",
+			}),
+		).toEqual({
+			name: "Tomato soup",
+			occurredAt: "2026-11-10T12:00:00.000Z",
+			amount: 300,
+			unit: "ml",
+			macros: { energyKcal: 140, proteinG: 5, carbsG: 12, fatG: 7 },
+			idempotencyKey: "key",
+			operationKey: "key",
+			compositionSource: "ai_estimate",
+		});
+	});
+
+	it("does not approve a blank name, a non-positive amount, or a missing macro", () => {
+		const review = fuelPhotoReviewFromLines([
+			{ name: "Soup", amount: 1, unit: "serving", energyKcal: 10 },
+		]);
+		const keys = {
+			idempotencyKey: "key",
+			operationKey: "key",
+			occurredAt: "2026-11-10T12:00:00.000Z",
+		};
+		expect(fuelPhotoApproveBody({ ...review, name: "  " }, keys)).toBeNull();
+		expect(fuelPhotoApproveBody({ ...review, amount: "0" }, keys)).toBeNull();
+		expect(fuelPhotoApproveBody({ ...review, fat: "" }, keys)).toBeNull();
 	});
 });

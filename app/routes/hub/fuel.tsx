@@ -15,7 +15,12 @@ import {
 	isNutritionFastLogEnabled,
 	isNutritionFuelPageEnabled,
 } from "~/lib/nutrition/fast-log-flag.server";
-import { pollFuelPhoto } from "~/lib/nutrition/fuel-photo-client";
+import {
+	type FuelPhotoReviewDraft,
+	fuelPhotoApproveBody,
+	fuelPhotoReviewFromLines,
+	pollFuelPhoto,
+} from "~/lib/nutrition/fuel-photo-client";
 import { loadFuelDay } from "~/lib/nutrition/fuel-read.server";
 import {
 	deviceFuelTimeZone,
@@ -561,14 +566,9 @@ function ScanToFuel({
 	onError: (message: string) => void;
 	pollAbort: { current: AbortController | null };
 }) {
-	const [review, setReview] = useState<{
-		requestId: string;
-		name: string;
-		energy: number;
-		protein: number;
-		carbs: number;
-		fat: number;
-	} | null>(null);
+	const [review, setReview] = useState<
+		(FuelPhotoReviewDraft & { requestId: string }) | null
+	>(null);
 	const [busy, setBusy] = useState(false);
 
 	async function upload(file: File) {
@@ -632,20 +632,9 @@ function ScanToFuel({
 				onError(`Photo status: ${polled.status}.`);
 				return;
 			}
-			const lines = polled.lines;
 			setReview({
 				requestId: body.requestId,
-				name: lines.map((line) => line.name || "Food").join(", "),
-				energy: lines.reduce(
-					(sum, line) => sum + Number(line.energyKcal ?? 0),
-					0,
-				),
-				protein: lines.reduce(
-					(sum, line) => sum + Number(line.proteinG ?? 0),
-					0,
-				),
-				carbs: lines.reduce((sum, line) => sum + Number(line.carbsG ?? 0), 0),
-				fat: lines.reduce((sum, line) => sum + Number(line.fatG ?? 0), 0),
+				...fuelPhotoReviewFromLines(polled.lines),
 			});
 		} catch (error) {
 			if (error instanceof DOMException && error.name === "AbortError") return;
@@ -657,30 +646,29 @@ function ScanToFuel({
 
 	async function confirm() {
 		if (!review) return;
+		if (!deviceFuelTimeZone()) {
+			onError(FUEL_ZONE_UNUSABLE);
+			return;
+		}
+		const key = crypto.randomUUID();
+		const payload = fuelPhotoApproveBody(review, {
+			idempotencyKey: key,
+			operationKey: key,
+			occurredAt: new Date().toISOString(),
+		});
+		if (!payload) {
+			onError("Add a name, amount, and unit.");
+			return;
+		}
 		setBusy(true);
-		const response = await fetch(
-			`/api/nutrition/diary/photo/${review.requestId}/confirm`,
-			{
+		const send = () =>
+			fetch(`/api/nutrition/diary/photo/${review.requestId}/confirm`, {
 				method: "POST",
 				credentials: "same-origin",
 				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({
-					name: review.name,
-					occurredAt: new Date().toISOString(),
-					amount: 1,
-					unit: "serving",
-					macros: {
-						energyKcal: review.energy,
-						proteinG: review.protein,
-						carbsG: review.carbs,
-						fatG: review.fat,
-					},
-					idempotencyKey: crypto.randomUUID(),
-					operationKey: crypto.randomUUID(),
-					compositionSource: "ai_estimate",
-				}),
-			},
-		);
+				body: JSON.stringify(withDeviceFuelZone(payload)),
+			});
+		const response = await retryFuelZoneOnce(await send(), send);
 		const body = (await response.json().catch(() => null)) as {
 			code?: string;
 		} | null;
@@ -724,13 +712,94 @@ function ScanToFuel({
 						void confirm();
 					}}
 				>
-					<p className="text-sm">{review.name}</p>
-					<p className="text-sm">{Math.round(review.energy)} kcal</p>
+					<p className="text-sm">Estimate</p>
+					<label className="block text-sm">
+						Name
+						<input
+							value={review.name}
+							aria-label="Name"
+							className="mt-1 block min-h-11 w-full"
+							onChange={(event) =>
+								setReview({ ...review, name: event.target.value })
+							}
+						/>
+					</label>
+					<label className="block text-sm">
+						Amount
+						<input
+							value={review.amount}
+							inputMode="decimal"
+							aria-label="Amount"
+							className="mt-1 block min-h-11 w-full"
+							onChange={(event) =>
+								setReview({ ...review, amount: event.target.value })
+							}
+						/>
+					</label>
+					<label className="block text-sm">
+						Unit
+						<input
+							value={review.unit}
+							aria-label="Unit"
+							className="mt-1 block min-h-11 w-full"
+							onChange={(event) =>
+								setReview({ ...review, unit: event.target.value })
+							}
+						/>
+					</label>
+					<label className="block text-sm">
+						Calories
+						<input
+							value={review.energy}
+							inputMode="decimal"
+							aria-label="Calories"
+							className="mt-1 block min-h-11 w-full"
+							onChange={(event) =>
+								setReview({ ...review, energy: event.target.value })
+							}
+						/>
+					</label>
+					<label className="block text-sm">
+						Protein
+						<input
+							value={review.protein}
+							inputMode="decimal"
+							aria-label="Protein"
+							className="mt-1 block min-h-11 w-full"
+							onChange={(event) =>
+								setReview({ ...review, protein: event.target.value })
+							}
+						/>
+					</label>
+					<label className="block text-sm">
+						Carbs
+						<input
+							value={review.carbs}
+							inputMode="decimal"
+							aria-label="Carbs"
+							className="mt-1 block min-h-11 w-full"
+							onChange={(event) =>
+								setReview({ ...review, carbs: event.target.value })
+							}
+						/>
+					</label>
+					<label className="block text-sm">
+						Fat
+						<input
+							value={review.fat}
+							inputMode="decimal"
+							aria-label="Fat"
+							className="mt-1 block min-h-11 w-full"
+							onChange={(event) =>
+								setReview({ ...review, fat: event.target.value })
+							}
+						/>
+					</label>
 					<button
 						type="submit"
 						className="min-h-11 rounded-xl bg-carbon px-4 text-ceramic"
 					>
-						Confirm meal
+						Approve
 					</button>
 				</form>
 			) : null}

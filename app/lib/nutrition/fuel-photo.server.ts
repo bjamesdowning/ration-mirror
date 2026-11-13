@@ -42,6 +42,59 @@ import type {
 const FUEL_PHOTO_REASON = "Fuel photo";
 const JOB_TTL_MS = 60 * 60 * 1000;
 
+/** One photo, one draft line. The portion is what the photo shows. */
+export const FUEL_PHOTO_PROMPT =
+	'Look at this photo and log one food. It may be a prepared plate, a set of ingredients, one ingredient, or a drink, and a beer counts. Estimate one portion from the visible size. Return ONLY JSON {"lines":[{"name":"","amount":1,"unit":"serving","energyKcal":0,"proteinG":0,"carbsG":0,"fatG":0,"fiberG":null}]}. One line. The numbers are an estimate, not medical advice. Do not include an email address.';
+
+function finiteNumber(value: unknown, fallback: number): number {
+	const number = Number(value);
+	return Number.isFinite(number) ? number : fallback;
+}
+
+/** Several model lines still become one draft. Approve writes that one intake. */
+export function collapseFuelPhotoLines(
+	lines: Array<Record<string, unknown>>,
+): FoodLogLine {
+	const named = lines.filter(
+		(line) => String(line.name ?? "").trim().length > 0,
+	);
+	const source = named.length > 0 ? named : lines;
+	if (source.length === 0) throw new Error("fuel_photo_model");
+	const first = source[0];
+	const amount = finiteNumber(first?.amount, 1);
+	const unit = String(first?.unit ?? "serving").trim() || "serving";
+	const fiberValues = source.map((line) =>
+		line.fiberG == null ? null : finiteNumber(line.fiberG, Number.NaN),
+	);
+	const fiberKnown = fiberValues.filter(
+		(value): value is number => value != null && Number.isFinite(value),
+	);
+	return {
+		name: source
+			.map((line) => String(line.name ?? "Food").trim() || "Food")
+			.join(", "),
+		energyKcal: source.reduce(
+			(sum, line) => sum + finiteNumber(line.energyKcal, 0),
+			0,
+		),
+		proteinG: source.reduce(
+			(sum, line) => sum + finiteNumber(line.proteinG, 0),
+			0,
+		),
+		carbsG: source.reduce((sum, line) => sum + finiteNumber(line.carbsG, 0), 0),
+		fatG: source.reduce((sum, line) => sum + finiteNumber(line.fatG, 0), 0),
+		fiberG:
+			fiberKnown.length === 0
+				? null
+				: fiberKnown.reduce((sum, value) => sum + value, 0),
+		amount: amount > 0 ? amount : 1,
+		unit,
+		barcode: null,
+		fdcId: null,
+		compositionSource: "ai_estimate",
+	};
+}
+
 type JobStatus = "pending" | "processing" | "completed" | "failed";
 
 type JobRow = {
@@ -149,9 +202,7 @@ export async function analyzeFuelPhoto(
 	const result = await callGeminiWithArtifact(env, requestId, {
 		feature: "import_photo",
 		parts: [
-			{
-				text: 'Identify each food in this photo. Return ONLY JSON {"lines":[{"name":"","energyKcal":0,"proteinG":0,"carbsG":0,"fatG":0,"fiberG":null}]}. Estimates are unverified. Do not include an email address.',
-			},
+			{ text: FUEL_PHOTO_PROMPT },
 			{ inlineData: { mimeType, data: bytesToBase64(bytes) } },
 		],
 		metadata: {
@@ -163,24 +214,7 @@ export async function analyzeFuelPhoto(
 	const parsed = parseAiNutritionJson(result.text) as {
 		lines?: Array<Record<string, unknown>>;
 	} | null;
-	const lines = parsed?.lines ?? [];
-	if (lines.length === 0) throw new Error("fuel_photo_model");
-	return lines.map((line) => ({
-		name: String(line.name ?? "Food"),
-		energyKcal: Number(line.energyKcal ?? 0),
-		proteinG: Number(line.proteinG ?? 0),
-		carbsG: Number(line.carbsG ?? 0),
-		fatG: Number(line.fatG ?? 0),
-		fiberG:
-			line.fiberG == null || !Number.isFinite(Number(line.fiberG))
-				? null
-				: Number(line.fiberG),
-		amount: 1,
-		unit: "serving",
-		barcode: null,
-		fdcId: null,
-		compositionSource: "ai_estimate",
-	}));
+	return [collapseFuelPhotoLines(parsed?.lines ?? [])];
 }
 
 /** One confirm writes one intake, however many foods the draft lists. */
@@ -207,6 +241,11 @@ async function refundFuelJob(
 		writeStatus: async () =>
 			updateQueueJobResult(env.DB, job.requestId, "failed", {
 				cost: stored?.cost ?? meta.cost,
+				imageKey: stored?.imageKey ?? meta.imageKey,
+				mimeType: stored?.mimeType ?? meta.mimeType,
+				operationId: stored?.operationId ?? meta.operationId,
+				...(stored?.draftId ? { draftId: stored.draftId } : {}),
+				...(stored?.readyAt ? { readyAt: stored.readyAt } : {}),
 			}),
 	});
 	await env.STORAGE.delete(meta.imageKey);
@@ -501,6 +540,11 @@ export async function runFuelPhotoConsumerJob(
 					.where(eq(schema.nutritionOperation.id, meta.operationId))
 					.limit(1);
 				const existingDraft = operation?.resultJson?.draftId;
+				const storedFuelDate = operation?.resultJson?.fuelDate;
+				const fuelDate =
+					typeof storedFuelDate === "string" && storedFuelDate.length > 0
+						? storedFuelDate
+						: undefined;
 				if (operation?.status === "completed" && existingDraft) {
 					await updateQueueJobResult(env.DB, requestId, "completed", {
 						...meta,
@@ -535,7 +579,11 @@ export async function runFuelPhotoConsumerJob(
 					.set({
 						status: "completed",
 						completedAt: now,
-						resultJson: { draftId, requestId },
+						resultJson: {
+							draftId,
+							requestId,
+							...(fuelDate ? { fuelDate } : {}),
+						},
 					})
 					.where(eq(schema.nutritionOperation.id, meta.operationId));
 				draftStored = true;

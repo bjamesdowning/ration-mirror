@@ -2,6 +2,7 @@ import { Link } from "react-router";
 import { BlogCTA } from "~/components/blog/BlogCTA";
 import { BlogMarkdown } from "~/components/blog/BlogMarkdown";
 import { RelatedPosts } from "~/components/blog/RelatedPosts";
+import { CopyPromptButton } from "~/components/marketing/CopyPromptButton";
 import { JsonLd } from "~/components/seo/JsonLd";
 import { PublicFooter } from "~/components/shell/PublicFooter";
 import { PublicHeader } from "~/components/shell/PublicHeader";
@@ -181,6 +182,9 @@ export default function BlogPost({ loaderData }: Route.ComponentProps) {
 
 				{/* Article body */}
 				<div className="max-w-3xl mx-auto px-6 py-12">
+					<div className="mb-8">
+						<CopyPromptButton />
+					</div>
 					<article className="prose-article max-w-none">
 						<BlogMarkdown content={post.content} />
 					</article>

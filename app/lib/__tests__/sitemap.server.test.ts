@@ -33,6 +33,7 @@ describe("getSitemapEntries", () => {
 				"/legal/terms",
 				"/legal/privacy",
 				"/auth.md",
+				"/setup.md",
 				"/mcp.md",
 			]),
 		);

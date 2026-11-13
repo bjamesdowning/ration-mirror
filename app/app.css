@@ -490,6 +490,31 @@
   margin-top: 2rem;
 }
 
+.splash-copy-prompt {
+  display: inline-flex;
+  min-height: 3.1rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #111111;
+  border-radius: 0.5rem;
+  background: #F8F9FA;
+  color: #111111;
+  padding-inline: 0.9rem;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.splash-copy-prompt:hover {
+  background: #ffffff;
+}
+
+.splash-copy-prompt:focus-visible {
+  outline: 3px solid rgba(0, 224, 136, 0.35);
+  outline-offset: 3px;
+}
+
 .splash-primary-cta {
   display: inline-flex;
   min-height: 3.1rem;
@@ -1377,6 +1402,10 @@
   .splash-secondary-link {
     width: 100%;
     justify-content: center;
+  }
+
+  .splash-copy-prompt {
+    width: 100%;
   }
 
   .splash-scroll-cue {

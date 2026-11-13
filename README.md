@@ -1895,6 +1895,7 @@ Only `/mcp` requires authentication; discovery endpoints under `/.well-known/...
 | `/.well-known/agent-skills/index.json` | `application/json` | Agent skills discovery index with SHA-256 digests. |
 | `/.well-known/agent-skills/:skill/SKILL.md` | `text/markdown` | Individual agent skill instructions. |
 | `/auth.md` | `text/markdown` | WorkOS/isitagentready agent registration discovery (Tier 0 anonymous + Tier 1 claim). H1 contains `auth.md`. |
+| `/setup.md` | `text/markdown` | Short imperative agent setup. OAuth MCP, or one anonymous kitchen, then stop. |
 | `/` and `/docs/api` with `Accept: text/markdown` | `text/markdown` | Markdown versions of the splash page and API docs for agents. |
 
 The OAuth authorization-server metadata at `/.well-known/oauth-authorization-server` merges an **`agent_auth`** block (`skill`, `register_uri`, `claim_uri`, `identity_types_supported`, `anonymous.credential_types_supported`) alongside standard RFC 8414 fields. App-domain PRM links to `/auth.md` via `agent_auth`.

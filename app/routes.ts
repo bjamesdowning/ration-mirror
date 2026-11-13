@@ -47,6 +47,7 @@ export default [
 		"routes/well-known.agent-skills.$skillName.SKILL.ts",
 	),
 	route("auth.md", "routes/auth-md.ts"),
+	route("setup.md", "routes/setup-md.ts"),
 	route("mcp.md", "routes/mcp-md.ts"),
 	route("connect", "routes/connect.tsx"),
 	route("connect/claim", "routes/connect.claim.tsx"),

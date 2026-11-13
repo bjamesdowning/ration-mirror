@@ -13,6 +13,7 @@ import {
 	HELP_DOCS_URL,
 	YOUTUBE_CHANNEL_URL,
 } from "~/lib/marketing";
+import { CopyPromptButton } from "./CopyPromptButton";
 import { ExplainerVideo } from "./ExplainerVideo";
 import { Reveal } from "./Reveal";
 import { SplashFuelStory } from "./SplashFuelStory";
@@ -316,6 +317,7 @@ export function SplashExperience() {
 						>
 							Get the app <ArrowRight aria-hidden size={17} />
 						</a>
+						<CopyPromptButton />
 						<a href="#signup" className="splash-secondary-link">
 							or start free on the web
 						</a>

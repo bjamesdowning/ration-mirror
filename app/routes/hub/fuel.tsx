@@ -6,6 +6,7 @@ import {
 	useFetcher,
 	useNavigate,
 	useRevalidator,
+	useRouteLoaderData,
 	useSearchParams,
 } from "react-router";
 import { patchUserSettings, requireActiveGroup } from "~/lib/auth.server";
@@ -83,6 +84,10 @@ export default function FuelPage({ loaderData }: Route.ComponentProps) {
 	const [showAdd, setShowAdd] = useState(false);
 	const [showGoals, setShowGoals] = useState(editor);
 	const [showBarcode, setShowBarcode] = useState(false);
+	const rootData = useRouteLoaderData("root") as
+		| { clientFlags?: { nutritionPhotoLog?: boolean } }
+		| undefined;
+	const photoLog = rootData?.clientFlags?.nutritionPhotoLog === true;
 	const [showScan, setShowScan] = useState(false);
 	const capped = day.limit != null && day.used >= day.limit;
 	const pollAbort = useRef<AbortController | null>(null);
@@ -115,6 +120,10 @@ export default function FuelPage({ loaderData }: Route.ComponentProps) {
 			return;
 		}
 		setError(null);
+		if (kind === "scan" && !photoLog) {
+			setError("Photo food log is unavailable.");
+			return;
+		}
 		if (kind === "add") setShowAdd(true);
 		if (kind === "scan") setShowScan(true);
 		if (kind === "barcode") setShowBarcode(true);
@@ -690,8 +699,9 @@ function ScanToFuel({
 	return (
 		<div className="space-y-3 rounded-xl border border-platinum p-4">
 			<p className="text-sm">
-				Scan to Fuel takes one photo, then one meal. The camera or a file both
-				work.
+				A plate, a set of ingredients, one item, or a drink. The estimate is
+				from what is visible. This costs 2 credits. Approve is the write. This
+				is not medical advice.
 			</p>
 			<input
 				type="file"

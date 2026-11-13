@@ -664,10 +664,10 @@ struct FuelView: View {
             try await Task.sleep(nanoseconds: milliseconds * 1_000_000)
             try Task.checkCancellation()
             last = try await env.api.fuelPhotoStatus(requestId)
-            if last.status == "queued" { message = "Queued" }
-            if last.status == "processing" { message = "Analyzing" }
+            if let caption = FuelPhotoPollCaption.message(status: last.status) {
+                message = caption
+            }
             if last.status == "failed" {
-                message = "That photo was not queued."
                 photoFailed = true
             }
             if last.status == "ready_to_review" || last.status == "failed" || last.status == "expired" {

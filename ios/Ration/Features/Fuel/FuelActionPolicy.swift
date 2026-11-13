@@ -127,6 +127,22 @@ enum FuelPhotoFailure: Equatable {
     case message(String)
 }
 
+/// Captions for the Fuel photo poll. The server says `analyzing`, not `processing`.
+enum FuelPhotoPollCaption {
+    static func message(status: String) -> String? {
+        switch status {
+        case "queued":
+            return "Queued"
+        case "analyzing":
+            return "Analyzing"
+        case "failed":
+            return "Photo status: failed."
+        default:
+            return nil
+        }
+    }
+}
+
 enum FuelPhotoFailureMapping {
     static func decide(_ error: Error) -> FuelPhotoFailure {
         guard let api = error as? APIError else {

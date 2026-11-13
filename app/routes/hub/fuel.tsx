@@ -570,6 +570,9 @@ function ScanToFuel({
 		(FuelPhotoReviewDraft & { requestId: string }) | null
 	>(null);
 	const [busy, setBusy] = useState(false);
+	const [photoPhase, setPhotoPhase] = useState<"queued" | "analyzing" | null>(
+		null,
+	);
 
 	async function upload(file: File) {
 		if (!online) return;
@@ -591,6 +594,7 @@ function ScanToFuel({
 			return;
 		}
 		setBusy(true);
+		setPhotoPhase(null);
 		onError("");
 		const bytes = new Uint8Array(await file.arrayBuffer());
 		let binary = "";
@@ -625,8 +629,14 @@ function ScanToFuel({
 				onError("That photo was not queued.");
 				return;
 			}
+			setPhotoPhase("queued");
 			const polled = await pollFuelPhoto(body.requestId, {
 				signal: controller.signal,
+				onStatus: (status) => {
+					if (status === "queued" || status === "analyzing") {
+						setPhotoPhase(status);
+					}
+				},
 			});
 			if (polled.status !== "ready_to_review" || !polled.lines?.length) {
 				onError(`Photo status: ${polled.status}.`);
@@ -641,6 +651,7 @@ function ScanToFuel({
 			onError("That photo was not queued.");
 		} finally {
 			setBusy(false);
+			setPhotoPhase(null);
 		}
 	}
 
@@ -703,7 +714,13 @@ function ScanToFuel({
 					if (file) void upload(file);
 				}}
 			/>
-			{busy ? <p className="text-sm">Working on that photo.</p> : null}
+			{photoPhase === "queued" || photoPhase === "analyzing" ? (
+				<p className="text-sm">
+					{photoPhase === "queued" ? "Queued" : "Analyzing"}
+				</p>
+			) : busy ? (
+				<p className="text-sm">Working on that photo.</p>
+			) : null}
 			{review ? (
 				<form
 					className="space-y-2"

@@ -81,6 +81,13 @@ final class FuelActionPolicyTests: XCTestCase {
         )
     }
 
+    func testPollCaptionUsesAnalyzingAndNamesAFailure() {
+        XCTAssertEqual(FuelPhotoPollCaption.message(status: "queued"), "Queued")
+        XCTAssertEqual(FuelPhotoPollCaption.message(status: "analyzing"), "Analyzing")
+        XCTAssertNil(FuelPhotoPollCaption.message(status: "processing"))
+        XCTAssertEqual(FuelPhotoPollCaption.message(status: "failed"), "Photo status: failed.")
+    }
+
     func testPhotoFailuresStaySpecific() {
         XCTAssertEqual(
             FuelPhotoFailureMapping.decide(

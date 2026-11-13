@@ -10,6 +10,7 @@ import { handleApiError } from "~/lib/error-handler";
 import { buildMobileFlagContext } from "~/lib/feature-flags/context.server";
 import { decodeCursor, encodeCursor } from "~/lib/mcp/envelope";
 import { requireMobileActiveGroup } from "~/lib/mobile/auth.server";
+import { toMobileCargoItem } from "~/lib/mobile/cargo-item";
 import { paginatedResponse } from "~/lib/mobile/responses.server";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import {
@@ -75,7 +76,10 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		);
 
 		return {
-			...paginatedResponse(items, nextCursor),
+			...paginatedResponse(
+				items.map((item) => toMobileCargoItem(item, organizationId)),
+				nextCursor,
+			),
 			total,
 			activeCargoIds,
 		};
@@ -144,7 +148,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 			result.item,
 		]);
 		return {
-			item: withTags,
+			item: toMobileCargoItem(withTags ?? result.item, organizationId),
 		};
 	} catch (e) {
 		return handleApiError(e);

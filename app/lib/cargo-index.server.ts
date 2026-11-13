@@ -19,6 +19,10 @@ export interface CargoIndexRow {
 	expiresAt?: Date | null;
 	/** Present so merge can backfill null nutrition without a second round-trip. */
 	nutrition?: unknown | null;
+	/** Mobile CargoItem requires these. The index select fills them for merge responses. */
+	organizationId?: string;
+	status?: string;
+	createdAt?: Date;
 }
 
 /**
@@ -42,6 +46,9 @@ export async function fetchOrgCargoIndex(
 			baseUnit: cargo.baseUnit,
 			expiresAt: cargo.expiresAt,
 			nutrition: cargo.nutrition,
+			organizationId: cargo.organizationId,
+			status: cargo.status,
+			createdAt: cargo.createdAt,
 		})
 		.from(cargo)
 		.where(eq(cargo.organizationId, organizationId));

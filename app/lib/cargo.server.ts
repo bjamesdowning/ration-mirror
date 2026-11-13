@@ -856,6 +856,7 @@ export async function ingestCargoItems(
 		cargoId: string;
 		slugs: string[];
 	}> = [];
+	const pendingMergeTagSets: Array<{ cargoId: string; slugs: string[] }> = [];
 
 	const nutritionFlagContext = resolveCargoNutritionFlagContext(env, options);
 	const nutritionEngineOn = await isFeatureEnabled(
@@ -974,12 +975,30 @@ export async function ingestCargoItems(
 						),
 				);
 			}
+			const mergeTagSlugs = dedupeTagSlugs(it.tags ?? []);
+			if (mergeTagSlugs.length > 0) {
+				pendingMergeTagSets.push({
+					cargoId: target.id,
+					slugs: mergeTagSlugs,
+				});
+			}
 			results.push({
 				status: "merged",
 				item: {
 					...target,
+					organizationId,
 					quantity: newQty,
+					baseQuantity: mergedBase.baseQuantity,
+					baseUnit: mergedBase.baseUnit,
+					status:
+						typeof target.status === "string" && target.status.length > 0
+							? target.status
+							: calculateInventoryStatus(target.expiresAt ?? null),
+					createdAt:
+						target.createdAt instanceof Date ? target.createdAt : now,
 					updatedAt: now,
+					expiresAt: target.expiresAt ?? null,
+					nutrition: mergeNutrition ?? target.nutrition ?? null,
 				} as typeof cargo.$inferSelect,
 				mergedInto: { id: target.id, name: target.name },
 			});
@@ -1094,6 +1113,47 @@ export async function ingestCargoItems(
 					tags: tagsByCargoId.get(cargoId) ?? [],
 				} as typeof cargo.$inferSelect;
 			}
+		}
+	}
+
+	if (pendingMergeTagSets.length > 0) {
+		const mergeSlugs = uniqueTagSlugs(
+			pendingMergeTagSets.flatMap((entry) => entry.slugs),
+		);
+		const resolvedTagIds = await resolveTagIds(
+			env.DB,
+			organizationId,
+			mergeSlugs,
+			options?.userId,
+		);
+		const tagIdsBySlug = new Map(
+			mergeSlugs.map((slug, index) => [slug, resolvedTagIds[index]]),
+		);
+		const junctionRows = pendingMergeTagSets.flatMap(({ cargoId, slugs }) =>
+			dedupeTagSlugs(slugs)
+				.map((slug) => tagIdsBySlug.get(slug))
+				.filter((id): id is string => typeof id === "string")
+				.map((tagId) => ({ cargoId, tagId })),
+		);
+		for (const chunk of chunkArray(
+			junctionRows,
+			D1_MAX_TAG_ROWS_PER_STATEMENT,
+		)) {
+			if (chunk.length === 0) continue;
+			await d1.insert(cargoTag).values(chunk).onConflictDoNothing();
+		}
+		const tagsByCargoId = await getTagsForCargoIds(
+			env.DB,
+			pendingMergeTagSets.map((entry) => entry.cargoId),
+		);
+		for (const result of results) {
+			if (result.status !== "merged" || !result.item) continue;
+			const tags = tagsByCargoId.get(result.item.id);
+			if (!tags) continue;
+			result.item = {
+				...result.item,
+				tags,
+			} as typeof cargo.$inferSelect;
 		}
 	}
 

@@ -36,7 +36,7 @@ final class BaseLayerTests: XCTestCase {
             "name": "rice",
             "quantity": 2,
             "unit": "kg",
-            "tags": #"[\"dry\",\"pantry\"]"#,
+            "tags": #"["dry","pantry"]"#,
             "domain": "food",
             "status": "stable",
             "expiresAt": NSNull(),
@@ -286,7 +286,7 @@ final class BaseLayerTests: XCTestCase {
     }
 
     func testCreateResponseDecodesMergeRowAndStringNutrition() throws {
-        let nutrition = #"{\"source\":\"user_override\",\"confidence\":1,\"verified\":1,\"per100g\":null,\"perServing\":{\"energyKcal\":10,\"proteinG\":200,\"fatG\":200,\"carbG\":200},\"fdcId\":\"167512\",\"description\":null}"#
+        let nutrition = #"{"source":"user_override","confidence":1,"verified":1,"per100g":null,"perServing":{"energyKcal":10,"proteinG":200,"fatG":200,"carbG":200},"fdcId":"167512","description":null}"#
         let object: [String: Any] = [
             "item": [
                 "id": "cargo_existing",

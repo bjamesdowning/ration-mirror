@@ -15,6 +15,10 @@ struct FuelView: View {
     @State private var showingGoals = false
     @State private var showingBarcodeCamera = false
     @State private var showingScanCamera = false
+    @State private var showingScanIntro = false
+    @State private var showingCreditPaywall = false
+    @State private var consent = AIConsentCoordinator()
+    @State private var photoFailed = false
     @State private var showingTypedBarcode = false
     @State private var name = ""
     @State private var calories = ""
@@ -23,6 +27,8 @@ struct FuelView: View {
     @State private var barcode = ""
     @State private var message: String?
     @State private var reviewName = ""
+    @State private var reviewAmount = "1"
+    @State private var reviewUnit = "serving"
     @State private var reviewEnergy = ""
     @State private var reviewProtein = ""
     @State private var reviewCarbs = ""
@@ -65,9 +71,29 @@ struct FuelView: View {
                     } else if let message {
                         Text(message).rationCaption()
                     }
+                    if photoFailed {
+                        Button("Try again") {
+                            photoFailed = false
+                            message = nil
+                            showingScanIntro = true
+                        }
+                        .frame(minHeight: 44)
+                    }
                     if let photoRequestId, !reviewName.isEmpty {
-                        Text(reviewName).rationBody()
-                        Button("Confirm meal") { Task { await confirmPhoto() } }
+                        Text("Estimate").rationCaption()
+                        TextField("Name", text: $reviewName)
+                        TextField("Amount", text: $reviewAmount)
+                            .keyboardType(.decimalPad)
+                        TextField("Unit", text: $reviewUnit)
+                        TextField("Calories", text: $reviewEnergy)
+                            .keyboardType(.decimalPad)
+                        TextField("Protein", text: $reviewProtein)
+                            .keyboardType(.decimalPad)
+                        TextField("Carbs", text: $reviewCarbs)
+                            .keyboardType(.decimalPad)
+                        TextField("Fat", text: $reviewFat)
+                            .keyboardType(.decimalPad)
+                        Button("Approve") { Task { await confirmPhoto() } }
                             .frame(minHeight: 44)
                             .accessibilityIdentifier("fuel.photo.confirm")
                     }
@@ -190,6 +216,19 @@ struct FuelView: View {
                 guard let image else { return }
                 Task { await upload(image) }
             }
+        }
+        .sheet(isPresented: $showingScanIntro) { scanIntro }
+        .sheet(isPresented: $showingCreditPaywall) { PaywallView(context: .credits()) }
+        .sheet(isPresented: Binding(
+            get: { consent.isPresenting },
+            set: { if !$0 { consent.decline() } }
+        )) {
+            AIConsentGateView(
+                errorMessage: consent.errorMessage,
+                isAccepting: consent.isAccepting,
+                onAccept: { Task { await consent.accept(api: env.api, session: env.session) } },
+                onDecline: { consent.decline() }
+            )
         }
         .sheet(isPresented: $showingTypedBarcode) { typedBarcode }
         .task { await reloadAndHandleDeepLink() }
@@ -333,7 +372,8 @@ struct FuelView: View {
     }
 
     private func perform(_ action: FuelCreateAction, used: Int, limit: Int?) async {
-        if action == .scan || action == .barcode {
+        let photoLogEnabled = env.session.clientFlags.isNutritionPhotoLogEnabled
+        if action == .barcode || (action == .scan && photoLogEnabled) {
             await ensureCameraAccess()
         }
         let decision = FuelActionPolicy.decide(
@@ -341,13 +381,16 @@ struct FuelView: View {
             used: used,
             limit: limit,
             isOnline: env.network.isOnline,
-            cameraDenied: cameraDenied
+            cameraDenied: cameraDenied,
+            photoLogEnabled: photoLogEnabled
         )
         switch decision {
         case .disabledOffline:
             message = "You're offline."
         case .openPurchase:
             showingPaywall = true
+        case .photoLogOff:
+            message = "Photo food log is unavailable."
         case .cameraOff:
             message = "The camera is off. Scan to Fuel does not upload."
         case .openForm, .openCamera, .openBarcodeCamera, .openTypedBarcode:
@@ -359,7 +402,7 @@ struct FuelView: View {
             case .openForm:
                 showingAdd = true
             case .openCamera:
-                showingScanCamera = true
+                showingScanIntro = true
             case .openBarcodeCamera:
                 showingBarcodeCamera = true
             case .openTypedBarcode:
@@ -367,6 +410,42 @@ struct FuelView: View {
             default:
                 break
             }
+        }
+    }
+
+    private var scanCreditCost: Int {
+        env.session.session?.aiCosts?.scan ?? 2
+    }
+
+    private var scanIntro: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 20) {
+                    AIFeatureInlineIntro(
+                        title: "Scan to Fuel",
+                        detail: "A plate, a set of ingredients, one item, or a drink. The estimate is from what is visible.",
+                        creditCost: scanCreditCost,
+                        costLabel: "per photo",
+                        nextSteps: "Approve is the write. This is not medical advice.",
+                        hint: AIFeatureInlineIntro.nutritionHint
+                    )
+                    AIFeaturePrimaryButton(label: "Open camera", creditCost: scanCreditCost) {
+                        consent.presentIfNeeded(session: env.session) {
+                            showingScanIntro = false
+                            showingScanCamera = true
+                        }
+                    }
+                }
+                .padding(.horizontal, 16)
+            }
+            .navigationTitle("Scan to Fuel")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Close") { showingScanIntro = false }
+                }
+            }
+            .background(Theme.ceramic)
         }
     }
 
@@ -527,7 +606,24 @@ struct FuelView: View {
             showingPaywall = true
             return
         }
-        guard let jpeg = image.jpegData(compressionQuality: 0.7) else { return }
+        let jpeg: Data?
+        do {
+            jpeg = try await ScanImageProcessor.resizedJPEG(from: image)
+        } catch is CancellationError {
+            return
+        } catch {
+            message = "That photo was not queued."
+            photoFailed = true
+            return
+        }
+        guard let jpeg else { return }
+        if jpeg.count > 3 * 1024 * 1024 {
+            message = "Photo must be 3 MiB or smaller."
+            photoFailed = true
+            return
+        }
+        photoFailed = false
+        message = "Queued"
         photoTask?.cancel()
         photoTask = Task {
             do {
@@ -546,6 +642,8 @@ struct FuelView: View {
                 }
                 photoRequestId = queued.requestId
                 reviewName = lines.map { $0.name ?? "Food" }.joined(separator: ", ")
+                reviewAmount = String(lines.first?.amount ?? 1)
+                reviewUnit = lines.first?.unit ?? "serving"
                 reviewEnergy = String(lines.reduce(0) { $0 + ($1.energyKcal ?? 0) })
                 reviewProtein = String(lines.reduce(0) { $0 + ($1.proteinG ?? 0) })
                 reviewCarbs = String(lines.reduce(0) { $0 + ($1.carbsG ?? 0) })
@@ -553,12 +651,8 @@ struct FuelView: View {
             } catch is CancellationError {
                 return
             } catch {
-                await handleWrite(error)
+                await MainActor.run { handlePhoto(error) }
             }
-        }
-    }
-
-    private func poll(_ requestId: String) async throws -> FuelPhotoStatusResponse {
         var last = FuelPhotoStatusResponse(requestId: requestId, status: "queued", lines: nil)
         for attempt in 1...40 {
             try Task.checkCancellation()
@@ -566,6 +660,12 @@ struct FuelView: View {
             try await Task.sleep(nanoseconds: milliseconds * 1_000_000)
             try Task.checkCancellation()
             last = try await env.api.fuelPhotoStatus(requestId)
+            if last.status == "queued" { message = "Queued" }
+            if last.status == "processing" { message = "Analyzing" }
+            if last.status == "failed" {
+                message = "That photo was not queued."
+                photoFailed = true
+            }
             if last.status == "ready_to_review" || last.status == "failed" || last.status == "expired" {
                 return last
             }
@@ -575,6 +675,7 @@ struct FuelView: View {
 
     private func confirmPhoto() async {
         guard let photoRequestId,
+              let amount = Double(reviewAmount), amount > 0,
               let energy = Double(reviewEnergy),
               let protein = Double(reviewProtein),
               let carbs = Double(reviewCarbs),
@@ -590,18 +691,23 @@ struct FuelView: View {
                     carbs: carbs,
                     fat: fat,
                     key: key,
-                    source: "ai_estimate"
+                    source: "ai_estimate",
+                    amount: amount,
+                    unit: reviewUnit.isEmpty ? "serving" : reviewUnit
                 )
             )
             self.photoRequestId = nil
             reviewName = ""
+            reviewAmount = "1"
+            reviewUnit = "serving"
             reviewEnergy = ""
             reviewProtein = ""
             reviewCarbs = ""
             reviewFat = ""
+            message = nil
             await load(date: day?.date ?? LocalDay.todayISO())
         } catch {
-            await handleWrite(error)
+            handlePhoto(error)
         }
     }
 
@@ -612,18 +718,32 @@ struct FuelView: View {
         carbs: Double,
         fat: Double,
         key: String,
-        source: String
+        source: String,
+        amount: Double = 1,
+        unit: String = "serving"
     ) -> DiaryFoodBody {
         DiaryFoodBody(
             name: name,
             occurredAt: ISO8601DateFormatter().string(from: Date()),
-            amount: 1,
-            unit: "serving",
+            amount: amount,
+            unit: unit,
             macros: DiaryMacrosBody(energyKcal: energy, proteinG: protein, carbsG: carbs, fatG: fat),
             idempotencyKey: key,
             operationKey: key,
             compositionSource: source
         )
+    }
+
+    private func handlePhoto(_ error: Error) {
+        switch FuelPhotoFailureMapping.decide(error) {
+        case .crew:
+            showingPaywall = true
+        case .credits:
+            showingCreditPaywall = true
+        case .message(let text):
+            photoFailed = true
+            message = text
+        }
     }
 
     private func handleWrite(_ error: Error) async {

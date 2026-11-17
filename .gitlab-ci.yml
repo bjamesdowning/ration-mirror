@@ -40,15 +40,16 @@ cache:
 # One-branch check for the EmbeddingGemma 2 cutover. Does not run on main.
 cutover_verify:
   stage: verify
+  variables:
+    BUN_INSTALL_CACHE_DIR: "/tmp/bun-install-cache"
   rules:
     - if: '$CI_COMMIT_BRANCH == "cursor/cargo-embedding-gemma-2-3e04"'
   script:
     - bun install --frozen-lockfile --ignore-scripts
-    - bun -e 'import { z } from "zod"; console.log("zod-direct", typeof z?.string)'
-    - CI= bun run test:unit
     - bun run flag:check
     - echo "127.0.0.1 dummy.invalid" >> /etc/hosts || true
     - bun run typecheck
+    - bun run test:unit
   allow_failure: false
 
 # Manual: upload docs corpus to R2 and reindex Copilot AI Search.

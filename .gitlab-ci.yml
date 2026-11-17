@@ -47,6 +47,7 @@ cutover_verify:
   script:
     - bun install --frozen-lockfile --ignore-scripts
     - bun run flag:check
+    - apt-get update -qq && apt-get install -y -qq curl ca-certificates
     - curl -fsSL https://nodejs.org/dist/v22.23.4/node-v22.23.4-linux-x64.tar.gz | tar -xz -C /usr/local --strip-components=1
     - node --version
     - bun run typecheck

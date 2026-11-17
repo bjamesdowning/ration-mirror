@@ -44,9 +44,10 @@ cutover_verify:
     - if: '$CI_COMMIT_BRANCH == "cursor/cargo-embedding-gemma-2-3e04"'
   script:
     - bun install --frozen-lockfile --ignore-scripts
-    - bun run typecheck
     - bun run test:unit
     - bun run flag:check
+    - echo "127.0.0.1 dummy.invalid" >> /etc/hosts || true
+    - bun run typecheck
   allow_failure: false
 
 # Manual: upload docs corpus to R2 and reindex Copilot AI Search.

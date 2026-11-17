@@ -249,7 +249,7 @@ describe("cargo embedding flag paths", () => {
 		env.AI = {
 			run: vi.fn().mockResolvedValue(gemma2Shape(finiteVector(0.5))),
 		} as unknown as Ai;
-		vi.mocked(eg2.getByIds).mockResolvedValue([{ id: "already" }]);
+		vi.mocked(eg2.getByIds).mockResolvedValue([{ id: "already", values: [0] }]);
 
 		await fillMissingCargoVectors(env, "org-1", [
 			{ id: "already", name: "Salt", domain: "food" },

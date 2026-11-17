@@ -41,7 +41,7 @@ export type NameMatchDecision =
 export function decideStockNameMatch(
 	matches: readonly ScoredNameMatch[],
 	scoreGap: number,
-	cookThreshold = STOCK_NAME_MATCH_THRESHOLD,
+	cookThreshold: number = STOCK_NAME_MATCH_THRESHOLD,
 ): NameMatchDecision {
 	const ranked = matches
 		.filter((match) => match.itemId.length > 0 && Number.isFinite(match.score))
@@ -65,7 +65,7 @@ export function decideStockNameMatch(
 
 export function cookMatchForScore(
 	score: number,
-	cookThreshold = STOCK_NAME_MATCH_THRESHOLD,
+	cookThreshold: number = STOCK_NAME_MATCH_THRESHOLD,
 ): boolean {
 	return score >= cookThreshold;
 }

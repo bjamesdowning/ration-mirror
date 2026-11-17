@@ -398,7 +398,7 @@ describe("MCP tools", () => {
 				expect.anything(),
 				"org-test-123",
 				["rice"],
-				{ topK: 5, threshold: 0.6 },
+				{ topK: 5, threshold: 0.6, floor: "recall" },
 			);
 		});
 
@@ -2486,7 +2486,7 @@ describe("MCP tools", () => {
 				expect.anything(),
 				"org-test-123",
 				["rice"],
-				{ topK: 3, threshold: 0.6 },
+				{ topK: 3, threshold: 0.6, floor: "recall" },
 			);
 		});
 

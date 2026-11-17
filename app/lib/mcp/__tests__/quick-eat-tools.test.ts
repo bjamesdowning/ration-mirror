@@ -383,7 +383,7 @@ describe("quick_eat_cargo", () => {
 			expect.anything(),
 			"org-1",
 			["grapes"],
-			{ topK: 3, threshold: 0.6 },
+			{ topK: 3, threshold: 0.6, floor: "recall" },
 		);
 	});
 

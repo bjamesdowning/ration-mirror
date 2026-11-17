@@ -47,7 +47,8 @@ cutover_verify:
   script:
     - bun install --frozen-lockfile --ignore-scripts
     - bun run flag:check
-    - echo "127.0.0.1 dummy.invalid" >> /etc/hosts || true
+    - curl -fsSL https://nodejs.org/dist/v22.23.4/node-v22.23.4-linux-x64.tar.gz | tar -xz -C /usr/local --strip-components=1
+    - node --version
     - bun run typecheck
     - bun run test:unit
   allow_failure: false

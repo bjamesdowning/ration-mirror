@@ -69,6 +69,10 @@
 		{
 			"binding": "VECTORIZE",
 			"index_name": "ration-cargo-dev"
+		},
+		{
+			"binding": "VECTORIZE_EG2",
+			"index_name": "ration-cargo-dev-eg2"
 		}
 	],
 	"queues": {

@@ -41,6 +41,7 @@ export type NameMatchDecision =
 export function decideStockNameMatch(
 	matches: readonly ScoredNameMatch[],
 	scoreGap: number,
+	cookThreshold = STOCK_NAME_MATCH_THRESHOLD,
 ): NameMatchDecision {
 	const ranked = matches
 		.filter((match) => match.itemId.length > 0 && Number.isFinite(match.score))
@@ -49,7 +50,7 @@ export function decideStockNameMatch(
 	const top = ranked[0];
 	if (!top) return { kind: "none" };
 	const runnerUp = ranked[1];
-	if (top.score < STOCK_NAME_MATCH_THRESHOLD) {
+	if (top.score < cookThreshold) {
 		return {
 			kind: "disambiguate",
 			reason: "below_cook_threshold",
@@ -62,8 +63,11 @@ export function decideStockNameMatch(
 	return { kind: "use", itemId: top.itemId };
 }
 
-export function cookMatchForScore(score: number): boolean {
-	return score >= STOCK_NAME_MATCH_THRESHOLD;
+export function cookMatchForScore(
+	score: number,
+	cookThreshold = STOCK_NAME_MATCH_THRESHOLD,
+): boolean {
+	return score >= cookThreshold;
 }
 
 export function stockNameDisambiguationNote(

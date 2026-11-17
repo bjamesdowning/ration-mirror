@@ -26,6 +26,9 @@ import {
 	toSupportedUnit,
 } from "./units";
 import {
+	cargoEmbeddingCacheToken,
+	EMBEDDING_MODEL,
+	fillMissingCargoVectors,
 	findSimilarCargoBatch,
 	SIMILARITY_THRESHOLDS,
 	type SimilarCargoMatch,
@@ -498,6 +501,7 @@ export async function matchMeals(
 	organizationId: string,
 	query: MealMatchQuery,
 ): Promise<MealMatchResult[]> {
+	const embeddingModel = await cargoEmbeddingCacheToken(env, organizationId);
 	const d1 = drizzle(env.DB);
 	const {
 		mode,
@@ -543,6 +547,7 @@ export async function matchMeals(
 				preLimit: effectivePreLimit,
 			},
 			matchCacheVersion,
+			embeddingModel,
 		);
 		try {
 			const cached = await env.RATION_KV.get(cacheKey, "json");
@@ -680,6 +685,7 @@ export async function matchMeals(
 					{
 						topK: 3,
 						threshold: SIMILARITY_THRESHOLDS.INGREDIENT_MATCH,
+						floor: "ingredient",
 					},
 				)
 			: new Map<string, SimilarCargoMatch[]>();
@@ -756,6 +762,7 @@ export async function matchMeals(
 				preLimit: effectivePreLimit,
 			},
 			matchCacheVersion,
+			embeddingModel,
 		);
 		try {
 			await env.RATION_KV.put(cacheKey, JSON.stringify(limited), {
@@ -815,7 +822,7 @@ export async function resolveIngredientsToCargo(
 			env,
 			organizationId,
 			vectorMissNames,
-			{ topK: 3, threshold },
+			{ topK: 3, threshold, ...(options?.threshold == null ? { floor: "ingredient" as const } : {}) },
 		);
 
 		for (const name of vectorMissNames) {
@@ -828,6 +835,21 @@ export async function resolveIngredientsToCargo(
 			result.set(name, buckets);
 		}
 	}
+
+	const fillRows: Array<{ id: string; name: string; domain: string }> = [];
+	for (const buckets of result.values()) {
+		for (const row of buckets) {
+			const id = row.original.id;
+			const name = row.original.name;
+			if (!id || !name?.trim()) continue;
+			fillRows.push({
+				id,
+				name,
+				domain: row.original.domain ?? "food",
+			});
+		}
+	}
+	await fillMissingCargoVectors(env, organizationId, fillRows);
 
 	return result;
 }
@@ -891,6 +913,7 @@ export async function checkMealReadiness(
 					{
 						topK: 3,
 						threshold: SIMILARITY_THRESHOLDS.INGREDIENT_MATCH,
+						floor: "ingredient",
 					},
 				)
 			: new Map<string, SimilarCargoMatch[]>();
@@ -987,6 +1010,7 @@ export async function getMealMissingIngredients(
 					{
 						topK: 3,
 						threshold: SIMILARITY_THRESHOLDS.INGREDIENT_MATCH,
+						floor: "ingredient",
 					},
 				)
 			: new Map<string, SimilarCargoMatch[]>();
@@ -1032,6 +1056,7 @@ export function getMatchCacheKey(
 	organizationId: string,
 	query: MealMatchQuery,
 	version = "0",
+	embeddingModel = EMBEDDING_MODEL,
 ): string {
 	const {
 		mode,
@@ -1050,5 +1075,5 @@ export function getMatchCacheKey(
 			? "all"
 			: (Array.isArray(tags) ? [...tags].sort() : [tags]).join("+") || "all";
 	const searchKey = searchQuery?.trim().toLowerCase() ?? "all";
-	return `${MATCH_CACHE_PREFIX}${organizationId}:v${version}:${mode}:${minMatch}:${limit}:${preLimit ?? MEAL_MATCH_CANDIDATE_CAP}:${tagsKey}:${servings ?? "base"}:${type ?? "all"}:${domain ?? "all"}:${searchKey}`;
+	return `${MATCH_CACHE_PREFIX}${organizationId}:v${version}:${mode}:${minMatch}:${limit}:${preLimit ?? MEAL_MATCH_CANDIDATE_CAP}:${tagsKey}:${servings ?? "base"}:${type ?? "all"}:${domain ?? "all"}:${searchKey}:${embeddingModel}`;
 }

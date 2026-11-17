@@ -30,6 +30,11 @@ vi.mock("~/lib/cargo-index.server", () => ({
 
 vi.mock("~/lib/vector.server", () => ({
 	findSimilarCargoBatch: mockFindSimilarCargoBatch,
+	fillMissingCargoVectors: vi.fn().mockResolvedValue(undefined),
+	cargoEmbeddingCacheToken: vi
+		.fn()
+		.mockResolvedValue("@cf/google/embeddinggemma-300m"),
+	EMBEDDING_MODEL: "@cf/google/embeddinggemma-300m",
 	SIMILARITY_THRESHOLDS: { INGREDIENT_MATCH: 0.7 },
 }));
 

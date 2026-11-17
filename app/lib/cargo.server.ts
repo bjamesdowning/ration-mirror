@@ -55,6 +55,7 @@ import {
 } from "./units";
 import {
 	deleteCargoVectors,
+	fillMissingCargoVectors,
 	findSimilarCargoBatch,
 	SIMILARITY_THRESHOLDS,
 	upsertCargoVector,
@@ -737,7 +738,29 @@ export async function ingestCargoItems(
 		toVectorResolve.push(i);
 	}
 
-	if (toVectorResolve.length > 0 && env.VECTORIZE && env.AI) {
+	const referenced: Array<{ id: string; name: string; domain: string }> = [];
+	for (const row of resolved) {
+		if (row?.action !== "merge") continue;
+		const target = cargoById.get(row.targetId);
+		if (!target?.id || !target.name?.trim()) continue;
+		referenced.push({
+			id: target.id,
+			name: target.name,
+			domain: target.domain ?? "food",
+		});
+	}
+	await fillMissingCargoVectors(
+		env,
+		organizationId,
+		referenced,
+		options?.flagContext,
+	);
+
+	if (
+		toVectorResolve.length > 0 &&
+		env.AI &&
+		(env.VECTORIZE || "VECTORIZE_EG2" in env)
+	) {
 		const uniqueNames = [...new Set(toVectorResolve.map((i) => items[i].name))];
 		const similarityMap = await findSimilarCargoBatch(
 			env,
@@ -746,6 +769,7 @@ export async function ingestCargoItems(
 			{
 				topK: 1,
 				threshold: SIMILARITY_THRESHOLDS.CARGO_MERGE,
+				floor: "merge",
 			},
 		);
 

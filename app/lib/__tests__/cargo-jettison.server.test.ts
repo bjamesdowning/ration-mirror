@@ -35,6 +35,7 @@ vi.mock("~/lib/kitchen-events.server", () => ({
 
 vi.mock("~/lib/vector.server", () => ({
 	deleteCargoVectors: vi.fn().mockResolvedValue(undefined),
+	fillMissingCargoVectors: vi.fn().mockResolvedValue(undefined),
 	findSimilarCargoBatch: vi.fn(),
 	upsertCargoVector: vi.fn(),
 	upsertCargoVectors: vi.fn(),

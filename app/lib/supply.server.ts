@@ -1542,7 +1542,11 @@ export async function addItemsFromMeal(
 		env,
 		organizationId,
 		missNames,
-		{ topK: 1, threshold: SIMILARITY_THRESHOLDS.INGREDIENT_MATCH },
+		{
+			topK: 1,
+			threshold: SIMILARITY_THRESHOLDS.INGREDIENT_MATCH,
+			floor: "ingredient",
+		},
 	);
 
 	const addedItems: (typeof supplyItem.$inferSelect)[] = [];
@@ -2033,7 +2037,11 @@ async function buildMealContributions(
 		env,
 		organizationId,
 		missNames,
-		{ topK: 1, threshold: SIMILARITY_THRESHOLDS.INGREDIENT_MATCH },
+		{
+			topK: 1,
+			threshold: SIMILARITY_THRESHOLDS.INGREDIENT_MATCH,
+			floor: "ingredient",
+		},
 	);
 
 	const contributions: SupplyContribution[] = [];

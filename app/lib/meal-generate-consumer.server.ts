@@ -251,6 +251,7 @@ ${customization}
 			vectorMissNames.length > 0
 				? await findSimilarCargoBatch(env, organizationId, vectorMissNames, {
 						threshold: SIMILARITY_THRESHOLDS.INGREDIENT_MATCH,
+						floor: "ingredient",
 					})
 				: new Map();
 

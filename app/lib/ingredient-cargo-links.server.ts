@@ -9,7 +9,13 @@ import {
 	resolveCargoBucketsForIngredient,
 } from "./matching.server";
 import { getMatchCacheVersion } from "./readiness-cache.server";
-import { findSimilarCargoBatch, SIMILARITY_THRESHOLDS } from "./vector.server";
+import {
+	cargoEmbeddingCacheToken,
+	EMBEDDING_MODEL,
+	fillMissingCargoVectors,
+	findSimilarCargoBatch,
+	SIMILARITY_THRESHOLDS,
+} from "./vector.server";
 
 const ING_LINKS_CACHE_PREFIX = "ing-links:";
 const ING_LINKS_CACHE_TTL_SECONDS = 600;
@@ -29,8 +35,9 @@ type CachedIngredientLinks = {
 export function ingredientLinksCacheKey(
 	organizationId: string,
 	version: string,
+	embeddingModel = EMBEDDING_MODEL,
 ): string {
-	return `${ING_LINKS_CACHE_PREFIX}${organizationId}:${version}`;
+	return `${ING_LINKS_CACHE_PREFIX}${organizationId}:${version}:${embeddingModel}`;
 }
 
 export function pickPrimaryCargoEntry(
@@ -113,7 +120,12 @@ export async function resolveIngredientCargoLinks(
 	if (uniqueNames.length === 0) return result;
 
 	const version = await getMatchCacheVersion(env.RATION_KV, organizationId);
-	const cacheKey = ingredientLinksCacheKey(organizationId, version);
+	const embeddingModel = await cargoEmbeddingCacheToken(env, organizationId);
+	const cacheKey = ingredientLinksCacheKey(
+		organizationId,
+		version,
+		embeddingModel,
+	);
 	const cached = await readCachedLinks(env.RATION_KV, cacheKey);
 	const entries = { ...(cached?.entries ?? {}) };
 
@@ -159,6 +171,7 @@ export async function resolveIngredientCargoLinks(
 			{
 				topK: 3,
 				threshold: SIMILARITY_THRESHOLDS.INGREDIENT_MATCH,
+				floor: "ingredient",
 			},
 		);
 		for (const name of vectorMissNames) {
@@ -173,6 +186,24 @@ export async function resolveIngredientCargoLinks(
 			result.set(name, link);
 		}
 	}
+
+	const linkedIds = new Set<string>();
+	for (const link of result.values()) {
+		for (const id of link.cargoIds) {
+			if (id) linkedIds.add(id);
+		}
+	}
+	await fillMissingCargoVectors(
+		env,
+		organizationId,
+		cargoRows
+			.filter((row) => linkedIds.has(row.id) && row.id && row.name?.trim())
+			.map((row) => ({
+				id: row.id,
+				name: row.name,
+				domain: row.domain ?? "food",
+			})),
+	);
 
 	await writeCachedLinks(env.RATION_KV, cacheKey, { entries });
 	return result;

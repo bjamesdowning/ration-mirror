@@ -44,6 +44,7 @@ vi.mock("../capacity.server", () => ({
 
 vi.mock("../vector.server", () => ({
 	deleteCargoVectors: vi.fn(),
+	fillMissingCargoVectors: vi.fn().mockResolvedValue(undefined),
 	findSimilarCargoBatch,
 	SIMILARITY_THRESHOLDS: { CARGO_MERGE: 0.92 },
 	upsertCargoVector: vi.fn(),

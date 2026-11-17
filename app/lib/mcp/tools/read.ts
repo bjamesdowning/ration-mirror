@@ -354,7 +354,7 @@ export function createReadToolDefs(env: McpToolsEnv) {
 					env,
 					ctx.organizationId,
 					[a.query],
-					{ topK: a.topK ?? 5, threshold: NAME_SEARCH_RECALL_THRESHOLD },
+					{ topK: a.topK ?? 5, threshold: NAME_SEARCH_RECALL_THRESHOLD, floor: "recall" },
 				);
 				const matches = results.get(a.query) || [];
 				if (matches.length === 0) {

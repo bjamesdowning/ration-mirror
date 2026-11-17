@@ -25,6 +25,8 @@ type SessionUser = {
 
 type BuildFlagContextOptions = {
 	plan?: string;
+	/** Verified kitchen id. Never copy this from the client body. */
+	organizationId?: string | null;
 };
 
 export class InvalidRationClientHeaderError extends Error {
@@ -91,6 +93,10 @@ function baseContext(
 
 	if (options?.plan) {
 		context.plan = options.plan;
+	}
+
+	if (options?.organizationId) {
+		context.organizationId = options.organizationId;
 	}
 
 	return context;
@@ -182,12 +188,14 @@ export function buildSystemFlagContext(
 	options?: {
 		originatingSurface?: ClientSurface;
 		originatingClientVersion?: string | null;
+		organizationId?: string | null;
 	},
 ): FlagshipEvaluationContext {
 	const context: FlagshipEvaluationContext = {
 		clientPlatform: options?.originatingSurface ?? "system",
 		environment: env.RATION_ENV?.trim() || "unknown",
 	};
+	if (options?.organizationId) context.organizationId = options.organizationId;
 	if (userId) {
 		context.userId = userId;
 	}
@@ -210,6 +218,7 @@ export function buildAgentFlagContext(
 	userId: string | null | undefined,
 	platform: AgentFlagPlatform,
 	originating?: AgentOriginatingClient | null,
+	organizationId?: string | null,
 ): FlagshipEvaluationContext {
 	const inherited =
 		platform === "copilot" && originating?.clientPlatform ? originating : null;
@@ -232,6 +241,10 @@ export function buildAgentFlagContext(
 
 	if (userId) {
 		context.userId = userId;
+	}
+
+	if (organizationId) {
+		context.organizationId = organizationId;
 	}
 
 	return context;

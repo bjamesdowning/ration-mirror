@@ -353,4 +353,427 @@ async function embedBatchLegacy(
 			const response = await runModel(ai, EMBEDDING_MODEL, { text: chunk });
 			for (let i = 0; i < chunk.length; i++) {
 				results[offset + i] = legacyVectorAt(response, i);
-CQkJfQoJCX0gY2F0Y2ggKGVycikgewoJCQlsb2dFbWJlZEZhaWx1cmUoRU1CRURESU5HX01PREVMLCB2ZWN0b3JFcnJvckNvZGUoZXJyKSk7CgkJfQoJfQoJcmV0dXJuIHJlc3VsdHM7Cn0KCmFzeW5jIGZ1bmN0aW9uIGVtYmVkQmF0Y2hHZW1tYTIoCglhaTogQWksCgl0ZXh0czogc3RyaW5nW10sCik6IFByb21pc2U8KG51bWJlcltdIHwgbnVsbClbXT4gewoJY29uc3QgcmVzdWx0czogKG51bWJlcltdIHwgbnVsbClbXSA9IG5ldyBBcnJheSh0ZXh0cy5sZW5ndGgpLmZpbGwobnVsbCk7Cgljb25zdCBwZW5kaW5nOiBBcnJheTx7IGluZGV4OiBudW1iZXI7IHNsaWNlZDogc3RyaW5nIH0+ID0gW107Cglmb3IgKGxldCBpID0gMDsgaSA8IHRleHRzLmxlbmd0aDsgaSsrKSB7CgkJY29uc3Qgc2xpY2VkID0gc2xpY2VkTmFtZSh0ZXh0c1tpXSA/PyAiIik7CgkJaWYgKCFzbGljZWQpIGNvbnRpbnVlOwoJCXBlbmRpbmcucHVzaCh7IGluZGV4OiBpLCBzbGljZWQgfSk7Cgl9Cglmb3IgKAoJCWxldCBvZmZzZXQgPSAwOwoJCW9mZnNldCA8IHBlbmRpbmcubGVuZ3RoOwoJCW9mZnNldCArPSBFTUJFRF9HRU1NQV8yX0JBVENIX1NJWkUKCSkgewoJCWNvbnN0IGNodW5rID0gcGVuZGluZy5zbGljZShvZmZzZXQsIG9mZnNldCArIEVNQkVEX0dFTU1BXzJfQkFUQ0hfU0laRSk7CgkJdHJ5IHsKCQkJY29uc3QgcmVzcG9uc2UgPSBhd2FpdCBydW5Nb2RlbChhaSwgRU1CRURESU5HX0dFTU1BXzJfTU9ERUwsIHsKCQkJCWlucHV0OiBjaHVuay5tYXAoKHJvdykgPT4gY2x1c3RlcklucHV0KHJvdy5zbGljZWQpKSwKCQkJCWRpbWVuc2lvbnM6IEVNQkVERElOR19ESU1FTlNJT05TLAoJCQkJZW5jb2RpbmdfZm9ybWF0OiAiZmxvYXQiLAoJCQl9KTsKCQkJbGV0IHJlamVjdGVkID0gZmFsc2U7CgkJCWZvciAobGV0IGkgPSAwOyBpIDwgY2h1bmsubGVuZ3RoOyBpKyspIHsKCQkJCWNvbnN0IHZlYyA9IGdlbW1hMlZlY3RvckF0KHJlc3BvbnNlLCBpKTsKCQkJCWlmICghdmVjKSByZWplY3RlZCA9IHRydWU7CgkJCQlyZXN1bHRzW2NodW5rW2ldLmluZGV4XSA9IHZlYzsKCQkJfQoJCQlpZiAocmVqZWN0ZWQpIGxvZ0VtYmVkRmFpbHVyZShFTUJFRERJTkdfR0VNTUFfMl9NT0RFTCwgImludmFsaWRfZW1iZWRkaW5nIik7CgkJfSBjYXRjaCAoZXJyKSB7CgkJCWxvZ0VtYmVkRmFpbHVyZShFTUJFRERJTkdfR0VNTUFfMl9NT0RFTCwgdmVjdG9yRXJyb3JDb2RlKGVycikpOwoJCX0KCX0KCXJldHVybiByZXN1bHRzOwp9CgovKiogQmF0Y2ggZW1iZWQgd2l0aCBLViBjYWNoZTogY2hlY2sgY2FjaGUgZm9yIGVhY2gsIGNhbGwgQUkgb25seSBmb3IgbWlzc2VzICovCmV4cG9ydCBhc3luYyBmdW5jdGlvbiBlbWJlZEJhdGNoV2l0aENhY2hlKAoJZW52OiBFbnYsCgl0ZXh0czogc3RyaW5nW10sCglydW4/OiBDYXJnb1ZlY3RvclJ1biwKKTogUHJvbWlzZTwobnVtYmVyW10gfCBudWxsKVtdPiB7CglpZiAodGV4dHMubGVuZ3RoID09PSAwKSByZXR1cm4gW107Cgljb25zdCBnZW1tYTIgPSBhd2FpdCBnZW1tYTJFbmFibGVkKGVudiwgcnVuPy5vcmdhbml6YXRpb25JZCwgcnVuPy5mbGFnQ29udGV4dCk7Cgljb25zdCBvcmRlcjogc3RyaW5nW10gPSBbXTsKCWNvbnN0IHNlZW4gPSBuZXcgU2V0PHN0cmluZz4oKTsKCWZvciAoY29uc3QgdCBvZiB0ZXh0cykgewoJCWNvbnN0IHMgPSBzbGljZWROYW1lKHQpOwoJCWlmICghc2Vlbi5oYXMocykpIHsKCQkJc2Vlbi5hZGQocyk7CgkJCW9yZGVyLnB1c2gocyk7CgkJfQoJfQoKCWNvbnN0IGNhY2hlUmVzdWx0cyA9IGF3YWl0IFByb21pc2UuYWxsKAoJCW9yZGVyLm1hcChhc3luYyAocykgPT4gewoJCQkvLyBMZWdhY3kgc3RpbGwgY2FjaGVzIGFuZCBlbWJlZHMgYW4gZW1wdHkgc2xpY2UuIFRoZSBuZXcgcGF0aCBkb2VzIG5vdC4KCQkJaWYgKGdlbW1hMiAmJiAhcykgcmV0dXJuIHsgdGV4dDogcywgdmVjOiBudWxsIGFzIG51bWJlcltdIHwgbnVsbCB9OwoJCQljb25zdCBrZXkgPSBnZW1tYTIgPyBhd2FpdCBnZW1tYTJDYWNoZUtleShzKSA6IGF3YWl0IGxlZ2FjeUNhY2hlS2V5KHMpOwoJCQl0cnkgewoJCQkJY29uc3QgY2FjaGVkID0gZW52LlJBVElPTl9LVgoJCQkJCT8gYXdhaXQgZW52LlJBVElPTl9LVi5nZXQoa2V5LCAianNvbiIpCgkJCQkJOiBudWxsOwoJCQkJaWYgKAoJCQkJCWNhY2hlZCAmJgoJCQkJCUFycmF5LmlzQXJyYXkoY2FjaGVkKSAmJgoJCQkJCWNhY2hlZC5sZW5ndGggPT09IEVNQkVERElOR19ESU1FTlNJT05TICYmCgkJCQkJKCFnZW1tYTIgfHwKCQkJCQkJY2FjaGVkLmV2ZXJ5KAoJCQkJCQkJKHZhbHVlKSA9PiB0eXBlb2YgdmFsdWUgPT09ICJudW1iZXIiICYmIE51bWJlci5pc0Zpbml0ZSh2YWx1ZSksCgkJCQkJCSkpCgkJCQkpIHsKCQkJCQlyZXR1cm4geyB0ZXh0OiBzLCB2ZWM6IGNhY2hlZCBhcyBudW1iZXJbXSB9OwoJCQkJfQoJCQl9IGNhdGNoIHsKCQkJCS8vIGlnbm9yZSBjYWNoZSByZWFkIGVycm9ycwoJCQl9CgkJCXJldHVybiB7IHRleHQ6IHMsIHZlYzogbnVsbCBhcyBudW1iZXJbXSB8IG51bGwgfTsKCQl9KSwKCSk7CgoJY29uc3QgaGl0cyA9IG5ldyBNYXA8c3RyaW5nLCBudW1iZXJbXT4oKTsKCWNvbnN0IHRvRW1iZWQ6IHN0cmluZ1tdID0gW107Cglmb3IgKGNvbnN0IHIgb2YgY2FjaGVSZXN1bHRzKSB7CgkJaWYgKHIudmVjKSBoaXRzLnNldChyLnRleHQsIHIudmVjKTsKCQllbHNlIGlmICghZ2VtbWEyIHx8IHIudGV4dCkgdG9FbWJlZC5wdXNoKHIudGV4dCk7Cgl9CgoJbGV0IG1pc3NWZWN0b3JzOiAobnVtYmVyW10gfCBudWxsKVtdID0gW107CglpZiAodG9FbWJlZC5sZW5ndGggPiAwICYmIGVudi5BSSkgewoJCW1pc3NWZWN0b3JzID0gYXdhaXQgZW1iZWRCYXRjaChlbnYuQUksIHRvRW1iZWQsIHsKCQkJZW52LAoJCQlvcmdhbml6YXRpb25JZDogcnVuPy5vcmdhbml6YXRpb25JZCwKCQkJZmxhZ0NvbnRleHQ6IHJ1bj8uZmxhZ0NvbnRleHQsCgkJCWdlbW1hMiwKCQl9KTsKCQlpZiAoZW52LlJBVElPTl9LVikgewoJCQlmb3IgKGxldCBpID0gMDsgaSA8IHRvRW1iZWQubGVuZ3RoOyBpKyspIHsKCQkJCWNvbnN0IHZlYyA9IG1pc3NWZWN0b3JzW2ldOwoJCQkJaWYgKHZlYyAmJiB2ZWMubGVuZ3RoID09PSBFTUJFRERJTkdfRElNRU5TSU9OUykgewoJCQkJCWNvbnN0IGtleSA9IGdlbW1hMgoJCQkJCQk/IGF3YWl0IGdlbW1hMkNhY2hlS2V5KHRvRW1iZWRbaV0pCgkJCQkJCTogYXdhaXQgbGVnYWN5Q2FjaGVLZXkodG9FbWJlZFtpXSk7CgkJCQkJZW52LlJBVElPTl9LVi5wdXQoa2V5LCBKU09OLnN0cmluZ2lmeSh2ZWMpLCB7CgkJCQkJCWV4cGlyYXRpb25UdGw6IEVNQkVEX0NBQ0hFX1RUTCwKCQkJCQl9KS5jYXRjaCgoKSA9PiB7fSk7CgkJCQl9CgkJCX0KCQl9Cgl9CgoJY29uc3QgdmVjQnlUZXh0ID0gbmV3IE1hcDxzdHJpbmcsIG51bWJlcltdIHwgbnVsbD4oKTsKCWZvciAoY29uc3QgcyBvZiBvcmRlcikgewoJCXZlY0J5VGV4dC5zZXQocywgaGl0cy5nZXQocykgPz8gbnVsbCk7Cgl9Cglmb3IgKGxldCBpID0gMDsgaSA8IHRvRW1iZWQubGVuZ3RoOyBpKyspIHsKCQl2ZWNCeVRleHQuc2V0KHRvRW1iZWRbaV0sIG1pc3NWZWN0b3JzW2ldID8/IG51bGwpOwoJfQoKCXJldHVybiB0ZXh0cy5tYXAoKHQpID0+IHZlY0J5VGV4dC5nZXQoc2xpY2VkTmFtZSh0KSkgPz8gbnVsbCk7Cn0KCnR5cGUgQ2FyZ29WZWN0b3JJdGVtID0geyBpZDogc3RyaW5nOyBuYW1lOiBzdHJpbmc7IGRvbWFpbjogc3RyaW5nIH07Cgphc3luYyBmdW5jdGlvbiB1cHNlcnRJbnRvKAoJaW5kZXg6IFZlY3Rvcml6ZUluZGV4LAoJb3JnYW5pemF0aW9uSWQ6IHN0cmluZywKCXJvd3M6IEFycmF5PHsgaWQ6IHN0cmluZzsgdmFsdWVzOiBudW1iZXJbXTsgbmFtZTogc3RyaW5nOyBkb21haW46IHN0cmluZyB9PiwKCWxvZ0xhYmVsOiBzdHJpbmcsCgltb2RlbDogc3RyaW5nLAopOiBQcm9taXNlPHZvaWQ+IHsKCWlmIChyb3dzLmxlbmd0aCA9PT0gMCkgcmV0dXJuOwoJY29uc3QgdG9VcHNlcnQgPSByb3dzLm1hcCgocm93KSA9PiAoewoJCWlkOiByb3cuaWQsCgkJdmFsdWVzOiByb3cudmFsdWVzLAoJCW5hbWVzcGFjZTogb3JnYW5pemF0aW9uSWQsCgkJbWV0YWRhdGE6IHsKCQkJbmFtZTogcm93Lm5hbWUsCgkJCWRvbWFpbjogcm93LmRvbWFpbiA/PyAiZm9vZCIsCgkJCW9yZ2FuaXphdGlvbklkLAoJCX0sCgl9KSk7Cglmb3IgKGNvbnN0IGNodW5rIG9mIGNodW5rQXJyYXkodG9VcHNlcnQsIFZFQ1RPUklaRV9VUFNFUlRfTUFYKSkgewoJCXRyeSB7CgkJCWF3YWl0IGluZGV4LnVwc2VydChjaHVuayk7CgkJfSBjYXRjaCAoZXJyKSB7CgkJCWxvZy5lcnJvcihsb2dMYWJlbCwgewoJCQkJbW9kZWwsCgkJCQljb2RlOiB2ZWN0b3JFcnJvckNvZGUoZXJyKSA/PyAidXBzZXJ0IiwKCQkJfSk7CgkJfQoJfQp9CgovKiogVXBzZXJ0IGEgc2luZ2xlIGNhcmdvIGl0ZW0ncyB2ZWN0b3IgaW50byBWZWN0b3JpemUgKi8KZXhwb3J0IGFzeW5jIGZ1bmN0aW9uIHVwc2VydENhcmdvVmVjdG9yKAoJZW52OiBFbnYsCglvcmdhbml6YXRpb25JZDogc3RyaW5nLAoJaXRlbTogQ2FyZ29WZWN0b3JJdGVtLAoJZmxhZ0NvbnRleHQ/OiBGbGFnc2hpcEV2YWx1YXRpb25Db250ZXh0LAopOiBQcm9taXNlPHZvaWQ+IHsKCWlmICghZW52LkFJKSByZXR1cm47Cgljb25zdCBnZW1tYTIgPSBhd2FpdCBnZW1tYTJFbmFibGVkKGVudiwgb3JnYW5pemF0aW9uSWQsIGZsYWdDb250ZXh0KTsKCWNvbnN0IGluZGV4ID0gZ2VtbWEyID8gZWcySW5kZXgoZW52KSA6IGVudi5WRUNUT1JJWkU7CglpZiAoIWluZGV4KSByZXR1cm47Cgljb25zdCBtb2RlbCA9IGdlbW1hMiA/IEVNQkVERElOR19HRU1NQV8yX01PREVMIDogRU1CRURESU5HX01PREVMOwoJY29uc3QgdmVjID0gYXdhaXQgZW1iZWQoZW52LkFJLCBpdGVtLm5hbWUsIHsKCQllbnYsCgkJb3JnYW5pemF0aW9uSWQsCgkJZmxhZ0NvbnRleHQsCgkJZ2VtbWEyLAoJfSk7CglpZiAoIXZlYyB8fCB2ZWMubGVuZ3RoICE9PSBFTUJFRERJTkdfRElNRU5TSU9OUykgcmV0dXJuOwoJYXdhaXQgdXBzZXJ0SW50bygKCQlpbmRleCwKCQlvcmdhbml6YXRpb25JZCwKCQlbCgkJCXsKCQkJCWlkOiBpdGVtLmlkLAoJCQkJdmFsdWVzOiB2ZWMsCgkJCQluYW1lOiBpdGVtLm5hbWUsCgkJCQlkb21haW46IGl0ZW0uZG9tYWluID8/ICJmb29kIiwKCQkJfSwKCQldLAoJCSJbVmVjdG9yXSB1cHNlcnRDYXJnb1ZlY3RvciBmYWlsZWQiLAoJCW1vZGVsLAoJKTsKfQoKLyoqIFVwc2VydCBtdWx0aXBsZSBjYXJnbyBpdGVtcycgdmVjdG9ycyBpbiBiYXRjaCAqLwpleHBvcnQgYXN5bmMgZnVuY3Rpb24gdXBzZXJ0Q2FyZ29WZWN0b3JzKAoJZW52OiBFbnYsCglvcmdhbml6YXRpb25JZDogc3RyaW5nLAoJaXRlbXM6IENhcmdvVmVjdG9ySXRlbVtdLAoJZmxhZ0NvbnRleHQ/OiBGbGFnc2hpcEV2YWx1YXRpb25Db250ZXh0LAopOiBQcm9taXNlPHZvaWQ+IHsKCWlmICghZW52LkFJIHx8IGl0ZW1zLmxlbmd0aCA9PT0gMCkgcmV0dXJuOwoJY29uc3QgZ2VtbWEyID0gYXdhaXQgZ2VtbWEyRW5hYmxlZChlbnYsIG9yZ2FuaXphdGlvbklkLCBmbGFnQ29udGV4dCk7Cgljb25zdCBpbmRleCA9IGdlbW1hMiA/IGVnMkluZGV4KGVudikgOiBlbnYuVkVDVE9SSVpFOwoJaWYgKCFpbmRleCkgcmV0dXJuOwoJY29uc3QgbW9kZWwgPSBnZW1tYTIgPyBFTUJFRERJTkdfR0VNTUFfMl9NT0RFTCA6IEVNQkVERElOR19NT0RFTDsKCWNvbnN0IHZlY3RvcnMgPSBhd2FpdCBlbWJlZEJhdGNoKAoJCWVudi5BSSwKCQlpdGVtcy5tYXAoKGl0ZW0pID0+IGl0ZW0ubmFtZSksCgkJeyBlbnYsIG9yZ2FuaXphdGlvbklkLCBmbGFnQ29udGV4dCwgZ2VtbWEyIH0sCgkpOwoJY29uc3Qgcm93czogQXJyYXk8ewoJCWlkOiBzdHJpbmc7CgkJdmFsdWVzOiBudW1iZXJbXTsKCQluYW1lOiBzdHJpbmc7CgkJZG9tYWluOiBzdHJpbmc7Cgl9PiA9IFtdOwoJZm9yIChsZXQgaSA9IDA7IGkgPCBpdGVtcy5sZW5ndGg7IGkrKykgewoJCWNvbnN0IHZlYyA9IHZlY3RvcnNbaV07CgkJaWYgKHZlYyAmJiB2ZWMubGVuZ3RoID09PSBFTUJFRERJTkdfRElNRU5TSU9OUykgewoJCQlyb3dzLnB1c2goewoJCQkJaWQ6IGl0ZW1zW2ldLmlkLAoJCQkJdmFsdWVzOiB2ZWMsCgkJCQluYW1lOiBpdGVtc1tpXS5uYW1lLAoJCQkJZG9tYWluOiBpdGVtc1tpXS5kb21haW4gPz8gImZvb2QiLAoJCQl9KTsKCQl9Cgl9Cglhd2FpdCB1cHNlcnRJbnRvKAoJCWluZGV4LAoJCW9yZ2FuaXphdGlvbklkLAoJCXJvd3MsCgkJIltWZWN0b3JdIHVwc2VydENhcmdvVmVjdG9ycyBjaHVuayBmYWlsZWQiLAoJCW1vZGVsLAoJKTsKfQoKZnVuY3Rpb24gaWRzRnJvbUdldEJ5SWRzKHJlc3VsdDogdW5rbm93bik6IFNldDxzdHJpbmc+IHsKCWNvbnN0IHJvd3MgPSBBcnJheS5pc0FycmF5KHJlc3VsdCkKCQk/IHJlc3VsdAoJCTogcmVzdWx0ICYmCgkJCQl0eXBlb2YgcmVzdWx0ID09PSAib2JqZWN0IiAmJgoJCQkJQXJyYXkuaXNBcnJheSgocmVzdWx0IGFzIHsgdmVjdG9ycz86IHVua25vd24gfSkudmVjdG9ycykKCQkJPyAocmVzdWx0IGFzIHsgdmVjdG9yczogdW5rbm93bltdIH0pLnZlY3RvcnMKCQkJOiBbXTsKCWNvbnN0IGlkcyA9IG5ldyBTZXQ8c3RyaW5nPigpOwoJZm9yIChjb25zdCByb3cgb2Ygcm93cykgewoJCWlmICgKCQkJcm93ICYmCgkJCXR5cGVvZiByb3cgPT09ICJvYmplY3QiICYmCgkJCXR5cGVvZiAocm93IGFzIHsgaWQ/OiB1bmtub3duIH0pLmlkID09PSAic3RyaW5nIgoJCSkgewoJCQlpZHMuYWRkKChyb3cgYXMgeyBpZDogc3RyaW5nIH0pLmlkKTsKCQl9Cgl9CglyZXR1cm4gaWRzOwp9CgovKioKICogTGF6eS1maWxsIHJlc29sdmVkIENhcmdvIHJvd3MgbWlzc2luZyBmcm9tIHRoZSBuZXcgaW5kZXguCiAqIE5vLW9wIHdoZW4gdGhlIGZsYWcgaXMgb2ZmLiBOZXZlciB1cHNlcnRzIGEgZnJlZS10ZXh0IHF1ZXJ5LiBOZXZlciB0aHJvd3MuCiAqLwpleHBvcnQgYXN5bmMgZnVuY3Rpb24gZmlsbE1pc3NpbmdDYXJnb1ZlY3RvcnMoCgllbnY6IEVudiwKCW9yZ2FuaXphdGlvbklkOiBzdHJpbmcsCglpdGVtczogQ2FyZ29WZWN0b3JJdGVtW10sCglmbGFnQ29udGV4dD86IEZsYWdzaGlwRXZhbHVhdGlvbkNvbnRleHQsCik6IFByb21pc2U8dm9pZD4gewoJaWYgKGl0ZW1zLmxlbmd0aCA9PT0gMCkgcmV0dXJuOwoJbGV0IGdlbW1hMiA9IGZhbHNlOwoJdHJ5IHsKCQlnZW1tYTIgPSBhd2FpdCBnZW1tYTJFbmFibGVkKGVudiwgb3JnYW5pemF0aW9uSWQsIGZsYWdDb250ZXh0KTsKCX0gY2F0Y2ggKGVycikgewoJCWxvZ0VtYmVkRmFpbHVyZShFTUJFRERJTkdfR0VNTUFfMl9NT0RFTCwgdmVjdG9yRXJyb3JDb2RlKGVycikgPz8gImZsYWdzaGlwIik7CgkJcmV0dXJuOwoJfQoJaWYgKCFnZW1tYTIpIHJldHVybjsKCWNvbnN0IGluZGV4ID0gZWcySW5kZXgoZW52KTsKCWlmICghaW5kZXggfHwgIWVudi5BSSkgewoJCWxvZ0VtYmVkRmFpbHVyZShFTUJFRERJTkdfR0VNTUFfMl9NT0RFTCwgImJpbmRpbmdfbWlzc2luZyIpOwoJCXJldHVybjsKCX0KCgljb25zdCBieUlkID0gbmV3IE1hcDxzdHJpbmcsIENhcmdvVmVjdG9ySXRlbT4oKTsKCWZvciAoY29uc3QgaXRlbSBvZiBpdGVtcykgewoJCWlmICghaXRlbS5pZCB8fCAhaXRlbS5uYW1lPy50cmltKCkpIGNvbnRpbnVlOwoJCWlmICghYnlJZC5oYXMoaXRlbS5pZCkpIGJ5SWQuc2V0KGl0ZW0uaWQsIGl0ZW0pOwoJfQoJY29uc3QgaWRzID0gWy4uLmJ5SWQua2V5cygpXTsKCWlmIChpZHMubGVuZ3RoID09PSAwKSByZXR1cm47CgoJY29uc3QgcHJlc2VudCA9IG5ldyBTZXQ8c3RyaW5nPigpOwoJdHJ5IHsKCQlmb3IgKGNvbnN0IGNodW5rIG9mIGNodW5rQXJyYXkoaWRzLCBWRUNUT1JJWkVfREVMRVRFX0JZX0lEU19NQVgpKSB7CgkJCWNvbnN0IGZvdW5kID0gYXdhaXQgaW5kZXguZ2V0QnlJZHMoY2h1bmspOwoJCQlmb3IgKGNvbnN0IGlkIG9mIGlkc0Zyb21HZXRCeUlkcyhmb3VuZCkpIHByZXNlbnQuYWRkKGlkKTsKCQl9Cgl9IGNhdGNoIChlcnIpIHsKCQlsb2cuZXJyb3IoIltWZWN0b3JdIGxhenkgZmlsbCBza2lwcGVkIiwgewoJCQltb2RlbDogRU1CRURESU5HX0dFTU1BXzJfTU9ERUwsCgkJCWNvZGU6IHZlY3RvckVycm9yQ29kZShlcnIpID8/ICJnZXRCeUlkcyIsCgkJfSk7CgkJcmV0dXJuOwoJfQoKCWNvbnN0IG1pc3NpbmcgPSBpZHMKCQkuZmlsdGVyKChpZCkgPT4gIXByZXNlbnQuaGFzKGlkKSkKCQkubWFwKChpZCkgPT4gYnlJZC5nZXQoaWQpKQoJCS5maWx0ZXIoKGl0ZW0pOiBpdGVtIGlzIENhcmdvVmVjdG9ySXRlbSA9PiBpdGVtICE9IG51bGwpOwoJaWYgKG1pc3NpbmcubGVuZ3RoID09PSAwKSByZXR1cm47Cgl0cnkgewoJCWF3YWl0IHVwc2VydENhcmdvVmVjdG9ycyhlbnYsIG9yZ2FuaXphdGlvbklkLCBtaXNzaW5nLCBmbGFnQ29udGV4dCk7Cgl9IGNhdGNoIChlcnIpIHsKCQlsb2cuZXJyb3IoIltWZWN0b3JdIGxhenkgZmlsbCBza2lwcGVkIiwgewoJCQltb2RlbDogRU1CRURESU5HX0dFTU1BXzJfTU9ERUwsCgkJCWNvZGU6IHZlY3RvckVycm9yQ29kZShlcnIpID8/ICJ1cHNlcnQiLAoJCX0pOwoJfQp9CgovKiogRGVsZXRlIGNhcmdvIHZlY3RvcnMgYnkgSUQuIFRocm93cyBvbiBWZWN0b3JpemUgZmFpbHVyZSAoR0RQUiBmYWlsLWNsb3NlZCkuICovCmV4cG9ydCBhc3luYyBmdW5jdGlvbiBkZWxldGVDYXJnb1ZlY3RvcnMoCgllbnY6IEVudiwKCWl0ZW1JZHM6IHN0cmluZ1tdLAopOiBQcm9taXNlPHZvaWQ+IHsKCWlmIChpdGVtSWRzLmxlbmd0aCA9PT0gMCkgcmV0dXJuOwoJY29uc3QgaW5kZXhlcyA9IFtlbnYuVkVDVE9SSVpFLCBlZzJJbmRleChlbnYpXS5maWx0ZXIoCgkJKGluZGV4KTogaW5kZXggaXMgVmVjdG9yaXplSW5kZXggPT4gQm9vbGVhbihpbmRleCksCgkpOwoJaWYgKGluZGV4ZXMubGVuZ3RoID09PSAwKSByZXR1cm47Cgljb25zdCBmYWlsdXJlczogdW5rbm93bltdID0gW107Cglmb3IgKGNvbnN0IGluZGV4IG9mIGluZGV4ZXMpIHsKCQlmb3IgKGNvbnN0IGNodW5rIG9mIGNodW5rQXJyYXkoaXRlbUlkcywgVkVDVE9SSVpFX0RFTEVURV9CWV9JRFNfTUFYKSkgewoJCQl0cnkgewoJCQkJYXdhaXQgaW5kZXguZGVsZXRlQnlJZHMoY2h1bmspOwoJCQl9IGNhdGNoIChlcnIpIHsKCQkJCWZhaWx1cmVzLnB1c2goZXJyKTsKCQkJfQoJCX0KCX0KCWlmIChmYWlsdXJlcy5sZW5ndGggPiAwKSB7CgkJdGhyb3cgZmFpbHVyZXNbMF07Cgl9Cn0KCi8qKiBCYXRjaCBxdWVyeSBmb3IgbXVsdGlwbGUgaW5ncmVkaWVudCBuYW1lcyAodXNlcyBLViBjYWNoZSBmb3IgZW1iZWRkaW5ncykgKi8KZXhwb3J0IGFzeW5jIGZ1bmN0aW9uIGZpbmRTaW1pbGFyQ2FyZ29CYXRjaCgKCWVudjogRW52LAoJb3JnYW5pemF0aW9uSWQ6IHN0cmluZywKCWluZ3JlZGllbnROYW1lczogc3RyaW5nW10sCglvcHRpb25zPzogewoJCXRvcEs/OiBudW1iZXI7CgkJdGhyZXNob2xkPzogbnVtYmVyOwoJCWRvbWFpbj86IHN0cmluZzsKCQlmbG9vcj86IENhcmdvVmVjdG9yRmxvb3I7CgkJZmxhZ0NvbnRleHQ/OiBGbGFnc2hpcEV2YWx1YXRpb25Db250ZXh0OwoJfSwKKTogUHJvbWlzZTxNYXA8c3RyaW5nLCBTaW1pbGFyQ2FyZ29NYXRjaFtdPj4gewoJY29uc3Qgb3V0ID0gbmV3IE1hcDxzdHJpbmcsIFNpbWlsYXJDYXJnb01hdGNoW10+KCk7CglpZiAoaW5ncmVkaWVudE5hbWVzLmxlbmd0aCA9PT0gMCkgcmV0dXJuIG91dDsKCWNvbnN0IGdlbW1hMiA9IGF3YWl0IGdlbW1hMkVuYWJsZWQoCgkJZW52LAoJCW9yZ2FuaXphdGlvbklkLAoJCW9wdGlvbnM/LmZsYWdDb250ZXh0LAoJKTsKCWNvbnN0IHsgdG9wSyA9IDMgfSA9IG9wdGlvbnMgPz8ge307Cgljb25zdCB0aHJlc2hvbGQgPQoJCW9wdGlvbnM/LmZsb29yICE9IG51bGwKCQkJPyBmbG9vclZhbHVlKG9wdGlvbnMuZmxvb3IsIGdlbW1hMikKCQkJOiAob3B0aW9ucz8udGhyZXNob2xkID8/CgkJCQkoZ2VtbWEyCgkJCQkJPyBFTUJFRERJTkdfR0VNTUFfMl9USFJFU0hPTERTLkRFRkFVTFRfUVVFUlkKCQkJCQk6IExFR0FDWV9ERUZBVUxUX1FVRVJZX1RIUkVTSE9MRCkpOwoJY29uc3QgaW5kZXggPSBnZW1tYTIgPyBlZzJJbmRleChlbnYpIDogZW52LlZFQ1RPUklaRTsKCWNvbnN0IHZlY3RvcnMgPSBhd2FpdCBlbWJlZEJhdGNoV2l0aENhY2hlKGVudiwgaW5ncmVkaWVudE5hbWVzLCB7CgkJb3JnYW5pemF0aW9uSWQsCgkJZmxhZ0NvbnRleHQ6IG9wdGlvbnM/LmZsYWdDb250ZXh0LAoJfSk7CglpZiAoIWluZGV4KSByZXR1cm4gb3V0OwoJY29uc3QgcXVlcnlPcHRzID0gewoJCXRvcEssCgkJcmV0dXJuTWV0YWRhdGE6ICJpbmRleGVkIiBhcyBjb25zdCwKCQluYW1lc3BhY2U6IG9yZ2FuaXphdGlvbklkLAoJfTsKCgljb25zdCBpbmRleGVkID0gaW5ncmVkaWVudE5hbWVzLm1hcCgobmFtZSwgaSkgPT4gKHsgbmFtZSwgaSB9KSk7Cglmb3IgKGNvbnN0IGNodW5rIG9mIGNodW5rQXJyYXkoaW5kZXhlZCwgVkVDVE9SSVpFX1FVRVJZX0NPTkNVUlJFTkNZKSkgewoJCWF3YWl0IFByb21pc2UuYWxsKAoJCQljaHVuay5tYXAoYXN5bmMgKHsgbmFtZSwgaSB9KSA9PiB7CgkJCQljb25zdCB2ZWMgPSB2ZWN0b3JzW2ldOwoJCQkJaWYgKCF2ZWMgfHwgdmVjLmxlbmd0aCAhPT0gRU1CRURESU5HX0RJTUVOU0lPTlMpIHJldHVybjsKCQkJCXRyeSB7CgkJCQkJY29uc3QgcmVzdWx0ID0gYXdhaXQgaW5kZXgucXVlcnkodmVjLCBxdWVyeU9wdHMpOwoJCQkJCWNvbnN0IG1hdGNoZXMgPQoJCQkJCQkoCgkJCQkJCQlyZXN1bHQgYXMgewoJCQkJCQkJCW1hdGNoZXM/OiBBcnJheTx7CgkJCQkJCQkJCWlkPzogc3RyaW5nOwoJCQkJCQkJCQlzY29yZT86IG51bWJlcjsKCQkJCQkJCQkJbWV0YWRhdGE/OiBSZWNvcmQ8c3RyaW5nLCBzdHJpbmc+OwoJCQkJCQkJCX0+OwoJCQkJCQkJfQoJCQkJCQkpLm1hdGNoZXMgPz8gW107CgkJCQkJY29uc3QgZmlsdGVyZWQgPSBtYXRjaGVzCgkJCQkJCS5maWx0ZXIoKG0pID0+IG0uc2NvcmUgIT0gbnVsbCAmJiBtLnNjb3JlID49IHRocmVzaG9sZCkKCQkJCQkJLm1hcCgobSkgPT4gKHsKCQkJCQkJCWl0ZW1JZDogbS5pZCA/PyAiIiwKCQkJCQkJCWl0ZW1OYW1lOiAoKG0ubWV0YWRhdGE/Lm5hbWUgPz8gIiIpLnRyaW0oKSB8fCBtLmlkKSA/PyAiIiwKCQkJCQkJCXNjb3JlOiBtLnNjb3JlID8/IDAsCgkJCQkJCX0pKQoJCQkJCQkuZmlsdGVyKChtKSA9PiBtLml0ZW1JZCAmJiBtLml0ZW1OYW1lKTsKCQkJCQlvdXQuc2V0KG5hbWUsIGZpbHRlcmVkKTsKCQkJCX0gY2F0Y2ggewoJCQkJCW91dC5zZXQobmFtZSwgW10pOwoJCQkJfQoJCQl9KSwKCQkpOwoJfQoJcmV0dXJuIG91dDsKfQo=
+			}
+		} catch (err) {
+			logEmbedFailure(EMBEDDING_MODEL, vectorErrorCode(err));
+		}
+	}
+	return results;
+}
+
+async function embedBatchGemma2(
+	ai: Ai,
+	texts: string[],
+): Promise<(number[] | null)[]> {
+	const results: (number[] | null)[] = new Array(texts.length).fill(null);
+	const pending: Array<{ index: number; sliced: string }> = [];
+	for (let i = 0; i < texts.length; i++) {
+		const sliced = slicedName(texts[i] ?? "");
+		if (!sliced) continue;
+		pending.push({ index: i, sliced });
+	}
+	for (
+		let offset = 0;
+		offset < pending.length;
+		offset += EMBED_GEMMA_2_BATCH_SIZE
+	) {
+		const chunk = pending.slice(offset, offset + EMBED_GEMMA_2_BATCH_SIZE);
+		try {
+			const response = await runModel(ai, EMBEDDING_GEMMA_2_MODEL, {
+				input: chunk.map((row) => clusterInput(row.sliced)),
+				dimensions: EMBEDDING_DIMENSIONS,
+				encoding_format: "float",
+			});
+			let rejected = false;
+			for (let i = 0; i < chunk.length; i++) {
+				const vec = gemma2VectorAt(response, i);
+				if (!vec) rejected = true;
+				results[chunk[i].index] = vec;
+			}
+			if (rejected) logEmbedFailure(EMBEDDING_GEMMA_2_MODEL, "invalid_embedding");
+		} catch (err) {
+			logEmbedFailure(EMBEDDING_GEMMA_2_MODEL, vectorErrorCode(err));
+		}
+	}
+	return results;
+}
+
+/** Batch embed with KV cache: check cache for each, call AI only for misses */
+export async function embedBatchWithCache(
+	env: Env,
+	texts: string[],
+	run?: CargoVectorRun,
+): Promise<(number[] | null)[]> {
+	if (texts.length === 0) return [];
+	const gemma2 = await gemma2Enabled(env, run?.organizationId, run?.flagContext);
+	const order: string[] = [];
+	const seen = new Set<string>();
+	for (const t of texts) {
+		const s = slicedName(t);
+		if (!seen.has(s)) {
+			seen.add(s);
+			order.push(s);
+		}
+	}
+
+	const cacheResults = await Promise.all(
+		order.map(async (s) => {
+			// Legacy still caches and embeds an empty slice. The new path does not.
+			if (gemma2 && !s) return { text: s, vec: null as number[] | null };
+			const key = gemma2 ? await gemma2CacheKey(s) : await legacyCacheKey(s);
+			try {
+				const cached = env.RATION_KV
+					? await env.RATION_KV.get(key, "json")
+					: null;
+				if (
+					cached &&
+					Array.isArray(cached) &&
+					cached.length === EMBEDDING_DIMENSIONS &&
+					(!gemma2 ||
+						cached.every(
+							(value) => typeof value === "number" && Number.isFinite(value),
+						))
+				) {
+					return { text: s, vec: cached as number[] };
+				}
+			} catch {
+				// ignore cache read errors
+			}
+			return { text: s, vec: null as number[] | null };
+		}),
+	);
+
+	const hits = new Map<string, number[]>();
+	const toEmbed: string[] = [];
+	for (const r of cacheResults) {
+		if (r.vec) hits.set(r.text, r.vec);
+		else if (!gemma2 || r.text) toEmbed.push(r.text);
+	}
+
+	let missVectors: (number[] | null)[] = [];
+	if (toEmbed.length > 0 && env.AI) {
+		missVectors = await embedBatch(env.AI, toEmbed, {
+			env,
+			organizationId: run?.organizationId,
+			flagContext: run?.flagContext,
+			gemma2,
+		});
+		if (env.RATION_KV) {
+			for (let i = 0; i < toEmbed.length; i++) {
+				const vec = missVectors[i];
+				if (vec && vec.length === EMBEDDING_DIMENSIONS) {
+					const key = gemma2
+						? await gemma2CacheKey(toEmbed[i])
+						: await legacyCacheKey(toEmbed[i]);
+					env.RATION_KV.put(key, JSON.stringify(vec), {
+						expirationTtl: EMBED_CACHE_TTL,
+					}).catch(() => {});
+				}
+			}
+		}
+	}
+
+	const vecByText = new Map<string, number[] | null>();
+	for (const s of order) {
+		vecByText.set(s, hits.get(s) ?? null);
+	}
+	for (let i = 0; i < toEmbed.length; i++) {
+		vecByText.set(toEmbed[i], missVectors[i] ?? null);
+	}
+
+	return texts.map((t) => vecByText.get(slicedName(t)) ?? null);
+}
+
+type CargoVectorItem = { id: string; name: string; domain: string };
+
+async function upsertInto(
+	index: VectorizeIndex,
+	organizationId: string,
+	rows: Array<{ id: string; values: number[]; name: string; domain: string }>,
+	logLabel: string,
+	model: string,
+): Promise<void> {
+	if (rows.length === 0) return;
+	const toUpsert = rows.map((row) => ({
+		id: row.id,
+		values: row.values,
+		namespace: organizationId,
+		metadata: {
+			name: row.name,
+			domain: row.domain ?? "food",
+			organizationId,
+		},
+	}));
+	for (const chunk of chunkArray(toUpsert, VECTORIZE_UPSERT_MAX)) {
+		try {
+			await index.upsert(chunk);
+		} catch (err) {
+			log.error(logLabel, {
+				model,
+				code: vectorErrorCode(err) ?? "upsert",
+			});
+		}
+	}
+}
+
+/** Upsert a single cargo item's vector into Vectorize */
+export async function upsertCargoVector(
+	env: Env,
+	organizationId: string,
+	item: CargoVectorItem,
+	flagContext?: FlagshipEvaluationContext,
+): Promise<void> {
+	if (!env.AI) return;
+	const gemma2 = await gemma2Enabled(env, organizationId, flagContext);
+	const index = gemma2 ? eg2Index(env) : env.VECTORIZE;
+	if (!index) return;
+	const model = gemma2 ? EMBEDDING_GEMMA_2_MODEL : EMBEDDING_MODEL;
+	const vec = await embed(env.AI, item.name, {
+		env,
+		organizationId,
+		flagContext,
+		gemma2,
+	});
+	if (!vec || vec.length !== EMBEDDING_DIMENSIONS) return;
+	await upsertInto(
+		index,
+		organizationId,
+		[
+			{
+				id: item.id,
+				values: vec,
+				name: item.name,
+				domain: item.domain ?? "food",
+			},
+		],
+		"[Vector] upsertCargoVector failed",
+		model,
+	);
+}
+
+/** Upsert multiple cargo items' vectors in batch */
+export async function upsertCargoVectors(
+	env: Env,
+	organizationId: string,
+	items: CargoVectorItem[],
+	flagContext?: FlagshipEvaluationContext,
+): Promise<void> {
+	if (!env.AI || items.length === 0) return;
+	const gemma2 = await gemma2Enabled(env, organizationId, flagContext);
+	const index = gemma2 ? eg2Index(env) : env.VECTORIZE;
+	if (!index) return;
+	const model = gemma2 ? EMBEDDING_GEMMA_2_MODEL : EMBEDDING_MODEL;
+	const vectors = await embedBatch(
+		env.AI,
+		items.map((item) => item.name),
+		{ env, organizationId, flagContext, gemma2 },
+	);
+	const rows: Array<{
+		id: string;
+		values: number[];
+		name: string;
+		domain: string;
+	}> = [];
+	for (let i = 0; i < items.length; i++) {
+		const vec = vectors[i];
+		if (vec && vec.length === EMBEDDING_DIMENSIONS) {
+			rows.push({
+				id: items[i].id,
+				values: vec,
+				name: items[i].name,
+				domain: items[i].domain ?? "food",
+			});
+		}
+	}
+	await upsertInto(
+		index,
+		organizationId,
+		rows,
+		"[Vector] upsertCargoVectors chunk failed",
+		model,
+	);
+}
+
+function idsFromGetByIds(result: unknown): Set<string> {
+	const rows = Array.isArray(result)
+		? result
+		: result &&
+				typeof result === "object" &&
+				Array.isArray((result as { vectors?: unknown }).vectors)
+			? (result as { vectors: unknown[] }).vectors
+			: [];
+	const ids = new Set<string>();
+	for (const row of rows) {
+		if (
+			row &&
+			typeof row === "object" &&
+			typeof (row as { id?: unknown }).id === "string"
+		) {
+			ids.add((row as { id: string }).id);
+		}
+	}
+	return ids;
+}
+
+/**
+ * Lazy-fill resolved Cargo rows missing from the new index.
+ * No-op when the flag is off. Never upserts a free-text query. Never throws.
+ */
+export async function fillMissingCargoVectors(
+	env: Env,
+	organizationId: string,
+	items: CargoVectorItem[],
+	flagContext?: FlagshipEvaluationContext,
+): Promise<void> {
+	if (items.length === 0) return;
+	let gemma2 = false;
+	try {
+		gemma2 = await gemma2Enabled(env, organizationId, flagContext);
+	} catch (err) {
+		logEmbedFailure(EMBEDDING_GEMMA_2_MODEL, vectorErrorCode(err) ?? "flagship");
+		return;
+	}
+	if (!gemma2) return;
+	const index = eg2Index(env);
+	if (!index || !env.AI) {
+		logEmbedFailure(EMBEDDING_GEMMA_2_MODEL, "binding_missing");
+		return;
+	}
+
+	const byId = new Map<string, CargoVectorItem>();
+	for (const item of items) {
+		if (!item.id || !item.name?.trim()) continue;
+		if (!byId.has(item.id)) byId.set(item.id, item);
+	}
+	const ids = [...byId.keys()];
+	if (ids.length === 0) return;
+
+	const present = new Set<string>();
+	try {
+		for (const chunk of chunkArray(ids, VECTORIZE_DELETE_BY_IDS_MAX)) {
+			const found = await index.getByIds(chunk);
+			for (const id of idsFromGetByIds(found)) present.add(id);
+		}
+	} catch (err) {
+		log.error("[Vector] lazy fill skipped", {
+			model: EMBEDDING_GEMMA_2_MODEL,
+			code: vectorErrorCode(err) ?? "getByIds",
+		});
+		return;
+	}
+
+	const missing = ids
+		.filter((id) => !present.has(id))
+		.map((id) => byId.get(id))
+		.filter((item): item is CargoVectorItem => item != null);
+	if (missing.length === 0) return;
+	try {
+		await upsertCargoVectors(env, organizationId, missing, flagContext);
+	} catch (err) {
+		log.error("[Vector] lazy fill skipped", {
+			model: EMBEDDING_GEMMA_2_MODEL,
+			code: vectorErrorCode(err) ?? "upsert",
+		});
+	}
+}
+
+/** Delete cargo vectors by ID. Throws on Vectorize failure (GDPR fail-closed). */
+export async function deleteCargoVectors(
+	env: Env,
+	itemIds: string[],
+): Promise<void> {
+	if (itemIds.length === 0) return;
+	const indexes = [env.VECTORIZE, eg2Index(env)].filter(
+		(index): index is VectorizeIndex => Boolean(index),
+	);
+	if (indexes.length === 0) return;
+	const failures: unknown[] = [];
+	for (const index of indexes) {
+		for (const chunk of chunkArray(itemIds, VECTORIZE_DELETE_BY_IDS_MAX)) {
+			try {
+				await index.deleteByIds(chunk);
+			} catch (err) {
+				failures.push(err);
+			}
+		}
+	}
+	if (failures.length > 0) {
+		throw failures[0];
+	}
+}
+
+/** Batch query for multiple ingredient names (uses KV cache for embeddings) */
+export async function findSimilarCargoBatch(
+	env: Env,
+	organizationId: string,
+	ingredientNames: string[],
+	options?: {
+		topK?: number;
+		threshold?: number;
+		domain?: string;
+		floor?: CargoVectorFloor;
+		flagContext?: FlagshipEvaluationContext;
+	},
+): Promise<Map<string, SimilarCargoMatch[]>> {
+	const out = new Map<string, SimilarCargoMatch[]>();
+	if (ingredientNames.length === 0) return out;
+	const gemma2 = await gemma2Enabled(
+		env,
+		organizationId,
+		options?.flagContext,
+	);
+	const { topK = 3 } = options ?? {};
+	const threshold =
+		options?.floor != null
+			? floorValue(options.floor, gemma2)
+			: (options?.threshold ??
+				(gemma2
+					? EMBEDDING_GEMMA_2_THRESHOLDS.DEFAULT_QUERY
+					: LEGACY_DEFAULT_QUERY_THRESHOLD));
+	const index = gemma2 ? eg2Index(env) : env.VECTORIZE;
+	const vectors = await embedBatchWithCache(env, ingredientNames, {
+		organizationId,
+		flagContext: options?.flagContext,
+	});
+	if (!index) return out;
+	const queryOpts = {
+		topK,
+		returnMetadata: "indexed" as const,
+		namespace: organizationId,
+	};
+
+	const indexed = ingredientNames.map((name, i) => ({ name, i }));
+	for (const chunk of chunkArray(indexed, VECTORIZE_QUERY_CONCURRENCY)) {
+		await Promise.all(
+			chunk.map(async ({ name, i }) => {
+				const vec = vectors[i];
+				if (!vec || vec.length !== EMBEDDING_DIMENSIONS) return;
+				try {
+					const result = await index.query(vec, queryOpts);
+					const matches =
+						(
+							result as {
+								matches?: Array<{
+									id?: string;
+									score?: number;
+									metadata?: Record<string, string>;
+								}>;
+							}
+						).matches ?? [];
+					const filtered = matches
+						.filter((m) => m.score != null && m.score >= threshold)
+						.map((m) => ({
+							itemId: m.id ?? "",
+							itemName: ((m.metadata?.name ?? "").trim() || m.id) ?? "",
+							score: m.score ?? 0,
+						}))
+						.filter((m) => m.itemId && m.itemName);
+					out.set(name, filtered);
+				} catch {
+					out.set(name, []);
+				}
+			}),
+		);
+	}
+	return out;
+}

@@ -25,6 +25,7 @@ describe("FLAG_REGISTRY validation", () => {
 		expect(notIos).toEqual([
 			"app-review-login",
 			"apple-web-login",
+			"cargo-embedding-gemma-2",
 			"nutrition-async-recompute",
 			"nutrition-barcode-diary",
 			"nutrition-fast-log",

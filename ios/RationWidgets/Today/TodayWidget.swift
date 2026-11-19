@@ -53,14 +53,20 @@ struct TodayWidgetView: View {
                     small(today)
                 } else {
                     mealList(today)
-                    if HomeWidgetCopy.energyLine(remainingKcal: today.remainingKcal) != nil, let goal = today.goalKcal {
+                    if let remaining = today.remainingKcal, let goal = today.goalKcal {
                         MacroBar(
                             label: "Calories",
-                            remaining: today.remainingKcal ?? 0,
+                            remaining: remaining,
                             goal: goal,
                             unit: "kcal",
                             palette: palette
                         )
+                    } else {
+                        Text(HomeWidgetCopy.absentEnergyLine)
+                            .font(WidgetType.detail())
+                            .foregroundStyle(palette.muted)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
                     }
                     if family == .systemLarge {
                         macroBars(today)

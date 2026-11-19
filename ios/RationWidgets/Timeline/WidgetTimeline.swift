@@ -192,7 +192,7 @@ enum WidgetMutations {
             await mutate { cache in
                 cache.inFlightCargoIds.removeAll { $0 == food.cargoId }
                 cache.eatHold = nil
-                cache.statusLine = "Couldn't log that bite"
+                cache.statusLine = HomeWidgetCopy.eatFailure(planFuelActions: cache.planFuelActions)
                 return true
             }
         }

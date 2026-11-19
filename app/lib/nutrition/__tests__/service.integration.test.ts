@@ -111,6 +111,7 @@ function setup() {
 			fdc_id text,
 			barcode text,
 			saved_food_id text,
+			tag_names text,
 			created_at integer not null
 		);
 		create unique index nutrition_intake_user_idempotency_uidx
@@ -428,7 +429,7 @@ describe("canonical nutrition service with transactional SQLite", () => {
 							 occurred_at, kitchen_event_id, schema_version, nutrients_json,
 							 coverage_json, fiber_g, consent_id, '99999999-9999-4999-8999-999999999999',
 							 null, id, null, null, null, notes, logged_amount, logged_unit,
-							 null, null, null, null, null, null, null, created_at
+							 null, null, null, null, null, null, null, null, created_at
 							 from nutrition_intake where id = ?`,
 						)
 						.run(first.items[0]?.intake.id);

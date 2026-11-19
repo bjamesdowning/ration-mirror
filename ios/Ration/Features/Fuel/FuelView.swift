@@ -40,6 +40,7 @@ struct FuelView: View {
                 VStack(alignment: .leading, spacing: 16) {
                     if let day {
                         FuelDaySummary(model: summary(for: day)) { showingGoals = true }
+                        FuelConsistencyRows(days: day.consistency)
                     } else if !loaded {
                         ProgressView()
                     }

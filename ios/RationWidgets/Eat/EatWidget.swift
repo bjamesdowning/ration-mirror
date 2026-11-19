@@ -53,7 +53,7 @@ struct EatWidgetView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            WidgetHeader(wordmark: "EAT", source: sourceWord, destination: cargoURL, palette: palette)
+            WidgetHeader(wordmark: HomeWidgetCopy.eatWordmark(planFuelActions: entry.cache.planFuelActions), source: sourceWord, destination: cargoURL, palette: palette)
             WidgetStatusLine(text: entry.cache.statusLine, palette: palette)
             if entry.cache.isReady {
                 content
@@ -101,10 +101,10 @@ struct EatWidgetView: View {
             WidgetEmptyLine(text: "That tag is gone", palette: palette)
         } else if let eat {
             if !eat.available {
-                WidgetEmptyLine(text: "Open Cargo to eat", palette: palette)
+                WidgetEmptyLine(text: HomeWidgetCopy.eatFallback(planFuelActions: entry.cache.planFuelActions), palette: palette)
             } else if eat.foods.isEmpty {
                 WidgetEmptyLine(
-                    text: entry.eatTagName.map { HomeWidgetCopy.taggedEmpty(name: $0) } ?? "Nothing ready to eat",
+                    text: entry.eatTagName.map { HomeWidgetCopy.taggedEmpty(name: $0) } ?? HomeWidgetCopy.eatEmpty(planFuelActions: entry.cache.planFuelActions),
                     palette: palette
                 )
             } else if interactive {
@@ -148,7 +148,7 @@ struct EatWidgetView: View {
                     title: food.name,
                     detail: detail(for: food),
                     succeeded: isEaten(food.cargoId),
-                    succeededWord: "Eaten",
+                    succeededWord: HomeWidgetCopy.eatSucceededWord(planFuelActions: entry.cache.planFuelActions),
                     saving: saving,
                     palette: palette
                 )
@@ -180,8 +180,12 @@ struct EatWidgetView: View {
     }
 
     private func accessibility(for food: HomeWidgetEatFood) -> String {
-        if isEaten(food.cargoId) { return "Ate one \(food.unit) of \(food.name)" }
-        return "Eat one \(food.unit) of \(food.name)"
+        HomeWidgetCopy.eatAccessibility(
+            unit: food.unit,
+            name: food.name,
+            eaten: isEaten(food.cargoId),
+            planFuelActions: entry.cache.planFuelActions
+        )
     }
 
     private func isEaten(_ id: String) -> Bool {

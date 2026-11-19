@@ -205,6 +205,92 @@ final class FuelAlignmentTests: XCTestCase {
         XCTAssertNil(item.loggedUnit)
     }
 
+    func testOldFuelDayWithoutConsistencyDrawsNoShades() throws {
+        let day = try JSONDecoder().decode(
+            FuelDayResponse.self,
+            from: Data(
+                """
+                {"date":"2026-11-13","week":["2026-11-08"],"weekStart":"sunday","loggedDates":[],"used":0,"limit":3,"crew":false,"diaryLayout":"timeline","fuelTimeZone":null,"goal":null,"totals":null,"items":[]}
+                """.utf8
+            )
+        )
+        XCTAssertNil(day.consistency)
+        XCTAssertTrue(FuelConsistency.rows(from: day.consistency).isEmpty)
+    }
+
+    func testConsistencyQuartersMatchTheWorkerTable() {
+        let goal = 100.0
+        let cases: [(Double, Int?)] = [
+            (0, 1), (25, 1), (26, 2), (49, 2), (50, 3), (74, 3), (75, 4), (100, 4), (101, 4),
+        ]
+        for (actual, shade) in cases {
+            XCTAssertEqual(FuelMacroShade.level(actual: actual, goal: goal, logged: true), shade)
+        }
+        XCTAssertEqual(FuelMacroShade.level(actual: 2, goal: 10, logged: true), 1)
+        XCTAssertEqual(FuelMacroShade.level(actual: 3, goal: 10, logged: true), 2)
+        XCTAssertEqual(FuelMacroShade.level(actual: 5, goal: 10, logged: true), 3)
+        XCTAssertEqual(FuelMacroShade.level(actual: 8, goal: 10, logged: true), 4)
+        XCTAssertEqual(FuelMacroShade.level(actual: 0, goal: 100, logged: true), 1)
+        XCTAssertNil(FuelMacroShade.level(actual: 80, goal: 100, logged: false))
+        XCTAssertNil(FuelMacroShade.level(actual: 10, goal: 0, logged: true))
+        XCTAssertNil(FuelMacroShade.level(actual: 10, goal: 0.4, logged: true))
+    }
+
+    func testConsistencyVoiceOverUsesGramsOrNotLogged() {
+        let days = [
+            FuelDayResponse.ConsistencyDay(
+                date: "2026-11-11",
+                logged: true,
+                proteinG: 80,
+                carbsG: 10,
+                fatG: nil,
+                goal: .init(proteinG: 100, carbsG: nil, fatG: 40)
+            ),
+            FuelDayResponse.ConsistencyDay(
+                date: "2026-11-12",
+                logged: false,
+                proteinG: nil,
+                carbsG: nil,
+                fatG: nil,
+                goal: .init(proteinG: 100, carbsG: nil, fatG: nil)
+            ),
+            FuelDayResponse.ConsistencyDay(
+                date: "2026-11-13",
+                logged: true,
+                proteinG: 5,
+                carbsG: nil,
+                fatG: nil,
+                goal: nil
+            ),
+        ]
+        let rows = FuelConsistency.rows(from: days)
+        XCTAssertEqual(rows.map(\.name), ["Protein", "Fat"])
+        XCTAssertEqual(
+            rows[0].cells[0].accessibilityLabel,
+            "Protein, Wednesday 11 November, 80 of 100 grams"
+        )
+        XCTAssertEqual(rows[0].cells[0].shade, 4)
+        XCTAssertNil(rows[0].cells[1].shade)
+        XCTAssertEqual(
+            rows[0].cells[1].accessibilityLabel,
+            "Protein, Thursday 12 November, not logged"
+        )
+        XCTAssertNil(rows[0].cells[2].shade)
+        XCTAssertEqual(
+            rows[0].cells[2].accessibilityLabel,
+            "Protein, Friday 13 November, no target"
+        )
+        XCTAssertEqual(
+            rows[1].cells[0].accessibilityLabel,
+            "Fat, Wednesday 11 November, 0 of 40 grams"
+        )
+        XCTAssertEqual(FuelConsistency.weekdayLetter("2026-11-11"), "W")
+        let spoken = rows.flatMap(\.cells).map(\.accessibilityLabel).joined(separator: " ")
+        XCTAssertFalse(spoken.localizedCaseInsensitiveContains("missed"))
+        XCTAssertFalse(spoken.localizedCaseInsensitiveContains("failed"))
+        XCTAssertFalse(spoken.localizedCaseInsensitiveContains("streak"))
+    }
+
     private func goal(
         energy: Double?,
         protein: Double?,

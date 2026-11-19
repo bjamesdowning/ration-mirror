@@ -19,8 +19,10 @@ final class HomeWidgetCopyTests: XCTestCase {
         XCTAssertNil(HomeWidgetCopy.energyLine(remainingKcal: nil))
         XCTAssertEqual(HomeWidgetCopy.energyLine(remainingKcal: 640), "640 kcal left")
         XCTAssertEqual(HomeWidgetCopy.energyLine(remainingKcal: -40), "40 kcal over")
-        XCTAssertEqual(HomeWidgetCopy.macroLine(remaining: 82), "82 g left")
-        XCTAssertEqual(HomeWidgetCopy.macroLine(remaining: -12), "12 g over")
+        XCTAssertEqual(HomeWidgetCopy.macroLine(remaining: 109, goal: 151), "42 of 151 g")
+        XCTAssertEqual(HomeWidgetCopy.macroLine(remaining: -12, goal: 50), "62 of 50 g")
+        XCTAssertEqual(HomeWidgetCopy.absentEnergyLine, "No calorie goal")
+        XCTAssertNil(HomeWidgetCopy.energyLine(remainingKcal: nil))
         XCTAssertEqual(HomeWidgetCopy.eatDetail(quantity: 6, unit: "slice", step: 1), "6 slices · take 1")
         XCTAssertEqual(HomeWidgetCopy.eatDetail(quantity: 0, unit: "slice", step: 1), "1 slice")
         XCTAssertEqual(HomeWidgetCopy.slotLabel("snack"), "Snack")
@@ -56,6 +58,35 @@ final class HomeWidgetCopyTests: XCTestCase {
         """.data(using: .utf8)!
         let cache = try JSONDecoder().decode(HomeWidgetCache.self, from: json)
         XCTAssertEqual(WidgetEatRouting.route(planFuelActions: cache.planFuelActions), .addToFuel)
+    }
+
+    func testEatFaceBranchesOnTheFuelBit() {
+        XCTAssertEqual(HomeWidgetCopy.eatWordmark(planFuelActions: nil), "EAT")
+        XCTAssertEqual(HomeWidgetCopy.eatWordmark(planFuelActions: false), "EAT")
+        XCTAssertEqual(HomeWidgetCopy.eatWordmark(planFuelActions: true), "FUEL")
+        XCTAssertEqual(HomeWidgetCopy.eatSucceededWord(planFuelActions: false), "Eaten")
+        XCTAssertEqual(HomeWidgetCopy.eatSucceededWord(planFuelActions: true), "Logged")
+        XCTAssertEqual(HomeWidgetCopy.eatEmpty(planFuelActions: nil), "Nothing ready to eat")
+        XCTAssertEqual(HomeWidgetCopy.eatEmpty(planFuelActions: true), "Nothing ready to log")
+        XCTAssertEqual(HomeWidgetCopy.eatFallback(planFuelActions: false), "Open Cargo to eat")
+        XCTAssertEqual(HomeWidgetCopy.eatFallback(planFuelActions: true), "Open Cargo to log")
+        XCTAssertEqual(HomeWidgetCopy.eatFailure(planFuelActions: nil), "Couldn't log that bite")
+        XCTAssertEqual(HomeWidgetCopy.eatFailure(planFuelActions: true), "Couldn't log to Fuel")
+        XCTAssertEqual(HomeWidgetCopy.eatIntentTitle(planFuelActions: false), "Eat one")
+        XCTAssertEqual(HomeWidgetCopy.eatIntentTitle(planFuelActions: true), "Log to Fuel")
+        XCTAssertEqual(
+            HomeWidgetCopy.eatAccessibility(unit: "slice", name: "Bread", eaten: false, planFuelActions: false),
+            "Eat one slice of Bread"
+        )
+        XCTAssertEqual(
+            HomeWidgetCopy.eatAccessibility(unit: "slice", name: "Bread", eaten: false, planFuelActions: true),
+            "Log one slice of Bread to Fuel"
+        )
+        XCTAssertEqual(
+            HomeWidgetCopy.eatAccessibility(unit: "slice", name: "Bread", eaten: false, planFuelActions: nil),
+            "Eat one slice of Bread"
+        )
+        XCTAssertEqual(HomeWidgetCache.currentSchema, 2)
     }
 
     func testAPIBaseAllowsHttpsAndLocalhostOnly() {

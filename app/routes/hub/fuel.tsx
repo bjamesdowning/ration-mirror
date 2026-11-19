@@ -72,7 +72,12 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		loadFuelDay(env.DB, user.id, date),
 		checkBalance(env, groupId),
 	]);
-	return { day, healthNote: APPLE_HEALTH_REMAINS, credits };
+	return {
+		day,
+		healthNote: APPLE_HEALTH_REMAINS,
+		credits,
+		scanCreditCost: AI_COSTS.SCAN,
+	};
 }
 
 export async function action({ request, context }: Route.ActionArgs) {
@@ -100,7 +105,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 }
 
 export default function FuelPage({ loaderData }: Route.ComponentProps) {
-	const { day, credits } = loaderData;
+	const { day, credits, scanCreditCost } = loaderData;
 	const [params] = useSearchParams();
 	const editor = params.get("editor") === "goals";
 	const navigate = useNavigate();
@@ -384,6 +389,7 @@ export default function FuelPage({ loaderData }: Route.ComponentProps) {
 					online={online}
 					photoLog={photoLog}
 					credits={credits}
+					scanCreditCost={scanCreditCost}
 					onClose={() => setShowScan(false)}
 					onLimit={() => navigate("/hub/pricing")}
 					onSaved={() => {
@@ -534,6 +540,7 @@ function ScanToFuel({
 	online,
 	photoLog,
 	credits,
+	scanCreditCost,
 	onClose,
 	onLimit,
 	onSaved,
@@ -543,6 +550,7 @@ function ScanToFuel({
 	online: boolean;
 	photoLog: boolean;
 	credits: number;
+	scanCreditCost: number;
 	onClose: () => void;
 	onLimit: () => void;
 	onSaved: () => void;
@@ -749,7 +757,7 @@ function ScanToFuel({
 					mark="fuel"
 					title={FUEL_SCAN_ANALYZING}
 					detail={FUEL_SCAN_ANALYZING_DETAIL}
-					creditCost={AI_COSTS.SCAN}
+					creditCost={scanCreditCost}
 					className="flex-1"
 				/>
 			</div>
@@ -894,7 +902,7 @@ function ScanToFuel({
 					</p>
 					<p className="text-sm">{FUEL_SCAN_NEXT_STEPS}</p>
 					<p className="text-sm">
-						Uses {AI_COSTS.SCAN} credits per photo. You have {credits}.
+						Uses {scanCreditCost} credits per photo. You have {credits}.
 					</p>
 					<p className="text-sm text-muted">{FUEL_SCAN_NOT_MEDICAL}</p>
 					<p className="text-sm text-muted">

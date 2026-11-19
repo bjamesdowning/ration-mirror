@@ -22,12 +22,7 @@ struct MarkSupplyPurchasedIntent: AppIntent {
 }
 
 struct EatCargoStepIntent: AppIntent {
-    static var title: LocalizedStringResource {
-        if HomeWidgetCacheStore.load()?.planFuelActions == true {
-            return "Log to Fuel"
-        }
-        return "Eat one"
-    }
+    static var title: LocalizedStringResource = "Eat one"
     static var isDiscoverable: Bool = false
     static var openAppWhenRun: Bool = false
 

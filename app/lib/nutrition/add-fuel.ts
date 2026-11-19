@@ -109,8 +109,10 @@ export function manualFuelEntry(input: {
 	}
 	const tagNames = input.tagNames
 		.map((tag) => tag.trim())
-		.filter((tag) => tag.length > 0 && tag.length <= 100)
-		.slice(0, 10);
+		.filter((tag) => tag.length > 0);
+	if (tagNames.length > 10 || tagNames.some((tag) => tag.length > 100)) {
+		return null;
+	}
 	return {
 		name,
 		amount: input.amount,

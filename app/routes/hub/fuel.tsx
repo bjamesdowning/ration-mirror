@@ -1148,6 +1148,7 @@ function AddFuelPanel({
 	const [pickedCargo, setPickedCargo] = useState<AddFuelCargo | null>(null);
 	const [pickedMeal, setPickedMeal] = useState<AddFuelMeal | null>(null);
 	const [touched, setTouched] = useState<Set<string>>(new Set());
+	const [formError, setFormError] = useState<string | null>(null);
 	const searchedMeals = useRef(false);
 
 	useEffect(() => {
@@ -1359,7 +1360,13 @@ function AddFuelPanel({
 					fatG: Number(fat || "0"),
 					tagNames: tags.split(",").map((tag) => tag.trim()),
 				});
-				if (!entry) return;
+				if (!entry) {
+					setFormError(
+						"Check the name, amount, and macros. Use at most 10 tags, each 100 characters or fewer.",
+					);
+					return;
+				}
+				setFormError(null);
 				const named = entry.tagNames.map((tag) => {
 					const known = pickedTags.find((row) => row.name === tag);
 					return known?.slug ? { name: tag, slug: known.slug } : { name: tag };
@@ -1375,6 +1382,7 @@ function AddFuelPanel({
 			}}
 		>
 			<h2 className="text-base">Add Fuel</h2>
+			{formError ? <p className="text-sm text-carbon">{formError}</p> : null}
 			<label className="block text-sm">
 				Search
 				<input

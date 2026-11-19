@@ -115,5 +115,29 @@ describe("add fuel", () => {
 				tagNames: [],
 			}),
 		).toBeNull();
+		expect(
+			manualFuelEntry({
+				name: "Soup",
+				amount: 1,
+				unit: "serving",
+				energyKcal: 1,
+				proteinG: 0,
+				carbsG: 0,
+				fatG: 0,
+				tagNames: Array.from({ length: 11 }, (_, index) => `Tag ${index}`),
+			}),
+		).toBeNull();
+		expect(
+			manualFuelEntry({
+				name: "Soup",
+				amount: 1,
+				unit: "serving",
+				energyKcal: 1,
+				proteinG: 0,
+				carbsG: 0,
+				fatG: 0,
+				tagNames: ["a".repeat(101)],
+			}),
+		).toBeNull();
 	});
 });

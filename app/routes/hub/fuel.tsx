@@ -9,6 +9,7 @@ import {
 	useRouteLoaderData,
 	useSearchParams,
 } from "react-router";
+import { AiWait } from "~/components/ai/AiWait";
 import { useOpenHubAction } from "~/components/hub/useHubAction";
 import { patchUserSettings, requireActiveGroup } from "~/lib/auth.server";
 import { buildWebFlagContext } from "~/lib/feature-flags/flags.server";
@@ -31,6 +32,8 @@ import {
 	pollFuelPhoto,
 } from "~/lib/nutrition/fuel-photo-client";
 import {
+	FUEL_SCAN_ANALYZING,
+	FUEL_SCAN_ANALYZING_DETAIL,
 	FUEL_SCAN_NEXT_STEPS,
 	FUEL_SCAN_NOT_MEDICAL,
 	FUEL_SCAN_UNAVAILABLE,
@@ -696,6 +699,27 @@ function ScanToFuel({
 
 	const analyzing = photoPhase === "queued" || photoPhase === "analyzing";
 
+	if (analyzing) {
+		return (
+			<div className="ai-wait-screen">
+				<div className="ai-wait-bar">
+					<button type="button" className="ai-wait-close" onClick={onClose}>
+						Close
+					</button>
+					<h2 className="ai-wait-screen-title">Scan to Fuel</h2>
+					<span aria-hidden="true" />
+				</div>
+				<AiWait
+					mark="fuel"
+					title={FUEL_SCAN_ANALYZING}
+					detail={FUEL_SCAN_ANALYZING_DETAIL}
+					creditCost={AI_COSTS.SCAN}
+					className="flex-1"
+				/>
+			</div>
+		);
+	}
+
 	return (
 		<div className="space-y-3 rounded-xl border border-platinum p-4">
 			<h2 className="text-base">Scan to Fuel</h2>
@@ -812,11 +836,6 @@ function ScanToFuel({
 						Scan another
 					</button>
 				</form>
-			) : analyzing ? (
-				<div className="rounded-xl border border-platinum p-4">
-					<p className="text-sm">Analyzing</p>
-					<p className="text-sm text-muted">This usually takes a few seconds.</p>
-				</div>
 			) : photoPhase === "failed" ? (
 				<div className="space-y-2">
 					<p className="text-sm">{failure}</p>

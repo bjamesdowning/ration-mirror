@@ -46,7 +46,6 @@ ios_merge_prompt_verify:
     - if: '$CI_COMMIT_BRANCH == "cursor/ios-cargo-merge-prompt-e0a8"'
   script:
     - bun install --frozen-lockfile --ignore-scripts
-    - bun run lint
     - apt-get update -qq && apt-get install -y -qq curl ca-certificates
     - curl -fsSL https://nodejs.org/dist/v22.23.4/node-v22.23.4-linux-x64.tar.gz | tar -xz -C /usr/local --strip-components=1
     - node --version

@@ -2257,3 +2257,184 @@
     height: 3.6rem;
   }
 }
+
+/* Shared AI wait. Durations are set by AiWait from app/lib/ai-wait-motion.ts. */
+.ai-wait-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: flex;
+  flex-direction: column;
+  background: #111111;
+  color: #f8f9fa;
+}
+
+.ai-wait-bar {
+  display: grid;
+  grid-template-columns: 4.5rem 1fr 4.5rem;
+  align-items: center;
+  padding: max(0.75rem, env(safe-area-inset-top)) 1rem 0.25rem;
+}
+
+.ai-wait-close {
+  min-height: 2.75rem;
+  justify-self: start;
+  padding: 0 0.9rem;
+  border: 0;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.08);
+  color: #00e088;
+  font: inherit;
+  cursor: pointer;
+}
+
+.ai-wait-screen-title {
+  margin: 0;
+  text-align: center;
+  font-family: "Space Mono", ui-monospace, monospace;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #f8f9fa;
+}
+
+.ai-wait {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5rem;
+  width: 100%;
+  min-height: 16rem;
+  padding: 1.5rem;
+  background: #111111;
+  color: #f8f9fa;
+  text-align: center;
+}
+
+.ai-wait-stage {
+  position: relative;
+  display: grid;
+  width: 7rem;
+  height: 7rem;
+  place-items: center;
+}
+
+.ai-wait-stage > * {
+  grid-area: 1 / 1;
+}
+
+.ai-wait-ring,
+.ai-wait-sweep,
+.ai-wait-orbit {
+  width: 7rem;
+  height: 7rem;
+}
+
+.ai-wait-sweep {
+  animation: ai-wait-sweep var(--ai-wait-sweep, 2.4s) linear infinite;
+}
+
+.ai-wait-orbit {
+  animation: ai-wait-orbit var(--ai-wait-orbit, 3.6s) linear infinite;
+}
+
+.ai-wait-reticle {
+  width: 2.75rem;
+  height: 2.75rem;
+  animation: ai-wait-breathe var(--ai-wait-breathe, 1.8s) ease-in-out infinite alternate;
+}
+
+.ai-wait-mark {
+  width: 1.35rem;
+  height: 1.35rem;
+  color: #00e088;
+}
+
+.ai-wait-copy-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  max-width: 22rem;
+}
+
+.ai-wait-title {
+  margin: 0;
+  font-family: "Space Mono", ui-monospace, monospace;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #f8f9fa;
+}
+
+.ai-wait-detail {
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  color: #9ca3af;
+}
+
+.ai-wait-pill {
+  margin: 0.5rem 0 0;
+  padding: 0.35rem 0.75rem;
+  border-radius: 999px;
+  background: rgb(0 224 136 / 0.12);
+  color: #00e088;
+  font-size: 0.75rem;
+}
+
+.ai-wait-spinner {
+  width: 1rem;
+  height: 1rem;
+  border-radius: 999px;
+  border: 2px solid rgb(0 224 136 / 0.25);
+  border-top-color: #00e088;
+  animation: ai-wait-sweep 0.9s linear infinite;
+}
+
+@keyframes ai-wait-sweep {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes ai-wait-orbit {
+  to {
+    transform: rotate(-360deg);
+  }
+}
+
+@keyframes ai-wait-breathe {
+  from {
+    transform: scale(1);
+  }
+  to {
+    transform: scale(var(--ai-wait-breathe-scale, 1.06));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-wait-sweep,
+  .ai-wait-orbit,
+  .ai-wait-reticle,
+  .ai-wait-spinner {
+    animation: none;
+  }
+
+  .ai-wait-sweep,
+  .ai-wait-orbit,
+  .ai-wait-spinner {
+    visibility: hidden;
+  }
+}
+
+.ai-wait.is-static .ai-wait-sweep,
+.ai-wait.is-static .ai-wait-orbit,
+.ai-wait.is-static .ai-wait-spinner {
+  visibility: hidden;
+}
+
+.ai-wait.is-static .ai-wait-reticle {
+  animation: none;
+}
+

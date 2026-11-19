@@ -1,7 +1,18 @@
 import { z } from "zod";
+import { MAX_TAG_SLUG_LENGTH, MAX_TAGS_PER_ENTITY } from "~/lib/tags";
 import { FuelTimeZoneSchema } from "./fuel";
 import { IntakeNotesSchema, SLOT_TYPES } from "./manifest";
 import { UuidSchema } from "./uuid";
+
+/** One display name copied onto a Fuel log. A slug is optional and stays a slug. */
+export const DiaryTagRefSchema = z.object({
+	name: z.string().trim().min(1).max(100),
+	slug: z.string().trim().min(1).max(MAX_TAG_SLUG_LENGTH).optional(),
+});
+
+export const DiaryTagNamesSchema = z
+	.array(z.union([z.string().trim().min(1).max(100), DiaryTagRefSchema]))
+	.max(MAX_TAGS_PER_ENTITY);
 
 const IsoDateSchema = z
 	.string()
@@ -41,6 +52,8 @@ export const DiaryFoodWriteSchema = z
 		idempotencyKey: UuidSchema,
 		operationKey: UuidSchema,
 		notes: IntakeNotesSchema.optional(),
+		/** Display names copied onto this log. Empty stores null. Photo confirm omits this. */
+		tagNames: DiaryTagNamesSchema.optional(),
 		/** Device IANA zone. The server stamps fuel_date. Not a client day. */
 		fuelTimeZone: FuelTimeZoneSchema.optional(),
 	})

@@ -38,6 +38,7 @@ import {
 	lookupFdcPortion,
 	resolveHouseholdServingGrams,
 } from "./fdc-portion.server";
+import { publishableTagNames } from "./fuel-dto.server";
 import {
 	isGoalEffectiveOnDate,
 	nutritionIntakeRetentionCutoff,
@@ -825,6 +826,7 @@ export type NutritionIntakeRow = {
 	notes: string | null;
 	loggedAmount?: number | null;
 	loggedUnit?: "serving" | "g" | "oz" | null;
+	tagNames?: string[] | null;
 };
 
 export type ListNutritionIntakesOptions = {
@@ -982,6 +984,7 @@ export async function listNutritionIntakesForRange(
 			notes: schema.nutritionIntake.notes,
 			loggedAmount: schema.nutritionIntake.loggedAmount,
 			loggedUnit: schema.nutritionIntake.loggedUnit,
+			tagNames: schema.nutritionIntake.tagNames,
 		})
 		.from(schema.nutritionIntake)
 		.leftJoin(schema.meal, eq(schema.nutritionIntake.mealId, schema.meal.id))
@@ -1021,6 +1024,7 @@ export async function listNutritionIntakesForRange(
 		notes: r.notes ?? null,
 		loggedAmount: r.loggedAmount ?? null,
 		loggedUnit: coerceIntakeLoggedUnit(r.loggedUnit),
+		tagNames: publishableTagNames(r.tagNames),
 	}));
 
 	const last = page.at(-1);

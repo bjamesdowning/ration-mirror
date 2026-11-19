@@ -10,6 +10,11 @@ describe("FLAG_REGISTRY validation", () => {
 		expect(() => assertRegistryDefaults()).not.toThrow();
 	});
 
+	it("keeps photo food log off until it is switched on", () => {
+		expect(FLAG_REGISTRY["nutrition-photo-log"].defaultEnabled).toBe(false);
+		expect(FLAG_REGISTRY["nutrition-photo-log"].iosAlwaysOn).toBe(false);
+	});
+
 	it("validates kebab-case flag keys", () => {
 		expect(isValidFlagKey("apple-web-login")).toBe(true);
 		expect(isValidFlagKey("new-checkout")).toBe(true);

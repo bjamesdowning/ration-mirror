@@ -12,6 +12,7 @@ import type { DiaryFoodWrite } from "~/lib/schemas/diary";
 import type { OrganizationMetadata } from "~/lib/types";
 import { assertActiveNutritionConsent } from "./consent.server";
 import type { DiaryNutritionOperationType } from "./diary-operations";
+import { storedDiaryTagNames } from "./diary-tags";
 import {
 	assertNutritionFastLog,
 	assertNutritionSavedFood,
@@ -174,6 +175,7 @@ type ResolvedFood = {
 	fiberG: number | null;
 	idempotencyKey: string;
 	requestedNotes: string | null;
+	tagNames: ReturnType<typeof storedDiaryTagNames>;
 };
 
 type CompleteFoodWrite = Omit<DiaryFoodWrite, "name" | "macros"> & {
@@ -218,6 +220,7 @@ function resolveFood(
 		fiberG: input.macros.fiberG ?? null,
 		idempotencyKey: input.idempotencyKey,
 		requestedNotes: input.notes ?? null,
+		tagNames: storedDiaryTagNames(input.tagNames),
 	};
 }
 
@@ -242,6 +245,7 @@ function canonicalBody(
 		fatG: food.fatG,
 		fiberG: food.fiberG,
 		idempotencyKey: food.idempotencyKey,
+		tagNames: food.tagNames,
 		...intakeNotesForCanonicalHash(notesEnabled, food.requestedNotes),
 		...extra,
 	};
@@ -352,6 +356,7 @@ function sameFood(
 		row.carbsG === food.carbsG &&
 		row.fatG === food.fatG &&
 		(row.fiberG ?? null) === food.fiberG &&
+		JSON.stringify(row.tagNames ?? null) === JSON.stringify(food.tagNames) &&
 		(row.notes ?? null) === notes
 	);
 }
@@ -419,6 +424,7 @@ function intakeInsert(
 		notes: input.notes,
 		loggedAmount: food.loggedAmount,
 		loggedUnit: food.loggedUnit,
+		tagNames: food.tagNames,
 		healthSyncId: input.healthSyncId,
 		healthSyncVersion: input.healthSyncVersion,
 		compositionSource: input.compositionSource ?? "manual_macros",

@@ -9,8 +9,16 @@ import {
 	useRouteLoaderData,
 	useSearchParams,
 } from "react-router";
+import { useOpenHubAction } from "~/components/hub/useHubAction";
 import { patchUserSettings, requireActiveGroup } from "~/lib/auth.server";
 import { buildWebFlagContext } from "~/lib/feature-flags/flags.server";
+import { AI_COSTS, checkBalance } from "~/lib/ledger.server";
+import {
+	cargoAddFuelMacros,
+	manualFuelEntry,
+	matchesTagDisplayNames,
+	mealAddFuelMacros,
+} from "~/lib/nutrition/add-fuel";
 import {
 	isNutritionFastLogEnabled,
 	isNutritionFuelPageEnabled,
@@ -18,10 +26,17 @@ import {
 import {
 	type FuelPhotoReviewDraft,
 	fuelPhotoApproveBody,
+	fuelPhotoPixelSize,
 	fuelPhotoReviewFromLines,
 	pollFuelPhoto,
 } from "~/lib/nutrition/fuel-photo-client";
+import {
+	FUEL_SCAN_NEXT_STEPS,
+	FUEL_SCAN_NOT_MEDICAL,
+	FUEL_SCAN_UNAVAILABLE,
+} from "~/lib/nutrition/fuel-scan-copy";
 import { loadFuelDay } from "~/lib/nutrition/fuel-read.server";
+import type { NutritionSnapshot } from "~/lib/nutrition/types";
 import {
 	deviceFuelTimeZone,
 	FUEL_ZONE_UNUSABLE,
@@ -37,6 +52,7 @@ const APPLE_HEALTH_REMAINS =
 export async function loader({ request, context }: Route.LoaderArgs) {
 	const {
 		session: { user },
+		groupId,
 	} = await requireActiveGroup(context, request);
 	const env = context.cloudflare.env;
 	const flags = buildWebFlagContext(request, env, { user });
@@ -49,8 +65,11 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		requested && /^\d{4}-\d{2}-\d{2}$/.test(requested)
 			? requested
 			: new Date().toISOString().slice(0, 10);
-	const day = await loadFuelDay(env.DB, user.id, date);
-	return { day, healthNote: APPLE_HEALTH_REMAINS };
+	const [day, credits] = await Promise.all([
+		loadFuelDay(env.DB, user.id, date),
+		checkBalance(env, groupId),
+	]);
+	return { day, healthNote: APPLE_HEALTH_REMAINS, credits };
 }
 
 export async function action({ request, context }: Route.ActionArgs) {
@@ -78,7 +97,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 }
 
 export default function FuelPage({ loaderData }: Route.ComponentProps) {
-	const { day } = loaderData;
+	const { day, credits } = loaderData;
 	const [params] = useSearchParams();
 	const editor = params.get("editor") === "goals";
 	const navigate = useNavigate();
@@ -118,6 +137,15 @@ export default function FuelPage({ loaderData }: Route.ComponentProps) {
 		setShowGoals(editor);
 	}, [editor]);
 
+	useOpenHubAction("log-to-fuel", true, () => {
+		setShowAdd(false);
+		if (day.limit != null && day.used >= day.limit) {
+			navigate("/hub/pricing");
+			return;
+		}
+		setShowScan(true);
+	});
+
 	function openCreate(kind: "add" | "scan" | "barcode") {
 		if (!online) return;
 		if (capped) {
@@ -125,10 +153,6 @@ export default function FuelPage({ loaderData }: Route.ComponentProps) {
 			return;
 		}
 		setError(null);
-		if (kind === "scan" && !photoLog) {
-			setError("Photo food log is unavailable.");
-			return;
-		}
 		if (kind === "add") setShowAdd(true);
 		if (kind === "scan") setShowScan(true);
 		if (kind === "barcode") setShowBarcode(true);
@@ -152,11 +176,26 @@ export default function FuelPage({ loaderData }: Route.ComponentProps) {
 		revalidator.revalidate();
 	}
 
-	async function submitAdd(form: FormData) {
-		const name = String(form.get("name") ?? "").trim();
-		const energy = Number(form.get("energyKcal") ?? "0");
-		if (!name || !Number.isFinite(energy)) return;
-		setPendingName(name);
+	async function submitAdd(entry: {
+		name: string;
+		amount: number;
+		unit: string;
+		macros: {
+			energyKcal: number;
+			proteinG: number;
+			carbsG: number;
+			fatG: number;
+		};
+		compositionSource: "manual_macros" | "meal";
+		tagNames: { name: string; slug?: string }[];
+	}) {
+		if (!online) {
+			setError(
+				"You're offline. Fuel writes, scans, and barcodes stay off until the connection returns.",
+			);
+			return;
+		}
+		setPendingName(entry.name);
 		if (!deviceFuelTimeZone()) {
 			setError(FUEL_ZONE_UNUSABLE);
 			return;
@@ -167,19 +206,15 @@ export default function FuelPage({ loaderData }: Route.ComponentProps) {
 		const timer = setTimeout(() => controller.abort(), 15000);
 		try {
 			const payload = {
-				name,
+				name: entry.name,
 				occurredAt: new Date().toISOString(),
-				amount: 1,
-				unit: "serving",
-				macros: {
-					energyKcal: energy,
-					proteinG: Number(form.get("proteinG") ?? "0"),
-					carbsG: Number(form.get("carbsG") ?? "0"),
-					fatG: Number(form.get("fatG") ?? "0"),
-				},
+				amount: entry.amount,
+				unit: entry.unit,
+				macros: entry.macros,
 				idempotencyKey: operationKey,
 				operationKey,
-				compositionSource: "manual_macros" as const,
+				compositionSource: entry.compositionSource,
+				...(entry.tagNames.length > 0 ? { tagNames: entry.tagNames } : {}),
 			};
 			const send = () =>
 				fetch("/api/nutrition/diary", {
@@ -344,6 +379,8 @@ export default function FuelPage({ loaderData }: Route.ComponentProps) {
 			{showScan && !capped ? (
 				<ScanToFuel
 					online={online}
+					photoLog={photoLog}
+					credits={credits}
 					onClose={() => setShowScan(false)}
 					onLimit={() => navigate("/hub/pricing")}
 					onSaved={() => {
@@ -401,72 +438,11 @@ export default function FuelPage({ loaderData }: Route.ComponentProps) {
 			</section>
 
 			{showAdd ? (
-				<form
-					className="space-y-3 rounded-xl border border-platinum p-4"
-					onSubmit={(event) => {
-						event.preventDefault();
-						void submitAdd(new FormData(event.currentTarget));
+				<AddFuelPanel
+					onSave={(entry) => {
+						void submitAdd(entry);
 					}}
-				>
-					<label className="block text-sm">
-						Name
-						<input
-							name="name"
-							required
-							className="mt-1 block min-h-11 w-full"
-						/>
-					</label>
-					<label className="block text-sm">
-						Daily calories
-						<input
-							name="energyKcal"
-							type="number"
-							min="0"
-							max="20000"
-							required
-							className="mt-1 block min-h-11 w-full"
-						/>
-					</label>
-					<label className="block text-sm">
-						Protein
-						<input
-							name="proteinG"
-							type="number"
-							min="0"
-							max="2000"
-							defaultValue="0"
-							className="mt-1 block min-h-11 w-full"
-						/>
-					</label>
-					<label className="block text-sm">
-						Carbs
-						<input
-							name="carbsG"
-							type="number"
-							min="0"
-							max="2000"
-							defaultValue="0"
-							className="mt-1 block min-h-11 w-full"
-						/>
-					</label>
-					<label className="block text-sm">
-						Fat
-						<input
-							name="fatG"
-							type="number"
-							min="0"
-							max="2000"
-							defaultValue="0"
-							className="mt-1 block min-h-11 w-full"
-						/>
-					</label>
-					<button
-						type="submit"
-						className="min-h-11 rounded-xl bg-carbon px-4 text-ceramic"
-					>
-						Save
-					</button>
-				</form>
+				/>
 			) : null}
 
 			{showGoals ? <GoalEditor date={day.date} /> : null}
@@ -553,6 +529,8 @@ function GoalEditor({ date }: { date: string }) {
 
 function ScanToFuel({
 	online,
+	photoLog,
+	credits,
 	onClose,
 	onLimit,
 	onSaved,
@@ -560,6 +538,8 @@ function ScanToFuel({
 	pollAbort,
 }: {
 	online: boolean;
+	photoLog: boolean;
+	credits: number;
 	onClose: () => void;
 	onLimit: () => void;
 	onSaved: () => void;
@@ -570,23 +550,20 @@ function ScanToFuel({
 		(FuelPhotoReviewDraft & { requestId: string }) | null
 	>(null);
 	const [busy, setBusy] = useState(false);
-	const [photoPhase, setPhotoPhase] = useState<"queued" | "analyzing" | null>(
-		null,
-	);
+	const [photoPhase, setPhotoPhase] = useState<
+		"idle" | "queued" | "analyzing" | "failed"
+	>("idle");
+	const [failure, setFailure] = useState("");
 
 	async function upload(file: File) {
-		if (!online) return;
-		if (file.size > FUEL_PHOTO_MAX_BYTES) {
-			onError("That photo is over 3 MB.");
-			return;
-		}
-		const contentType = file.type;
+		if (!online || !photoLog) return;
 		if (
-			contentType !== "image/jpeg" &&
-			contentType !== "image/png" &&
-			contentType !== "image/webp"
+			file.type !== "image/jpeg" &&
+			file.type !== "image/png" &&
+			file.type !== "image/webp"
 		) {
-			onError("Use a JPEG, PNG, or WebP photo.");
+			setFailure("Use a JPEG, PNG, or WebP photo.");
+			setPhotoPhase("failed");
 			return;
 		}
 		if (!deviceFuelTimeZone()) {
@@ -594,18 +571,33 @@ function ScanToFuel({
 			return;
 		}
 		setBusy(true);
-		setPhotoPhase(null);
+		setReview(null);
+		setFailure("");
+		setPhotoPhase("queued");
 		onError("");
-		const bytes = new Uint8Array(await file.arrayBuffer());
+		const encoded = await fuelPhotoJpeg(file);
+		if (!encoded) {
+			setBusy(false);
+			setFailure("That photo was not queued.");
+			setPhotoPhase("failed");
+			return;
+		}
+		if (encoded.bytes.byteLength > FUEL_PHOTO_MAX_BYTES) {
+			setBusy(false);
+			setFailure("That photo is over 3 MB.");
+			setPhotoPhase("failed");
+			return;
+		}
 		let binary = "";
-		for (const byte of bytes) binary += String.fromCharCode(byte);
+		for (const byte of encoded.bytes) binary += String.fromCharCode(byte);
 		const controller = new AbortController();
 		pollAbort.current?.abort();
 		pollAbort.current = controller;
+		let settled = false;
 		try {
 			const payload = {
 				operationKey: crypto.randomUUID(),
-				contentType,
+				contentType: "image/jpeg",
 				imageBase64: btoa(binary),
 			};
 			const send = () =>
@@ -619,6 +611,7 @@ function ScanToFuel({
 			const response = await retryFuelZoneOnce(await send(), send);
 			const body = (await response.json().catch(() => null)) as {
 				code?: string;
+				error?: string;
 				requestId?: string;
 			} | null;
 			if (body?.code === "fuel_daily_limit") {
@@ -626,10 +619,10 @@ function ScanToFuel({
 				return;
 			}
 			if (!response.ok || !body?.requestId) {
-				onError("That photo was not queued.");
+				setFailure(body?.error ?? "That photo was not queued.");
+				setPhotoPhase("failed");
 				return;
 			}
-			setPhotoPhase("queued");
 			const polled = await pollFuelPhoto(body.requestId, {
 				signal: controller.signal,
 				onStatus: (status) => {
@@ -639,19 +632,25 @@ function ScanToFuel({
 				},
 			});
 			if (polled.status !== "ready_to_review" || !polled.lines?.length) {
-				onError(`Photo status: ${polled.status}.`);
+				setFailure(polled.error ?? `Photo status: ${polled.status}.`);
+				setPhotoPhase("failed");
 				return;
 			}
 			setReview({
 				requestId: body.requestId,
 				...fuelPhotoReviewFromLines(polled.lines),
 			});
+			setPhotoPhase("idle");
+			settled = true;
 		} catch (error) {
 			if (error instanceof DOMException && error.name === "AbortError") return;
-			onError("That photo was not queued.");
+			setFailure("That photo was not queued.");
+			setPhotoPhase("failed");
 		} finally {
 			setBusy(false);
-			setPhotoPhase(null);
+			if (!settled && photoPhase === "queued") {
+				/* failed or still showing the analyzing card */
+			}
 		}
 	}
 
@@ -695,32 +694,11 @@ function ScanToFuel({
 		onSaved();
 	}
 
+	const analyzing = photoPhase === "queued" || photoPhase === "analyzing";
+
 	return (
 		<div className="space-y-3 rounded-xl border border-platinum p-4">
-			<p className="text-sm">
-				A plate, a set of ingredients, one item, or a drink. The estimate is
-				from what is visible. This costs 2 credits. Approve is the write. This
-				is not medical advice.
-			</p>
-			<input
-				type="file"
-				accept="image/jpeg,image/png,image/webp"
-				capture="environment"
-				aria-label="Fuel photo"
-				className="min-h-11"
-				disabled={!online || busy}
-				onChange={(event) => {
-					const file = event.target.files?.[0];
-					if (file) void upload(file);
-				}}
-			/>
-			{photoPhase === "queued" || photoPhase === "analyzing" ? (
-				<p className="text-sm">
-					{photoPhase === "queued" ? "Queued" : "Analyzing"}
-				</p>
-			) : busy ? (
-				<p className="text-sm">Working on that photo.</p>
-			) : null}
+			<h2 className="text-base">Scan to Fuel</h2>
 			{review ? (
 				<form
 					className="space-y-2"
@@ -729,7 +707,12 @@ function ScanToFuel({
 						void confirm();
 					}}
 				>
-					<p className="text-sm">Estimate</p>
+					<p className="text-sm">Ready to review</p>
+					<p className="text-sm text-muted">1 item found</p>
+					<p className="text-sm text-muted">
+						Tap edit to adjust name, amount, unit, calories, protein, carbs, or
+						fat.
+					</p>
 					<label className="block text-sm">
 						Name
 						<input
@@ -765,11 +748,11 @@ function ScanToFuel({
 						/>
 					</label>
 					<label className="block text-sm">
-						Calories
+						Calories (kcal)
 						<input
 							value={review.energy}
 							inputMode="decimal"
-							aria-label="Calories"
+							aria-label="Calories (kcal)"
 							className="mt-1 block min-h-11 w-full"
 							onChange={(event) =>
 								setReview({ ...review, energy: event.target.value })
@@ -777,11 +760,11 @@ function ScanToFuel({
 						/>
 					</label>
 					<label className="block text-sm">
-						Protein
+						Protein (g)
 						<input
 							value={review.protein}
 							inputMode="decimal"
-							aria-label="Protein"
+							aria-label="Protein (g)"
 							className="mt-1 block min-h-11 w-full"
 							onChange={(event) =>
 								setReview({ ...review, protein: event.target.value })
@@ -789,11 +772,11 @@ function ScanToFuel({
 						/>
 					</label>
 					<label className="block text-sm">
-						Carbs
+						Carbs (g)
 						<input
 							value={review.carbs}
 							inputMode="decimal"
-							aria-label="Carbs"
+							aria-label="Carbs (g)"
 							className="mt-1 block min-h-11 w-full"
 							onChange={(event) =>
 								setReview({ ...review, carbs: event.target.value })
@@ -801,11 +784,11 @@ function ScanToFuel({
 						/>
 					</label>
 					<label className="block text-sm">
-						Fat
+						Fat (g)
 						<input
 							value={review.fat}
 							inputMode="decimal"
-							aria-label="Fat"
+							aria-label="Fat (g)"
 							className="mt-1 block min-h-11 w-full"
 							onChange={(event) =>
 								setReview({ ...review, fat: event.target.value })
@@ -816,10 +799,71 @@ function ScanToFuel({
 						type="submit"
 						className="min-h-11 rounded-xl bg-carbon px-4 text-ceramic"
 					>
-						Approve
+						Add to Fuel
+					</button>
+					<button
+						type="button"
+						className="min-h-11 text-sm underline"
+						onClick={() => {
+							setReview(null);
+							setPhotoPhase("idle");
+						}}
+					>
+						Scan another
 					</button>
 				</form>
-			) : null}
+			) : analyzing ? (
+				<div className="rounded-xl border border-platinum p-4">
+					<p className="text-sm">Analyzing</p>
+					<p className="text-sm text-muted">This usually takes a few seconds.</p>
+				</div>
+			) : photoPhase === "failed" ? (
+				<div className="space-y-2">
+					<p className="text-sm">{failure}</p>
+					<button
+						type="button"
+						className="min-h-11 text-sm underline"
+						onClick={() => {
+							setFailure("");
+							setPhotoPhase("idle");
+						}}
+					>
+						Try again
+					</button>
+				</div>
+			) : (
+				<div className="space-y-2">
+					<p className="text-sm">
+						A plate, a set of ingredients, one item, or a drink. The estimate is
+						from what is visible.
+					</p>
+					<p className="text-sm">{FUEL_SCAN_NEXT_STEPS}</p>
+					<p className="text-sm">
+						Uses {AI_COSTS.SCAN} credits per photo. You have {credits}.
+					</p>
+					<p className="text-sm text-muted">{FUEL_SCAN_NOT_MEDICAL}</p>
+					<p className="text-sm text-muted">
+						AI-generated results are suggestions only. Always review before
+						saving.
+					</p>
+					{photoLog ? (
+						<input
+							type="file"
+							accept="image/jpeg,image/png,image/webp"
+							capture="environment"
+							aria-label="Open camera"
+							className="min-h-11"
+							disabled={!online || busy}
+							onChange={(event) => {
+								const file = event.target.files?.[0];
+								if (file) void upload(file);
+							}}
+						/>
+					) : (
+						<p className="text-sm">{FUEL_SCAN_UNAVAILABLE}</p>
+					)}
+				</div>
+			)}
 			<button
 				type="button"
 				className="min-h-11 text-sm underline"
@@ -829,6 +873,25 @@ function ScanToFuel({
 			</button>
 		</div>
 	);
+}
+
+async function fuelPhotoJpeg(
+	file: File,
+): Promise<{ bytes: Uint8Array } | null> {
+	const bitmap = await createImageBitmap(file);
+	const size = fuelPhotoPixelSize(bitmap.width, bitmap.height);
+	const canvas = document.createElement("canvas");
+	canvas.width = size.width;
+	canvas.height = size.height;
+	const context = canvas.getContext("2d");
+	if (!context) return null;
+	context.drawImage(bitmap, 0, 0, size.width, size.height);
+	const blob = await new Promise<Blob | null>((resolve) => {
+		canvas.toBlob((next) => resolve(next), "image/jpeg", 0.92);
+	});
+	bitmap.close();
+	if (!blob) return null;
+	return { bytes: new Uint8Array(await blob.arrayBuffer()) };
 }
 
 function BarcodeToFuel({
@@ -1024,5 +1087,462 @@ function BarcodeToFuel({
 				Close
 			</button>
 		</div>
+	);
+}
+type AddFuelTag = { name: string; slug?: string };
+type AddFuelCargo = {
+	id: string;
+	name: string;
+	unit: string;
+	tags?: AddFuelTag[];
+	nutrition?: NutritionSnapshot | null;
+};
+type AddFuelMeal = {
+	id: string;
+	name: string;
+	tags?: AddFuelTag[];
+	nutrition?: {
+		perServing?: {
+			energyKcal?: number | null;
+			proteinG?: number | null;
+			carbG?: number | null;
+			fatG?: number | null;
+		} | null;
+	} | null;
+};
+
+function AddFuelPanel({
+	onSave,
+}: {
+	onSave: (entry: {
+		name: string;
+		amount: number;
+		unit: string;
+		macros: {
+			energyKcal: number;
+			proteinG: number;
+			carbsG: number;
+			fatG: number;
+		};
+		compositionSource: "manual_macros" | "meal";
+		tagNames: AddFuelTag[];
+	}) => void;
+}) {
+	const [query, setQuery] = useState("");
+	const [cargoPage, setCargoPage] = useState<AddFuelCargo[]>([]);
+	const [searchHits, setSearchHits] = useState<
+		{ id: string; name: string; unit: string }[]
+	>([]);
+	const [meals, setMeals] = useState<AddFuelMeal[]>([]);
+	const [selected, setSelected] = useState<string[]>([]);
+	const [name, setName] = useState("");
+	const [amount, setAmount] = useState("1");
+	const [unit, setUnit] = useState("serving");
+	const [energy, setEnergy] = useState("");
+	const [protein, setProtein] = useState("");
+	const [carbs, setCarbs] = useState("");
+	const [fat, setFat] = useState("");
+	const [tags, setTags] = useState("");
+	const [source, setSource] = useState<"manual_macros" | "meal">("manual_macros");
+	const [pickedTags, setPickedTags] = useState<AddFuelTag[]>([]);
+	const [pickedCargo, setPickedCargo] = useState<AddFuelCargo | null>(null);
+	const [pickedMeal, setPickedMeal] = useState<AddFuelMeal | null>(null);
+	const [touched, setTouched] = useState<Set<string>>(new Set());
+	const [formError, setFormError] = useState<string | null>(null);
+	const searchedMeals = useRef(false);
+
+	useEffect(() => {
+		let cancelled = false;
+		void (async () => {
+			const [cargoRes, mealRes] = await Promise.all([
+				fetch("/api/cargo?limit=50", { credentials: "same-origin" }),
+				fetch("/api/meals?limit=50", { credentials: "same-origin" }),
+			]);
+			if (cancelled) return;
+			if (cargoRes.ok) {
+				const body = (await cargoRes.json()) as { items?: AddFuelCargo[] };
+				setCargoPage(body.items ?? []);
+			}
+			if (mealRes.ok) {
+				const body = (await mealRes.json()) as { meals?: AddFuelMeal[] };
+				setMeals(body.meals ?? []);
+			}
+		})();
+		return () => {
+			cancelled = true;
+		};
+	}, []);
+
+	useEffect(() => {
+		const text = query.trim();
+		if (text.length < 2) {
+			setSearchHits([]);
+			if (!searchedMeals.current) return;
+			searchedMeals.current = false;
+			void (async () => {
+				const mealRes = await fetch("/api/meals?limit=50", {
+					credentials: "same-origin",
+				});
+				if (!mealRes.ok) return;
+				const body = (await mealRes.json()) as { meals?: AddFuelMeal[] };
+				setMeals(body.meals ?? []);
+			})();
+			return;
+		}
+		searchedMeals.current = true;
+		const handle = setTimeout(() => {
+			void (async () => {
+				const [searchRes, mealRes] = await Promise.all([
+					fetch(`/api/search?q=${encodeURIComponent(text)}`, {
+						credentials: "same-origin",
+					}),
+					fetch(`/api/meals?q=${encodeURIComponent(text)}`, {
+						credentials: "same-origin",
+					}),
+				]);
+				if (searchRes.ok) {
+					const body = (await searchRes.json()) as {
+						results?: { id: string; name: string; unit: string }[];
+					};
+					setSearchHits(body.results ?? []);
+				}
+				if (mealRes.ok) {
+					const body = (await mealRes.json()) as { meals?: AddFuelMeal[] };
+					setMeals(body.meals ?? []);
+				}
+			})();
+		}, 200);
+		return () => clearTimeout(handle);
+	}, [query]);
+
+	const suggestions = [
+		...new Set(
+			[...cargoPage.flatMap((item) => item.tags ?? []), ...meals.flatMap((meal) => meal.tags ?? [])]
+				.map((tag) => tag.name)
+				.filter((name) => name.length > 0),
+		),
+	].sort();
+
+	const needle = query.trim().toLowerCase();
+	const cargoRows =
+		needle.length >= 2
+			? searchHits
+			: cargoPage
+					.filter((item) =>
+						needle.length === 0
+							? true
+							: item.name.toLowerCase().includes(needle),
+					)
+					.map((item) => ({ id: item.id, name: item.name, unit: item.unit }));
+	const visibleCargo = cargoRows
+		.filter((row) => {
+			const item = cargoPage.find((candidate) => candidate.id === row.id);
+			if (!item) return selected.length === 0;
+			return matchesTagDisplayNames(item.tags ?? [], selected);
+		})
+		.slice(0, 20);
+	const visibleMeals = meals
+		.filter(
+			(meal) =>
+				(needle.length === 0 || meal.name.toLowerCase().includes(needle)) &&
+				matchesTagDisplayNames(meal.tags ?? [], selected),
+		)
+		.slice(0, 20);
+
+	function applyMacros(
+		next: { energyKcal: number; proteinG: number; carbsG: number; fatG: number } | null,
+	) {
+		if (!next) return;
+		if (!touched.has("energy")) setEnergy(String(next.energyKcal));
+		if (!touched.has("protein")) setProtein(String(next.proteinG));
+		if (!touched.has("carbs")) setCarbs(String(next.carbsG));
+		if (!touched.has("fat")) setFat(String(next.fatG));
+	}
+
+	async function pickCargo(id: string) {
+		const response = await fetch(`/api/cargo/${id}`, { credentials: "same-origin" });
+		if (!response.ok) return;
+		const body = (await response.json()) as { item?: AddFuelCargo };
+		const item = body.item;
+		if (!item) return;
+		setName(item.name);
+		setUnit(item.unit);
+		setAmount("1");
+		setSource("manual_macros");
+		setPickedCargo(item);
+		setPickedMeal(null);
+		setPickedTags(item.tags ?? []);
+		setTags((item.tags ?? []).map((tag) => tag.name).join(", "));
+		setTouched(new Set());
+		const scaled = cargoAddFuelMacros({
+			nutrition: item.nutrition,
+			quantity: 1,
+			unit: item.unit,
+		});
+		if (scaled) {
+			setEnergy(String(scaled.energyKcal));
+			setProtein(String(scaled.proteinG));
+			setCarbs(String(scaled.carbsG));
+			setFat(String(scaled.fatG));
+		}
+	}
+
+	function pickMeal(meal: AddFuelMeal) {
+		const per = meal.nutrition?.perServing;
+		setName(meal.name);
+		setUnit("serving");
+		setAmount("1");
+		setSource("meal");
+		setPickedMeal(meal);
+		setPickedCargo(null);
+		setPickedTags(meal.tags ?? []);
+		setTags((meal.tags ?? []).map((tag) => tag.name).join(", "));
+		setTouched(new Set());
+		const scaled = mealAddFuelMacros(
+			{
+				energyKcal: per?.energyKcal ?? 0,
+				proteinG: per?.proteinG ?? 0,
+				carbsG: per?.carbG ?? 0,
+				fatG: per?.fatG ?? 0,
+			},
+			1,
+		);
+		if (scaled) {
+			setEnergy(String(scaled.energyKcal));
+			setProtein(String(scaled.proteinG));
+			setCarbs(String(scaled.carbsG));
+			setFat(String(scaled.fatG));
+		}
+	}
+
+	function rescale(nextAmount: string, nextUnit = unit) {
+		setAmount(nextAmount);
+		const quantity = Number(nextAmount);
+		if (!(quantity > 0)) return;
+		if (pickedMeal) {
+			const per = pickedMeal.nutrition?.perServing;
+			if (!per) return;
+			applyMacros(
+				mealAddFuelMacros(
+					{
+						energyKcal: per.energyKcal ?? 0,
+						proteinG: per.proteinG ?? 0,
+						carbsG: per.carbG ?? 0,
+						fatG: per.fatG ?? 0,
+					},
+					quantity,
+				),
+			);
+			return;
+		}
+		if (!pickedCargo?.nutrition) return;
+		applyMacros(
+			cargoAddFuelMacros({
+				nutrition: pickedCargo.nutrition,
+				quantity,
+				unit: nextUnit,
+			}),
+		);
+	}
+
+	return (
+		<form
+			className="space-y-3 rounded-xl border border-platinum p-4"
+			onSubmit={(event) => {
+				event.preventDefault();
+				const entry = manualFuelEntry({
+					name,
+					amount: Number(amount),
+					unit,
+					energyKcal: Number(energy),
+					proteinG: Number(protein || "0"),
+					carbsG: Number(carbs || "0"),
+					fatG: Number(fat || "0"),
+					tagNames: tags.split(",").map((tag) => tag.trim()),
+				});
+				if (!entry) {
+					setFormError(
+						"Check the name, amount, and macros. Use at most 10 tags, each 100 characters or fewer.",
+					);
+					return;
+				}
+				setFormError(null);
+				const named = entry.tagNames.map((tag) => {
+					const known = pickedTags.find((row) => row.name === tag);
+					return known?.slug ? { name: tag, slug: known.slug } : { name: tag };
+				});
+				onSave({
+					name: entry.name,
+					amount: entry.amount,
+					unit: entry.unit,
+					macros: entry.macros,
+					compositionSource: source,
+					tagNames: named,
+				});
+			}}
+		>
+			<h2 className="text-base">Add Fuel</h2>
+			{formError ? <p className="text-sm text-carbon">{formError}</p> : null}
+			<label className="block text-sm">
+				Search
+				<input
+					value={query}
+					aria-label="Search Cargo and Galley"
+					className="mt-1 block min-h-11 w-full"
+					onChange={(event) => setQuery(event.target.value)}
+				/>
+			</label>
+			{suggestions.length > 0 ? (
+				<div className="flex flex-wrap gap-2">
+					{suggestions.map((tag) => (
+						<button
+							key={tag}
+							type="button"
+							aria-pressed={selected.includes(tag)}
+							className="min-h-11 rounded-full border border-platinum px-3 text-sm"
+							onClick={() =>
+								setSelected((current) =>
+									current.includes(tag)
+										? current.filter((name) => name !== tag)
+										: [...current, tag],
+								)
+							}
+						>
+							{tag}
+						</button>
+					))}
+				</div>
+			) : null}
+			<ul className="space-y-1">
+				{visibleCargo.map((row) => (
+					<li key={`cargo-${row.id}`}>
+						<button
+							type="button"
+							className="min-h-11 text-sm underline"
+							onClick={() => void pickCargo(row.id)}
+						>
+							{row.name}
+						</button>
+					</li>
+				))}
+				{visibleMeals.map((meal) => (
+					<li key={`meal-${meal.id}`}>
+						<button
+							type="button"
+							className="min-h-11 text-sm underline"
+							onClick={() => pickMeal(meal)}
+						>
+							{meal.name}
+						</button>
+					</li>
+				))}
+			</ul>
+			<label className="block text-sm">
+				Name
+				<input
+					value={name}
+					required
+					className="mt-1 block min-h-11 w-full"
+					onChange={(event) => setName(event.target.value)}
+				/>
+			</label>
+			<label className="block text-sm">
+				Amount
+				<input
+					value={amount}
+					type="number"
+					min="0.01"
+					step="any"
+					required
+					className="mt-1 block min-h-11 w-full"
+					onChange={(event) => rescale(event.target.value)}
+				/>
+			</label>
+			<label className="block text-sm">
+				Unit
+				<input
+					value={unit}
+					required
+					className="mt-1 block min-h-11 w-full"
+					onChange={(event) => {
+						const nextUnit = event.target.value;
+						setUnit(nextUnit);
+						if (!pickedMeal) rescale(amount, nextUnit);
+					}}
+				/>
+			</label>
+			<label className="block text-sm">
+				Calories (kcal)
+				<input
+					value={energy}
+					type="number"
+					min="0"
+					step="any"
+					required
+					className="mt-1 block min-h-11 w-full"
+					onChange={(event) => {
+						setTouched((current) => new Set(current).add("energy"));
+						setEnergy(event.target.value);
+					}}
+				/>
+			</label>
+			<label className="block text-sm">
+				Protein (g)
+				<input
+					value={protein}
+					type="number"
+					min="0"
+					step="any"
+					className="mt-1 block min-h-11 w-full"
+					onChange={(event) => {
+						setTouched((current) => new Set(current).add("protein"));
+						setProtein(event.target.value);
+					}}
+				/>
+			</label>
+			<label className="block text-sm">
+				Carbs (g)
+				<input
+					value={carbs}
+					type="number"
+					min="0"
+					step="any"
+					className="mt-1 block min-h-11 w-full"
+					onChange={(event) => {
+						setTouched((current) => new Set(current).add("carbs"));
+						setCarbs(event.target.value);
+					}}
+				/>
+			</label>
+			<label className="block text-sm">
+				Fat (g)
+				<input
+					value={fat}
+					type="number"
+					min="0"
+					step="any"
+					className="mt-1 block min-h-11 w-full"
+					onChange={(event) => {
+						setTouched((current) => new Set(current).add("fat"));
+						setFat(event.target.value);
+					}}
+				/>
+			</label>
+			<label className="block text-sm">
+				Tags
+				<input
+					value={tags}
+					aria-label="Tags"
+					className="mt-1 block min-h-11 w-full"
+					onChange={(event) => setTags(event.target.value)}
+				/>
+			</label>
+			<button
+				type="submit"
+				className="min-h-11 rounded-xl bg-carbon px-4 text-ceramic"
+			>
+				Add to Fuel
+			</button>
+		</form>
 	);
 }

@@ -18,6 +18,7 @@ export type FuelItemSource = {
 	loggedAmount?: number | null;
 	loggedUnit?: string | null;
 	entryId?: string | null;
+	tagNames?: unknown;
 };
 
 export type PublishableFuelItem = {
@@ -35,6 +36,8 @@ export type PublishableFuelItem = {
 	entryId?: string;
 	/** Present only when the caller asks. Flag-off JSON has no note text. */
 	notes?: string | null;
+	/** Display names stored on the log. Absent when the row has none. */
+	tagNames?: string[];
 };
 
 export type FuelDiagnostic = {
@@ -47,6 +50,25 @@ const finiteNutrient = (value: unknown): value is number =>
 
 function finiteOrNull(value: unknown): number | null {
 	return finiteNutrient(value) ? value : null;
+}
+
+export function publishableTagNames(value: unknown): string[] | null {
+	if (!Array.isArray(value)) return null;
+	const names: string[] = [];
+	for (const entry of value) {
+		if (typeof entry === "string") {
+			const name = entry.trim();
+			if (name.length > 0) names.push(name);
+			continue;
+		}
+		if (entry && typeof entry === "object" && "name" in entry) {
+			const raw = (entry as { name?: unknown }).name;
+			if (typeof raw !== "string") continue;
+			const name = raw.trim();
+			if (name.length > 0) names.push(name);
+		}
+	}
+	return names.length > 0 ? names : null;
 }
 
 function textOrNull(value: unknown): string | null {
@@ -95,6 +117,8 @@ export function selectPublishableFuelItems(
 		if (options.includeNotes) {
 			row.notes = textOrNull(item.notes);
 		}
+		const tagNames = publishableTagNames(item.tagNames);
+		if (tagNames) row.tagNames = tagNames;
 		published.push(row);
 	}
 	if (skipped > 0) {

@@ -41,7 +41,7 @@ const HUB_ACTIONS: readonly {
 		id: "log-to-fuel",
 		label: HUB_ACTION_LOG_TO_FUEL,
 		flag: "logToFuel",
-		path: "/hub/manifest",
+		path: "/hub/fuel",
 	},
 	{
 		id: "scan-to-cargo",

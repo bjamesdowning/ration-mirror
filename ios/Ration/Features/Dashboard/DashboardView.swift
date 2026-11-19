@@ -145,9 +145,17 @@ struct DashboardView: View {
             }
         }
         .sheet(isPresented: $showLogToFuel) {
-            LogToFuelSheet(onClose: { showLogToFuel = false }, onSaved: {
-                Task { await reload() }
-            })
+            ScanToFuelView(
+                photoLogEnabled: env.session.clientFlags.isNutritionPhotoLogEnabled,
+                used: 0,
+                limit: nil,
+                onSaved: {
+                    showLogToFuel = false
+                    Task { await reload() }
+                },
+                onPaywall: { showLogToFuel = false },
+                onCredits: { showLogToFuel = false }
+            )
         }
     }
 

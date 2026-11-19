@@ -101,6 +101,18 @@ describe("scaleCargoEatMacros", () => {
 		});
 	});
 
+	it("scales one ounce from per 100 g at 28.3495 grams", () => {
+		const macros = scaleCargoEatMacros({
+			nutrition: density,
+			quantity: 1,
+			unit: "oz",
+		});
+		expect(macros.energyKcal).toBeCloseTo((89 * 28.3495) / 100, 5);
+		expect(macros.proteinG).toBeCloseTo((1.1 * 28.3495) / 100, 5);
+		expect(macros.carbG).toBeCloseTo((23 * 28.3495) / 100, 5);
+		expect(macros.fatG).toBeCloseTo((0.3 * 28.3495) / 100, 5);
+	});
+
 	it("converts ounces to grams with 28.3495", () => {
 		const macros = scaleCargoEatMacros({
 			nutrition: density,

@@ -1730,7 +1730,7 @@ export async function cookMeal(
 						env,
 						organizationId,
 						unlinkedNamesNeedingVector,
-						{ topK: 3, threshold: SIMILARITY_THRESHOLDS.CARGO_DEDUCTION },
+						{ topK: 3, threshold: SIMILARITY_THRESHOLDS.CARGO_DEDUCTION, floor: "deduction" },
 					)
 				: new Map();
 

@@ -27,7 +27,10 @@ import { addCargoToFuel } from "../../plan-fuel-actions.server";
 import { IntakeNotesSchema } from "../../schemas/manifest";
 import { UuidSchema } from "../../schemas/uuid";
 import { coerceToolUnit, convertQuantity, toSupportedUnit } from "../../units";
-import { findSimilarCargoBatch } from "../../vector.server";
+import {
+	cargoVectorFloors,
+	findSimilarCargoBatch,
+} from "../../vector.server";
 import {
 	resolveAgentFlagContext,
 	resolveAgentSurface,
@@ -255,12 +258,18 @@ export function createQuickEatToolDefs(env: McpToolsEnv) {
 							env,
 							ctx.organizationId,
 							[a.name],
-							{ topK: 3, threshold: NAME_SEARCH_RECALL_THRESHOLD },
+							{ topK: 3, threshold: NAME_SEARCH_RECALL_THRESHOLD, floor: "recall" },
 						);
 						const matches = results.get(a.name) ?? [];
+						const floors = await cargoVectorFloors(
+							env,
+							ctx.organizationId,
+							resolveAgentFlagContext(env, ctx),
+						);
 						const decision = decideStockNameMatch(
 							matches,
 							QUICK_EAT_NAME_SCORE_GAP,
+							floors.ingredient,
 						);
 						if (decision.kind === "disambiguate") {
 							const rows = await getCargoByIds(

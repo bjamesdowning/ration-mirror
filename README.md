@@ -211,6 +211,7 @@ flowchart TB
 | `ASSETS` | Static Assets | Built client-side bundle (`./build/client`) served at the edge |
 | `AI` | Workers AI | Embedding generation (`@cf/google/embeddinggemma-300m`, 768-dim) on `ration` / `ration-mcp`; Copilot Gemini 3.7 Flash via AI Gateway (`ration-gateway`) on `ration-copilot` |
 | `VECTORIZE` | Vectorize Index | Semantic ingredient search (`ration-cargo`, cosine similarity) |
+| `VECTORIZE_EG2` | Vectorize Index | Semantic search on `ration-cargo-eg2` when `cargo-embedding-gemma-2` is on |
 | `AI_SEARCH` | AI Search namespace | Copilot-only — hybrid retrieval over `ration-docs` (support docs + blog) |
 | `PROJECT_THINK` | Durable Object | Copilot-only — one `ProjectThinkAgent` isolate per `{org}:{user}:{tier}:{conversationId}` |
 | `COPILOT_ANALYTICS` | Analytics Engine | Copilot-only — conversation, tool, and billing telemetry (`ration_copilot` dataset) |
@@ -592,7 +593,7 @@ sequenceDiagram
     User->>Worker: POST /api/meal-plans/:id/entries/consume { entryIds: [...] }
     Worker->>D1: Fetch meal plan entries + their meals + ingredients
     Worker->>D1: fetchOrgCargoIndex()
-    Worker->>Vectorize: findSimilarCargoBatch(ingredientNames, threshold=0.80)
+    Worker->>Vectorize: findSimilarCargoBatch(ingredientNames, threshold=0.78)
     Vectorize-->>Worker: resolved cargo IDs + scores
 
     loop For each resolved ingredient
@@ -889,9 +890,10 @@ Brand names are **semantic slots that invert**. Rules:
 
 All semantic search and matching is built on Cloudflare's native AI stack — no external embedding API calls.
 
-**Model:** `@cf/google/embeddinggemma-300m` via the `AI` Workers AI binding.
-**Dimensions:** 768
-**Vectorize index:** `ration-cargo`, cosine similarity metric, namespaced per organization.
+**Flag off (default):** `@cf/google/embeddinggemma-300m`, KV prefix `vec:`, index `ration-cargo`.
+**Flag `cargo-embedding-gemma-2` on:** `@cf/google/embeddinggemma-2` at 768 (`input`, `dimensions`, `encoding_format: float`), a separate KV key, and index `ration-cargo-eg2` (dev `ration-cargo-dev-eg2`) on binding `VECTORIZE_EG2`. The new path prefixes `task: clustering | query: ` and never reads `vec:` keys.
+**Dimensions:** 768. Cosine. Namespace is the kitchen id.
+**Thresholds:** unflagged kitchens stay at 0.78 (match, merge, and cook deduction) and 0.6 recall. The new-path floors start at those same numbers and are replaced after a kitchen probe, before any global flip. Cook deduction is 0.78, not 0.80.
 
 ```mermaid
 flowchart LR

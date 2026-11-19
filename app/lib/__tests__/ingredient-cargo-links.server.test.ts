@@ -18,6 +18,11 @@ vi.mock("../cargo-index.server", () => ({
 vi.mock("../vector.server", () => ({
 	findSimilarCargoBatch: (...args: unknown[]) =>
 		mockFindSimilarCargoBatch(...args),
+	fillMissingCargoVectors: vi.fn().mockResolvedValue(undefined),
+	cargoEmbeddingCacheToken: vi
+		.fn()
+		.mockResolvedValue("@cf/google/embeddinggemma-300m"),
+	EMBEDDING_MODEL: "@cf/google/embeddinggemma-300m",
 	SIMILARITY_THRESHOLDS: { INGREDIENT_MATCH: 0.78 },
 }));
 
@@ -148,7 +153,7 @@ describe("resolveIngredientCargoLinks", () => {
 		);
 		await resolveIngredientCargoLinks(env, "org-1", ["bread"]);
 		expect(env.RATION_KV.put).toHaveBeenCalledWith(
-			"ing-links:org-1:1",
+			"ing-links:org-1:1:@cf/google/embeddinggemma-300m",
 			expect.stringContaining("c-bread"),
 			expect.objectContaining({ expirationTtl: 600 }),
 		);

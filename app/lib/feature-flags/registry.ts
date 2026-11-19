@@ -242,6 +242,13 @@ export const FLAG_REGISTRY: Record<string, FlagRegistryEntry> = {
 		clientKey: "shareExtensionImport",
 		iosAlwaysOn: false,
 	},
+	"cargo-embedding-gemma-2": {
+		defaultEnabled: false,
+		description:
+			"Per-kitchen Cargo embeddings on EmbeddingGemma 2 and ration-cargo-eg2. Off keeps embeddinggemma-300m and ration-cargo.",
+		clientVisible: false,
+		iosAlwaysOn: false,
+	},
 };
 
 /** Registry keys — narrows as entries are added to FLAG_REGISTRY. */

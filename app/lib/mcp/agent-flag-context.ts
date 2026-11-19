@@ -22,5 +22,6 @@ export function resolveAgentFlagContext(
 		ctx.userId,
 		resolveAgentSurface(ctx),
 		ctx.originatingClient,
+		ctx.organizationId,
 	);
 }

@@ -73,6 +73,11 @@
 			"binding": "VECTORIZE",
 			"index_name": "ration-cargo-dev",
 			"remote": true
+		},
+		{
+			"binding": "VECTORIZE_EG2",
+			"index_name": "ration-cargo-dev-eg2",
+			"remote": true
 		}
 	],
 	"durable_objects": {

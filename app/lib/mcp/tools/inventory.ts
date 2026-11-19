@@ -20,7 +20,10 @@ import {
 import { CargoNutritionOverrideSchema } from "../../schemas/nutrition";
 import { UNIT_FIELD_DESCRIPTION, UuidSchema } from "../../schemas/uuid";
 import { coerceToolUnit } from "../../units";
-import { findSimilarCargoBatch } from "../../vector.server";
+import {
+	cargoVectorFloors,
+	findSimilarCargoBatch,
+} from "../../vector.server";
 import { resolveAgentFlagContext } from "../agent-flag-context";
 import { err, ok, type ToolEnvelope } from "../envelope";
 import {
@@ -314,12 +317,18 @@ export function createInventoryToolDefs(env: McpToolsEnv) {
 							env,
 							ctx.organizationId,
 							[a.name],
-							{ topK: 3, threshold: NAME_SEARCH_RECALL_THRESHOLD },
+							{ topK: 3, threshold: NAME_SEARCH_RECALL_THRESHOLD, floor: "recall" },
 						);
 						const matches = results.get(a.name) ?? [];
+						const floors = await cargoVectorFloors(
+							env,
+							ctx.organizationId,
+							resolveAgentFlagContext(env, ctx),
+						);
 						const decision = decideStockNameMatch(
 							matches,
 							ADJUST_NAME_SCORE_GAP,
+							floors.ingredient,
 						);
 						if (decision.kind === "disambiguate") {
 							const rows = await getCargoByIds(

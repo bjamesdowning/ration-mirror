@@ -172,3 +172,20 @@ describe("buildAgentFlagContext", () => {
 		expect(context.clientVersion).toBe(APP_VERSION);
 	});
 });
+
+describe("verified kitchen id", () => {
+	it("stamps organizationId when the server passes it", () => {
+		const request = new Request("https://ration.mayutic.com/");
+		expect(
+			buildWebFlagContext(request, {}, null, { organizationId: "org-1" })
+				.organizationId,
+		).toBe("org-1");
+		expect(
+			buildSystemFlagContext({}, "user-1", { organizationId: "org-1" })
+				.organizationId,
+		).toBe("org-1");
+		expect(
+			buildAgentFlagContext({}, "user-1", "mcp", null, "org-1").organizationId,
+		).toBe("org-1");
+	});
+});

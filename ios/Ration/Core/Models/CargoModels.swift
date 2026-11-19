@@ -154,7 +154,7 @@ struct CargoPage: Codable, Sendable {
 }
 
 /// `POST /api/mobile/v1/cargo` request body.
-struct CreateCargoRequest: Codable, Sendable {
+struct CreateCargoRequest: Encodable, Sendable {
     let name: String
     let quantity: Double
     let unit: String
@@ -162,10 +162,52 @@ struct CreateCargoRequest: Codable, Sendable {
     var tags: [String] = []
     var expiresAt: Date?
     var nutrition: NutritionSnapshot? = nil
+    /// `merge` adds to `mergeTargetId`. `new` creates a separate row.
+    var mergeChoice: String? = nil
+    var mergeTargetId: String? = nil
+
+    enum CodingKeys: String, CodingKey {
+        case name, quantity, unit, domain, tags, expiresAt, nutrition
+        case mergeChoice, mergeTargetId
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(name, forKey: .name)
+        try container.encode(quantity, forKey: .quantity)
+        try container.encode(unit, forKey: .unit)
+        try container.encode(domain, forKey: .domain)
+        try container.encode(tags, forKey: .tags)
+        try container.encodeIfPresent(expiresAt, forKey: .expiresAt)
+        try container.encodeIfPresent(nutrition, forKey: .nutrition)
+        try container.encodeIfPresent(mergeChoice, forKey: .mergeChoice)
+        try container.encodeIfPresent(mergeTargetId, forKey: .mergeTargetId)
+    }
 }
 
 struct CreateCargoResponse: Codable, Sendable {
     let item: CargoItem
+}
+
+/// Existing cargo row the server will not merge into until the person chooses.
+struct CargoMergeCandidate: Codable, Equatable, Sendable {
+    let id: String
+    let name: String
+    let quantity: Double
+    let unit: String
+    let score: Double
+    let convertedQuantity: Double
+}
+
+struct CargoMergeCandidateResponse: Decodable, Sendable {
+    let status: String
+    let code: String?
+    let candidate: CargoMergeCandidate
+}
+
+enum CreateCargoOutcome: Sendable {
+    case saved(CargoItem)
+    case mergeCandidate(CargoMergeCandidate)
 }
 
 // MARK: - Search

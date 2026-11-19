@@ -7,6 +7,22 @@ export const MobileCargoListQuerySchema = z.object({
 	domain: z.enum(["food", "household", "alcohol"]).optional(),
 });
 
+/** Same choice as the web cargo form: merge into the candidate, or create a new row. */
+export const MobileCargoMergeIntentSchema = z
+	.object({
+		mergeChoice: z.enum(["merge", "new"]).optional(),
+		mergeTargetId: z.string().min(1).optional(),
+	})
+	.superRefine((value, ctx) => {
+		if (value.mergeChoice === "merge" && !value.mergeTargetId) {
+			ctx.addIssue({
+				code: z.ZodIssueCode.custom,
+				path: ["mergeTargetId"],
+				message: "mergeTargetId is required when mergeChoice is merge",
+			});
+		}
+	});
+
 export const MobileCreateCargoSchema = CargoItemSchema;
 
 export const MobileUpdateCargoSchema = PartialCargoItemSchema;

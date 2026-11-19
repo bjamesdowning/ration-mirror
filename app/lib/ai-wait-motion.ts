@@ -34,7 +34,7 @@ export function aiWaitMotionStyle(
 	};
 }
 
-/** One VoiceOver / status announcement. Decorative motion is not part of it. */
+/** One VoiceOver status line. Decorative motion is not part of it. */
 export function aiWaitStatusLabel(
 	title: string,
 	detail: string,

@@ -118,7 +118,7 @@ CREATE TABLE nutrition_intake (
   notes TEXT,
   logged_amount REAL,
   logged_unit TEXT,
-  tag_names TEXT
+  tag_names TEXT DEFAULT 'null'
 );
 CREATE TABLE meal (
   id TEXT PRIMARY KEY,

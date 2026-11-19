@@ -12,6 +12,13 @@ struct PlanWeekSheet: View {
         env.session.session?.aiCosts?.mealPlanWeekly ?? 3
     }
 
+    private var showsAiWait: Bool {
+        switch model.state {
+        case .submitting, .processing: true
+        default: false
+        }
+    }
+
     var body: some View {
         NavigationStack {
             VStack(spacing: 16) {
@@ -29,13 +36,14 @@ struct PlanWeekSheet: View {
                     }
                 }
             }
-            .padding(16)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(showsAiWait ? 0 : 16)
             .navigationTitle("Plan week")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } }
             }
-            .background(Theme.ceramic)
+            .aiWaitSheetChrome(active: showsAiWait)
             .sheet(isPresented: Binding(
                 get: { consent.isPresenting },
                 set: { if !$0 { consent.decline() } }

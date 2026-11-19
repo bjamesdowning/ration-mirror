@@ -5,3 +5,7 @@ export const FUEL_SCAN_NEXT_STEPS =
 export const FUEL_SCAN_NOT_MEDICAL = "Not medical advice.";
 
 export const FUEL_SCAN_UNAVAILABLE = "Photo food log is unavailable.";
+
+export const FUEL_SCAN_ANALYZING = "Analyzing";
+
+export const FUEL_SCAN_ANALYZING_DETAIL = "This usually takes a few seconds.";

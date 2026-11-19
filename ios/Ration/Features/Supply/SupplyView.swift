@@ -351,6 +351,8 @@ struct SupplyView: View {
                 set: { _ in }
             )) {
                 AIProcessingView(feature: .supplyReplenish, creditCost: scanCreditCost)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .aiWaitSheetChrome(active: true)
             }
             .overlay(alignment: .bottom) {
                 if let message = model.dockMessage {

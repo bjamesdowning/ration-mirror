@@ -18,6 +18,7 @@ import {
 	AIFeatureIntroView,
 	AIFeatureModal,
 } from "~/components/ai/AIFeatureModal";
+import { AiWait } from "~/components/ai/AiWait";
 import { Toast } from "~/components/shell/Toast";
 import { importEvidenceSummary } from "~/lib/import/import-evidence";
 import { MAX_POLL_ATTEMPTS, startBackoffPollLoop } from "~/lib/polling";
@@ -726,6 +727,7 @@ export const ImportRecipeButton = forwardRef<
 						)
 					}
 					maxWidth="md"
+					field={showProcessing && !showImportInfo}
 				>
 					{showImportInfo ? (
 						<AIFeatureIntroView
@@ -739,7 +741,9 @@ export const ImportRecipeButton = forwardRef<
 							confirmLabel="Got it"
 						/>
 					) : (
-						<div className="p-8">
+						<div
+							className={showProcessing ? "flex min-h-0 flex-1 flex-col" : "p-8"}
+						>
 							{showUrlInput && (
 								<div className="space-y-6 text-center py-8">
 									{showInputTabs && (
@@ -898,19 +902,13 @@ export const ImportRecipeButton = forwardRef<
 							)}
 
 							{showProcessing && (
-								<div className="animate-pulse space-y-4 text-center py-12">
-									<div className="w-16 h-16 mx-auto rounded-full bg-hyper-green/20 flex items-center justify-center animate-spin-slow">
-										{inputMode === "photo" && aiImportPhoto ? (
-											<ImageIcon className="w-8 h-8 text-hyper-green" />
-										) : (
-											<Link2 className="w-8 h-8 text-hyper-green" />
-										)}
-									</div>
-									<h4 className="text-lg font-medium text-carbon dark:text-white">
-										{processingCopy.title}
-									</h4>
-									<p className="text-muted text-sm">{processingCopy.body}</p>
-								</div>
+								<AiWait
+									mark={inputMode === "photo" && aiImportPhoto ? "camera" : "link"}
+									title={processingCopy.title}
+									detail={processingCopy.body}
+									creditCost={costPerImport}
+									className="flex-1"
+								/>
 							)}
 
 							{showVerification && verificationData && (

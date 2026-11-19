@@ -12,6 +12,7 @@ import {
 	AIFeatureIntroView,
 	AIFeatureModal,
 } from "~/components/ai/AIFeatureModal";
+import { AiWait } from "~/components/ai/AiWait";
 import type { MealForPicker } from "~/lib/manifest.server";
 import { MAX_POLL_ATTEMPTS, startBackoffPollLoop } from "~/lib/polling";
 import { SLOT_LABELS, SLOT_TYPES, type SlotType } from "~/lib/schemas/manifest";
@@ -591,6 +592,7 @@ export function PlanWeekButton({
 				subtitle="Powered by Orbital Intelligence"
 				icon={<Calendar className="w-5 h-5 text-hyper-green" />}
 				maxWidth="lg"
+				field={view === "form" && isGenerating}
 			>
 				{/* ── Intro view ── */}
 				{view === "intro" && (
@@ -606,7 +608,16 @@ export function PlanWeekButton({
 				)}
 
 				{/* ── Config form + loading ── */}
-				{view === "form" && (
+				{view === "form" && isGenerating ? (
+					<AiWait
+						mark="calendar"
+						title="Planning week…"
+						detail="Building a balanced week from your Galley — matching what's already in Cargo."
+						creditCost={cost}
+						className="flex-1"
+					/>
+				) : null}
+				{view === "form" && !isGenerating && (
 					<PlanWeekForm
 						futureDates={futureDates}
 						showSnackSlot={showSnackSlot}

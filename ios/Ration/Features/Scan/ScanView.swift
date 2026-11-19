@@ -14,6 +14,13 @@ struct ScanView: View {
         env.session.session?.aiCosts?.scan ?? 1
     }
 
+    private var showsAiWait: Bool {
+        switch model.state {
+        case .uploading, .processing, .confirming: true
+        default: false
+        }
+    }
+
     var body: some View {
         NavigationStack {
             VStack(spacing: 20) {
@@ -23,7 +30,12 @@ struct ScanView: View {
                 case .uploading:
                     AIProcessingView(feature: .scanCargo, creditCost: env.session.session?.aiCosts?.scan ?? 1)
                 case .processing:
-                    processingContent
+                    AIProcessingView(
+                        feature: .scanCargo,
+                        creditCost: nil,
+                        titleOverride: "Extracting items",
+                        messageOverride: "This usually takes a few seconds."
+                    )
                 case .completed:
                     completedContent
                 case .confirming:
@@ -34,7 +46,7 @@ struct ScanView: View {
                     failedContent(message)
                 }
             }
-            .frame(maxHeight: .infinity)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .navigationTitle("Scan")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -42,7 +54,7 @@ struct ScanView: View {
                     Button("Close") { dismiss() }
                 }
             }
-            .background(Theme.ceramic)
+            .aiWaitSheetChrome(active: showsAiWait)
             .sheet(isPresented: Binding(
                 get: { consent.isPresenting },
                 set: { if !$0 { consent.decline() } }
@@ -113,19 +125,6 @@ struct ScanView: View {
         consent.presentIfNeeded(session: env.session) {
             showingCamera = true
         }
-    }
-
-    private var processingContent: some View {
-        GlassCard {
-            VStack(spacing: 12) {
-                ProgressView().tint(Theme.hyperGreen)
-                Text("Extracting items").rationHeadline()
-                Text("This usually takes a few seconds.")
-                    .rationCaption()
-                    .multilineTextAlignment(.center)
-            }
-        }
-        .padding(24)
     }
 
     private var completedContent: some View {

@@ -32,6 +32,13 @@ struct ImportRecipeSheet: View {
         env.session.session?.aiCosts?.importUrl ?? 3
     }
 
+    private var showsAiWait: Bool {
+        switch model.state {
+        case .submitting, .processing, .confirming: true
+        default: false
+        }
+    }
+
     private var photoImportEnabled: Bool {
         clientFlags.isAiImportPhotoEnabled
     }
@@ -88,7 +95,8 @@ struct ImportRecipeSheet: View {
                     siteBlockedContent(message)
                 }
             }
-            .padding(16)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(showsAiWait ? 0 : 16)
             .navigationTitle("Import recipe")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -125,7 +133,7 @@ struct ImportRecipeSheet: View {
                 }
                 .presentationDetents([.medium, .large])
             }
-            .background(Theme.ceramic)
+            .aiWaitSheetChrome(active: showsAiWait)
             .sheet(isPresented: Binding(
                 get: { consent.isPresenting },
                 set: { if !$0 { consent.decline() } }

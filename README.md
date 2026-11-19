@@ -879,7 +879,7 @@ Brand names are **semantic slots that invert**. Rules:
 1. Never use `carbon` as a dark fill, scrim, or modal shell (`bg-carbon`, `bg-carbon/30`, `dark:bg-carbon`, `backdrop:bg-carbon`).
 2. Modal overlays use `.modal-scrim` / `.modal-scrim-heavy` (fixed near-black) or `backdrop:bg-black/50`. Panels use `.modal-surface` (ceramic / dark `#1A1A1A`).
 3. Copy / secondary actions: Hyper-Green Copy ([`CopyField`](app/components/settings/developer/CopyField.tsx)) or `.btn-secondary` — never bare `bg-white` + light text.
-4. iOS full-screen AI/confirm waits: [`AIProcessingView`](ios/Ration/Core/Design/AIProcessingView.swift) (optional title/message overrides), not bare labeled `ProgressView` chips.
+4. AI waits share one orbital scan: iOS [`AIProcessingView`](ios/Ration/Core/Design/AIProcessingView.swift) and web [`AiWait`](app/components/ai/AiWait.tsx). The field is fixed `#111111` (the `carbon` utility still inverts, so it is not the fill). Each feature keeps its headline, one line, credit pill, and center mark. Reduced motion holds a static ring.
 5. Guardrail test: `app/lib/__tests__/theme-class-guardrails.test.ts`. Audit log: [docs/dev/appearance-audit.md](docs/dev/appearance-audit.md).
 
 ---

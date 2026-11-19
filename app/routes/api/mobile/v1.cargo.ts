@@ -132,7 +132,8 @@ export async function action({ request, context }: Route.ActionArgs) {
 			{
 				allowFuzzyCandidate: true,
 				forceCreateNew: mergeChoice === "new",
-				mergeTargetId: mergeChoice === "merge" ? mergeTargetId : undefined,
+				mergeTargetId:
+					mergeChoice === "merge" ? mergeTargetId : undefined,
 				waitUntil: context.cloudflare.ctx.waitUntil.bind(
 					context.cloudflare.ctx,
 				),

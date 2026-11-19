@@ -7,6 +7,11 @@ struct DiaryMacrosBody: Encodable, Sendable {
     let fatG: Double
 }
 
+struct DiaryTagName: Encodable, Sendable {
+    let name: String
+    var slug: String? = nil
+}
+
 struct DiaryFoodBody: Encodable, Sendable {
     let name: String
     let occurredAt: String
@@ -18,9 +23,10 @@ struct DiaryFoodBody: Encodable, Sendable {
     var compositionSource: String? = nil
     var fuelTimeZone: String? = nil
     var notes: String? = nil
+    var tagNames: [DiaryTagName]? = nil
 
     enum CodingKeys: String, CodingKey {
-        case name, occurredAt, amount, unit, macros, idempotencyKey, operationKey, compositionSource, fuelTimeZone, notes
+        case name, occurredAt, amount, unit, macros, idempotencyKey, operationKey, compositionSource, fuelTimeZone, notes, tagNames
     }
 
     func encode(to encoder: Encoder) throws {
@@ -35,6 +41,7 @@ struct DiaryFoodBody: Encodable, Sendable {
         try container.encodeIfPresent(compositionSource, forKey: .compositionSource)
         try container.encodeIfPresent(fuelTimeZone, forKey: .fuelTimeZone)
         try container.encodeIfPresent(notes, forKey: .notes)
+        try container.encodeIfPresent(tagNames, forKey: .tagNames)
     }
 }
 
@@ -445,6 +452,7 @@ struct FuelDayResponse: Decodable, Sendable {
         let loggedAmount: Double?
         let loggedUnit: String?
         let entryId: String?
+        let tagNames: [String]?
     }
 
     let date: String

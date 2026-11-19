@@ -104,6 +104,9 @@ struct FuelLogDetailView: View {
                 if let amount = amountLine {
                     detailRow("Amount", amount)
                 }
+                if let tags = item.tagNames, !tags.isEmpty {
+                    detailRow("Tags", tags.joined(separator: ", "))
+                }
                 if let note = item.notes?.trimmingCharacters(in: .whitespacesAndNewlines), !note.isEmpty {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Note").rationCaption()

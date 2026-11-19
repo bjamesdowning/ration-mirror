@@ -20,6 +20,7 @@ import {
 	AIFeatureIntroView,
 	AIFeatureModal,
 } from "~/components/ai/AIFeatureModal";
+import { AiWait } from "~/components/ai/AiWait";
 import { useQuantityFormatter } from "~/components/shared/DisplayQuantity";
 import { MAX_POLL_ATTEMPTS, startBackoffPollLoop } from "~/lib/polling";
 
@@ -454,6 +455,7 @@ export const GenerateMealButton = forwardRef<
 					subtitle="Powered by Orbital Intelligence"
 					icon={<Sparkles className="w-5 h-5 text-hyper-green" />}
 					maxWidth="lg"
+					field={view !== "intro" && isGenerating && !recipes && !error}
 				>
 					{view === "intro" ? (
 						<AIFeatureIntroView
@@ -467,22 +469,30 @@ export const GenerateMealButton = forwardRef<
 							confirmLabel="Continue"
 						/>
 					) : (
-						<div className="p-8">
+						<div
+							className={
+								isGenerating && !recipes && !error
+									? "flex min-h-0 flex-1 flex-col"
+									: "p-8"
+							}
+						>
 							{/* Form / Loading / Error / Results */}
 							{!recipes && !error && (
-								<div className="text-center py-12">
+								<div
+									className={
+										isGenerating
+											? "flex min-h-0 flex-1 flex-col"
+											: "text-center py-12"
+									}
+								>
 									{isGenerating ? (
-										<div className="animate-pulse space-y-4">
-											<div className="w-16 h-16 mx-auto rounded-full bg-hyper-green/20 flex items-center justify-center animate-spin-slow">
-												<Sparkles className="w-8 h-8 text-hyper-green" />
-											</div>
-											<h4 className="text-lg font-medium text-carbon dark:text-white">
-												Generating meals...
-											</h4>
-											<p className="text-muted text-sm">
-												Inventing recipes based on your stock.
-											</p>
-										</div>
+										<AiWait
+											mark="sparkles"
+											title="Generating meals..."
+											detail="Inventing recipes based on your stock."
+											creditCost={costPerGenerate}
+											className="flex-1"
+										/>
 									) : (
 										<div className="space-y-6">
 											<p className="text-carbon/80 dark:text-white/80 max-w-md mx-auto">

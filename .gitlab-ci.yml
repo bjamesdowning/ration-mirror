@@ -37,22 +37,6 @@ cache:
 #     - bun run flag:check
 #   allow_failure: false
 
-# One-branch check for the iOS cargo merge prompt. Does not run on main.
-ios_merge_prompt_verify:
-  stage: verify
-  variables:
-    BUN_INSTALL_CACHE_DIR: "/tmp/bun-install-cache"
-  rules:
-    - if: '$CI_COMMIT_BRANCH == "cursor/ios-cargo-merge-prompt-e0a8"'
-  script:
-    - bun install --frozen-lockfile --ignore-scripts
-    - apt-get update -qq && apt-get install -y -qq curl ca-certificates
-    - curl -fsSL https://nodejs.org/dist/v22.23.4/node-v22.23.4-linux-x64.tar.gz | tar -xz -C /usr/local --strip-components=1
-    - node --version
-    - bun run typecheck
-    - bun run test:unit
-  allow_failure: false
-
 # Manual: upload docs corpus to R2 and reindex Copilot AI Search.
 # Trigger after docs/fin, docs/dev, docs/legal, content/blog, or README changes.
 # Requires CLOUDFLARE_API_TOKEN (and account) with R2 + AI Search write access.

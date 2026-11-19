@@ -27,6 +27,8 @@ struct CargoFormView: View {
     @State private var isSaving = false
     @State private var errorMessage: String?
     @State private var quantityError: String?
+    @State private var pendingMerge: CargoMergeCandidate?
+    @State private var showMergePrompt = false
     @State private var paywallContext: PaywallContext?
     @FocusState private var focusedField: Field?
 
@@ -140,11 +142,30 @@ struct CargoFormView: View {
             .sheet(item: $paywallContext) { ctx in
                 PaywallView(context: ctx)
             }
+            .confirmationDialog(
+                CargoMergePrompt.title,
+                isPresented: $showMergePrompt,
+                titleVisibility: .visible
+            ) {
+                Button(CargoMergePrompt.addToExistingTitle) {
+                    Task { await save(choice: .merge) }
+                }
+                Button(CargoMergePrompt.createNewTitle) {
+                    Task { await save(choice: .createNew) }
+                }
+                Button("Cancel", role: .cancel) {
+                    pendingMerge = nil
+                }
+            } message: {
+                if let pendingMerge {
+                    Text(CargoMergePrompt.message(for: pendingMerge))
+                }
+            }
         }
     }
 
     @MainActor
-    private func save() async {
+    private func save(choice: CargoMergeChoice? = nil) async {
         errorMessage = nil
         quantityError = nil
         let qty: Double
@@ -161,13 +182,18 @@ struct CargoFormView: View {
             quantityError = message
             return
         }
+        let candidate = pendingMerge
+        if choice == nil {
+            pendingMerge = nil
+            showMergePrompt = false
+        }
         isSaving = true
         defer { isSaving = false }
 
         do {
             switch mode {
             case .create:
-                let body = CreateCargoRequest(
+                var body = CreateCargoRequest(
                     name: name,
                     quantity: qty,
                     unit: unit.isEmpty ? "unit" : unit,
@@ -176,7 +202,28 @@ struct CargoFormView: View {
                     expiresAt: hasExpiry ? expiresAt : nil,
                     nutrition: nutritionPayload
                 )
-                _ = try await env.api.createCargo(body)
+                switch choice {
+                case .merge:
+                    guard let candidate else {
+                        errorMessage = "Could not merge with an existing item."
+                        return
+                    }
+                    body.mergeChoice = "merge"
+                    body.mergeTargetId = candidate.id
+                case .createNew:
+                    body.mergeChoice = "new"
+                case nil:
+                    break
+                }
+                switch try await env.api.createCargo(body) {
+                case .saved:
+                    pendingMerge = nil
+                    showMergePrompt = false
+                case let .mergeCandidate(match):
+                    pendingMerge = match
+                    showMergePrompt = true
+                    return
+                }
             case let .edit(item):
                 _ = try await env.api.updateCargo(
                     id: item.id,

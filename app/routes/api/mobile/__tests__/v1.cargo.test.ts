@@ -205,6 +205,8 @@ describe("POST /api/mobile/v1/cargo", () => {
 				nutrition: expect.objectContaining({ source: "user_override" }),
 			}),
 			expect.objectContaining({
+				allowFuzzyCandidate: true,
+				forceCreateNew: false,
 				userId: "user_1",
 				flagContext: expect.objectContaining({
 					clientPlatform: "ios",
@@ -309,5 +311,158 @@ describe("POST /api/mobile/v1/cargo", () => {
 		expect(result.item.nutrition.fdcId).toBeNull();
 		expect(result.item.nutrition.perServing.energyKcal).toBe(10);
 		expect(result.item.nutrition.perServing.proteinG).toBe(200);
+	});
+
+	async function postCargo(body: Record<string, unknown>) {
+		const { action } = await import("~/routes/api/mobile/v1.cargo");
+		return action({
+			request: new Request("https://ration.mayutic.com/api/mobile/v1/cargo", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify(body),
+			}),
+			context: {
+				cloudflare: {
+					env: {
+						DB: {},
+						RATION_KV: {},
+						FLAGSHIP_ENV: "dev",
+						CLOUDFLARE_ENV: "dev",
+					},
+					ctx: { waitUntil: vi.fn() },
+				},
+			} as never,
+			params: {},
+		} as never);
+	}
+
+	it("returns a merge candidate instead of adding quantity to a near-duplicate", async () => {
+		addOrMergeItem.mockResolvedValue({
+			status: "merge_candidate",
+			candidate: {
+				id: "cargo_tomato",
+				name: "Cherry Tomato",
+				quantity: 2,
+				unit: "unit",
+				score: 0.91,
+				convertedQuantity: 1,
+			},
+		});
+
+		const result = await postCargo({
+			name: "Cheesecake",
+			quantity: 1,
+			unit: "unit",
+			domain: "food",
+			tags: [],
+		});
+
+		expect(addOrMergeItem).toHaveBeenCalledWith(
+			expect.anything(),
+			"org_1",
+			expect.objectContaining({ name: "cheesecake" }),
+			expect.objectContaining({
+				allowFuzzyCandidate: true,
+				forceCreateNew: false,
+			}),
+		);
+		expect(attachTagsToCargo).not.toHaveBeenCalled();
+		expect(result).toMatchObject({
+			type: "DataWithResponseInit",
+			data: {
+				status: "merge_candidate",
+				code: "merge_candidate",
+				candidate: { id: "cargo_tomato", name: "Cherry Tomato" },
+			},
+			init: { status: 409 },
+		});
+	});
+
+	it("creates a new row when the client declines the near-duplicate", async () => {
+		addOrMergeItem.mockResolvedValue({
+			status: "created",
+			item: { id: "cargo_cake", name: "cheesecake" },
+		});
+		attachTagsToCargo.mockResolvedValue([
+			{ id: "cargo_cake", name: "cheesecake", tags: [] },
+		]);
+
+		const result = (await postCargo({
+			name: "Cheesecake",
+			quantity: 1,
+			unit: "unit",
+			domain: "food",
+			tags: [],
+			mergeChoice: "new",
+		})) as { item: { id: string } };
+
+		expect(addOrMergeItem).toHaveBeenCalledWith(
+			expect.anything(),
+			"org_1",
+			expect.objectContaining({ name: "cheesecake" }),
+			expect.objectContaining({
+				allowFuzzyCandidate: true,
+				forceCreateNew: true,
+			}),
+		);
+		expect(result.item.id).toBe("cargo_cake");
+	});
+
+	it("merges only after the client chooses the existing item", async () => {
+		addOrMergeItem.mockResolvedValue({
+			status: "merged",
+			item: {
+				id: "cargo_tomato",
+				name: "cherry tomato",
+				quantity: 3,
+				unit: "unit",
+				domain: "food",
+				expiresAt: null,
+				updatedAt: new Date("2026-11-19T12:00:00.000Z"),
+			},
+		});
+		attachTagsToCargo.mockImplementation(
+			async (_db: unknown, rows: unknown[]) => rows,
+		);
+
+		const result = (await postCargo({
+			name: "Cherry tomatoes",
+			quantity: 1,
+			unit: "unit",
+			domain: "food",
+			tags: [],
+			mergeChoice: "merge",
+			mergeTargetId: "cargo_tomato",
+		})) as { item: { id: string; quantity: number } };
+
+		expect(addOrMergeItem).toHaveBeenCalledWith(
+			expect.anything(),
+			"org_1",
+			expect.anything(),
+			expect.objectContaining({
+				allowFuzzyCandidate: true,
+				forceCreateNew: false,
+				mergeTargetId: "cargo_tomato",
+			}),
+		);
+		expect(result.item.id).toBe("cargo_tomato");
+		expect(result.item.quantity).toBe(3);
+	});
+
+	it("rejects a merge choice that has no target", async () => {
+		const result = await postCargo({
+			name: "Cheesecake",
+			quantity: 1,
+			unit: "unit",
+			domain: "food",
+			tags: [],
+			mergeChoice: "merge",
+		});
+
+		expect(addOrMergeItem).not.toHaveBeenCalled();
+		expect(result).toMatchObject({
+			data: { code: "invalid_merge_metadata" },
+			init: { status: 400 },
+		});
 	});
 });

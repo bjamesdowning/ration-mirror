@@ -13,8 +13,22 @@ extension RationAPI {
         try await client.get("cargo/\(id)")
     }
 
-    func createCargo(_ body: CreateCargoRequest) async throws -> CreateCargoResponse {
-        try await client.post("cargo", body: body)
+    func createCargo(_ body: CreateCargoRequest) async throws -> CreateCargoOutcome {
+        do {
+            let saved: CreateCargoResponse = try await client.post("cargo", body: body)
+            return .saved(saved.item)
+        } catch let merge as CargoMergeHTTP {
+            let response: CargoMergeCandidateResponse
+            do {
+                response = try JSON.decoder.decode(CargoMergeCandidateResponse.self, from: merge.data)
+            } catch {
+                throw APIError.decoding("Unexpected response from server.")
+            }
+            guard response.status == "merge_candidate" || response.code == "merge_candidate" else {
+                throw APIError.decoding("Expected a merge candidate")
+            }
+            return .mergeCandidate(response.candidate)
+        }
     }
 
     func updateCargo(id: String, _ body: UpdateCargoRequest) async throws -> CargoDetailResponse {

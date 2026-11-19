@@ -208,6 +208,9 @@ final class APIClient {
                     await orgAccessLostHandler()
                 }
             }
+            if http.statusCode == 409, path == "cargo", method.uppercased() == "POST" {
+                throw CargoMergeHTTP(data: data)
+            }
             throw APIError.server(
                 status: http.statusCode,
                 message: errBody?.message ?? errBody?.error,
@@ -330,6 +333,11 @@ final class APIClient {
         // Transport / decoding / cancellation — keep local session.
         return false
     }
+}
+
+/// 409 body from `POST /cargo` when a near-duplicate must be confirmed first.
+struct CargoMergeHTTP: Error, Sendable {
+    let data: Data
 }
 
 /// Type-erased Encodable so the client can accept any request body.

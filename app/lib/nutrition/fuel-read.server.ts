@@ -5,9 +5,9 @@ import { fuelConsistencyDates } from "./fuel-consistency";
 import { FUEL_DAILY_LIMIT } from "./fuel-errors";
 import { isGoalEffectiveOnDate } from "./goal-effective";
 import {
-	getNutritionSummary as readNutritionSummary,
 	listNutritionGoals,
 	listNutritionIntakesForRange,
+	getNutritionSummary as readNutritionSummary,
 } from "./persist.server";
 
 function finiteMacro(value: unknown): number {

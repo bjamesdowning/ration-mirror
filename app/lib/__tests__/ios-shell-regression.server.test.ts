@@ -575,10 +575,7 @@ describe("fuel reads", () => {
 		);
 		expect(route).toContain("consistency: day.consistency");
 		expect(route).not.toContain("console.");
-		const read = readFileSync(
-			"app/lib/nutrition/fuel-read.server.ts",
-			"utf8",
-		);
+		const read = readFileSync("app/lib/nutrition/fuel-read.server.ts", "utf8");
 		expect(read).toContain("fuelConsistencyDates(date)");
 		expect(read).toContain("listNutritionGoals");
 		expect(read).not.toContain("fillSparseDays");
@@ -590,10 +587,7 @@ describe("fuel reads", () => {
 		expect(fuel).toContain("FuelConsistencyRows(days: day.consistency)");
 		expect(fuel).toContain("FuelLogEditSheet");
 		expect(fuel).not.toContain("streak");
-		const eat = readFileSync(
-			"ios/RationWidgets/Eat/EatWidget.swift",
-			"utf8",
-		);
+		const eat = readFileSync("ios/RationWidgets/Eat/EatWidget.swift", "utf8");
 		expect(eat).toContain('kind: "com.mayutic.ration.eat"');
 		expect(eat).toContain('.configurationDisplayName("Eat")');
 		expect(eat).toContain("eatWordmark");
@@ -626,17 +620,7 @@ describe("fuel reads", () => {
 			"2026-01-01",
 			"2026-11-10",
 		);
-		goal.run(
-			"g-late",
-			"user-1",
-			2000,
-			100,
-			0,
-			40,
-			null,
-			"2026-11-11",
-			null,
-		);
+		goal.run("g-late", "user-1", 2000, 100, 0, 40, null, "2026-11-11", null);
 		goal.run(
 			"g-other",
 			"user-2",
@@ -741,10 +725,7 @@ describe("fuel reads", () => {
 		expect(day.week[0]).toBe("2026-11-08");
 		expect(day.week).toContain("2026-11-14");
 		expect(dates).not.toContain("2026-11-14");
-		expect([...day.loggedDates].sort()).toEqual([
-			"2026-11-09",
-			"2026-11-13",
-		]);
+		expect([...day.loggedDates].sort()).toEqual(["2026-11-09", "2026-11-13"]);
 		const byDate = Object.fromEntries(
 			day.consistency.map((entry) => [entry.date, entry]),
 		);

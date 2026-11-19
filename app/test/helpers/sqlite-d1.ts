@@ -60,11 +60,11 @@ export function createSqliteD1() {
 					async raw() {
 						const names = statement.columns().map((column) => column.name);
 						const lastIndex = new Map<string, number>();
-						for (const [index, name] of names.entries()) lastIndex.set(name, index);
-						const rows = statement.all(...(params as SQLInputValue[])) as Record<
-							string,
-							unknown
-						>[];
+						for (const [index, name] of names.entries())
+							lastIndex.set(name, index);
+						const rows = statement.all(
+							...(params as SQLInputValue[]),
+						) as Record<string, unknown>[];
 						return rows.map((row) =>
 							names.map((name, index) => {
 								if (lastIndex.get(name) !== index) return null;

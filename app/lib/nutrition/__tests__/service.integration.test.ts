@@ -111,6 +111,7 @@ function setup() {
 			fdc_id text,
 			barcode text,
 			saved_food_id text,
+			tag_names text,
 			created_at integer not null
 		);
 		create unique index nutrition_intake_user_idempotency_uidx

@@ -146,6 +146,7 @@ function setup(metadata: string | null = null) {
 			fdc_id text,
 			barcode text,
 			saved_food_id text,
+			tag_names text,
 			created_at integer not null
 		);
 		create table nutrition_saved_food (

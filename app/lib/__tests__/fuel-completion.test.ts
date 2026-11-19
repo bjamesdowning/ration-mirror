@@ -169,6 +169,7 @@ async function database() {
 			fdc_id text,
 			barcode text,
 			saved_food_id text,
+			tag_names text,
 			created_at integer not null
 		);
 		CREATE TABLE nutrition_operation (

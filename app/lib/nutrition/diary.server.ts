@@ -245,6 +245,7 @@ function canonicalBody(
 		fatG: food.fatG,
 		fiberG: food.fiberG,
 		idempotencyKey: food.idempotencyKey,
+		tagNames: food.tagNames,
 		...intakeNotesForCanonicalHash(notesEnabled, food.requestedNotes),
 		...extra,
 	};
@@ -355,6 +356,7 @@ function sameFood(
 		row.carbsG === food.carbsG &&
 		row.fatG === food.fatG &&
 		(row.fiberG ?? null) === food.fiberG &&
+		JSON.stringify(row.tagNames ?? null) === JSON.stringify(food.tagNames) &&
 		(row.notes ?? null) === notes
 	);
 }
@@ -422,6 +424,7 @@ function intakeInsert(
 		notes: input.notes,
 		loggedAmount: food.loggedAmount,
 		loggedUnit: food.loggedUnit,
+		tagNames: food.tagNames,
 		healthSyncId: input.healthSyncId,
 		healthSyncVersion: input.healthSyncVersion,
 		compositionSource: input.compositionSource ?? "manual_macros",

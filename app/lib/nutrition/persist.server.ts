@@ -667,19 +667,23 @@ export async function recomputeMealsAffectedByCargoNutrition(
 	return results.filter((r) => r.mode !== "skipped").length;
 }
 
-export async function getActiveNutritionGoal(
-	db: D1Database,
-	userId: string,
-	date: string,
-) {
+/** Up to 50 goal versions, newest effectiveFrom first. Same read as the active-goal pick. */
+export async function listNutritionGoals(db: D1Database, userId: string) {
 	const d1 = drizzle(db);
-	const rows = await d1
+	return d1
 		.select()
 		.from(schema.nutritionGoal)
 		.where(eq(schema.nutritionGoal.userId, userId))
 		.orderBy(sql`${schema.nutritionGoal.effectiveFrom} desc`)
 		.limit(50);
+}
 
+export async function getActiveNutritionGoal(
+	db: D1Database,
+	userId: string,
+	date: string,
+) {
+	const rows = await listNutritionGoals(db, userId);
 	return (
 		rows.find((row) =>
 			isGoalEffectiveOnDate(

@@ -85,6 +85,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 			week: day.week,
 			weekStart: day.weekStart,
 			loggedDates: day.loggedDates,
+			consistency: day.consistency,
 			used: day.used,
 			limit: day.limit,
 			crew: day.crew,

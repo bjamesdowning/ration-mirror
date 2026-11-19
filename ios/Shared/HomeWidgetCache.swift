@@ -250,11 +250,51 @@ enum HomeWidgetCopy {
         return "\(-remainingKcal) kcal over"
     }
 
-    static func macroLine(remaining: Int) -> String {
-        if remaining >= 0 {
-            return "\(remaining) g left"
+    static let absentEnergyLine = "No calorie goal"
+
+    /// Consumed is `goal - remaining`, including when remaining is negative.
+    static func macroLine(remaining: Int, goal: Int) -> String {
+        let consumed = goal - remaining
+        return "\(consumed) of \(goal) g"
+    }
+
+    static func eatWordmark(planFuelActions: Bool?) -> String {
+        planFuelActions == true ? "FUEL" : "EAT"
+    }
+
+    static func eatSucceededWord(planFuelActions: Bool?) -> String {
+        planFuelActions == true ? "Logged" : "Eaten"
+    }
+
+    static func eatEmpty(planFuelActions: Bool?) -> String {
+        planFuelActions == true ? "Nothing ready to log" : "Nothing ready to eat"
+    }
+
+    static func eatFallback(planFuelActions: Bool?) -> String {
+        planFuelActions == true ? "Open Cargo to log" : "Open Cargo to eat"
+    }
+
+    static func eatFailure(planFuelActions: Bool?) -> String {
+        planFuelActions == true ? "Couldn't log to Fuel" : "Couldn't log that bite"
+    }
+
+    static func eatIntentTitle(planFuelActions: Bool?) -> String {
+        planFuelActions == true ? "Log to Fuel" : "Eat one"
+    }
+
+    static func eatAccessibility(
+        unit: String,
+        name: String,
+        eaten: Bool,
+        planFuelActions: Bool?
+    ) -> String {
+        if eaten {
+            return "Ate one \(unit) of \(name)"
         }
-        return "\(-remaining) g over"
+        if planFuelActions == true {
+            return "Log one \(unit) of \(name) to Fuel"
+        }
+        return "Eat one \(unit) of \(name)"
     }
 
     static func slotLabel(_ slotType: String?) -> String? {

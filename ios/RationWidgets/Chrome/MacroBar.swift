@@ -18,7 +18,7 @@ struct MacroBar: View {
                     .font(WidgetType.detail())
                     .foregroundStyle(palette.muted)
                 Spacer(minLength: 0)
-                Text(unit == "kcal" ? (HomeWidgetCopy.energyLine(remainingKcal: remaining) ?? "") : HomeWidgetCopy.macroLine(remaining: remaining))
+                Text(unit == "kcal" ? (HomeWidgetCopy.energyLine(remainingKcal: remaining) ?? "") : HomeWidgetCopy.macroLine(remaining: remaining, goal: goal))
                     .font(WidgetType.detail())
                     .foregroundStyle(over ? palette.warning : palette.carbon)
                     .contentTransition(.numericText())

@@ -566,6 +566,223 @@ describe("fuel reads", () => {
 			.get() as { n: number };
 		expect(filled.n).toBe(120);
 	});
+
+	it("passes consistency through without renaming the Eat widget", () => {
+		const route = readFileSync(
+			"app/routes/api/mobile/v1.nutrition.fuel.ts",
+			"utf8",
+		);
+		expect(route).toContain("consistency: day.consistency");
+		expect(route).not.toContain("console.");
+		const read = readFileSync(
+			"app/lib/nutrition/fuel-read.server.ts",
+			"utf8",
+		);
+		expect(read).toContain("fuelConsistencyDates(date)");
+		expect(read).toContain("listNutritionGoals");
+		expect(read).not.toContain("fillSparseDays");
+		expect(read).not.toContain("console.");
+		const fuel = readFileSync(
+			"ios/Ration/Features/Fuel/FuelView.swift",
+			"utf8",
+		);
+		expect(fuel).toContain("FuelConsistencyRows(days: day.consistency)");
+		expect(fuel).toContain("FuelLogEditSheet");
+		expect(fuel).not.toContain("streak");
+		const eat = readFileSync(
+			"ios/RationWidgets/Eat/EatWidget.swift",
+			"utf8",
+		);
+		expect(eat).toContain('kind: "com.mayutic.ration.eat"');
+		expect(eat).toContain('.configurationDisplayName("Eat")');
+		expect(eat).toContain("eatWordmark");
+		const cache = readFileSync("ios/Shared/HomeWidgetCache.swift", "utf8");
+		expect(cache).toContain("static let currentSchema = 2");
+	});
+
+	it("builds consistency for the selected day and the six days before it", async () => {
+		const { database, sqlite } = shellDb();
+		sqlite
+			.prepare("INSERT INTO user (id, settings, tier) VALUES (?, ?, 'free')")
+			.run(
+				"user-1",
+				JSON.stringify({ manifestSettings: { weekStart: "sunday" } }),
+			);
+		const goal = sqlite.prepare(
+			`INSERT INTO nutrition_goal (
+			   id, user_id, daily_energy_kcal, protein_g, carbs_g, fat_g, fiber_g,
+			   effective_from, effective_to, consent_at
+			 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+		);
+		goal.run(
+			"g-early",
+			"user-1",
+			1800,
+			80,
+			200,
+			70,
+			20,
+			"2026-01-01",
+			"2026-11-10",
+		);
+		goal.run(
+			"g-late",
+			"user-1",
+			2000,
+			100,
+			0,
+			40,
+			null,
+			"2026-11-11",
+			null,
+		);
+		goal.run(
+			"g-other",
+			"user-2",
+			3000,
+			500,
+			500,
+			500,
+			null,
+			"2026-01-01",
+			null,
+		);
+		const occurred = Math.floor(Date.parse("2026-11-13T15:00:00.000Z") / 1000);
+		const intake = sqlite.prepare(
+			`INSERT INTO nutrition_intake (
+			   id, user_id, manifest_date, fuel_date, voided_at, occurred_at,
+			   energy_kcal, protein_g, carbs_g, fat_g, meal_name_snapshot
+			 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		);
+		intake.run(
+			"c-selected",
+			"user-1",
+			"2026-11-13",
+			"2026-11-13",
+			null,
+			occurred,
+			400,
+			42,
+			80,
+			20,
+			"Hidden oats",
+		);
+		intake.run(
+			"c-void",
+			"user-1",
+			"2026-11-12",
+			"2026-11-12",
+			1,
+			occurred,
+			10,
+			99,
+			1,
+			1,
+			"Voided secret",
+		);
+		intake.run(
+			"c-zero",
+			"user-1",
+			"2026-11-09",
+			"2026-11-09",
+			null,
+			occurred,
+			0,
+			0,
+			0,
+			0,
+			"Zero",
+		);
+		intake.run(
+			"c-sat",
+			"user-1",
+			"2026-11-07",
+			"2026-11-07",
+			null,
+			occurred,
+			30,
+			3,
+			4,
+			1,
+			"Saturday bite",
+		);
+		intake.run(
+			"c-other",
+			"user-2",
+			"2026-11-13",
+			"2026-11-13",
+			null,
+			occurred,
+			900,
+			900,
+			900,
+			900,
+			"Other person",
+		);
+
+		const day = await loadFuelDay(
+			database,
+			"user-1",
+			"2026-11-13",
+			new Date("2026-11-13T12:00:00.000Z"),
+		);
+		const dates = day.consistency.map((entry) => entry.date);
+		expect(dates).toEqual([
+			"2026-11-07",
+			"2026-11-08",
+			"2026-11-09",
+			"2026-11-10",
+			"2026-11-11",
+			"2026-11-12",
+			"2026-11-13",
+		]);
+		expect(dates.at(-1)).toBe("2026-11-13");
+		expect(day.week[0]).toBe("2026-11-08");
+		expect(day.week).toContain("2026-11-14");
+		expect(dates).not.toContain("2026-11-14");
+		expect([...day.loggedDates].sort()).toEqual([
+			"2026-11-09",
+			"2026-11-13",
+		]);
+		const byDate = Object.fromEntries(
+			day.consistency.map((entry) => [entry.date, entry]),
+		);
+		expect(byDate["2026-11-10"]?.goal).toEqual({
+			proteinG: 80,
+			carbsG: 200,
+			fatG: 70,
+		});
+		expect(byDate["2026-11-11"]?.goal).toEqual({
+			proteinG: 100,
+			carbsG: null,
+			fatG: 40,
+		});
+		expect(byDate["2026-11-11"]?.logged).toBe(false);
+		expect(byDate["2026-11-11"]?.proteinG).toBeNull();
+		expect(byDate["2026-11-12"]?.logged).toBe(false);
+		expect(byDate["2026-11-12"]?.proteinG).toBeNull();
+		expect(byDate["2026-11-12"]?.carbsG).toBeNull();
+		expect(byDate["2026-11-12"]?.fatG).toBeNull();
+		expect(byDate["2026-11-09"]?.logged).toBe(true);
+		expect(byDate["2026-11-09"]?.proteinG).toBe(0);
+		expect(byDate["2026-11-08"]?.logged).toBe(false);
+		expect(byDate["2026-11-08"]?.proteinG).toBeNull();
+		expect(byDate["2026-11-07"]?.logged).toBe(true);
+		expect(byDate["2026-11-07"]?.proteinG).toBe(3);
+		expect(day.totals?.proteinG).toBe(42);
+		expect(byDate["2026-11-13"]?.proteinG).toBe(day.totals?.proteinG);
+		expect(byDate["2026-11-13"]?.logged).toBe(true);
+		expect(day.goal?.proteinG).toBe(100);
+		expect(day.goal?.carbsG).toBe(0);
+		expect(byDate["2026-11-13"]?.goal?.proteinG).toBe(100);
+		expect(byDate["2026-11-13"]?.goal?.carbsG).toBeNull();
+		const encoded = JSON.stringify(day.consistency);
+		expect(encoded).not.toContain("Hidden");
+		expect(encoded).not.toContain("Voided");
+		expect(encoded).not.toContain("Other person");
+		expect(encoded).not.toContain("shade");
+		expect(day.consistency.every((entry) => !("shade" in entry))).toBe(true);
+	});
 });
 
 describe("import dispatch", () => {

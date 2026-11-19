@@ -467,6 +467,23 @@ struct FuelDayResponse: Decodable, Sendable {
     let goal: Goal?
     let totals: Totals?
     var items: [Item]
+    /// Missing on an older Fuel GET. Synthesized Decodable uses decodeIfPresent.
+    let consistency: [ConsistencyDay]?
+
+    struct ConsistencyDay: Decodable, Equatable, Sendable {
+        struct MacroGoal: Decodable, Equatable, Sendable {
+            let proteinG: Double?
+            let carbsG: Double?
+            let fatG: Double?
+        }
+
+        let date: String
+        let logged: Bool
+        let proteinG: Double?
+        let carbsG: Double?
+        let fatG: Double?
+        let goal: MacroGoal?
+    }
 }
 
 struct FuelPhotoSubmitBody: Encodable, Sendable {

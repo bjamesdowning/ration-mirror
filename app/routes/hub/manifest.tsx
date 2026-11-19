@@ -589,9 +589,6 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 			{ method: "post" },
 		);
 	}
-	useOpenHubAction("log-to-fuel", fuelCapture, () => {
-		setShowFuelLog(true);
-	});
 	useOpenHubAction("plan-week", aiPlanWeek, () => {
 		setShowPlanWeekModal(true);
 	});

@@ -12,6 +12,7 @@ import type { DiaryFoodWrite } from "~/lib/schemas/diary";
 import type { OrganizationMetadata } from "~/lib/types";
 import { assertActiveNutritionConsent } from "./consent.server";
 import type { DiaryNutritionOperationType } from "./diary-operations";
+import { storedDiaryTagNames } from "./diary-tags";
 import {
 	assertNutritionFastLog,
 	assertNutritionSavedFood,
@@ -174,6 +175,7 @@ type ResolvedFood = {
 	fiberG: number | null;
 	idempotencyKey: string;
 	requestedNotes: string | null;
+	tagNames: ReturnType<typeof storedDiaryTagNames>;
 };
 
 type CompleteFoodWrite = Omit<DiaryFoodWrite, "name" | "macros"> & {
@@ -218,6 +220,7 @@ function resolveFood(
 		fiberG: input.macros.fiberG ?? null,
 		idempotencyKey: input.idempotencyKey,
 		requestedNotes: input.notes ?? null,
+		tagNames: storedDiaryTagNames(input.tagNames),
 	};
 }
 

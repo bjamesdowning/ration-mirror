@@ -727,7 +727,7 @@ export const ImportRecipeButton = forwardRef<
 						)
 					}
 					maxWidth="md"
-					field={showProcessing}
+					field={showProcessing && !showImportInfo}
 				>
 					{showImportInfo ? (
 						<AIFeatureIntroView

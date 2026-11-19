@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { type ReactNode, useEffect, useRef } from "react";
 import { Link } from "react-router";
 import { CloseIcon } from "~/components/icons/PageIcons";
 
@@ -37,6 +37,12 @@ export function AIFeatureModal({
 	titleId,
 	field = false,
 }: AIFeatureModalProps) {
+	const closeRef = useRef<HTMLButtonElement>(null);
+	useEffect(() => {
+		if (!open || !field) return;
+		closeRef.current?.focus();
+	}, [open, field]);
+
 	if (!open) return null;
 
 	const id = titleId ?? "ai-feature-modal-title";
@@ -51,6 +57,21 @@ export function AIFeatureModal({
 			role="dialog"
 			aria-modal="true"
 			aria-labelledby={id}
+			onKeyDown={
+				field
+					? (event) => {
+							if (event.key === "Escape") {
+								event.preventDefault();
+								onClose();
+								return;
+							}
+							if (event.key === "Tab") {
+								event.preventDefault();
+								closeRef.current?.focus();
+							}
+						}
+					: undefined
+			}
 		>
 			{field ? null : (
 				<button
@@ -70,7 +91,12 @@ export function AIFeatureModal({
 			>
 				{field ? (
 					<div className="ai-wait-bar">
-						<button type="button" className="ai-wait-close" onClick={onClose}>
+						<button
+							ref={closeRef}
+							type="button"
+							className="ai-wait-close"
+							onClick={onClose}
+						>
 							Close
 						</button>
 						<h3 id={id} className="ai-wait-screen-title">

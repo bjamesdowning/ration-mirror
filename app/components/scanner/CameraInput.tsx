@@ -82,6 +82,12 @@ export const CameraInput = forwardRef<CameraInputHandle, CameraInputProps>(
 			},
 		}));
 
+		const waitRef = useRef<HTMLDivElement>(null);
+		useEffect(() => {
+			if (!isAnalyzing && !isLoadingSupplyMatch) return;
+			waitRef.current?.focus();
+		}, [isAnalyzing, isLoadingSupplyMatch]);
+
 		// Resize parameters
 		const MAX_DIMENSION = 1024; // Max width or height - reduced to prevent AI timeouts
 		const COMPRESSION_QUALITY = 0.8;
@@ -434,14 +440,19 @@ export const CameraInput = forwardRef<CameraInputHandle, CameraInputProps>(
 				{/* Scan in progress modal (blocking; rendered outside hidden wrapper so it is visible) */}
 				{(isAnalyzing || isLoadingSupplyMatch) && (
 					<div
+						ref={waitRef}
+						tabIndex={-1}
 						className="ai-wait-screen"
 						role="dialog"
 						aria-modal="true"
-						aria-labelledby="scan-progress-title"
-						aria-describedby="scan-progress-desc"
+						aria-labelledby="scan-progress-status"
+						onKeyDown={(event) => {
+							if (event.key === "Tab") event.preventDefault();
+						}}
 					>
 						<AiWait
 							mark="camera"
+							statusId="scan-progress-status"
 							title={
 								origin === "supply"
 									? isLoadingSupplyMatch
@@ -454,8 +465,6 @@ export const CameraInput = forwardRef<CameraInputHandle, CameraInputProps>(
 									? "Uploading and matching lines to your Supply list."
 									: "Identifying items. This may take a moment."
 							}
-							titleId="scan-progress-title"
-							detailId="scan-progress-desc"
 							className="flex-1"
 						/>
 					</div>

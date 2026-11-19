@@ -41,6 +41,7 @@ export function AiWait({
 	creditCost = null,
 	titleId,
 	detailId,
+	statusId,
 	className,
 }: {
 	mark: AiWaitMark;
@@ -49,9 +50,11 @@ export function AiWait({
 	creditCost?: number | null;
 	titleId?: string;
 	detailId?: string;
+	statusId?: string;
 	className?: string;
 }) {
 	const motion = aiWaitMotionMode(usePrefersReducedMotion());
+	const status = aiWaitStatusLabel(title, detail, creditCost);
 	const Icon = MARKS[mark];
 	return (
 		<div
@@ -63,19 +66,23 @@ export function AiWait({
 				icon={<Icon className="ai-wait-mark" strokeWidth={1.75} />}
 			/>
 			<div
+				id={statusId}
 				className="ai-wait-copy-block"
 				role="status"
 				aria-live="polite"
-				aria-label={aiWaitStatusLabel(title, detail, creditCost)}
+				aria-atomic="true"
+				aria-label={status}
 			>
-				<h2 id={titleId} className="ai-wait-title">
+				<h2 id={titleId} className="ai-wait-title" aria-hidden="true">
 					{title}
 				</h2>
-				<p id={detailId} className="ai-wait-detail">
+				<p id={detailId} className="ai-wait-detail" aria-hidden="true">
 					{detail}
 				</p>
 				{creditCost == null ? null : (
-					<p className="ai-wait-pill">{aiWaitCreditLabel(creditCost)}</p>
+					<p className="ai-wait-pill" aria-hidden="true">
+						{aiWaitCreditLabel(creditCost)}
+					</p>
 				)}
 			</div>
 			{motion === "scan" ? (

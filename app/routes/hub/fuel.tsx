@@ -557,6 +557,19 @@ function ScanToFuel({
 		"idle" | "queued" | "analyzing" | "failed"
 	>("idle");
 	const [failure, setFailure] = useState("");
+	const closeRef = useRef<HTMLButtonElement>(null);
+	const waitWasOpen = useRef(false);
+
+	useEffect(() => {
+		const active = photoPhase === "queued" || photoPhase === "analyzing";
+		if (active && !waitWasOpen.current) closeRef.current?.focus();
+		waitWasOpen.current = active;
+	}, [photoPhase]);
+
+	function dismissWait() {
+		pollAbort.current?.abort();
+		onClose();
+	}
 
 	async function upload(file: File) {
 		if (!online || !photoLog) return;
@@ -701,12 +714,35 @@ function ScanToFuel({
 
 	if (analyzing) {
 		return (
-			<div className="ai-wait-screen">
+			<div
+				className="ai-wait-screen"
+				role="dialog"
+				aria-modal="true"
+				aria-labelledby="fuel-scan-wait-title"
+				onKeyDown={(event) => {
+					if (event.key === "Escape") {
+						event.preventDefault();
+						dismissWait();
+						return;
+					}
+					if (event.key === "Tab") {
+						event.preventDefault();
+						closeRef.current?.focus();
+					}
+				}}
+			>
 				<div className="ai-wait-bar">
-					<button type="button" className="ai-wait-close" onClick={onClose}>
+					<button
+						ref={closeRef}
+						type="button"
+						className="ai-wait-close"
+						onClick={dismissWait}
+					>
 						Close
 					</button>
-					<h2 className="ai-wait-screen-title">Scan to Fuel</h2>
+					<h2 id="fuel-scan-wait-title" className="ai-wait-screen-title">
+						Scan to Fuel
+					</h2>
 					<span aria-hidden="true" />
 				</div>
 				<AiWait

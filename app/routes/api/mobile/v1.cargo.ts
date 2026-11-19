@@ -15,6 +15,7 @@ import { paginatedResponse } from "~/lib/mobile/responses.server";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import {
 	MobileCargoListQuerySchema,
+	MobileCargoMergeIntentSchema,
 	MobileCreateCargoSchema,
 } from "~/lib/schemas/mobile/cargo";
 import type { Route } from "./+types/v1.cargo";
@@ -113,11 +114,25 @@ export async function action({ request, context }: Route.ActionArgs) {
 
 		const body = await request.json();
 		const input = MobileCreateCargoSchema.parse(body);
+		const mergeMeta = MobileCargoMergeIntentSchema.safeParse(body);
+		if (!mergeMeta.success) {
+			return data(
+				{
+					error: "Invalid merge metadata",
+					code: "invalid_merge_metadata",
+				},
+				{ status: 400 },
+			);
+		}
+		const { mergeChoice, mergeTargetId } = mergeMeta.data;
 		const result = await addOrMergeItem(
 			context.cloudflare.env,
 			organizationId,
 			input,
 			{
+				allowFuzzyCandidate: true,
+				forceCreateNew: mergeChoice === "new",
+				mergeTargetId: mergeChoice === "merge" ? mergeTargetId : undefined,
 				waitUntil: context.cloudflare.ctx.waitUntil.bind(
 					context.cloudflare.ctx,
 				),
@@ -132,6 +147,8 @@ export async function action({ request, context }: Route.ActionArgs) {
 			return data(
 				{
 					status: "merge_candidate",
+					code: "merge_candidate",
+					error: "Potential duplicate found",
 					candidate: result.candidate,
 				},
 				{ status: 409 },

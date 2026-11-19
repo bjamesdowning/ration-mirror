@@ -46,22 +46,34 @@ struct ScanToFuelView: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    switch phase {
-                    case .idle:
-                        idleContent
-                    case .analyzing:
-                        analyzingCard
-                    case .ready:
-                        readyContent
-                    case .failed:
-                        failedContent
+            Group {
+                if phase == .analyzing {
+                    AIProcessingView(
+                        feature: .scanFuel,
+                        creditCost: scanCreditCost,
+                        titleOverride: FuelScanCopy.analyzing,
+                        messageOverride: FuelScanCopy.analyzingDetail
+                    )
+                } else {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 20) {
+                            switch phase {
+                            case .idle:
+                                idleContent
+                            case .analyzing:
+                                EmptyView()
+                            case .ready:
+                                readyContent
+                            case .failed:
+                                failedContent
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
                     }
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .navigationTitle("Scan to Fuel")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -69,7 +81,7 @@ struct ScanToFuelView: View {
                     Button("Close") { dismiss() }
                 }
             }
-            .background(Theme.ceramic)
+            .aiWaitSheetChrome(active: phase == .analyzing)
         }
         .sheet(isPresented: $showingCamera) {
             CameraPicker(sourceType: .camera) { image in
@@ -122,17 +134,6 @@ struct ScanToFuelView: View {
                 Text(FuelScanCopy.unavailable)
                     .rationBody()
             }
-        }
-    }
-
-    private var analyzingCard: some View {
-        GlassCard {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(FuelScanCopy.analyzing).rationHeadline()
-                Text(FuelScanCopy.analyzingDetail)
-                    .rationCaption()
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 

@@ -22,6 +22,8 @@ export interface AIFeatureModalProps {
 	maxWidth?: keyof typeof MODAL_MAX_WIDTH;
 	/** Optional id for the title element (a11y) */
 	titleId?: string;
+	/** Full carbon field while AI is working. Close stays in the header. */
+	field?: boolean;
 }
 
 export function AIFeatureModal({
@@ -33,6 +35,7 @@ export function AIFeatureModal({
 	children,
 	maxWidth = "md",
 	titleId,
+	field = false,
 }: AIFeatureModalProps) {
 	if (!open) return null;
 
@@ -40,21 +43,42 @@ export function AIFeatureModal({
 
 	return (
 		<div
-			className="fixed inset-0 z-[60] flex items-center justify-center modal-scrim-heavy animate-fade-in"
+			className={
+				field
+					? "ai-wait-screen"
+					: "fixed inset-0 z-[60] flex items-center justify-center modal-scrim-heavy animate-fade-in"
+			}
 			role="dialog"
 			aria-modal="true"
 			aria-labelledby={id}
 		>
-			<button
-				type="button"
-				className="absolute inset-0 bg-transparent cursor-default"
-				onClick={onClose}
-				aria-label="Close modal"
-			/>
+			{field ? null : (
+				<button
+					type="button"
+					className="absolute inset-0 bg-transparent cursor-default"
+					onClick={onClose}
+					aria-label="Close modal"
+				/>
+			)}
 
 			<div
-				className={`bg-ceramic dark:bg-[#1A1A1A] border border-platinum dark:border-white/10 rounded-2xl w-full ${MODAL_MAX_WIDTH[maxWidth]} max-h-[90vh] md:max-h-[85vh] overflow-y-auto m-4 relative z-10 flex flex-col shadow-xl`}
+				className={
+					field
+						? "flex min-h-0 w-full flex-1 flex-col"
+						: `bg-ceramic dark:bg-[#1A1A1A] border border-platinum dark:border-white/10 rounded-2xl w-full ${MODAL_MAX_WIDTH[maxWidth]} max-h-[90vh] md:max-h-[85vh] overflow-y-auto m-4 relative z-10 flex flex-col shadow-xl`
+				}
 			>
+				{field ? (
+					<div className="ai-wait-bar">
+						<button type="button" className="ai-wait-close" onClick={onClose}>
+							Close
+						</button>
+						<h3 id={id} className="ai-wait-screen-title">
+							{title}
+						</h3>
+						<span aria-hidden="true" />
+					</div>
+				) : (
 				<div className="p-6 border-b border-platinum dark:border-white/10 flex justify-between items-center sticky top-0 bg-ceramic/95 dark:bg-[#1A1A1A]/95 backdrop-blur z-20">
 					<div className="flex items-center gap-3">
 						<div className="w-10 h-10 rounded-full bg-hyper-green/20 flex items-center justify-center">
@@ -81,8 +105,9 @@ export function AIFeatureModal({
 						<CloseIcon className="w-4 h-4" />
 					</button>
 				</div>
+				)}
 
-				<div className="flex flex-col flex-1">{children}</div>
+				<div className="flex min-h-0 flex-1 flex-col">{children}</div>
 			</div>
 		</div>
 	);

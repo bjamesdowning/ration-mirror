@@ -8,6 +8,7 @@ import {
 	useState,
 } from "react";
 import { useFetcher, useRevalidator } from "react-router";
+import { AiWait } from "~/components/ai/AiWait";
 import { log } from "~/lib/logging.client";
 import { MAX_POLL_ATTEMPTS, startBackoffPollLoop } from "~/lib/polling";
 import { toUserFacingScanError } from "~/lib/scan-user-error";
@@ -409,10 +410,6 @@ export const CameraInput = forwardRef<CameraInputHandle, CameraInputProps>(
 						)}
 					</button>
 
-					{/* Visual Flair for Analyzing State */}
-					{isAnalyzing && (
-						<div className="absolute inset-0 border-2 border-hyper-green/50 rounded-lg animate-ping opacity-20 pointer-events-none" />
-					)}
 				</div>
 
 				{/* Inline scan error banner */}
@@ -437,39 +434,30 @@ export const CameraInput = forwardRef<CameraInputHandle, CameraInputProps>(
 				{/* Scan in progress modal (blocking; rendered outside hidden wrapper so it is visible) */}
 				{(isAnalyzing || isLoadingSupplyMatch) && (
 					<div
-						className="fixed inset-0 z-[60] flex items-center justify-center modal-scrim-heavy animate-fade-in"
+						className="ai-wait-screen"
 						role="dialog"
 						aria-modal="true"
 						aria-labelledby="scan-progress-title"
 						aria-describedby="scan-progress-desc"
 					>
-						{/* Non-dismissable backdrop - no onClick */}
-						<div
-							className="absolute inset-0 bg-transparent cursor-default"
-							aria-hidden="true"
+						<AiWait
+							mark="camera"
+							title={
+								origin === "supply"
+									? isLoadingSupplyMatch
+										? "Matching to supply list..."
+										: "Extracting receipt items..."
+									: "Analyzing image..."
+							}
+							detail={
+								origin === "supply"
+									? "Uploading and matching lines to your Supply list."
+									: "Identifying items. This may take a moment."
+							}
+							titleId="scan-progress-title"
+							detailId="scan-progress-desc"
+							className="flex-1"
 						/>
-						<div className="bg-ceramic dark:bg-[#1A1A1A] border border-platinum dark:border-white/10 rounded-2xl w-full max-w-sm max-h-[90vh] overflow-y-auto m-4 relative z-10 flex flex-col shadow-xl p-8">
-							<div className="animate-pulse space-y-4 text-center">
-								<div className="w-16 h-16 mx-auto rounded-full bg-hyper-green/20 flex items-center justify-center animate-spin-slow">
-									<Camera className="w-8 h-8 text-hyper-green" />
-								</div>
-								<h4
-									id="scan-progress-title"
-									className="text-lg font-medium text-carbon dark:text-white"
-								>
-									{origin === "supply"
-										? isLoadingSupplyMatch
-											? "Matching to supply list..."
-											: "Extracting receipt items..."
-										: "Analyzing image..."}
-								</h4>
-								<p id="scan-progress-desc" className="text-muted text-sm">
-									{origin === "supply"
-										? "Uploading and matching lines to your Supply list."
-										: "Identifying items. This may take a moment."}
-								</p>
-							</div>
-						</div>
 					</div>
 				)}
 

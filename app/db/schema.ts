@@ -1690,6 +1690,10 @@ export const nutritionIntake = sqliteTable(
 		loggedAmount: real("logged_amount"),
 		/** serving | g | oz; null on rows logged before amount+unit. */
 		loggedUnit: text("logged_unit"),
+		/** Display names copied onto the log. Null when the log has no tags. */
+		tagNames: text("tag_names", { mode: "json" }).$type<
+			{ name: string; slug?: string }[]
+		>(),
 		/**
 		 * Stable Health identity for one logical food. Null until the first
 		 * exportable save, then copied onto replacements. Not a HealthKit UUID.

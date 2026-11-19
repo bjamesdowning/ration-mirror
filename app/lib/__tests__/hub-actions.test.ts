@@ -41,7 +41,7 @@ describe("hub action menu", () => {
 
 	it("sends each row to the page that already owns that flow", () => {
 		expect(hubActionPath("log-to-fuel")).toBe(
-			"/hub/manifest?hubAction=log-to-fuel",
+			"/hub/fuel?hubAction=log-to-fuel",
 		);
 		expect(hubActionPath("scan-to-cargo")).toBe(
 			"/hub/cargo?hubAction=scan-to-cargo",

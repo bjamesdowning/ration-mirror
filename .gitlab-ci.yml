@@ -63,7 +63,12 @@ verify_fuel_manifest:
   script:
     - bun install --frozen-lockfile --ignore-scripts
     - bun run build
-    - bun run typecheck
+    - |
+      curl -fsSL https://nodejs.org/dist/v22.22.0/node-v22.22.0-linux-x64.tar.gz -o /tmp/node.tar.gz
+      tar -xzf /tmp/node.tar.gz -C /usr/local --strip-components=1
+      node ./node_modules/wrangler/bin/wrangler.js types
+      bunx react-router typegen
+      bunx tsc -b
     - bun run test:unit
     - bun run flag:check
   allow_failure: false

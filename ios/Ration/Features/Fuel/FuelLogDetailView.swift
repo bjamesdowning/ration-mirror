@@ -194,11 +194,13 @@ struct FuelLogEditSheet: View {
                     LabeledContent("Name") {
                         TextField("Name", text: $name)
                             .multilineTextAlignment(.trailing)
+                            .frame(maxWidth: .infinity, minHeight: 44, alignment: .trailing)
                     }
                     LabeledContent("Amount") {
                         TextField("Amount", text: $amount)
                             .keyboardType(.decimalPad)
                             .multilineTextAlignment(.trailing)
+                            .frame(maxWidth: .infinity, minHeight: 44, alignment: .trailing)
                     }
                     Picker("Unit", selection: $unit) {
                         Text("serving").tag("serving")
@@ -224,6 +226,7 @@ struct FuelLogEditSheet: View {
                     Button("Save") { save() }
                 }
             }
+            .rationFormKeyboardToolbar()
         }
     }
 
@@ -232,6 +235,7 @@ struct FuelLogEditSheet: View {
             TextField(title, text: text)
                 .keyboardType(.decimalPad)
                 .multilineTextAlignment(.trailing)
+                .frame(maxWidth: .infinity, minHeight: 44, alignment: .trailing)
         }
     }
 

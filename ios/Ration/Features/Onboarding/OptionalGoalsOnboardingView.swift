@@ -43,6 +43,7 @@ struct OptionalGoalsOnboardingView: View {
         .padding(24)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Theme.ceramic)
+        .rationFormKeyboardToolbar()
     }
 
     private func field(_ label: String, text: Binding<String>) -> some View {
@@ -53,6 +54,7 @@ struct OptionalGoalsOnboardingView: View {
             TextField("", text: text)
                 .keyboardType(.decimalPad)
                 .textFieldStyle(.roundedBorder)
+                .frame(maxWidth: .infinity, minHeight: 44, alignment: .trailing)
         }
     }
 

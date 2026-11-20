@@ -82,7 +82,7 @@ test.describe("fuel daily cap", () => {
 	test.use({ extraHTTPHeaders: { "x-ration-test-flags": fuelHeader } });
 
 	test("logs three meals and the fourth opens purchase", async ({ page }) => {
-		test.setTimeout(60_000);
+		test.setTimeout(120_000);
 		await grant(page, "intake");
 		await page.goto("/hub/fuel");
 		for (let n = 0; n < 6; n += 1) {
@@ -111,8 +111,14 @@ test.describe("fuel daily cap", () => {
 			leaked = true;
 			await route.abort();
 		});
-		await page.getByRole("button", { name: "Barcode to Fuel" }).click();
-		await expect(page).toHaveURL(/\/hub\/pricing/, { timeout: 15_000 });
+		// A dev-server reload during the click returns to Fuel. Try again until
+		// the paywall document is the one that stays.
+		await expect(async () => {
+			if (!page.url().includes("/hub/pricing")) {
+				await page.getByRole("button", { name: "Barcode to Fuel" }).click();
+			}
+			await expect(page).toHaveURL(/\/hub\/pricing/, { timeout: 8_000 });
+		}).toPass({ timeout: 45_000 });
 		expect(leaked).toBe(false);
 	});
 });

@@ -80,6 +80,7 @@ struct AddFuelSheet: View {
                             TextField("Amount", text: $amountText)
                                 .keyboardType(.decimalPad)
                                 .multilineTextAlignment(.trailing)
+                                .frame(maxWidth: .infinity, minHeight: 44, alignment: .trailing)
                         }
                         LabeledContent("Unit") {
                             Text(selectionUnit).rationBody()
@@ -95,11 +96,13 @@ struct AddFuelSheet: View {
                 Section("Typed") {
                     LabeledContent("Name") {
                         TextField("Name", text: $manualName)
+                            .frame(maxWidth: .infinity, minHeight: 44, alignment: .trailing)
                     }
                     LabeledContent("Amount") {
                         TextField("Amount", text: $manualAmount)
                             .keyboardType(.decimalPad)
                             .multilineTextAlignment(.trailing)
+                            .frame(maxWidth: .infinity, minHeight: 44, alignment: .trailing)
                     }
                     Picker("Unit", selection: $manualUnit) {
                         Text("serving").tag("serving")
@@ -112,6 +115,7 @@ struct AddFuelSheet: View {
                     labeledManual("Fat (g)", text: $manualFat)
                     LabeledContent("Tags") {
                         TextField("Tag", text: $tagDraft)
+                            .frame(maxWidth: .infinity, minHeight: 44, alignment: .trailing)
                     }
                     Button("Add tag") { addManualTag() }
                         .frame(minHeight: 44)
@@ -128,6 +132,7 @@ struct AddFuelSheet: View {
                     Button("Close") { dismiss() }
                 }
             }
+            .rationFormKeyboardToolbar()
             .task { await loadSuggestions() }
             .task(id: query) { await refreshSearch() }
             .onChange(of: amountText) { _, _ in applyScaledMacros() }
@@ -193,6 +198,7 @@ struct AddFuelSheet: View {
             TextField(label, text: text)
                 .keyboardType(.decimalPad)
                 .multilineTextAlignment(.trailing)
+                .frame(maxWidth: .infinity, minHeight: 44, alignment: .trailing)
                 .onChange(of: text.wrappedValue) { _, newValue in
                     guard let scaled = scaledMacros() else {
                         touched.insert(field)
@@ -210,6 +216,7 @@ struct AddFuelSheet: View {
             TextField(label, text: text)
                 .keyboardType(.decimalPad)
                 .multilineTextAlignment(.trailing)
+                .frame(maxWidth: .infinity, minHeight: 44, alignment: .trailing)
         }
     }
 

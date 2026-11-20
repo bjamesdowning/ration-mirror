@@ -273,16 +273,16 @@ struct NutritionGoalsView: View {
         .scrollContentBackground(.hidden)
         .background(Theme.ceramic)
         .scrollDismissesKeyboard(.interactively)
+        .rationFormKeyboardToolbar { focusedField = nil }
     }
 
     private func targetField(_ title: String, text: Binding<String>, suffix: String, field: Field) -> some View {
         HStack {
             Text(title)
-            Spacer()
             TextField("—", text: text)
-                .keyboardType(.numberPad)
+                .keyboardType(.decimalPad)
                 .multilineTextAlignment(.trailing)
-                .frame(maxWidth: 80)
+                .frame(maxWidth: .infinity, minHeight: 44, alignment: .trailing)
                 .focused($focusedField, equals: field)
             Text(suffix)
                 .foregroundStyle(Theme.muted)

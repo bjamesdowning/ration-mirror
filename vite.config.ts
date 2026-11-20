@@ -14,7 +14,43 @@ const configPath =
 			? "./wrangler.dev.jsonc"
 			: undefined;
 
+// Prebundle the deps a blog post and the pricing page discover on first visit.
+// The client optimizer and the Cloudflare server environment keep separate
+// caches. A mid-boot server optimize reloads the worker, and a reload that
+// still points at the previous chunk hash exits the dev server.
+const devOptimizeDeps = [
+	"lucide-react",
+	"zod",
+	"better-auth/client/plugins",
+	"better-auth/crypto",
+	"better-auth/react",
+	"react",
+	"react-dom",
+	"react-dom/server",
+	"react/jsx-dev-runtime",
+	"isbot",
+	"gray-matter",
+	"zod-to-json-schema",
+	"react-markdown",
+	"remark-gfm",
+	"react-syntax-highlighter",
+	"react-syntax-highlighter/dist/cjs/styles/hljs",
+	"mermaid",
+	"@stripe/react-stripe-js",
+	"@stripe/stripe-js",
+];
+
 export default defineConfig(({ isSsrBuild }) => ({
+	optimizeDeps: {
+		include: devOptimizeDeps,
+	},
+	environments: {
+		server: {
+			optimizeDeps: {
+				include: devOptimizeDeps,
+			},
+		},
+	},
 	plugins: [
 		cloudflare({
 			viteEnvironment: { name: "server" },

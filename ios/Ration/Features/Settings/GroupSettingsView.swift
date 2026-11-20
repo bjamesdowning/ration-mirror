@@ -198,6 +198,7 @@ struct GroupSettingsView: View {
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
         .background(Theme.ceramic)
+        .rationFormKeyboardToolbar()
         .onChange(of: pendingScrollToTransfer) { _, shouldScroll in
             guard shouldScroll else { return }
             pendingScrollToTransfer = false

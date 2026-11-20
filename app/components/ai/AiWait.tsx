@@ -73,9 +73,9 @@ export function AiWait({
 				aria-atomic="true"
 				aria-label={status}
 			>
-				<h2 id={titleId} className="ai-wait-title" aria-hidden="true">
+				<p id={titleId} className="ai-wait-title" aria-hidden="true">
 					{title}
-				</h2>
+				</p>
 				<p id={detailId} className="ai-wait-detail" aria-hidden="true">
 					{detail}
 				</p>

@@ -40,8 +40,19 @@ function resolveFeatureFlagOverrides(): string {
 	return JSON.stringify(E2E_AI_FLAG_OVERRIDES);
 }
 
+function devLauncher(): { command: string; args: string[] } {
+	// Miniflare's workerd dispatcher is a real DNS lookup under Bun
+	// (dummy.invalid, and the Vite export-types localhost fetch).
+	// The merge-request job puts a pinned Node on PATH and sets CI.
+	if (process.env.CI === "true") {
+		return { command: "node", args: ["--run", "dev:local"] };
+	}
+	return { command: "bun", args: ["run", "dev:local"] };
+}
+
 function runDev(logLabel: string): ReturnType<typeof spawn> {
-	const child = spawn("bun", ["run", "dev:local"], {
+	const launcher = devLauncher();
+	const child = spawn(launcher.command, launcher.args, {
 		cwd: ROOT,
 		env: {
 			...process.env,

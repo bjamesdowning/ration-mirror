@@ -2293,7 +2293,7 @@ bun run cf-typegen
 bun run test:unit
 ```
 
-`postinstall` runs [`scripts/postinstall.ts`](scripts/postinstall.ts): it skips `cf-typegen` with recovery instructions if Wrangler dependencies are incomplete (so install can still finish), and runs `wrangler types` when the tree is healthy. `pretest:unit` runs [`scripts/verify-test-deps.ts`](scripts/verify-test-deps.ts) before Vitest.
+`postinstall` runs [`scripts/postinstall.ts`](scripts/postinstall.ts): it skips `cf-typegen` with recovery instructions if Wrangler dependencies are incomplete (so install can still finish), and runs `wrangler types --include-runtime=false` when the tree is healthy. That still writes Env bindings. It skips the workerd runtime fetch, which exits 1 on Bun with `getaddrinfo ENOTFOUND dummy.invalid`. `pretest:unit` runs [`scripts/verify-test-deps.ts`](scripts/verify-test-deps.ts) before Vitest.
 
 ### Local dev server
 
@@ -2304,6 +2304,10 @@ bun run test:unit
 | `bun run dev:copilot` | [`wrangler.copilot.jsonc`](wrangler.copilot.jsonc) | Remote D1/KV/R2/AI/Vectorize/AI Search bindings for the Think Durable Object worker. |
 
 `dev:local` sets `remoteBindings: false` in [`vite.config.ts`](vite.config.ts) so Wrangler does not open an edge-preview proxy (required for remote AI). Do **not** set `CLOUDFLARE_ENV=local` for local dev — the Cloudflare Vite plugin maps that variable to `wrangler --env local`, which expects an `env.local` section and duplicates binding config.
+
+### Merge-request pipeline
+
+GitLab runs [`.gitlab-ci.yml`](.gitlab-ci.yml) on merge requests only. One install (`bun install --frozen-lockfile --ignore-scripts`) plus a checksummed Node.js 22.23.5 linux-x64 binary is shared by `lint`, `typecheck`, `unit`, `flag-check`, and `e2e`. `lint` applies Biome's safe fixes in the job workspace, then runs `biome check .`. `typecheck` runs `wrangler types` on that Node (runtime types included), then `react-router typegen` and `tsc -b`. `unit` runs Vitest on Node. `e2e` prepares local D1 with Bun and starts the dev server with Node when `CI=true`, because Miniflare's workerd dispatcher is a real DNS lookup under Bun. A push to `main` does not start this pipeline and does not deploy from it. Workers Builds deploys `ration`, `ration-mcp`, and `ration-copilot`. Xcode Cloud builds iOS.
 
 ### Cloudflare Workers Builds
 

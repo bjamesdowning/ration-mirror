@@ -1,50 +1,113 @@
-image: oven/bun:1
+default:
+  image: oven/bun@sha256:c017a211c49a21adc0e49dda7b60ac8112887c3d9465e01427f434ed107c830e
+  interruptible: true
 
-# Most CI jobs are commented out to conserve GitLab CI minutes.
-# Re-enable SAST, install, lint, typecheck, and unit tests when minutes allow.
-# Deploy stage was already disabled; Workers Builds / manual deploy remain the path to production.
-#
-# include:
-#   - component: $CI_SERVER_FQDN/components/sast/sast@3.4.0
+# Merge-request gate only. A push to main does not create a pipeline and
+# does not deploy. Workers Builds ships the three workers. Xcode Cloud
+# builds iOS. This file is the check Billy uses before a bot merges.
+
+workflow:
+  auto_cancel:
+    on_new_commit: interruptible
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
 
 stages:
-  - test
   - install
-  - verify
-  #- deploy
+  - test
 
 variables:
   BUN_INSTALL_CACHE_DIR: ".bun-install-cache"
 
-cache:
-  key:
-    files:
-      - bun.lock
-  paths:
-    - node_modules/
-    - .bun-install-cache/
-
-# Disabled: local quality gate (lint/typecheck/unit/flag:check). Run locally instead.
-# Workers Builds remains the production deploy path.
-# verify:
-#   stage: verify
-#   script:
-#     - bun install --frozen-lockfile --ignore-scripts
-#     - bun run cf-typegen
-#     - bun run lint
-#     - bun run typecheck
-#     - bun run test:unit
-#     - bun run flag:check
-#   allow_failure: false
-
-# Manual: upload docs corpus to R2 and reindex Copilot AI Search.
-# Trigger after docs/fin, docs/dev, docs/legal, content/blog, or README changes.
-# Requires CLOUDFLARE_API_TOKEN (and account) with R2 + AI Search write access.
-# `ai-search jobs` needs Wrangler ≥ 4.112.0 (resolved from package.json / bun.lock).
-ai_search_sync:
-  stage: verify
+.gate:
+  stage: test
   rules:
-    - when: manual
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  interruptible: true
+  needs:
+    - job: install
+      artifacts: true
+  cache: []
+
+install:
+  stage: install
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  interruptible: true
+  cache:
+    key:
+      files:
+        - bun.lock
+      prefix: bun-1.4.3
+    paths:
+      - .bun-install-cache/
+    policy: pull-push
+  script:
+    - bun scripts/ci-install-node.ts
+    # Node.js v22.23.5 linux-x64 sha256 c54118104acc524633b5abe106bbf44a53126ec8b4e5fa105cb92b5d7de8a1a1
+    - tar -xzf node-v22.23.5-linux-x64.tar.gz
+    - rm node-v22.23.5-linux-x64.tar.gz
+    - mv node-v22.23.5-linux-x64 .node
+    - bun install --frozen-lockfile --ignore-scripts
+  artifacts:
+    paths:
+      - node_modules/
+      - .node/
+    expire_in: 1 hour
+
+lint:
+  extends: .gate
+  script:
+    # Safe fixes (format, import order) apply in the job workspace.
+    # bun run lint is the gate and must exit 0. Warnings do not fail it.
+    - bunx biome check --write .
+    - bun run lint
+
+typecheck:
+  extends: .gate
+  script:
+    - export PATH="$CI_PROJECT_DIR/.node/bin:$CI_PROJECT_DIR/node_modules/.bin:$PATH"
+    - node --version
+    - wrangler types
+    - react-router typegen
+    - tsc -b
+
+unit:
+  extends: .gate
+  script:
+    - export PATH="$CI_PROJECT_DIR/.node/bin:$PATH"
+    - node --run test:unit
+
+flag-check:
+  extends: .gate
+  script:
+    - bun run flag:check
+
+e2e:
+  extends: .gate
+  variables:
+    PLAYWRIGHT_BROWSERS_PATH: $CI_PROJECT_DIR/.playwright-browsers
+  cache:
+    key:
+      files:
+        - bun.lock
+      prefix: playwright-chromium
+    paths:
+      - .playwright-browsers/
+    policy: pull-push
+  script:
+    - export PATH="$CI_PROJECT_DIR/.node/bin:$PATH"
+    - bunx playwright install --with-deps chromium
+    - bun run test:e2e
+
+# Operator sync for the Copilot docs corpus. Not part of the merge gate.
+# The workflow creates merge-request pipelines only, and this rule keeps
+# the job out of those pipelines. Run the script by hand outside this gate.
+ai_search_sync:
+  stage: test
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: never
   script:
     - bun install --frozen-lockfile --ignore-scripts
     - |

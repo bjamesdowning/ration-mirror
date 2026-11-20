@@ -111,7 +111,7 @@ ai_search_sync:
   script:
     - bun install --frozen-lockfile --ignore-scripts
     - |
-      for file in $(find docs/fin content/blog docs/dev docs/legal -type f \( -name '*.md' -o -name '*.mdx' \)); do
+      for file in $(find docs/fin content/blog docs/dev docs/legal docs/mcp -type f \( -name '*.md' -o -name '*.mdx' \)); do
         bunx wrangler r2 object put "ration-copilot-docs/${file}" --file "$file" --remote
       done
       bunx wrangler r2 object put "ration-copilot-docs/README.md" --file "README.md" --remote

@@ -15,16 +15,19 @@ test.describe("blog", () => {
 	});
 
 	test("post link opens the post page", async ({ page }) => {
-		await page.goto("/blog");
+		test.setTimeout(90_000);
+		await page.goto("/blog", { waitUntil: "domcontentloaded" });
 		const link = page.getByRole("link", { name: /Read →/ }).first();
 		await expect(link).toBeVisible();
 		const href = await link.getAttribute("href");
 		expect(href).toMatch(/\/blog\/.+/);
-		// A client-side click stays on /blog while Vite rewrites deps.
-		// The href is the navigation the card offers.
-		await page.goto(href ?? "/blog");
-		await expect(page).toHaveURL(/\/blog\/.+/);
-		await expect(page.getByRole("article")).toBeVisible({ timeout: 15_000 });
+		// The first post visit can reload while Vite finishes markdown deps.
+		// `load` never settles across that reload. Retry until the article is up.
+		await expect(async () => {
+			await page.goto(href ?? "/blog", { waitUntil: "domcontentloaded" });
+			await expect(page).toHaveURL(/\/blog\/.+/);
+			await expect(page.getByRole("article")).toBeVisible({ timeout: 5_000 });
+		}).toPass({ timeout: 70_000 });
 	});
 
 	test("mermaid diagrams render on copilot blog posts", async ({ page }) => {

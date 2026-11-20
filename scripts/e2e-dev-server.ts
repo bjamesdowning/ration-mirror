@@ -1,18 +1,20 @@
 #!/usr/bin/env bun
 /**
- * Start `dev:local` for Playwright after a warm optimize-deps pass.
+ * Start `dev:local` for Playwright.
  *
- * Fresh Vite + Cloudflare Miniflare often crashes on the first boot while
- * SSR optimize-deps chunk hashes change mid-load. A short first run populates
- * `node_modules/.vite`, then the long-lived second process serves E2E stably.
+ * Fresh Vite + Cloudflare Miniflare often exits on the first boot while
+ * SSR optimize-deps chunk hashes change mid-load. That pass can run for
+ * over a minute. If the process dies during it, start again so the next
+ * boot reuses the cache. Keep the cache: wiping it repeats the race.
  */
 import { spawn } from "node:child_process";
-import { existsSync, rmSync } from "node:fs";
+import { rmSync } from "node:fs";
 import { join } from "node:path";
 
 const ROOT = join(import.meta.dir, "..");
 const VITE_CACHE = join(ROOT, "node_modules/.vite");
-const WARM_MS = Number(process.env.E2E_VITE_WARM_MS ?? "35000");
+const STABLE_MS = 120_000;
+const ATTEMPTS = 3;
 
 /** Enable already-live AI kill switches for local E2E (registry defaults are off). */
 const E2E_AI_FLAG_OVERRIDES = {
@@ -76,37 +78,44 @@ function sleep(ms: number): Promise<void> {
 	return new Promise((r) => setTimeout(r, ms));
 }
 
-async function main(): Promise<void> {
-	if (!existsSync(join(VITE_CACHE, "deps_server", "_metadata.json"))) {
-		console.warn(
-			`[e2e-dev-server] Warming Vite optimize cache (${WARM_MS}ms)…`,
-		);
-		const warm = runDev("warm");
-		await sleep(WARM_MS);
-		warm.kill("SIGTERM");
-		await sleep(1500);
-		if (!warm.killed) warm.kill("SIGKILL");
-		await sleep(500);
-	} else {
-		console.warn("[e2e-dev-server] Reusing existing Vite optimize cache");
-	}
-
-	const server = runDev("serve");
-	const shutdown = () => {
-		server.kill("SIGTERM");
-	};
-	process.on("SIGINT", shutdown);
-	process.on("SIGTERM", shutdown);
-
-	const code = await new Promise<number | null>((resolve) => {
-		server.on("exit", (c) => resolve(c));
+function waitUntilStable(
+	child: ReturnType<typeof spawn>,
+): Promise<number | null | "alive"> {
+	return new Promise((resolve) => {
+		const timer = setTimeout(() => resolve("alive"), STABLE_MS);
+		child.once("exit", (code) => {
+			clearTimeout(timer);
+			resolve(code);
+		});
 	});
-	process.exit(code ?? 1);
+}
+
+async function main(): Promise<void> {
+	for (let attempt = 1; attempt <= ATTEMPTS; attempt++) {
+		const label = attempt === 1 ? "serve" : `serve-${attempt}`;
+		const server = runDev(label);
+		const early = await waitUntilStable(server);
+		if (early === "alive") {
+			const shutdown = () => {
+				server.kill("SIGTERM");
+			};
+			process.on("SIGINT", shutdown);
+			process.on("SIGTERM", shutdown);
+			const code = await new Promise<number | null>((resolve) => {
+				server.on("exit", (c) => resolve(c));
+			});
+			process.exit(code ?? 1);
+		}
+		console.warn(
+			`[e2e-dev-server] ${label} exited early (${early ?? "null"}); trying again`,
+		);
+		await sleep(1500);
+	}
+	process.exit(1);
 }
 
 main().catch((err) => {
 	console.error(err);
-	// If warm left a half-written cache, clear so the next attempt can rebuild.
 	try {
 		rmSync(VITE_CACHE, { recursive: true, force: true });
 	} catch {

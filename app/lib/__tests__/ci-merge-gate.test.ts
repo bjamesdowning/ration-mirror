@@ -53,5 +53,6 @@ describe("merge-request typecheck", () => {
 		expect(server).toContain('process.env.CI === "true"');
 		expect(server).toContain('command: "node"');
 		expect(server).toContain('"--run", "dev:local"');
+		expect(server).toContain("const STABLE_MS = 120_000");
 	});
 });

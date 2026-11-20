@@ -2,6 +2,10 @@
 .env*
 /node_modules
 /node_modules.nosync/
+.bun-install-cache/
+.playwright-browsers/
+.node/
+ci-biome/
 *.tsbuildinfo
 
 # React Router

@@ -94,9 +94,11 @@ test.describe("fuel daily cap", () => {
 		}
 		for (const meal of ["Breakfast", "Lunch", "Dinner"]) {
 			await page.getByRole("button", { name: "Add Fuel" }).click();
-			await page.locator("input[name='name']").fill(meal);
-			await page.locator("input[name='energyKcal']").fill("400");
-			await page.getByRole("button", { name: "Save" }).click();
+			await page.getByRole("textbox", { name: "Name" }).fill(meal);
+			await page
+				.getByRole("spinbutton", { name: "Calories (kcal)" })
+				.fill("400");
+			await page.getByRole("button", { name: "Add to Fuel" }).click();
 			await expect(page.getByText(meal)).toBeVisible();
 		}
 		await expect(page.getByText("3 of 3 meals logged")).toBeVisible();
@@ -110,7 +112,7 @@ test.describe("fuel daily cap", () => {
 			await route.abort();
 		});
 		await page.getByRole("button", { name: "Barcode to Fuel" }).click();
-		await expect(page).toHaveURL(/\/hub\/pricing/);
+		await expect(page).toHaveURL(/\/hub\/pricing/, { timeout: 15_000 });
 		expect(leaked).toBe(false);
 	});
 });

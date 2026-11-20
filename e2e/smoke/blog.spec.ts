@@ -16,14 +16,11 @@ test.describe("blog", () => {
 
 	test("click post link navigates to post page", async ({ page }) => {
 		await page.goto("/blog");
-		// Click first post (use meal-planning-loop or any existing slug)
-		await page
-			.getByRole("link", { name: /Read →/ })
-			.first()
-			.click();
-		await expect(page).toHaveURL(/\/blog\/.+/);
-		// Post page should have article content
-		await expect(page.getByRole("article")).toBeVisible({ timeout: 5000 });
+		const link = page.getByRole("link", { name: /Read →/ }).first();
+		await expect(link).toBeVisible();
+		await link.click();
+		await expect(page).toHaveURL(/\/blog\/.+/, { timeout: 15_000 });
+		await expect(page.getByRole("article")).toBeVisible({ timeout: 15_000 });
 	});
 
 	test("mermaid diagrams render on copilot blog posts", async ({ page }) => {

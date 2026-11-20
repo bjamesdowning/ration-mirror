@@ -412,6 +412,7 @@ struct FuelView: View {
                     Button("Close") { showingTypedBarcode = false }
                 }
             }
+            .rationFormKeyboardToolbar()
         }
     }
 

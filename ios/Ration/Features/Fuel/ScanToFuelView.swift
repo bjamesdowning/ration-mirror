@@ -180,15 +180,18 @@ struct ScanToFuelView: View {
             Form {
                 LabeledContent("Name") {
                     TextField("Name", text: $name)
+                        .frame(maxWidth: .infinity, minHeight: 44, alignment: .trailing)
                 }
                 LabeledContent("Amount") {
                     TextField("Amount", text: $amountText)
                         .keyboardType(.decimalPad)
                         .multilineTextAlignment(.trailing)
+                        .frame(maxWidth: .infinity, minHeight: 44, alignment: .trailing)
                 }
                 LabeledContent("Unit") {
                     TextField("Unit", text: $unit)
                         .multilineTextAlignment(.trailing)
+                        .frame(maxWidth: .infinity, minHeight: 44, alignment: .trailing)
                 }
                 labeledMacro("Calories (kcal)", text: $energyText)
                 labeledMacro("Protein (g)", text: $proteinText)
@@ -202,6 +205,7 @@ struct ScanToFuelView: View {
                     Button("Done") { editing = false }
                 }
             }
+            .rationFormKeyboardToolbar()
         }
     }
 
@@ -210,6 +214,7 @@ struct ScanToFuelView: View {
             TextField(title, text: text)
                 .keyboardType(.decimalPad)
                 .multilineTextAlignment(.trailing)
+                .frame(maxWidth: .infinity, minHeight: 44, alignment: .trailing)
         }
     }
 

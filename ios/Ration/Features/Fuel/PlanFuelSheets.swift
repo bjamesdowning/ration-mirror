@@ -127,6 +127,7 @@ struct PlanFuelAmountSheet: View {
                         TextField("kcal", text: $calorieText)
                             .keyboardType(.decimalPad)
                             .multilineTextAlignment(.trailing)
+                            .frame(maxWidth: .infinity, minHeight: 44, alignment: .trailing)
                             .accessibilityLabel("Calorie preview")
                     }
                     if calorieText.isEmpty {

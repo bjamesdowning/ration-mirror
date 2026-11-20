@@ -159,6 +159,7 @@ struct LogToFuelSheet: View {
                         .disabled(saving)
                 }
             }
+            .rationFormKeyboardToolbar()
             .task {
                 await loadRecent()
                 await loadSaved()

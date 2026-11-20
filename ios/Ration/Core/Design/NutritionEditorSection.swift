@@ -53,6 +53,7 @@ struct NutritionEditorSection: View {
             TextField("—", text: text)
                 .keyboardType(.decimalPad)
                 .multilineTextAlignment(.trailing)
+                .frame(maxWidth: .infinity, minHeight: 44, alignment: .trailing)
                 .focused($focusedField, equals: field)
                 .onChange(of: text.wrappedValue) { _, _ in
                     commitEdits()

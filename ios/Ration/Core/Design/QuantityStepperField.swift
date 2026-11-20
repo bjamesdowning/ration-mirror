@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Shared quantity rules for steppers and the Custom keypad.
+/// Shared quantity rules for steppers and the decimal field.
 enum QuantityEntry {
     static func step(for unit: String) -> Double {
         switch unit.lowercased() {
@@ -37,7 +37,7 @@ enum QuantityEntry {
     }
 }
 
-/// Stepper first, with Custom revealing a decimal keypad for an exact amount.
+/// Decimal field for an exact amount, with a stepper for one step at a time.
 struct QuantityStepperField: View {
     @Binding var value: Double
     var unit: String
@@ -46,7 +46,6 @@ struct QuantityStepperField: View {
     var step: Double?
     var accessibilityIdentifier: String?
 
-    @State private var showingCustom = false
     @State private var draft = ""
     @FocusState private var draftFocused: Bool
 
@@ -56,40 +55,31 @@ struct QuantityStepperField: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
+            TextField(title, text: $draft)
+                .keyboardType(.decimalPad)
+                .font(Typography.mono(22))
+                .focused($draftFocused)
+                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                .accessibilityIdentifier(accessibilityIdentifier ?? "")
+                .accessibilityLabel(title)
+                .onAppear { draft = QuantityEntry.format(value) }
+                .onChange(of: value) { _, _ in
+                    if !draftFocused {
+                        draft = QuantityEntry.format(value)
+                    }
+                }
+                .onChange(of: draftFocused) { _, focused in
+                    if !focused {
+                        finishCustom()
+                    }
+                }
+
             Stepper {
                 Text(amountLabel)
             } onIncrement: {
                 nudge(resolvedStep)
             } onDecrement: {
                 nudge(-resolvedStep)
-            }
-            .accessibilityIdentifier(accessibilityIdentifier ?? "")
-
-            Button(showingCustom ? "Done" : "Custom") {
-                if showingCustom {
-                    finishCustom()
-                } else {
-                    draft = QuantityEntry.format(value)
-                    showingCustom = true
-                    draftFocused = true
-                }
-            }
-            .font(Typography.caption())
-            .foregroundStyle(Theme.hyperGreen)
-            .accessibilityHint(showingCustom ? "Saves the typed amount" : "Type an exact amount")
-
-            if showingCustom {
-                TextField("Amount", text: $draft)
-                    .keyboardType(.decimalPad)
-                    .font(Typography.mono(22))
-                    .focused($draftFocused)
-                    .accessibilityLabel("Custom \(title.lowercased())")
-                    .onAppear { draftFocused = true }
-                    .onChange(of: draftFocused) { _, focused in
-                        if !focused, showingCustom {
-                            finishCustom()
-                        }
-                    }
             }
         }
     }
@@ -101,25 +91,25 @@ struct QuantityStepperField: View {
     }
 
     private func nudge(_ delta: Double) {
-        let base = showingCustom ? (QuantityEntry.parse(draft, range: range) ?? value) : value
+        let base = QuantityEntry.parse(draft, range: range) ?? value
         let next = base + delta
         guard next + 0.000_001 >= range.lowerBound, next - 0.000_001 <= range.upperBound else { return }
         value = next
-        if showingCustom {
-            draft = QuantityEntry.format(next)
-        }
+        draft = QuantityEntry.format(next)
     }
 
     private func finishCustom() {
         if let parsed = QuantityEntry.parse(draft, range: range) {
             value = parsed
+            draft = QuantityEntry.format(parsed)
+        } else {
+            draft = QuantityEntry.format(value)
         }
-        showingCustom = false
         draftFocused = false
     }
 }
 
-/// Stepper + Custom for forms that still store the quantity as text.
+/// Stepper and decimal field for forms that still store the quantity as text.
 struct QuantityStringStepperField: View {
     @Binding var text: String
     var unit: String

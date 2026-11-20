@@ -58,7 +58,7 @@ Your assistant guesses. It does not know what is in your fridge, what expired ye
 | "I just ate grapes." | `quick_eat_cargo` (creates a missing line, Manifest snack, optional private intake) |
 | "Import this Instagram recipe." | Not an MCP scrape. Client extracts caption/page text → `create_meal`, or native Galley Import |
 
-MCP tool calls are **deterministic and do not consume Ration credits**. Receipt parsing and recipe extraction from pasted text run in *your* LLM; Ration ingests structured items. Visual scan and URL import in the web/iOS app use optional credit packs. Copilot Ask is the same kitchen tools plus a conversation token meter.
+MCP tool calls are **deterministic and do not consume Ration credits**. The one exception is the flag-gated photo food log (`propose_food_log`), which costs 2 credits per model call. Receipt parsing and recipe extraction from pasted text run in *your* LLM; Ration ingests structured items. Visual scan and URL import in the web/iOS app use optional credit packs. Copilot Ask is the same kitchen tools plus a conversation token meter.
 
 ---
 
@@ -109,12 +109,15 @@ Full walkthrough with client-specific setup (Claude, Cursor, ChatGPT, Goose): [A
 
 ## MCP tools reference
 
-All tools are scoped to the authorized household. **MCP calls do not consume Ration credits.** Destructive tools require `confirm: true`.
+All tools are scoped to the authorized household. **MCP calls do not consume Ration credits** (except `propose_food_log`, below). Destructive tools require `confirm: true`: without it they return `invalid_input` and change nothing. The six always-approval tools (`delete_meal`, `clear_active_meals`, `remove_cargo_item`, `import_inventory_csv`, `commit_manifest_plan`, `complete_supply_list`) also advertise `destructiveHint: true`.
+
+OAuth issues tokens only through `authorization_code` and `refresh_token`; there is no `client_credentials` grant. Public PKCE clients may use a loopback redirect (`http://127.0.0.1`, `http://[::1]`, `http://localhost`) on any port.
 
 ### Read & account
 
 | Tool | Scope | Description |
 |------|-------|-------------|
+| `get_billing_summary` | `mcp:read` | Tier, credits, renewal, and billing links. |
 | `get_context` | `mcp:read` | Return org id, scopes, kitchen tier/usage/credits/lastActivityAt, capabilities, suggested next actions, and `temporal` (todayUtc, server time, expiry semantics). Safe to call first. |
 | `search_ingredients` | `mcp:read` | Semantic pantry search (recall 0.60). Each hit includes `matchScore` and `cookMatch` (true at ≥ 0.78). |
 | `list_inventory` | `mcp:read` | Cursor-paginated pantry list (default 100, max 200). Optional domain filter, UTC `expiresBefore` / `expiresAfter`, and `sortBy: expiresAt`. Includes `nutrition` when present. |
@@ -138,6 +141,8 @@ All tools are scoped to the authorized household. **MCP calls do not consume Rat
 | `clear_nutrition_goal` | `mcp:nutrition:write` | Idempotently close open-ended goals using `operationKey`. **Requires `confirm: true` + host approval.** |
 | `log_manifest_intake` | `mcp:nutrition:write` | Atomic private Eat for 1–50 prepared entries (`operationKey` + per-item `idempotencyKey`). Portions: `servings` (0.01–100) or `amount`+`unit` (`serving`/`g`/`oz`) when `gramsPerServing` is present. Multi-entry calls need host approval. Consent must already be active in Ration. |
 | `clear_manifest_intake` | `mcp:nutrition:write` | Atomically soft-void personal intake using `operationKey`. **Requires `confirm: true` + host approval.** |
+| `quick_eat_cargo` | `mcp:inventory:write` + `mcp:manifest:write` + `mcp:nutrition:write` | Personal Quick Eat from Cargo: resolve by `cargoId`, exact name, or a semantic match at ≥ 0.78 (a weaker name returns candidates). Creates a missing line if needed, adds a Manifest snack, and optionally logs private intake. Requires `cargo-quick-eat` + `nutrition-cook-log-split`. |
+
 ### Inventory (Cargo)
 
 | Tool | Scope | Description |
@@ -167,6 +172,7 @@ All tools are scoped to the authorized household. **MCP calls do not consume Rat
 
 | Tool | Scope | Description |
 |------|-------|-------------|
+| `propose_manifest_plan` | `mcp:read` | Compact week proposal from expiring items + `match_meals`. No writes; commit with `commit_manifest_plan`. |
 | `add_meal_plan_entry` | `mcp:manifest:write` | Schedule a meal on a date and slot. |
 | `commit_manifest_plan` | `mcp:manifest:write` | Commit a confirmed multi-entry schedule (optionally sync supply). Approval required; pass `confirm: true`. |
 | `update_meal_plan_entry` | `mcp:manifest:write` | Patch date, slot, servings, or notes. Cannot edit consumed entries. |
@@ -191,6 +197,28 @@ All tools are scoped to the authorized household. **MCP calls do not consume Rat
 | `manage_supply_staples` | `mcp:supply:write` | List, upsert, or delete kitchen staples. Flag-gated. |
 | `save_receipt_as_supply_list` | `mcp:supply:write` | Save reviewed receipt lines as a Saved list. Flag-gated. No second AI credit. |
 
+### Food diary (flag-gated)
+
+Registered only when the matching nutrition flags are on (all need `nutrition-fast-log`). Personal to the caller. Not medical advice.
+
+| Tool | Scope | Description |
+|------|-------|-------------|
+| `quote_food_log` | `mcp:nutrition:read` | Quote the credit cost of a food log. No writes, no model call. |
+| `log_diary_food` | `mcp:nutrition:write` | Log one food the caller ate (typed macros or `savedFoodId`). Approval required. No Cargo, Galley, Manifest, or Supply change. 0 credits. |
+| `update_diary_food` | `mcp:nutrition:write` | Replace a food log (void + new row). Approval required. 0 credits. |
+| `void_diary_food` | `mcp:nutrition:write` | Void a food log. Destructive; approval required; **requires `confirm: true`**. |
+| `save_diary_food_to_kitchen` | `mcp:nutrition:write` | Copy a food log into Cargo or Galley. Destructive for the shared kitchen; approval required; **requires `confirm: true`**. |
+| `set_diary_layout` | `mcp:preferences:write` | Timeline or slots for the caller's day list. Approval required. |
+| `list_saved_foods` | `mcp:nutrition:read` | Caller's saved foods (`nutrition-saved-food`). |
+| `save_food` | `mcp:nutrition:write` | Save a food for the caller (`nutrition-saved-food`). Approval required. |
+| `delete_saved_food` | `mcp:nutrition:write` | Delete a saved food (`nutrition-saved-food`). Approval required; **requires `confirm: true`**. |
+| `lookup_food_barcode` | `mcp:nutrition:read` | USDA Branded Foods barcode lookup, exact `gtinUpc` only (`nutrition-barcode-diary`). No writes. |
+| `propose_food_log` | `mcp:nutrition:write` | Draft a food log from a photo (`nutrition-photo-log`). A model call costs **2 credits**. Approval required. Commit with `log_diary_food`. |
+| `get_health_export_status` | `mcp:nutrition:read` | Apple Health export switch state (`nutrition-health-export`). |
+| `get_health_export_preview` | `mcp:nutrition:read` | Preview confirmed eaten foods that could export (`nutrition-health-export`). |
+| `set_health_export` | `mcp:nutrition:write` | Turn Apple Health export on or off (`nutrition-health-export`). Approval required; **requires `confirm: true`**. |
+| `clear_health_export` | `mcp:nutrition:write` | Ask the device to delete samples Ration wrote (`nutrition-health-export`). Destructive; approval required; **requires `confirm: true`**. |
+
 Server card: [`.well-known/mcp/server-card.json`](https://ration.mayutic.com/.well-known/mcp/server-card.json) · Full API reference: [docs/api](https://ration.mayutic.com/docs/api#mcp-tools)
 
 ---
@@ -200,7 +228,7 @@ Server card: [`.well-known/mcp/server-card.json`](https://ration.mayutic.com/.we
 | Tier | Includes |
 |------|----------|
 | **Free** | 35 pantry items · 15 recipes · 3 supply lists · MCP + OAuth · agent self-registration |
-| **Crew Member** | Unlimited pantry/recipes · 25 supply lists · household invites · shared Manifest/Supply links · $2/mo or $12/yr |
+| **Crew Member** | Unlimited pantry/recipes · 25 supply lists · household invites · shared Manifest/Supply links · €2/month or €12/year |
 | **Credit packs** (optional) | AI receipt scan, recipe import, meal generation, weekly AI plan in the **web app** — from €1 |
 
 [MCP does not meter credits](https://ration.mayutic.com/blog/mcp-kitchen-assistant). Use the web app when you want hosted vision/AI features.

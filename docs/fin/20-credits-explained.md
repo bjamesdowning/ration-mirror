@@ -15,16 +15,19 @@ Deductions are applied safely at the database layer so you cannot go **negative*
 | Receipt scan | 2 |
 | AI meal generation | 2 |
 | Import recipe (URL / social / photo) | 3 |
+| AI plan week | 3 |
+| Scan to Fuel / photo food log (when enabled) | 2 |
+| Ask Ration (Copilot) | 1 credit per 20,000 tokens per conversation (minimum 1); capped at 256,000 tokens per chat (max 13 credits) |
 
 URL imports that complete as a partial skeleton or **saved-link holder** still consume the 3 credits (you get a meal to review). Only hard failures (auth, insufficient credits, invalid URL) refund.
-| AI plan week | 3 |
-| Ask Ration (Copilot) | 1 credit per 20,000 tokens per conversation (minimum 1); capped at 256,000 tokens per chat (max 13 credits) |
+
+Scan to Fuel charges once per new photo. Confirming the reviewed result does not charge again. Typed, recent, and custom food logs are free.
 
 **Note:** Internal roadmaps may reserve costs for future features—always check **Pricing** in the app for the live matrix.
 
 ## What does **not** use AI credits
 
-- **MCP tool calls** (read and write) **do not** debit AI credits. MCP uses **rate limits** instead (per organization and, for writes, an additional cap **per API key**) — see *Limits and rate limits*.
+- **MCP tool calls** (read and write) **do not** debit AI credits, except the optional photo food log tool (`propose_food_log`), which costs the same 2 credits as Scan to Fuel. MCP uses **rate limits** instead (per organization and, for writes, an additional cap **per API key**) — see *Limits and rate limits*.
 - Ordinary CRUD in the hub (manual cargo, manual recipes) does not spend credits unless tied to an AI feature above.
 
 ## Buying more

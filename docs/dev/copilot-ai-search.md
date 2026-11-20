@@ -34,7 +34,7 @@ The sync is a **hand-run operator script**, not a CI job you can trigger. `.gitl
 
 So there is no button under Build → Pipelines to press. The sync runs **only when Billy asks for it**, from a machine with Cloudflare credentials that have R2 and AI Search write access. Merging docs does not re-sync them: an MR that changes indexed content should say "AI-search re-sync needed after merge" and leave the run to Billy.
 
-The script uploads the corpus to the `ration-copilot-docs` R2 source bucket and triggers managed reindexing via `wrangler ai-search jobs create` (**requires Wrangler ≥ 4.112.0**). Run it from the repo root on an up-to-date `main` (must use `--remote` or objects land in Miniflare only). Keep the `find` list in step with the `ai_search_sync` job:
+The script uploads the corpus to the `ration-copilot-docs` R2 source bucket and triggers managed reindexing via `wrangler ai-search jobs create` (**requires Wrangler ≥ 4.112.0**). Run it from the repo root on an up-to-date `main` (must use `--remote` or objects land in Miniflare only). Keep the `find` list in step with the `ai_search_sync` job (`docs/mcp` joins the job when the CI sync-sources MR lands):
 
 ```sh
 for file in $(find docs/fin content/blog docs/dev docs/legal docs/mcp -type f \( -name '*.md' -o -name '*.mdx' \)); do

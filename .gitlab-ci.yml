@@ -54,3 +54,25 @@ ai_search_sync:
       bunx wrangler r2 object put "ration-copilot-docs/README.md" --file "README.md" --remote
     - bunx wrangler ai-search jobs create ration-docs
   allow_failure: false
+
+# Branch-only. Removed before merge so main stays on the manual ai_search_sync job.
+verify_fuel_manifest:
+  stage: verify
+  rules:
+    - if: $CI_COMMIT_BRANCH == "cursor/fuel-manifest-load-296c"
+  script:
+    - bun install --frozen-lockfile --ignore-scripts
+    - bun run build
+    - bun run typecheck
+    - bun run test:unit
+    - bun run flag:check
+  allow_failure: false
+
+d1_migrate_prod:
+  stage: verify
+  rules:
+    - if: $CI_COMMIT_BRANCH == "cursor/fuel-manifest-load-296c"
+  script:
+    - bun install --frozen-lockfile --ignore-scripts
+    - bunx wrangler d1 migrations apply DB --remote
+  allow_failure: false

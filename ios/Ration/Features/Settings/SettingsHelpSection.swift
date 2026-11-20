@@ -22,6 +22,9 @@ struct SettingsHelpSection: View {
             Link(destination: URL(string: "mailto:\(AppConfig.supportEmail)")!) {
                 SettingsNavigationLabel(title: "Contact support", systemImage: "questionmark.circle")
             }
+            Link(destination: AppConfig.writeReviewURL) {
+                SettingsNavigationLabel(title: "Rate Ration", systemImage: "questionmark.circle")
+            }
             Link(destination: AppConfig.blogURL) {
                 SettingsNavigationLabel(title: "Visit blog", systemImage: "questionmark.circle")
             }

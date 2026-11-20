@@ -48,6 +48,8 @@ enum AppConfig {
     /// Product how-to guide (`docs/fin` → `/help`). Same corpus Ask Ration searches.
     static let userGuideURL = URL(string: "https://ration.mayutic.com/help")!
     static let blogURL = URL(string: "https://ration.mayutic.com/blog")!
+    /// App Store write-review page. Opened from Help; not an in-app review request.
+    static let writeReviewURL = URL(string: "https://apps.apple.com/app/id6785010110?action=write-review")!
     static let termsURL = URL(string: "https://ration.mayutic.com/legal/terms")!
     static let privacyURL = URL(string: "https://ration.mayutic.com/legal/privacy")!
 

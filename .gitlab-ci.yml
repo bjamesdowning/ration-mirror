@@ -54,21 +54,3 @@ ai_search_sync:
       bunx wrangler r2 object put "ration-copilot-docs/README.md" --file "README.md" --remote
     - bunx wrangler ai-search jobs create ration-docs
   allow_failure: false
-
-# Branch-only. Removed before merge so main stays on the manual ai_search_sync job.
-verify_fuel_manifest:
-  stage: verify
-  rules:
-    - if: $CI_COMMIT_BRANCH == "cursor/fuel-manifest-load-296c"
-  script:
-    - bun install --frozen-lockfile --ignore-scripts
-    - bun run build
-    - |
-      bun -e 'const res = await fetch("https://nodejs.org/dist/v22.22.0/node-v22.22.0-linux-x64.tar.gz"); if (!res.ok) throw new Error(String(res.status)); await Bun.write("/tmp/node.tar.gz", await res.arrayBuffer());'
-      tar -xzf /tmp/node.tar.gz -C /usr/local --strip-components=1
-      node ./node_modules/wrangler/bin/wrangler.js types
-      bunx react-router typegen
-      bunx tsc -b
-    - bun run test:unit
-    - bun run flag:check
-  allow_failure: false

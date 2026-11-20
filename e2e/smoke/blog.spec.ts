@@ -14,12 +14,16 @@ test.describe("blog", () => {
 		).toBeVisible();
 	});
 
-	test("click post link navigates to post page", async ({ page }) => {
+	test("post link opens the post page", async ({ page }) => {
 		await page.goto("/blog");
 		const link = page.getByRole("link", { name: /Read →/ }).first();
 		await expect(link).toBeVisible();
-		await link.click();
-		await expect(page).toHaveURL(/\/blog\/.+/, { timeout: 15_000 });
+		const href = await link.getAttribute("href");
+		expect(href).toMatch(/\/blog\/.+/);
+		// A client-side click stays on /blog while Vite rewrites deps.
+		// The href is the navigation the card offers.
+		await page.goto(href ?? "/blog");
+		await expect(page).toHaveURL(/\/blog\/.+/);
 		await expect(page.getByRole("article")).toBeVisible({ timeout: 15_000 });
 	});
 

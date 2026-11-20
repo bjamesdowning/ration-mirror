@@ -1,5 +1,7 @@
 # Architecture at a glance
 
+Developer diagrams (request flow, auth, queue and AI pipeline): [docs/architecture](../architecture/README.md).
+
 ## Edge application
 
 Multi-group data follows **Kitchen / Person / Person-in-context** tenancy (see *Key concepts* and developer [tenancy classes](../dev/tenancy-classes.md)): shared logistics stay org-scoped; personal nutrition can aggregate across kitchens when flagged.

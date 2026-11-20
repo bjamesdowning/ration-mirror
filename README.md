@@ -60,6 +60,8 @@ An AI-powered pantry, meal-planning, and macro-tracking application built as a C
 
 The application runs on Cloudflare's edge network with the main Worker (`ration`) bound to D1, R2, KV, Queues, Workers AI, and Vectorize. A separate `ration-mcp` Worker exposes the pantry to AI agents via the Model Context Protocol, and `ration-copilot` powers the first-party Ask experience with Project Think, Workers AI, Durable Objects, and AI Search. These Workers share the same D1/KV/R2/AI/Vectorize resources in production where appropriate.
 
+> **Verified architecture diagrams:** [request flow](docs/architecture/request-flow.md), [auth](docs/architecture/auth.md), [queue and AI pipeline](docs/architecture/queue-ai-pipeline.md) (index: [docs/architecture/](docs/architecture/README.md)).
+
 #### 1.1 Traffic flow — Users and AI agents
 
 ```mermaid

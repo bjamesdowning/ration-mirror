@@ -32,7 +32,7 @@ There are **no MCP tools** that replace those flows. The principle is: if the ag
 
 ## Credits reminder
 
-MCP **reads and writes do not debit** the organization’s AI credit balance. They still change **real data**—confirm destructive actions in your assistant.
+MCP **reads and writes do not debit** the organization’s AI credit balance. They still change **real data**—confirm destructive actions in your assistant. The one exception to the no-debit rule is the optional photo food log (`propose_food_log`), which costs 2 credits per model call when that feature is on.
 
 When product marketing or Pricing lists features, **those lists override** this summary if they conflict.
 

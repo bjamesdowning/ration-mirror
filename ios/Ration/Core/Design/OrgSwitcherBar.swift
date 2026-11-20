@@ -25,7 +25,6 @@ struct OrgSwitcherBar: View {
             }
         }
         .padding(.leading, 6)
-        .background(Theme.platinum.opacity(0.45), in: Capsule())
     }
 
     private var settingsButton: some View {

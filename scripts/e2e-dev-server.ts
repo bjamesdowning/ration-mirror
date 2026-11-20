@@ -16,7 +16,7 @@ import { join } from "node:path";
 
 const ROOT = join(import.meta.dir, "..");
 const VITE_CACHE = join(ROOT, "node_modules/.vite");
-const WARM_MS = Number(process.env.E2E_VITE_WARM_MS ?? "35000");
+const WARM_MS = Number(process.env.E2E_VITE_WARM_MS ?? "90000");
 const SERVE_PORT = 5173;
 const WARM_PORT = 5174;
 
@@ -109,11 +109,29 @@ function isPortClosed(err: unknown): boolean {
 	return message.includes("ECONNREFUSED");
 }
 
+async function probe(
+	port: number,
+	path: string,
+	timeoutMs: number,
+): Promise<boolean> {
+	const url = `http://localhost:${port}${path}`;
+	try {
+		const res = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
+		await res.arrayBuffer();
+		console.warn(`[e2e-dev-server] ${url} -> ${res.status}`);
+		return res.status < 500;
+	} catch (err) {
+		const message = err instanceof Error ? err.message : String(err);
+		console.warn(`[e2e-dev-server] ${url} failed: ${message}`);
+		return false;
+	}
+}
+
 async function waitUntilFree(port: number): Promise<void> {
 	for (let i = 0; i < 40; i += 1) {
 		try {
-			const res = await fetch(`http://127.0.0.1:${port}/`, {
-				signal: AbortSignal.timeout(500),
+			const res = await fetch(`http://localhost:${port}/`, {
+				signal: AbortSignal.timeout(800),
 			});
 			await res.arrayBuffer();
 		} catch (err) {
@@ -124,44 +142,26 @@ async function waitUntilFree(port: number): Promise<void> {
 	throw new Error(`[e2e-dev-server] port ${port} stayed busy`);
 }
 
-async function waitForHttp(port: number, budgetMs: number): Promise<boolean> {
-	const deadline = Date.now() + budgetMs;
+async function warmRoutes(port: number): Promise<boolean> {
+	const deadline = Date.now() + WARM_MS;
+	let up = false;
 	while (Date.now() < deadline) {
-		try {
-			const res = await fetch(`http://127.0.0.1:${port}/`, {
-				signal: AbortSignal.timeout(2000),
-			});
-			await res.arrayBuffer();
-			return true;
-		} catch {
-			await sleep(1000);
+		if (await probe(port, "/", 15_000)) {
+			up = true;
+			break;
 		}
+		await sleep(1000);
+	}
+	if (!up) return false;
+	const post = "/blog/agentic-app-control-copilot";
+	while (Date.now() < deadline) {
+		if (await probe(port, post, 30_000)) {
+			await sleep(3000);
+			return true;
+		}
+		await sleep(1000);
 	}
 	return false;
-}
-
-async function warmRoutes(port: number): Promise<void> {
-	const up = await waitForHttp(port, WARM_MS);
-	if (!up) {
-		console.warn("[e2e-dev-server] warm server did not answer; continuing");
-		return;
-	}
-	for (const path of [
-		"/",
-		"/blog",
-		"/blog/agentic-app-control-copilot",
-		"/pricing",
-	]) {
-		try {
-			const res = await fetch(`http://127.0.0.1:${port}${path}`, {
-				signal: AbortSignal.timeout(20000),
-			});
-			await res.arrayBuffer();
-		} catch {
-			console.warn(`[e2e-dev-server] warm fetch failed ${path}`);
-		}
-	}
-	await sleep(4000);
 }
 
 async function main(): Promise<void> {
@@ -170,7 +170,12 @@ async function main(): Promise<void> {
 			`[e2e-dev-server] Warming Vite optimize cache on ${WARM_PORT}…`,
 		);
 		const warm = runDev("warm", WARM_PORT);
-		await warmRoutes(WARM_PORT);
+		const ready = await warmRoutes(WARM_PORT);
+		if (!ready) {
+			console.warn(
+				"[e2e-dev-server] warm pass did not finish a blog response",
+			);
+		}
 		killDev(warm, "SIGTERM");
 		await sleep(1500);
 		killDev(warm, "SIGKILL");

@@ -63,7 +63,7 @@ export default defineConfig({
 				// Default to a fresh warmed server so E2E never reuses a stale/wrong process on 5173.
 				reuseExistingServer:
 					!process.env.CI && process.env.PLAYWRIGHT_REUSE_SERVER === "1",
-				timeout: 180000,
+				timeout: 300000,
 				stdout: "pipe",
 				stderr: "pipe",
 			},

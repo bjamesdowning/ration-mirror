@@ -1,4 +1,4 @@
-import { isTokenPhaseMatch, normalizeForCargoDedup } from "./matching";
+import { cargoMatchKey, isTokenPhaseMatch } from "./matching";
 import type { TagRecord } from "./tags";
 
 export type CargoLinkRow = { id: string; name: string; tags?: TagRecord[] };
@@ -9,15 +9,15 @@ export type CargoLinkedIngredient<
 
 /**
  * Resolves a cargo detail id for an ingredient name using the same
- * normalisation as inventory matching, then token-phase specialization.
+ * match key as inventory matching, then token-phase specialization.
  */
 export function resolveCargoIdForName(
 	name: string,
 	rows: CargoLinkRow[],
 ): string | null {
-	const normalized = normalizeForCargoDedup(name);
+	const normalized = cargoMatchKey(name);
 	for (const row of rows) {
-		if (normalizeForCargoDedup(row.name) === normalized) {
+		if (cargoMatchKey(row.name) === normalized) {
 			return row.id;
 		}
 	}

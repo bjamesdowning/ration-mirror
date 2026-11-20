@@ -98,6 +98,12 @@ const UNIT_ALIASES: Record<string, SupportedUnit> = {
 	loaves: "unit",
 };
 
+/** Pack-size tokens on the cargo match key: canonical units plus aliases. */
+export const PANTRY_UNIT_TOKENS = new Set<string>([
+	...SUPPORTED_UNITS,
+	...Object.keys(UNIT_ALIASES),
+]);
+
 /**
  * Applied on read as well as write. Other aliases stay on normalizeUnitAlias
  * so a stray "grams" string is not silently retyped by toSupportedUnit.

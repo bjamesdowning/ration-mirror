@@ -2307,7 +2307,7 @@ bun run test:unit
 
 ### Merge-request pipeline
 
-GitLab runs [`.gitlab-ci.yml`](.gitlab-ci.yml) on merge requests only. One install (`bun install --frozen-lockfile --ignore-scripts`) plus a checksummed Node.js 22.23.5 linux-x64 binary is shared by `lint`, `typecheck`, `unit`, `flag-check`, and `e2e`. `lint` applies Biome's safe fixes in the job workspace, then runs `biome check .`. `typecheck` runs `wrangler types` on that Node (runtime types included), then `react-router typegen` and `tsc -b`. `unit` runs Vitest on Node. `e2e` prepares local D1 with Bun and starts the dev server with Node when `CI=true`, because Miniflare's workerd dispatcher is a real DNS lookup under Bun. The warm pass binds port 5174 and is stopped before Playwright waits on port 5173. A push to `main` does not start this pipeline and does not deploy from it. Workers Builds deploys `ration`, `ration-mcp`, and `ration-copilot`. Xcode Cloud builds iOS.
+GitLab runs [`.gitlab-ci.yml`](.gitlab-ci.yml) on merge requests only. One install (`bun install --frozen-lockfile --ignore-scripts`) plus a checksummed Node.js 22.23.5 linux-x64 binary is shared by `lint`, `typecheck`, `unit`, `flag-check`, and `e2e`. `lint` applies Biome's safe fixes in the job workspace, then runs `biome check .`. `typecheck` runs `wrangler types` on that Node (runtime types included), then `react-router typegen` and `tsc -b`. `unit` runs Vitest on Node. `e2e` prepares local D1 with Bun and starts the dev server with Node when `CI=true`, because Miniflare's workerd dispatcher is a real DNS lookup under Bun. A push to `main` does not start this pipeline and does not deploy from it. Workers Builds deploys `ration`, `ration-mcp`, and `ration-copilot`. Xcode Cloud builds iOS.
 
 ### Cloudflare Workers Builds
 

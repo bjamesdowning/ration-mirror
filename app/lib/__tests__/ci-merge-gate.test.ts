@@ -48,11 +48,10 @@ describe("merge-request typecheck", () => {
 		}
 	});
 
-	it("warms Vite on a port Playwright is not waiting on", () => {
+	it("starts the dev server with Node in CI", () => {
 		const server = readFileSync("scripts/e2e-dev-server.ts", "utf8");
-		expect(server).toContain("const WARM_PORT = 5174");
-		expect(server).toContain("const SERVE_PORT = 5173");
-		expect(server).toContain("process.kill(-child.pid, signal)");
-		expect(server).toContain("detached: true");
+		expect(server).toContain('process.env.CI === "true"');
+		expect(server).toContain('command: "node"');
+		expect(server).toContain('"--run", "dev:local"');
 	});
 });

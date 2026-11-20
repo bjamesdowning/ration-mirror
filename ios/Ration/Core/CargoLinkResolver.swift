@@ -1,7 +1,7 @@
 import Foundation
 
-/// Resolves cargo detail navigation targets using the same normalisation
-/// as web `cargo-links` (`normalizeForCargoDedup`).
+/// Resolves cargo detail navigation targets using the same match key
+/// as web `cargo-links` (`cargoMatchKey`).
 enum CargoLinkResolver {
     struct Row: Sendable {
         let id: String
@@ -31,6 +31,6 @@ enum CargoLinkResolver {
     }
 
     private static func normalize(_ name: String) -> String {
-        CargoNameNormalizer.normalizeForCargoDedup(name)
+        CargoNameNormalizer.cargoMatchKey(name)
     }
 }

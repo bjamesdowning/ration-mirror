@@ -43,6 +43,7 @@ import {
 import { log } from "./logging.server";
 import { getManifestWeekMealsForSupply } from "./manifest.server";
 import { resolveSupplyManifestWindow } from "./manifest-dates";
+import { cargoMatchKey } from "./matching";
 import type { CargoTokenIndexes } from "./matching.server";
 import {
 	buildCargoIndex,
@@ -1359,7 +1360,7 @@ async function getActiveSnoozeKeys(
 
 	const keys = new Set<string>();
 	for (const row of rows) {
-		keys.add(`${row.normalizedName}__${row.domain}`);
+		keys.add(`${cargoMatchKey(row.normalizedName)}__${row.domain}`);
 	}
 
 	// Prune expired snoozes
@@ -2048,7 +2049,7 @@ async function buildMealContributions(
 	let coveredByCargo = 0;
 
 	for (const aggregated of aggregatedIngredients) {
-		const snoozeKey = `${aggregated.normalizedName}__${aggregated.domain}`;
+		const snoozeKey = `${cargoMatchKey(aggregated.normalizedName)}__${aggregated.domain}`;
 		if (snoozeKeys.has(snoozeKey)) continue;
 
 		const targetUnit = toSupportedUnit(aggregated.baseUnit);
@@ -2137,7 +2138,7 @@ async function buildCargoContributions(
 
 		const normalizedName = normalizeForCargoDedup(cargoRow.name);
 		const domain = cargoRow.domain ?? "food";
-		const snoozeKey = `${normalizedName}__${domain}`;
+		const snoozeKey = `${cargoMatchKey(normalizedName)}__${domain}`;
 		if (snoozeKeys.has(snoozeKey)) continue;
 
 		const restockQty = selection.quantityOverride ?? 1;

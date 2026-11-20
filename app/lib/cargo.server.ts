@@ -31,7 +31,7 @@ import {
 	buildSupplyDockedEvent,
 } from "./kitchen-events.server";
 import { log } from "./logging.server";
-import { normalizeForCargoDedup } from "./matching";
+import { normalizeForCargoDedup, vectorHitDisagreesOnCut } from "./matching";
 import {
 	areIngredientUnitsCompatible,
 	convertForIngredient,
@@ -778,7 +778,7 @@ export async function ingestCargoItems(
 			const similar = similarityMap.get(it.name);
 			const best = similar?.[0];
 			let handled = false;
-			if (best) {
+			if (best && !vectorHitDisagreesOnCut(it.name, best.itemName)) {
 				const target = cargoById.get(best.itemId);
 				if (
 					target &&

@@ -164,7 +164,7 @@ describe("getAvailableQuantityWithMap", () => {
 		expect(qty).toBe(0);
 	});
 
-	it("uses similarity map when direct match fails", () => {
+	it("refuses a vector hit when the cut disagrees", () => {
 		const items = [
 			createCargoIndexRow({ name: "chicken thigh", quantity: 400, unit: "g" }),
 		];
@@ -181,7 +181,7 @@ describe("getAvailableQuantityWithMap", () => {
 			index,
 			similarityMap,
 		);
-		expect(qty).toBe(400);
+		expect(qty).toBe(0);
 	});
 
 	it("normalises ingredient name for lookup (case-insensitive)", () => {
@@ -197,6 +197,75 @@ describe("getAvailableQuantityWithMap", () => {
 			similarityMap,
 		);
 		expect(qty).toBe(300);
+	});
+});
+
+describe("getAvailableQuantityWithMap — match key", () => {
+	it("covers cherry tomato, a hyphen, and a trailing pack size", () => {
+		const index = buildCargoIndex([
+			createCargoIndexRow({
+				name: "cherry tomatoes 250g",
+				quantity: 250,
+				unit: "g",
+			}),
+		]);
+		expect(
+			getAvailableQuantityWithMap("cherry tomato", "g", index, new Map()),
+		).toBe(250);
+		expect(
+			getAvailableQuantityWithMap("cherry-tomato", "g", index, new Map()),
+		).toBe(250);
+		expect(
+			getAvailableQuantityWithMap("cherry tomatoes", "g", index, new Map()),
+		).toBe(250);
+	});
+
+	it("covers beef mince with ground beef once", () => {
+		const index = buildCargoIndex([
+			createCargoIndexRow({ name: "beef mince", quantity: 200, unit: "g" }),
+			createCargoIndexRow({ name: "ground beef", quantity: 100, unit: "g" }),
+		]);
+		expect(index.size).toBe(1);
+		expect(
+			getAvailableQuantityWithMap("beef mince", "g", index, new Map()),
+		).toBe(300);
+		expect(
+			getAvailableQuantityWithMap("ground beef", "g", index, new Map()),
+		).toBe(300);
+	});
+
+	it("does not let chicken thighs cover chicken wings", () => {
+		const index = buildCargoIndex([
+			createCargoIndexRow({ name: "chicken wings", quantity: 400, unit: "g" }),
+		]);
+		const similarityMap = new Map<string, SimilarCargoMatch[]>([
+			[
+				"chicken thighs",
+				[{ itemId: "w", itemName: "chicken wings", score: 0.99 }],
+			],
+		]);
+		expect(
+			getAvailableQuantityWithMap("chicken thighs", "g", index, similarityMap),
+		).toBe(0);
+	});
+
+	it("accepts a vector hit when the leading food word differs", () => {
+		const index = buildCargoIndex([
+			createCargoIndexRow({
+				name: "cherry tomatoes",
+				quantity: 180,
+				unit: "g",
+			}),
+		]);
+		const similarityMap = new Map<string, SimilarCargoMatch[]>([
+			[
+				"grape tomatoes",
+				[{ itemId: "g", itemName: "cherry tomatoes", score: 0.9 }],
+			],
+		]);
+		expect(
+			getAvailableQuantityWithMap("grape tomatoes", "g", index, similarityMap),
+		).toBe(180);
 	});
 });
 

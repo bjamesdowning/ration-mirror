@@ -25,8 +25,8 @@ enum CargoTokenMatcher {
     ]
 
     static func isTokenPhaseMatch(recipeName: String, cargoName: String) -> Bool {
-        let recipeNorm = CargoNameNormalizer.normalizeForCargoDedup(recipeName)
-        let cargoNorm = CargoNameNormalizer.normalizeForCargoDedup(cargoName)
+        let recipeNorm = CargoNameNormalizer.cargoMatchOrdered(recipeName)
+        let cargoNorm = CargoNameNormalizer.cargoMatchOrdered(cargoName)
         guard !recipeNorm.isEmpty, !cargoNorm.isEmpty, recipeNorm != cargoNorm else {
             return false
         }
@@ -63,8 +63,8 @@ enum CargoTokenMatcher {
     }
 
     private static func isBidirectionalHeadNounSubset(_ a: String, _ b: String) -> Bool {
-        let normA = CargoNameNormalizer.normalizeForCargoDedup(a)
-        let normB = CargoNameNormalizer.normalizeForCargoDedup(b)
+        let normA = CargoNameNormalizer.cargoMatchOrdered(a)
+        let normB = CargoNameNormalizer.cargoMatchOrdered(b)
         guard !normA.isEmpty, !normB.isEmpty else { return false }
         let headA = headNoun(normA)
         let headB = headNoun(normB)

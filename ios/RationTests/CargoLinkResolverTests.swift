@@ -55,4 +55,39 @@ final class CargoLinkResolverTests: XCTestCase {
         )
         XCTAssertEqual(CargoLinkResolver.resolveCargoId(for: ingredient), "resolved")
     }
+
+    func testCherryTomatoCoversPluralHyphenAndPackSize() {
+        let rows = [
+            CargoLinkResolver.Row(id: "tomatoes", name: "cherry tomatoes"),
+        ]
+        XCTAssertEqual(
+            CargoLinkResolver.resolveCargoId(forName: "cherry tomato", in: rows),
+            "tomatoes"
+        )
+        XCTAssertEqual(
+            CargoLinkResolver.resolveCargoId(forName: "cherry-tomato", in: rows),
+            "tomatoes"
+        )
+        XCTAssertEqual(
+            CargoLinkResolver.resolveCargoId(forName: "cherry tomatoes 250g", in: rows),
+            "tomatoes"
+        )
+    }
+
+    func testBeefMinceCoversGroundBeef() {
+        let rows = [
+            CargoLinkResolver.Row(id: "beef", name: "ground beef"),
+        ]
+        XCTAssertEqual(
+            CargoLinkResolver.resolveCargoId(forName: "beef mince", in: rows),
+            "beef"
+        )
+    }
+
+    func testThighsDoNotCoverWings() {
+        let rows = [
+            CargoLinkResolver.Row(id: "wings", name: "chicken wings"),
+        ]
+        XCTAssertNil(CargoLinkResolver.resolveCargoId(forName: "chicken thighs", in: rows))
+    }
 }

@@ -15,8 +15,8 @@ import {
 	QuickEatValidationError,
 	quickEatFromCargo,
 } from "../../cargo-quick-eat.server";
-import { normalizeForCargoKey } from "../../cargo-utils";
 import { isFeatureEnabled } from "../../feature-flags/flags.server";
+import { cargoMatchKey, vectorHitDisagreesOnCut } from "../../matching";
 import { isPlanFuelActionsEnabled } from "../../nutrition/fast-log-flag.server";
 import {
 	FuelDailyLimitError,
@@ -237,10 +237,8 @@ export function createQuickEatToolDefs(env: McpToolsEnv) {
 
 				if (!cargoId && a.name) {
 					const index = await fetchOrgCargoIndex(env.DB, ctx.organizationId);
-					const key = normalizeForCargoKey(a.name);
-					const exact = index.filter(
-						(row) => normalizeForCargoKey(row.name) === key,
-					);
+					const key = cargoMatchKey(a.name);
+					const exact = index.filter((row) => cargoMatchKey(row.name) === key);
 					if (exact.length === 1 && exact[0]) {
 						cargoId = exact[0].id;
 					} else if (exact.length > 1) {
@@ -260,7 +258,11 @@ export function createQuickEatToolDefs(env: McpToolsEnv) {
 							[a.name],
 							{ topK: 3, threshold: NAME_SEARCH_RECALL_THRESHOLD, floor: "recall" },
 						);
-						const matches = results.get(a.name) ?? [];
+						const matches = (results.get(a.name) ?? []).filter(
+							(match) =>
+								typeof match.itemName !== "string" ||
+								!vectorHitDisagreesOnCut(a.name ?? "", match.itemName),
+						);
 						const floors = await cargoVectorFloors(
 							env,
 							ctx.organizationId,

@@ -10,8 +10,11 @@ import {
 	buildCargoTokenIndexes,
 	type CargoTokenIndexes,
 	cargoKeysMatchingIngredient,
+	cargoMatchKey,
+	cargoMatchOrdered,
 	normalizeForCargoDedup,
 	normalizeForMatch,
+	vectorHitDisagreesOnCut,
 } from "./matching";
 import { chunkedQuery } from "./query-utils.server";
 import {
@@ -51,6 +54,24 @@ export type CargoIndexEntry = {
 
 export type CargoBucketMatchType = "exact" | "token" | "vector" | "none";
 
+const exactAliases = new WeakMap<
+	Map<string, CargoIndexEntry[]>,
+	Map<string, CargoIndexEntry[]>
+>();
+
+function bucketForName(
+	cargoIndex: Map<string, CargoIndexEntry[]>,
+	name: string,
+): CargoIndexEntry[] | undefined {
+	const ordered = cargoMatchOrdered(name);
+	const direct = ordered ? cargoIndex.get(ordered) : undefined;
+	if (direct?.length) return direct;
+	const exact = cargoMatchKey(name);
+	if (!exact) return undefined;
+	const alias = exactAliases.get(cargoIndex)?.get(exact);
+	return alias?.length ? alias : undefined;
+}
+
 /**
  * Shared sync resolver for ingredient → cargo stock.
  * Phase order: exact key → head-noun/leading-token → Vectorize similarity map.
@@ -61,18 +82,20 @@ export function resolveCargoBucketsForIngredient(
 	tokenIndexes: CargoTokenIndexes,
 	similarityMap: Map<string, SimilarCargoMatch[]>,
 ): { buckets: CargoIndexEntry[]; matchType: CargoBucketMatchType } {
-	const normalized = normalizeForCargoDedup(ingredientName);
-	const exact = cargoIndex.get(normalized);
-	if (exact && exact.length > 0) {
+	const exact = bucketForName(cargoIndex, ingredientName);
+	if (exact) {
 		return { buckets: exact, matchType: "exact" };
 	}
 
 	const tokenKeys = cargoKeysMatchingIngredient(ingredientName, tokenIndexes);
 	if (tokenKeys.length > 0) {
+		const seen = new Set<CargoIndexEntry[]>();
 		const buckets: CargoIndexEntry[] = [];
 		for (const key of tokenKeys) {
 			const bucket = cargoIndex.get(key);
-			if (bucket?.length) buckets.push(...bucket);
+			if (!bucket?.length || seen.has(bucket)) continue;
+			seen.add(bucket);
+			buckets.push(...bucket);
 		}
 		if (buckets.length > 0) {
 			return { buckets, matchType: "token" };
@@ -81,8 +104,9 @@ export function resolveCargoBucketsForIngredient(
 
 	const similar = similarityMap.get(ingredientName) ?? [];
 	for (const match of similar) {
-		const bucket = cargoIndex.get(normalizeForCargoDedup(match.itemName));
-		if (bucket?.length) {
+		if (vectorHitDisagreesOnCut(ingredientName, match.itemName)) continue;
+		const bucket = bucketForName(cargoIndex, match.itemName);
+		if (bucket) {
 			return { buckets: bucket, matchType: "vector" };
 		}
 	}
@@ -174,29 +198,30 @@ export interface MealMatchQuery {
 
 /**
  * Builds a cargo lookup map for efficient matching.
- * Groups cargo by normalized name with total quantities.
- * Uses normalizeForCargoDedup so regional synonyms (e.g. tinned/canned)
- * resolve to the same index key.
+ * The public key stays in culinary order. A sorted-token alias shares that
+ * bucket, so "beef mince" and "ground beef" resolve to the same rows.
  */
 export function buildCargoIndex(items: CargoIndexRow[]) {
-	const index = new Map<
-		string,
-		{
-			original: CargoIndexRow;
-			totalQuantity: number;
-			normalizedName: string;
-		}[]
-	>();
+	const index = new Map<string, CargoIndexEntry[]>();
+	const byExact = new Map<string, CargoIndexEntry[]>();
+	exactAliases.set(index, byExact);
 
 	for (const item of items) {
-		const normalized = normalizeForCargoDedup(item.name);
-		const existing = index.get(normalized) || [];
-		existing.push({
+		const orderedName = cargoMatchOrdered(item.name);
+		const exactName = cargoMatchKey(item.name);
+		const entry: CargoIndexEntry = {
 			original: item,
 			totalQuantity: item.quantity,
-			normalizedName: normalized,
-		});
-		index.set(normalized, existing);
+			normalizedName: orderedName,
+		};
+		const existing = byExact.get(exactName);
+		if (existing) {
+			existing.push(entry);
+			continue;
+		}
+		const bucket = [entry];
+		index.set(orderedName, bucket);
+		byExact.set(exactName, bucket);
 	}
 
 	return index;

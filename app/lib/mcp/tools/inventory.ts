@@ -17,6 +17,7 @@ import {
 	applyInventoryRemove,
 	previewInventoryRemove,
 } from "../../inventory-remove.server";
+import { vectorHitDisagreesOnCut } from "../../matching";
 import { CargoNutritionOverrideSchema } from "../../schemas/nutrition";
 import { UNIT_FIELD_DESCRIPTION, UuidSchema } from "../../schemas/uuid";
 import { coerceToolUnit } from "../../units";
@@ -319,7 +320,11 @@ export function createInventoryToolDefs(env: McpToolsEnv) {
 							[a.name],
 							{ topK: 3, threshold: NAME_SEARCH_RECALL_THRESHOLD, floor: "recall" },
 						);
-						const matches = results.get(a.name) ?? [];
+						const matches = (results.get(a.name) ?? []).filter(
+							(match) =>
+								typeof match.itemName !== "string" ||
+								!vectorHitDisagreesOnCut(a.name ?? "", match.itemName),
+						);
 						const floors = await cargoVectorFloors(
 							env,
 							ctx.organizationId,

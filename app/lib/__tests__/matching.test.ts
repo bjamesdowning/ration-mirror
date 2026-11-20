@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
 	buildCargoTokenIndexes,
 	cargoKeysMatchingIngredient,
+	cargoMatchKey,
+	cargoMatchOrdered,
 	headNoun,
 	isBidirectionalHeadNounSubset,
 	isTokenPhaseMatch,
@@ -11,6 +13,7 @@ import {
 	passesCompoundGuard,
 	tokenize,
 	tokenMatchScore,
+	vectorHitDisagreesOnCut,
 } from "~/lib/matching";
 
 describe("normalizeForMatch", () => {
@@ -21,7 +24,10 @@ describe("normalizeForMatch", () => {
 	it("strips punctuation", () => {
 		expect(normalizeForMatch("tomato, diced")).toBe("tomato diced");
 		// Punctuation is removed and resulting multiple spaces are collapsed
-		expect(normalizeForMatch("'s & -")).toBe("s ");
+		expect(normalizeForMatch("'s & -")).toBe("s");
+		expect(normalizeForMatch("cherry-tomato")).toBe("cherry tomato");
+		expect(normalizeForMatch("cow's milk")).toBe("cows milk");
+		expect(normalizeForMatch("1/2")).toBe("1 2");
 	});
 
 	it("collapses multiple spaces", () => {
@@ -366,5 +372,66 @@ describe("cargoKeysMatchingIngredient", () => {
 			"black pepper",
 		]);
 		expect(cargoKeysMatchingIngredient("salt", indexes)).toEqual(["rock salt"]);
+	});
+});
+
+describe("cargo match key", () => {
+	it("stems only the last token so cherry tomato covers cherry tomatoes", () => {
+		expect(cargoMatchKey("cherry tomato")).toBe("cherry tomato");
+		expect(cargoMatchKey("cherry tomatoes")).toBe("cherry tomato");
+		expect(cargoMatchOrdered("cherry tomatoes")).toBe("cherry tomato");
+		expect(isTokenPhaseMatch("cherry tomato", "cherry tomatoes")).toBe(false);
+	});
+
+	it("keeps a hyphen or slash as a token break", () => {
+		expect(cargoMatchKey("cherry-tomato")).toBe("cherry tomato");
+		expect(cargoMatchKey("cherry/tomato")).toBe("cherry tomato");
+	});
+
+	it("drops a trailing amount and unit on the match key only", () => {
+		expect(cargoMatchKey("cherry tomatoes 250g")).toBe("cherry tomato");
+		expect(cargoMatchKey("cherry tomatoes, 250 g")).toBe("cherry tomato");
+		expect(normalizeForCargoDedup("cherry tomatoes 250g")).toBe(
+			"cherry tomatoes 250g",
+		);
+	});
+
+	it("sorts the match key and leaves the persisted snooze string unsorted", () => {
+		expect(cargoMatchKey("beef mince")).toBe(cargoMatchKey("ground beef"));
+		expect(cargoMatchKey("beef mince")).toBe("beef ground");
+		expect(normalizeForCargoDedup("beef mince")).toBe("beef ground");
+		expect(normalizeForCargoDedup("ground beef")).toBe("ground beef");
+		expect(normalizeForCargoDedup("chicken breast")).toBe("chicken breast");
+	});
+
+	it("does not stem a denylisted last token", () => {
+		for (const token of [
+			"couscous",
+			"asparagus",
+			"molasses",
+			"hummus",
+			"glass",
+			"bass",
+		]) {
+			expect(cargoMatchKey(token)).toBe(token);
+		}
+	});
+
+	it("refuses a vector hit when the cut disagrees", () => {
+		expect(cargoMatchOrdered("chicken thighs")).toBe("chicken thigh");
+		expect(cargoMatchOrdered("chicken wings")).toBe("chicken wing");
+		expect(cargoMatchKey("chicken thighs")).not.toBe(
+			cargoMatchKey("chicken wings"),
+		);
+		expect(vectorHitDisagreesOnCut("chicken thighs", "chicken wings")).toBe(
+			true,
+		);
+		expect(vectorHitDisagreesOnCut("chicken", "chicken wings")).toBe(false);
+		expect(vectorHitDisagreesOnCut("grape tomatoes", "cherry tomatoes")).toBe(
+			false,
+		);
+		expect(isTokenPhaseMatch("chicken thighs", "chicken wings")).toBe(false);
+		expect(isTokenPhaseMatch("chicken", "chicken breast")).toBe(true);
+		expect(isTokenPhaseMatch("oil", "olive oil")).toBe(true);
 	});
 });

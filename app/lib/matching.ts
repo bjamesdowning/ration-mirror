@@ -1,3 +1,5 @@
+import { PANTRY_UNIT_TOKENS } from "./units";
+
 /**
  * Pure string utilities for ingredient matching.
  * Isomorphic (client + server safe) - no D1, drizzle, or server APIs.
@@ -7,8 +9,10 @@ export function normalizeForMatch(name: string): string {
 	return name
 		.toLowerCase()
 		.trim()
+		.replace(/[-/]/g, " ")
 		.replace(/[^\w\s]/g, "")
-		.replace(/\s+/g, " ");
+		.replace(/\s+/g, " ")
+		.trim();
 }
 
 /**
@@ -72,20 +76,127 @@ const STRIP_WORDS = new Set([
 	"medium",
 ]);
 
-/**
- * Normalizes an ingredient name for deduplication key generation.
- * Stronger than normalizeForMatch: also strips prep/packaging words and
- * substitutes regional synonyms so "tinned tomatoes" and "canned tomatoes"
- * resolve to the same key.
- */
-export function normalizeForCargoDedup(name: string): string {
+function pantryTokens(name: string): string[] {
 	const base = normalizeForMatch(name);
 	const tokens = base.split(" ").flatMap((token) => {
 		const synonym = INGREDIENT_SYNONYMS[token];
 		return synonym ? synonym.split(" ") : [token];
 	});
-	const filtered = tokens.filter((t) => t.length > 0 && !STRIP_WORDS.has(t));
-	return filtered.join(" ");
+	return tokens.filter((t) => t.length > 0 && !STRIP_WORDS.has(t));
+}
+
+/**
+ * Normalizes an ingredient name for deduplication key generation.
+ * Stronger than normalizeForMatch: also strips prep/packaging words and
+ * substitutes regional synonyms so "tinned tomatoes" and "canned tomatoes"
+ * resolve to the same key.
+ *
+ * This is the string stored on `supply_snooze.normalized_name` and
+ * `supplyStoreProfile.normalizedName`. It does not stem, drop pack size,
+ * or sort tokens. Resolution compares `cargoMatchKey` at read time.
+ */
+export function normalizeForCargoDedup(name: string): string {
+	return pantryTokens(name).join(" ");
+}
+
+const MATCH_STEM_DENY = new Set([
+	"couscous",
+	"asparagus",
+	"molasses",
+	"hummus",
+	"glass",
+	"bass",
+]);
+
+const AMOUNT_TOKEN = /^\d+(?:\.\d+)?$/;
+
+function isAmountToken(token: string): boolean {
+	return AMOUNT_TOKEN.test(token);
+}
+
+function isGluedAmountUnit(token: string): boolean {
+	const match = /^(\d+(?:\.\d+)?)([a-z]+)$/.exec(token);
+	const suffix = match?.[2];
+	if (!suffix) return false;
+	return PANTRY_UNIT_TOKENS.has(suffix);
+}
+
+function trailingUnitLength(tokens: string[]): number {
+	if (tokens.length >= 2) {
+		const pair = `${tokens[tokens.length - 2]} ${tokens[tokens.length - 1]}`;
+		if (PANTRY_UNIT_TOKENS.has(pair)) return 2;
+	}
+	const last = tokens[tokens.length - 1];
+	if (last && PANTRY_UNIT_TOKENS.has(last)) return 1;
+	return 0;
+}
+
+/** Drop a trailing pack size. Keep the tokens when stripping would leave nothing. */
+function stripTrailingAmountAndUnit(tokens: string[]): string[] {
+	const out = [...tokens];
+	while (out.length > 0) {
+		const last = out[out.length - 1];
+		if (!last) break;
+		if (isGluedAmountUnit(last)) {
+			out.pop();
+			continue;
+		}
+		const unitLen = trailingUnitLength(out);
+		if (unitLen > 0 && out.length > unitLen) {
+			out.splice(out.length - unitLen, unitLen);
+			continue;
+		}
+		if (isAmountToken(last)) {
+			out.pop();
+			continue;
+		}
+		break;
+	}
+	return out.length > 0 ? out : [...tokens];
+}
+
+/** Stem one token. Do not use whole-string `normalizeForCargoKey`. */
+function stemMatchToken(token: string): string {
+	if (MATCH_STEM_DENY.has(token) || token.endsWith("ss")) return token;
+	if (token.endsWith("oes") && token.length > 3) return token.slice(0, -2);
+	if (
+		(token.endsWith("shes") ||
+			token.endsWith("ches") ||
+			token.endsWith("xes") ||
+			token.endsWith("zes")) &&
+		token.length > 3
+	) {
+		return token.slice(0, -2);
+	}
+	if (token.endsWith("ies") && token.length > 3) {
+		return `${token.slice(0, -3)}y`;
+	}
+	if (token.endsWith("es") && token.length > 3) return token.slice(0, -1);
+	if (token.endsWith("s") && token.length > 2) return token.slice(0, -1);
+	return token;
+}
+
+/**
+ * Cook / meal / supply match form in culinary order.
+ * Stems only the last token and drops a trailing amount and unit.
+ * Token phase (head noun, leading token) reads this string.
+ */
+export function cargoMatchOrdered(name: string): string {
+	const tokens = stripTrailingAmountAndUnit(pantryTokens(name));
+	if (tokens.length === 0) return "";
+	const last = tokens.length - 1;
+	tokens[last] = stemMatchToken(tokens[last] ?? "");
+	return tokens.join(" ");
+}
+
+/**
+ * Exact cargo index key. Same tokens as `cargoMatchOrdered`, sorted so
+ * "beef mince" and "ground beef" collide. Not the persisted snooze string.
+ */
+export function cargoMatchKey(name: string): string {
+	const ordered = cargoMatchOrdered(name);
+	if (!ordered) return "";
+	return ordered.split(" ").sort().join(" ");
 }
 
 /**
@@ -111,7 +222,7 @@ const CORIANDER_SPICE_MARKERS = new Set(["ground", "seed", "seeds", "powder"]);
  *
  * Do not use this for pantry, Supply, cookability, or snooze keys. Those
  * persist `normalizeForCargoDedup` (`supply_snooze.normalized_name`,
- * `supplyStoreProfile.normalizedName`).
+ * `supplyStoreProfile.normalizedName`). Cook resolution uses `cargoMatchKey`.
  */
 export function normalizeForNutritionIdentity(name: string): string {
 	const base = normalizeForMatch(name);
@@ -175,6 +286,27 @@ export function leadingToken(normalizedName: string): string {
 		.split(/\s+/)
 		.filter((t) => t.length > 1 && !STOP_WORDS.has(t));
 	return parts.length > 0 ? parts[0] : "";
+}
+
+const CUT_TOKENS = new Set(["thigh", "wing", "breast", "drumstick", "leg"]);
+
+/**
+ * True when a vector neighbor shares the leading food word but names a
+ * different cut. Bare "chicken" is not a cut and still covers a cut.
+ */
+export function vectorHitDisagreesOnCut(
+	ingredientName: string,
+	cargoName: string,
+): boolean {
+	const recipe = cargoMatchOrdered(ingredientName);
+	const cargo = cargoMatchOrdered(cargoName);
+	const leadA = leadingToken(recipe);
+	const leadB = leadingToken(cargo);
+	if (!leadA || leadA !== leadB) return false;
+	const headA = headNoun(recipe);
+	const headB = headNoun(cargo);
+	if (!headA || !headB || headA === headB) return false;
+	return CUT_TOKENS.has(headA) && CUT_TOKENS.has(headB);
 }
 
 /** Ultra-generic heads that must not auto-expand via token phase (vector/exact only). */
@@ -279,20 +411,24 @@ function isSubset(smaller: Set<string>, larger: Set<string>): boolean {
 	return true;
 }
 
-/**
- * True when both names share a head noun and one token-set is a subset of the
- * other (generic ↔ specialization), e.g. oil ⊆ olive oil, olive oil ⊆ EVOO.
- */
-export function isBidirectionalHeadNounSubset(a: string, b: string): boolean {
-	const normA = normalizeForCargoDedup(a);
-	const normB = normalizeForCargoDedup(b);
-	if (!normA || !normB) return false;
+function headNounsMatchOrdered(normA: string, normB: string): boolean {
 	const headA = headNoun(normA);
 	const headB = headNoun(normB);
 	if (!headA || headA !== headB) return false;
 	const tokensA = tokensOfNormalized(normA);
 	const tokensB = tokensOfNormalized(normB);
 	return isSubset(tokensA, tokensB) || isSubset(tokensB, tokensA);
+}
+
+/**
+ * True when both names share a head noun and one token-set is a subset of the
+ * other (generic ↔ specialization), e.g. oil ⊆ olive oil, olive oil ⊆ EVOO.
+ */
+export function isBidirectionalHeadNounSubset(a: string, b: string): boolean {
+	const normA = cargoMatchOrdered(a);
+	const normB = cargoMatchOrdered(b);
+	if (!normA || !normB) return false;
+	return headNounsMatchOrdered(normA, normB);
 }
 
 /**
@@ -361,20 +497,30 @@ export function passesCompoundGuard(
 	return true;
 }
 
+function tokenPhaseOrdered(
+	recipeOrdered: string,
+	cargoOrdered: string,
+): boolean {
+	if (!recipeOrdered || !cargoOrdered || recipeOrdered === cargoOrdered) {
+		return false;
+	}
+	if (ULTRA_GENERIC_HEADS.has(headNoun(recipeOrdered))) return false;
+
+	const headPath = headNounsMatchOrdered(recipeOrdered, cargoOrdered);
+	const leadPath = isLeadingTokenSpecialization(recipeOrdered, cargoOrdered);
+	if (!headPath && !leadPath) return false;
+	return passesCompoundGuard(recipeOrdered, cargoOrdered);
+}
+
 /** Full token-phase predicate (head-noun path or leading-token specialization). */
 export function isTokenPhaseMatch(
 	recipeName: string,
 	cargoName: string,
 ): boolean {
-	const recipeNorm = normalizeForCargoDedup(recipeName);
-	const cargoNorm = normalizeForCargoDedup(cargoName);
-	if (!recipeNorm || !cargoNorm || recipeNorm === cargoNorm) return false;
-	if (ULTRA_GENERIC_HEADS.has(headNoun(recipeNorm))) return false;
-
-	const headPath = isBidirectionalHeadNounSubset(recipeNorm, cargoNorm);
-	const leadPath = isLeadingTokenSpecialization(recipeNorm, cargoNorm);
-	if (!headPath && !leadPath) return false;
-	return passesCompoundGuard(recipeNorm, cargoNorm);
+	return tokenPhaseOrdered(
+		cargoMatchOrdered(recipeName),
+		cargoMatchOrdered(cargoName),
+	);
 }
 
 export type CargoTokenIndexes = {
@@ -416,16 +562,16 @@ export function cargoKeysMatchingIngredient(
 	recipeName: string,
 	indexes: CargoTokenIndexes,
 ): string[] {
-	const recipeNorm = normalizeForCargoDedup(recipeName);
-	const head = headNoun(recipeNorm);
+	const recipeOrdered = cargoMatchOrdered(recipeName);
+	const head = headNoun(recipeOrdered);
 	if (!head || ULTRA_GENERIC_HEADS.has(head)) return [];
 
 	const candidateSet = new Set<string>();
 	for (const k of indexes.byHeadNoun.get(head) ?? []) {
 		candidateSet.add(k);
 	}
-	const lead = leadingToken(recipeNorm);
-	const recipeTokenCount = tokensOfNormalized(recipeNorm).size;
+	const lead = leadingToken(recipeOrdered);
+	const recipeTokenCount = tokensOfNormalized(recipeOrdered).size;
 	if (recipeTokenCount === 1 && lead) {
 		for (const k of indexes.byLeadingToken.get(lead) ?? []) {
 			candidateSet.add(k);
@@ -434,8 +580,8 @@ export function cargoKeysMatchingIngredient(
 
 	const matches: string[] = [];
 	for (const cargoKey of candidateSet) {
-		if (cargoKey === recipeNorm) continue;
-		if (!isTokenPhaseMatch(recipeNorm, cargoKey)) continue;
+		if (cargoKey === recipeOrdered) continue;
+		if (!tokenPhaseOrdered(recipeOrdered, cargoKey)) continue;
 		matches.push(cargoKey);
 	}
 	return matches;

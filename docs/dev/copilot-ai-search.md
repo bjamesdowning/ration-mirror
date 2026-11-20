@@ -14,7 +14,7 @@ Ration Copilot uses Cloudflare AI Search as managed retrieval. The application d
 | `content/blog/**` | Blog posts |
 | `docs/dev/**` | Engineering / ops notes (Flagship, this doc) |
 | `docs/legal/**` | Terms and Privacy (also rendered at `/legal/*`) |
-| `docs/mcp/**` | MCP developer reference (`README.md`, source of truth for MCP tool names and behaviour) and `registry-publishing.md` |
+| `docs/mcp/**` | MCP developer reference (`README.md`, source of truth for MCP tool names and behaviour) and `registry-publishing.md`. Included once the CI sync-sources MR lands. |
 | `README.md` | Engineering SoT (root README) |
 
 Create the instance once:

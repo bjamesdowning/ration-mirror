@@ -27,7 +27,7 @@ OAuth consent and API keys can use granular **`mcp:*`** scopes:
 - **`mcp:inventory:write`** — `add_cargo_item`, `update_cargo_item`, `adjust_cargo_item`, `remove_cargo_item`, `preview_inventory_import`, `apply_inventory_import`, `preview_inventory_remove`, `apply_inventory_remove`, `import_inventory_csv`.
 - **`mcp:galley:write`** — `create_meal`, `update_meal`, `delete_meal`, `consume_meal`, `set_active_meals`, `clear_active_meals`.
 - **`mcp:manifest:write`** — meal-plan entry CRUD and `commit_manifest_plan`.
-- **`mcp:supply:write`** — supply list item CRUD, `mark_supply_purchased_bulk`, sync from selected meals, `complete_supply_list`.
+- **`mcp:supply:write`** — supply list item CRUD, `mark_supply_purchased_bulk`, sync from selected meals, `complete_supply_list` (which also needs `mcp:inventory:write`).
 - **`mcp:preferences:write`** — `update_user_preferences` (allergens, expiration alert days, theme).
 
 Pick the smallest set that covers the agent's job. A read-only research agent only needs `mcp:read`; a receipt-import agent only needs `mcp:read` + `mcp:inventory:write`.
@@ -56,7 +56,7 @@ MCP remains available for external agents and API-key/OAuth clients. The copilot
 
 ## Security expectation
 
-OAuth grants can be revoked instantly in Connected Agents. API keys should be treated like passwords — revoke keys you no longer use. Destructive tools (`remove_cargo_item`, `delete_meal`, `clear_active_meals`) require an explicit `confirm: true` argument as a guardrail against agent slips.
+OAuth grants can be revoked instantly in Connected Agents. API keys should be treated like passwords — revoke keys you no longer use. Destructive tools (`remove_cargo_item`, `delete_meal`, `clear_active_meals`, `import_inventory_csv`, `commit_manifest_plan`, `complete_supply_list`) require an explicit `confirm: true` argument as a guardrail against agent slips. See *MCP tools reference* for the full list.
 
 ## Next steps
 

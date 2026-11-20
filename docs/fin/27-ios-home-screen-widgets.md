@@ -10,6 +10,8 @@ Sign in **in the Ration app** first. A signed-out widget shows **Open Ration to 
 | **Eat** | Small, Medium, Large | Food from Cargo: recent items, or one **Cargo tag** chosen in Edit Widget. Small is a glance. Tap a counted item (slice, can, pack, unit) on Medium (2 rows) or Large (4 rows) to eat one: it shows **Eaten**, takes one from Cargo, and logs a private serving when Macro Tracking is on. Gram, ml, and dozen items show **Choose amount** and open Ration. |
 | **Today** | Small, Medium, Large | Today's planned meals by Breakfast, Lunch, Snack, and Dinner, marked **Cooked** when done. Small shows the next meal, **Nothing planned**, or **All cooked**. With a calorie goal, Medium and Large show **Calories** remaining; Large adds **Protein**, **Carbs**, and **Fat**. Read-only. |
 
+When Fuel is on for your account, the **Eat** widget's face says **Fuel**; it is still listed as **Eat** in the widget gallery.
+
 Each widget has an **Appearance** option (**System**, **Light**, **Dark**) in Edit Widget.
 
 Widgets refresh about once an hour, when you leave Ration, and after a tap on the widget. **Couldn't update** or **Offline** means the last refresh failed; open Ration to retry. **Couldn't log that bite** means Ration could not confirm an Eat tap; open Cargo in the app to check before tapping again.

@@ -21,6 +21,10 @@ Ration’s web app runs as a **Cloudflare Worker**: server-side rendering with a
 
 **MCP** uses its own Worker entrypoint and hostname but **shares** the same D1/KV/AI/Vectorize bindings so assistants see **consistent** data with the web app.
 
+## Separate Copilot Worker
+
+**Ask Ration** (Copilot) runs on a third Worker (`ration-copilot`). It uses the same kitchen tools and data as MCP, and answers how-to questions from Ration's help articles, blog, and developer docs through **Cloudflare AI Search**.
+
 ## No classic servers
 
 There are no always-on VMs you manage—capacity scales with Cloudflare’s platform. Heavy work is **queued** so browser requests stay fast.

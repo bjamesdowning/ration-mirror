@@ -328,6 +328,36 @@ describe("runRouteLoader", () => {
 		});
 	});
 
+	it("tells a member a plain sentence when tag_names is missing", async () => {
+		const { MEMBER_SCHEMA_ERROR, handleApiError, runRouteLoader } =
+			await import("~/lib/error-handler");
+		const missing = new Error(
+			"D1_ERROR: no such column: nutrition_intake.tag_names: SQLITE_ERROR",
+		);
+
+		const api = handleApiError(missing) as unknown as {
+			data: { error: string; code: string };
+			init: { status: number };
+		};
+		expect(api.init.status).toBe(500);
+		expect(api.data.code).toBe("admin_schema_error");
+		expect(api.data.error).toBe(MEMBER_SCHEMA_ERROR);
+		expect(api.data.error.toLowerCase()).not.toContain("admin");
+
+		await expect(
+			runRouteLoader(async () => {
+				throw missing;
+			}),
+		).rejects.toMatchObject({
+			type: "DataWithResponseInit",
+			init: { status: 500 },
+			data: {
+				code: "admin_schema_error",
+				error: MEMBER_SCHEMA_ERROR,
+			},
+		});
+	});
+
 	it("maps Drizzle-wrapped param-limit errors to 503 server_busy", async () => {
 		const { runRouteLoader } = await import("~/lib/error-handler");
 		const wrapped = new Error("Failed query: select …");

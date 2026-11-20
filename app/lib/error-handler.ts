@@ -74,6 +74,13 @@ export function isD1SchemaError(error: unknown): boolean {
 }
 
 /**
+ * Shown for a schema failure on member reads (Fuel, Manifest, and other
+ * loaders). The machine code stays `admin_schema_error` for telemetry.
+ * The sentence must not say admin.
+ */
+export const MEMBER_SCHEMA_ERROR = "Something went wrong. Please try again.";
+
+/**
  * Permanent query-shape failures from D1's 100 bound-parameter ceiling.
  * Still mapped to 503 `server_busy` for clients, but must not be retried.
  */
@@ -194,7 +201,7 @@ export function rethrowRouteLoaderError(error: unknown): never {
 		emitApiOutcome("5xx", "admin_schema_error");
 		throw data(
 			{
-				error: "Admin data is temporarily unavailable. Please try again later.",
+				error: MEMBER_SCHEMA_ERROR,
 				code: "admin_schema_error" as const,
 			},
 			{ status: 500 },
@@ -604,7 +611,7 @@ export function handleApiError(error: unknown) {
 		emitApiOutcome("5xx", "admin_schema_error");
 		return data(
 			{
-				error: "Admin data is temporarily unavailable. Please try again later.",
+				error: MEMBER_SCHEMA_ERROR,
 				code: "admin_schema_error" as const,
 			},
 			{ status: 500 },

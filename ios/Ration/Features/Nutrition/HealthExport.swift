@@ -2,6 +2,9 @@ import Foundation
 
 /// Dietary samples only. Weight, steps, workouts, and calories burned are refused.
 enum HealthExportPolicy {
+    /// iOS below this version could not keep Health current; the server fails it closed.
+    static let minimumAppVersion = "1.6.39"
+
     static let quantityTypes = [
         "dietaryEnergyConsumed",
         "dietaryProtein",
@@ -18,18 +21,27 @@ enum HealthExportPolicy {
         "workout",
     ]
 
-    /// Hidden unless the child flag is on. iOS below 1.6 stays closed.
+    /// Hidden unless the child flag is on. iOS below 1.6.39 stays closed.
     static func switchVisible(flagEnabled: Bool, appVersion: String) -> Bool {
-        flagEnabled
-            && HubCapturePolicy.choiceVisible(
-                fastLogEnabled: true,
-                appVersion: appVersion
-            )
+        flagEnabled && HubCapturePolicy.isAtLeast(appVersion, minimumAppVersion)
     }
 
     /// Missing intake consent does not open HealthKit, even when the switch is on.
     static func mayOpenHealthStore(intakeConsent: Bool, enabled: Bool) -> Bool {
         intakeConsent && enabled
+    }
+
+    /// A Ration sync identifier is `ration:<healthSyncId>:<quantityType>`.
+    static func ownsIdentifier(_ identifier: String, healthSyncId: String) -> Bool {
+        identifier.hasPrefix("ration:\(healthSyncId):")
+    }
+
+    static func quantityType(ofIdentifier identifier: String) -> String? {
+        guard identifier.hasPrefix("ration:"),
+              let last = identifier.split(separator: ":").last
+        else { return nil }
+        let type = String(last)
+        return quantityTypes.contains(type) ? type : nil
     }
 }
 
@@ -47,6 +59,8 @@ struct HealthQuantitySample: Equatable, Sendable {
     var quantityType: String
     var value: Double
     var healthSyncId: String
+    var occurredAt: Date
+    var foodName: String
 }
 
 struct HealthSampleDelete: Equatable, Sendable {
@@ -54,59 +68,207 @@ struct HealthSampleDelete: Equatable, Sendable {
     var syncIdentifiers: [String]
 }
 
+/// One HealthKit delete call: every identifier shares one quantity type.
+struct HealthDeleteGroup: Equatable, Sendable {
+    var quantityType: String
+    var syncIdentifiers: [String]
+}
+
+/// The only HealthKit surface the exporter uses. Production is `HealthKitExporter`.
+@MainActor
 protocol HealthSampleWriting: AnyObject {
-    func requestDietaryAuthorization() async -> String
-    func save(_ samples: [HealthQuantitySample]) async
-    func delete(_ items: [HealthSampleDelete]) async
+    /// Asks for write (share) permission only. Ration never reads Health.
+    func requestWriteAuthorization() async throws
+    /// Quantity type names this iPhone currently lets Ration write.
+    func authorizedTypes() -> Set<String>
+    func save(_ samples: [HealthQuantitySample]) async throws
+    func delete(_ group: HealthDeleteGroup) async throws
 }
 
-enum HealthExportTurnOn {
-    case consentRequired
-    case denied
-    case written(Int)
-}
-
-/// Applies a server plan on the device. Same id and version are not saved again.
-enum HealthExportSession {
-    static func turnOn(
-        intakeConsent: Bool,
-        store: HealthSampleWriting,
-        samples: [HealthQuantitySample],
-        deletes: [HealthSampleDelete],
-        localVersions: [String: Int]
-    ) async -> HealthExportTurnOn {
-        guard HealthExportPolicy.mayOpenHealthStore(
-            intakeConsent: intakeConsent,
-            enabled: true
-        ) else {
-            return .consentRequired
-        }
-        let authorization = await store.requestDietaryAuthorization()
-        guard authorization == "authorized" else {
-            return .denied
-        }
-        let safe = samplesToWrite(samples, localVersions: localVersions)
-        if !safe.isEmpty {
-            await store.save(safe)
-        }
-        let ownDeletes = deletes.filter { item in
-            item.syncIdentifiers.allSatisfy { $0.hasPrefix("ration:\(item.healthSyncId):") }
-        }
-        if !ownDeletes.isEmpty {
-            await store.delete(ownDeletes)
-        }
-        return .written(safe.count)
+enum HealthExportDates {
+    /// The server sends `2026-11-09T12:00:00.000Z`. Without fractional seconds
+    /// ISO8601DateFormatter fails, so try both. Nil means skip the sample.
+    static func parse(_ raw: String) -> Date? {
+        let fractional = ISO8601DateFormatter()
+        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = fractional.date(from: raw) { return date }
+        let plain = ISO8601DateFormatter()
+        plain.formatOptions = [.withInternetDateTime]
+        return plain.date(from: raw)
     }
 
-    static func samplesToWrite(
-        _ samples: [HealthQuantitySample],
-        localVersions: [String: Int]
-    ) -> [HealthQuantitySample] {
-        samples.filter { sample in
-            HealthExportPolicy.quantityTypes.contains(sample.quantityType)
-                && !HealthExportPolicy.refusedTypes.contains(sample.quantityType)
-                && sample.syncIdentifier.hasPrefix("ration:\(sample.healthSyncId):")
-                && (localVersions[sample.healthSyncId] ?? 0) < sample.syncVersion
+    static func format(_ date: Date) -> String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter.string(from: date)
+    }
+}
+
+/// What the iPhone does with one pending response. Pure, so tests cover the shipped path.
+struct HealthExportDevicePlan: Equatable, Sendable {
+    static let saveBatchSize = 50
+    static let deleteChunkSize = 200
+
+    /// One-time repair deletes, run first so samples saved at the wrong time move.
+    var repairDeletes: [HealthDeleteGroup]
+    /// Removals and cleared nutrients. Never includes an identifier being saved.
+    var deletes: [HealthDeleteGroup]
+    var saveBatches: [[HealthQuantitySample]]
+    /// Samples for a nutrient the person turned off in Health.
+    var unauthorized: Int
+    /// Samples refused (not a Ration dietary type, foreign id, or bad date).
+    var skipped: Int
+
+    static func make(
+        samples: [HealthExportPendingResponse.Sample],
+        deletes: [HealthExportPendingResponse.Delete],
+        authorizedTypes: Set<String>,
+        repair: Bool = false
+    ) -> HealthExportDevicePlan {
+        var writes: [HealthQuantitySample] = []
+        var unauthorized = 0
+        var skipped = 0
+        var seen = Set<String>()
+        for sample in samples {
+            guard HealthExportPolicy.quantityTypes.contains(sample.quantityType),
+                  !HealthExportPolicy.refusedTypes.contains(sample.quantityType),
+                  HealthExportPolicy.ownsIdentifier(
+                      sample.syncIdentifier,
+                      healthSyncId: sample.healthSyncId
+                  ),
+                  sample.syncIdentifier.hasSuffix(":\(sample.quantityType)"),
+                  sample.value.isFinite,
+                  sample.value >= 0,
+                  let occurredAt = HealthExportDates.parse(sample.occurredAt)
+            else {
+                skipped += 1
+                continue
+            }
+            guard authorizedTypes.contains(sample.quantityType) else {
+                unauthorized += 1
+                continue
+            }
+            guard seen.insert(sample.syncIdentifier).inserted else { continue }
+            writes.append(
+                HealthQuantitySample(
+                    syncIdentifier: sample.syncIdentifier,
+                    syncVersion: sample.syncVersion,
+                    quantityType: sample.quantityType,
+                    value: sample.value,
+                    healthSyncId: sample.healthSyncId,
+                    occurredAt: occurredAt,
+                    foodName: sample.foodName
+                )
+            )
         }
+        let writeIds = Set(writes.map(\.syncIdentifier))
+        var deleteIds: [String] = []
+        for item in deletes {
+            for identifier in item.syncIdentifiers
+            where HealthExportPolicy.ownsIdentifier(identifier, healthSyncId: item.healthSyncId)
+                && !writeIds.contains(identifier)
+            {
+                deleteIds.append(identifier)
+            }
+        }
+        return HealthExportDevicePlan(
+            repairDeletes: repair
+                ? group(writes.map(\.syncIdentifier), authorizedTypes: authorizedTypes)
+                : [],
+            deletes: group(deleteIds, authorizedTypes: authorizedTypes),
+            saveBatches: stride(from: 0, to: writes.count, by: saveBatchSize).map {
+                Array(writes[$0..<min($0 + saveBatchSize, writes.count)])
+            },
+            unauthorized: unauthorized,
+            skipped: skipped
+        )
+    }
+
+    /// Groups by quantity type in a stable order. A type Ration may not write
+    /// cannot be deleted either, so it is left for a later sync.
+    static func group(
+        _ identifiers: [String],
+        authorizedTypes: Set<String>
+    ) -> [HealthDeleteGroup] {
+        var byType: [String: [String]] = [:]
+        var seen = Set<String>()
+        for identifier in identifiers where seen.insert(identifier).inserted {
+            guard let type = HealthExportPolicy.quantityType(ofIdentifier: identifier),
+                  authorizedTypes.contains(type)
+            else { continue }
+            byType[type, default: []].append(identifier)
+        }
+        var groups: [HealthDeleteGroup] = []
+        for type in HealthExportPolicy.quantityTypes {
+            guard let ids = byType[type] else { continue }
+            for start in stride(from: 0, to: ids.count, by: deleteChunkSize) {
+                groups.append(
+                    HealthDeleteGroup(
+                        quantityType: type,
+                        syncIdentifiers: Array(ids[start..<min(start + deleteChunkSize, ids.count)])
+                    )
+                )
+            }
+        }
+        return groups
+    }
+
+    var saveCount: Int { saveBatches.reduce(0) { $0 + $1.count } }
+}
+
+struct HealthExportApplyResult: Equatable, Sendable {
+    var saved = 0
+    var deletedGroups = 0
+    var failed = 0
+    var unauthorized = 0
+    var skipped = 0
+}
+
+/// Runs a device plan: repair deletes, then deletes, then saves in batches.
+/// A delete error stops the run so the next sync retries it. A failed save
+/// batch is retried one sample at a time so one bad sample does not block the rest.
+@MainActor
+enum HealthExportApplier {
+    static func apply(
+        _ plan: HealthExportDevicePlan,
+        store: HealthSampleWriting
+    ) async throws -> HealthExportApplyResult {
+        var result = HealthExportApplyResult(
+            unauthorized: plan.unauthorized,
+            skipped: plan.skipped
+        )
+        for group in plan.repairDeletes + plan.deletes {
+            try await store.delete(group)
+            result.deletedGroups += 1
+        }
+        for batch in plan.saveBatches {
+            do {
+                try await store.save(batch)
+                result.saved += batch.count
+            } catch {
+                for sample in batch {
+                    do {
+                        try await store.save([sample])
+                        result.saved += 1
+                    } catch {
+                        result.failed += 1
+                    }
+                }
+            }
+        }
+        return result
+    }
+}
+
+/// `since` sent to the server: the last `syncedThrough` minus a margin, so a
+/// slow commit or a skewed clock is picked up again. Re-sending is harmless.
+enum HealthExportSince {
+    static let margin: TimeInterval = 10 * 60
+
+    static func make(syncedThrough: String?) -> String? {
+        guard let syncedThrough, let date = HealthExportDates.parse(syncedThrough) else {
+            return nil
+        }
+        return HealthExportDates.format(date.addingTimeInterval(-margin))
     }
 }

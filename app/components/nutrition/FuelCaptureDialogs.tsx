@@ -494,6 +494,11 @@ export function LogToFuelDialog({
 					<p className="text-sm text-muted">
 						This records what you ate. It does not change Cargo.
 					</p>
+					{draft.compositionSource === "ai_estimate" ? (
+						<p className="text-sm text-muted">
+							Photo numbers are AI estimates you can change.
+						</p>
+					) : null}
 				</div>
 				<div className="flex flex-col gap-2">
 					<div className="flex gap-2">

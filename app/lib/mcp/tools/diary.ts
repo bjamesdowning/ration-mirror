@@ -78,9 +78,11 @@ const diaryWriteFields = {
 	idempotencyKey: UuidSchema,
 	operationKey: UuidSchema,
 	notes: z.string().trim().max(280).nullable().optional(),
+	/** The caller estimated the macros (for example from a photo). */
+	estimated: z.boolean().optional(),
 };
 
-function toDiaryWrite(args: {
+export function toDiaryWrite(args: {
 	savedFoodId?: string;
 	name?: string;
 	manifestDate?: string;
@@ -102,6 +104,7 @@ function toDiaryWrite(args: {
 	idempotencyKey: string;
 	operationKey: string;
 	notes?: string | null;
+	estimated?: boolean;
 }) {
 	const hasMacros =
 		args.energyKcal != null &&
@@ -144,6 +147,10 @@ function toDiaryWrite(args: {
 		idempotencyKey: args.idempotencyKey,
 		operationKey: args.operationKey,
 		notes: args.notes,
+		// A saved food carries its own stored numbers, so it is never an estimate.
+		...(args.estimated === true && !args.savedFoodId
+			? { compositionSource: "ai_estimate" as const }
+			: {}),
 	};
 }
 
@@ -174,7 +181,7 @@ export function createDiaryToolDefs(env: McpToolsEnv) {
 		defineSharedTool({
 			name: "log_diary_food",
 			description:
-				"Log one personal food the caller ate. Writes nutrition intake with a null plan entry and does not change Cargo, Galley, Manifest, or Supply. Requires approval even for one item, active intake consent, and agent-processing consent. Pass name and explicit energyKcal/proteinG/carbsG/fatG, or savedFoodId. Typed macros are stored as given and are not converted. A savedFoodId copies that person's stored name and nutrients onto the intake row and ignores any macros the caller substitutes. savedFoodId requires nutrition-saved-food as well as nutrition-fast-log. Optional amount+unit label a typed log. To scale per 100 g, omit the typed macros and pass per100gEnergyKcal/per100gProteinG/per100gCarbsG/per100gFatG plus amount and unit. Household units scale only from gram weights already stored for fdcId. An unknown unit returns amount_unit_unavailable and the units that food allows. Do not invent a gram weight, and do not turn a handful into grams. Also pass manifestDate, occurredAt, slotType, notes, idempotencyKey, and operationKey. Costs 0 credits. Does not save to the kitchen; the result includes kitchenOffer only. Not medical advice.",
+				"Log one personal food the caller ate. Writes nutrition intake with a null plan entry and does not change Cargo, Galley, Manifest, or Supply. Requires approval even for one item, active intake consent, and agent-processing consent. Pass name and explicit energyKcal/proteinG/carbsG/fatG, or savedFoodId. Typed macros are stored as given and are not converted. A savedFoodId copies that person's stored name and nutrients onto the intake row and ignores any macros the caller substitutes. savedFoodId requires nutrition-saved-food as well as nutrition-fast-log. Optional amount+unit label a typed log. To scale per 100 g, omit the typed macros and pass per100gEnergyKcal/per100gProteinG/per100gCarbsG/per100gFatG plus amount and unit. Household units scale only from gram weights already stored for fdcId. An unknown unit returns amount_unit_unavailable and the units that food allows. Do not invent a gram weight, and do not turn a handful into grams. Also pass manifestDate, occurredAt, slotType, notes, idempotencyKey, and operationKey. Set estimated: true when you estimated the numbers (for example from a photo); the log is labelled an AI estimate the person can change. Costs 0 credits. Does not save to the kitchen; the result includes kitchenOffer only. Not medical advice.",
 			inputSchema: z.object(diaryWriteFields),
 			scopes: ["mcp:nutrition:write"],
 			rateLimitCategory: "mcp_write",

@@ -73,7 +73,7 @@ export function createHealthExportToolDefs(env: McpToolsEnv) {
 		defineSharedTool({
 			name: "get_health_export_preview",
 			description:
-				"Preview confirmed eaten foods the signed-in person could export. One sample per nutrient per food. No daily total. An ai_estimate is not exported. Does not write HealthKit. Requires intake consent. No plan check.",
+				"Preview the Fuel logs the signed-in person could export. One sample per nutrient per food. No daily total. AI estimates export marked as estimates; logs with missing or implausible numbers are kept out. Does not write HealthKit. Requires intake consent. No plan check.",
 			inputSchema: z.object({
 				cursor: z
 					.object({

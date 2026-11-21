@@ -74,4 +74,32 @@ describe("createCopilotGatewayModel", () => {
 		expect(COPILOT_GATEWAY_MODEL_OPTIONS.transport).toBe("gateway");
 		expect(model).toEqual({ modelId: COPILOT_GEMINI_MODEL_ID });
 	});
+
+	it("adds the request timeout and conversation id only when asked (copilot-recovery-tuning)", () => {
+		const binding = { run: vi.fn() } as unknown as Ai;
+		createCopilotGatewayModel(
+			{
+				AI: binding,
+				AI_GATEWAY_ID: "ration-gateway",
+				RATION_ENV: "production",
+			},
+			{ requestTimeoutMs: 40_000, conversationId: "conv-1" },
+		);
+
+		expect(mockCreateWorkersAI).toHaveBeenCalledWith({
+			binding,
+			providers: [{ id: "openai-plugin" }, { id: "google-plugin" }],
+			gateway: {
+				id: "ration-gateway",
+				skipCache: true,
+				retries: { maxAttempts: 1 },
+				requestTimeoutMs: 40_000,
+				metadata: {
+					feature: "copilot",
+					env: "production",
+					conversationId: "conv-1",
+				},
+			},
+		});
+	});
 });

@@ -61,6 +61,12 @@ enum CopilotWebSocketDecoder {
                 messageId: frame.id,
                 serverMessages: messages
             )
+        case "cf_agent_chat_recovering":
+            // Think's recovery status; matches web `recovering` frame action.
+            return CopilotStreamEvent(
+                type: frame.recovering == true ? "recovering_started" : "recovering_ended",
+                messageId: frame.id
+            )
         case "cf_agent_use_chat_response":
             break
         default:
@@ -90,6 +96,10 @@ enum CopilotWebSocketDecoder {
         }
 
         if frame.done == true {
+            // A stalled turn Think will retry under a new request id: not terminal.
+            if frame.outcome == "recovering" {
+                return CopilotStreamEvent(type: "turn_recovering", messageId: frame.id)
+            }
             return messageEnd(frameId: frame.id, continuation: frame.continuation == true)
         }
 
@@ -388,6 +398,10 @@ private struct AgentResponseFrame: Decodable {
     let id: String?
     let body: String?
     let done: Bool?
+    /// Set on the done frame when the turn did not end normally (`recovering`).
+    let outcome: String?
+    /// `cf_agent_chat_recovering` status.
+    let recovering: Bool?
     let error: AgentFrameError?
     let replay: Bool?
     let continuation: Bool?

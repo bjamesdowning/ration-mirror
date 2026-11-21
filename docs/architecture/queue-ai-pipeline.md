@@ -123,6 +123,6 @@ flowchart LR
 - `app/lib/ai-gateway.server.ts`, `app/lib/ai-config.server.ts`: Gateway URL, `cf-aig-*` headers, `AI_MODEL`.
 - `app/lib/vector.server.ts`: `EMBEDDING_MODEL`, `EMBEDDING_GEMMA_2_MODEL`, `CARGO_EMBEDDING_FLAG`, `embedBatchWithCache` (KV cache), `upsertCargoVectors` (namespace = organization), `findSimilarCargoBatch`, `deleteCargoVectors`.
 - `app/lib/cargo.server.ts`: calls `upsertCargoVectors`.
-- `app/lib/copilot/model.server.ts`, `app/lib/copilot/model-profiles.ts`: `createWorkersAI({ binding: env.AI, gateway })`, `COPILOT_GEMINI_MODEL_ID`.
+- `app/lib/copilot/model.server.ts`, `app/lib/copilot/model-profiles.ts`: `createWorkersAI({ binding: env.AI, gateway })`, `COPILOT_GEMINI_MODEL_ID`. With `copilot-recovery-tuning` on, the gateway options add `requestTimeoutMs: 40000` and a `conversationId` metadata key (no user text). Stall recovery is described in [Copilot turn](./copilot-turn.md).
 - `app/lib/copilot/tools.server.ts`: `COPILOT_AI_SEARCH_INSTANCES = ["ration-docs"]`, `AI_SEARCH.search` with hybrid retrieval.
 - `.gitlab-ci.yml`: `ai_search_sync` (`when: never` in MR pipelines, its `find` source list, `wrangler r2 object put`, `wrangler ai-search jobs create`).

@@ -1786,7 +1786,7 @@ A separate Cloudflare Worker (`ration-mcp`) exposes the Ration pantry to AI agen
 | `get_user_preferences` | Read | `mcp:read` | Allergens, expiration alert days, theme, default unit mode | mcp_list (30/min) |
 | `get_context` | Read | `mcp:read` | Returns org/key context, onboarding state, kitchen tier/usage/credits/lastActivityAt, capabilities, and suggested next actions | mcp_list (30/min) |
 | `preview_inventory_import` | Write | `mcp:inventory:write` | Validates parsed receipt items, returns `previewToken` (15-min KV TTL) | mcp_write (15/min) |
-| `apply_inventory_import` | Write | `mcp:inventory:write` | Applies a chat-confirmed preview (no second host approval card); idempotent via `idempotencyKey` (24h KV TTL) | mcp_write (15/min) |
+| `apply_inventory_import` | Write | `mcp:inventory:write` | Applies a confirmed preview; idempotent via `idempotencyKey` (24h KV TTL). MCP: `destructiveHint` + `idempotentHint`. Copilot: chat confirmation by default; host Approve/Deny card when `copilot-confirm-scope` is on | mcp_write (15/min) |
 | `preview_inventory_remove` | Write | `mcp:inventory:write` | Dry-run bulk Cargo deletes (2+); returns `previewToken` | mcp_write (15/min) |
 | `apply_inventory_remove` | Write | `mcp:inventory:write` | Applies a chat-confirmed remove preview (no second host card); idempotent | mcp_write (15/min) |
 | `import_inventory_csv` | Write | `mcp:inventory:write` | Parse a CSV string and apply directly | mcp_write (15/min) |

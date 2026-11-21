@@ -92,7 +92,7 @@ struct LogToFuelSheet: View {
                             .disabled(saving)
                     }
                     if shutterEnabled || barcodeEnabled {
-                        Text("A photo or barcode fills this draft. It is not logged until you save.")
+                        Text(FuelScanCopy.draftHint)
                             .rationCaption()
                             .foregroundStyle(Theme.muted)
                     }

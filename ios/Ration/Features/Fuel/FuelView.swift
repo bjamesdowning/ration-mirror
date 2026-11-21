@@ -70,7 +70,8 @@ struct FuelView: View {
                         NavigationLink(value: FuelLogRoute(id: item.id)) {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(item.name).rationBody()
-                                Text("\(Int(item.energyKcal.rounded())) kcal").rationCaption()
+                                Text(FuelScanCopy.rowCalories(item.energyKcal, estimate: item.estimate == true))
+                                    .rationCaption()
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.vertical, 4)

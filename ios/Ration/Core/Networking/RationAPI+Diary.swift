@@ -208,7 +208,7 @@ extension RationAPI {
         stamped.fuelTimeZone = stamped.fuelTimeZone ?? FuelDeviceZone.candidate
         return try await retryingFuelZone {
             try requireDiaryWrite(try await client.post("nutrition/diary", body: stamped))
-        }
+        }.signalingDiaryChange()
     }
 
     func updateDiaryFood(id: String, body: DiaryFoodBody) async throws -> DiaryWriteResponse {
@@ -216,11 +216,12 @@ extension RationAPI {
         stamped.fuelTimeZone = stamped.fuelTimeZone ?? FuelDeviceZone.candidate
         return try await retryingFuelZone {
             try requireDiaryWrite(try await client.patch("nutrition/diary/\(id)", body: stamped))
-        }
+        }.signalingDiaryChange()
     }
 
     func voidDiaryFood(id: String, body: DiaryVoidBody) async throws -> DiaryWriteResponse {
         try requireDiaryWrite(try await client.delete("nutrition/diary/\(id)", body: body))
+            .signalingDiaryChange()
     }
 
     func exportDiaryFood() async throws -> DiaryExportResponse {
@@ -232,7 +233,7 @@ extension RationAPI {
         stamped.fuelTimeZone = stamped.fuelTimeZone ?? FuelDeviceZone.candidate
         return try await retryingFuelZone {
             try requireDiaryWrite(try await client.post("nutrition/diary", body: stamped))
-        }
+        }.signalingDiaryChange()
     }
 
     private func retryingFuelZone<T>(_ work: () async throws -> T) async throws -> T {
@@ -302,7 +303,7 @@ extension RationAPI {
             try requireDiaryWrite(
                 try await client.post("nutrition/diary/photo/\(requestId)/confirm", body: stamped)
             )
-        }
+        }.signalingDiaryChange()
     }
 
     func proposeFoodLog(
@@ -337,9 +338,59 @@ extension RationAPI {
         )
     }
 
-    func pendingHealthExport() async throws -> HealthExportPendingResponse {
-        try await client.get("nutrition/health-export/pending")
+    /// - Parameters:
+    ///   - since: the last `syncedThrough` (less a margin); nil pulls the whole window.
+    ///   - scope: `"all"` asks for a delete-only purge of every Ration sample.
+    func pendingHealthExport(
+        since: String? = nil,
+        scope: String? = nil
+    ) async throws -> HealthExportPendingResponse {
+        var query: [URLQueryItem] = []
+        if let since { query.append(URLQueryItem(name: "since", value: since)) }
+        if let scope { query.append(URLQueryItem(name: "scope", value: scope)) }
+        return try await client.get("nutrition/health-export/pending", query: query)
     }
+
+    /// Tells the server the device finished removing Ration's samples.
+    func acknowledgeHealthExportClear() async throws {
+        let _: HealthExportClearResponse = try await client.post(
+            "nutrition/health-export/clear",
+            body: HealthExportClearBody(confirm: true, completed: true)
+        )
+    }
+}
+
+extension RationAPI: HealthExportBackend {
+    func healthExportPending(
+        since: String?,
+        scope: String?
+    ) async throws -> HealthExportPendingResponse {
+        try await pendingHealthExport(since: since, scope: scope)
+    }
+}
+
+extension Notification.Name {
+    /// Posted after a diary write succeeds, so Apple Health export can catch up.
+    static let rationDiaryDidChange = Notification.Name("com.mayutic.ration.diaryDidChange")
+}
+
+extension DiaryWriteResponse {
+    /// Returns self after telling observers the diary changed.
+    @MainActor
+    func signalingDiaryChange() -> DiaryWriteResponse {
+        NotificationCenter.default.post(name: .rationDiaryDidChange, object: nil)
+        return self
+    }
+}
+
+struct HealthExportClearBody: Encodable, Sendable {
+    let confirm: Bool
+    let completed: Bool
+}
+
+struct HealthExportClearResponse: Decodable, Sendable {
+    let clearRequested: Bool?
+    let status: String?
 }
 
 struct HealthExportPreferenceBody: Encodable, Sendable {
@@ -370,8 +421,25 @@ struct HealthExportPendingResponse: Decodable, Sendable {
         let syncIdentifiers: [String]
     }
 
+    struct Excluded: Decodable, Equatable, Sendable {
+        var aiEstimate: Int = 0
+        var unconfirmed: Int = 0
+        var notExportable: Int = 0
+
+        var total: Int { aiEstimate + unconfirmed + notExportable }
+    }
+
     let samples: [Sample]
     let deletes: [Delete]
+    var enabled: Bool? = nil
+    var clearRequested: Bool? = nil
+    /// True when `deletes` is a purge of every Ration sample for this account.
+    var purge: Bool? = nil
+    /// True when an incremental pull was too large; pull again without `since`.
+    var truncated: Bool? = nil
+    /// Server time this pull covers up to. Sent back as `since` next time.
+    var syncedThrough: String? = nil
+    var excluded: Excluded? = nil
 }
 
 struct FoodBarcodeBody: Encodable, Sendable {

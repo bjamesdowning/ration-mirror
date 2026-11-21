@@ -131,9 +131,9 @@ These personal Macro Tracking tools only appear when the matching nutrition feat
 | `lookup_food_barcode` | `mcp:nutrition:read` | Look up a packaged barcode in USDA Branded Foods (needs `nutrition-barcode-diary`). No writes. |
 | `propose_food_log` | `mcp:nutrition:write` | Draft a food log from a photo (needs `nutrition-photo-log`). A model call costs **2 credits**. Approval required. Commit with `log_diary_food`. |
 | `get_health_export_status` | `mcp:nutrition:read` | Read the Apple Health export switch (needs `nutrition-health-export`). |
-| `get_health_export_preview` | `mcp:nutrition:read` | Preview the eaten foods you could export (needs `nutrition-health-export`). |
+| `get_health_export_preview` | `mcp:nutrition:read` | Preview the eaten foods you could export, and how many foods were kept out (AI estimates, unconfirmed, meals) (needs `nutrition-health-export`). |
 | `set_health_export` | `mcp:nutrition:write` | Turn Apple Health export on or off (needs `nutrition-health-export`). Approval required; **requires `confirm: true`**. |
-| `clear_health_export` | `mcp:nutrition:write` | Ask your phone to delete the samples Ration wrote (needs `nutrition-health-export`). Destructive; approval required; **requires `confirm: true`**. |
+| `clear_health_export` | `mcp:nutrition:write` | Ask your iPhone to remove every Apple Health sample Ration wrote for your account on its next sync (needs `nutrition-health-export`). Destructive; approval required; **requires `confirm: true`**. |
 
 ## Supply (Shopping)
 

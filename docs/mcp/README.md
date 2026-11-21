@@ -215,9 +215,9 @@ Registered only when the matching nutrition flags are on (all need `nutrition-fa
 | `lookup_food_barcode` | `mcp:nutrition:read` | USDA Branded Foods barcode lookup, exact `gtinUpc` only (`nutrition-barcode-diary`). No writes. |
 | `propose_food_log` | `mcp:nutrition:write` | Draft a food log from a photo (`nutrition-photo-log`). A model call costs **2 credits**. Approval required. Commit with `log_diary_food`. |
 | `get_health_export_status` | `mcp:nutrition:read` | Apple Health export switch state (`nutrition-health-export`). |
-| `get_health_export_preview` | `mcp:nutrition:read` | Preview confirmed eaten foods that could export (`nutrition-health-export`). |
+| `get_health_export_preview` | `mcp:nutrition:read` | Preview confirmed eaten foods that could export, plus counts of foods kept out (AI estimates, unconfirmed, meals) (`nutrition-health-export`). |
 | `set_health_export` | `mcp:nutrition:write` | Turn Apple Health export on or off (`nutrition-health-export`). Approval required; **requires `confirm: true`**. |
-| `clear_health_export` | `mcp:nutrition:write` | Ask the device to delete samples Ration wrote (`nutrition-health-export`). Destructive; approval required; **requires `confirm: true`**. |
+| `clear_health_export` | `mcp:nutrition:write` | Ask the person's iPhone to remove every Apple Health sample Ration wrote for this account on its next sync; the device acknowledges when done (`nutrition-health-export`). Destructive; approval required; **requires `confirm: true`**. |
 
 Server card: [`.well-known/mcp/server-card.json`](https://ration.mayutic.com/.well-known/mcp/server-card.json) · Full API reference: [docs/api](https://ration.mayutic.com/docs/api#mcp-tools)
 

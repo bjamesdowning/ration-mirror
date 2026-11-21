@@ -534,7 +534,7 @@ export function createInventoryToolDefs(env: McpToolsEnv) {
 		defineSharedTool({
 			name: "apply_inventory_remove",
 			description:
-				"Commit a previously-previewed bulk Cargo delete. Pass the previewToken from preview_inventory_remove. Idempotent via idempotencyKey. Call immediately after the user confirms the preview in chat; the preview confirmation is the consent step, so this tool does not show a separate host approval prompt.",
+				"Commit a previously-previewed bulk Cargo delete. Pass the previewToken from preview_inventory_remove (valid 15 minutes). Only call after the user has seen the preview; hosts that support approval ask the user to approve. Permanently deletes the previewed rows. Idempotent via idempotencyKey.",
 			inputSchema: z.object({
 				previewToken: z
 					.string()
@@ -549,6 +549,9 @@ export function createInventoryToolDefs(env: McpToolsEnv) {
 			scopes: ["mcp:inventory:write"],
 			rateLimitCategory: "mcp_write",
 			audit: true,
+			destructiveHint: true,
+			// Safe to retry with the same idempotencyKey.
+			idempotentHint: true,
 			handler: async (ctx, a) => {
 				try {
 					const result = await applyInventoryRemove(env, ctx.organizationId, {
@@ -615,7 +618,7 @@ export function createInventoryToolDefs(env: McpToolsEnv) {
 		defineSharedTool({
 			name: "apply_inventory_import",
 			description:
-				"Commit a previously-previewed inventory import. Pass the previewToken from preview_inventory_import. Idempotent via idempotencyKey. Call immediately after the user confirms the preview in chat; the preview confirmation is the consent step, so this tool does not show a separate host approval prompt.",
+				"Commit a previously-previewed inventory import. Pass the previewToken from preview_inventory_import (valid 15 minutes). Only call after the user has seen the preview; hosts that support approval ask the user to approve. May merge into or overwrite existing Cargo rows. Idempotent via idempotencyKey.",
 			inputSchema: z.object({
 				previewToken: z
 					.string()
@@ -630,6 +633,9 @@ export function createInventoryToolDefs(env: McpToolsEnv) {
 			scopes: ["mcp:inventory:write"],
 			rateLimitCategory: "mcp_write",
 			audit: true,
+			destructiveHint: true,
+			// Safe to retry with the same idempotencyKey.
+			idempotentHint: true,
 			handler: async (ctx, a) => {
 				try {
 					const result = await applyInventoryImport(env, ctx.organizationId, {

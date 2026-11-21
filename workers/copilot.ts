@@ -1,7 +1,11 @@
 // First import. See workers/zod-init.ts. Do not reorder.
 import "./zod-init";
 import {
+	type ChatErrorClassification,
 	type ChatErrorContext,
+	type ChatRecoveryContext,
+	type ChatRecoveryExhaustedContext,
+	type ChatRecoveryOptions,
 	type ChatResponseResult,
 	type PrepareStepContext,
 	type StepContext,
@@ -19,8 +23,24 @@ import {
 import type { ToolSet } from "ai";
 import { formatCopilotTemporalContextForOrganization } from "../app/lib/agent/temporal-context.server";
 import { getUserSettings } from "../app/lib/auth.server";
-import { resolveCopilotActiveTools } from "../app/lib/copilot/active-tools.server";
+import {
+	type CopilotWriteCarryForwardDomain,
+	type CopilotWriteCarryForwardEntry,
+	liveCarryForwardDomains,
+	nextCarryForwardEntries,
+	resolveCopilotActiveTools,
+} from "../app/lib/copilot/active-tools.server";
 import { authenticateCopilot } from "../app/lib/copilot/auth.server";
+import {
+	COPILOT_GATEWAY_REQUEST_TIMEOUT_MS,
+	COPILOT_RECOVERY_TERMINAL_MESSAGE,
+	classifyCopilotChatError,
+	copilotClientNeedsStallDecline,
+	copilotFinalStepConfig,
+	createCopilotChatRecoveryConfig,
+	isCopilotEmptyTurn,
+	isCopilotLiveTurn,
+} from "../app/lib/copilot/chat-recovery";
 import {
 	COPILOT_SESSION_MAX_MESSAGES,
 	COPILOT_SESSION_MAX_TOKENS,
@@ -28,6 +48,7 @@ import {
 } from "../app/lib/copilot/constants";
 import {
 	COPILOT_DEFLECTION_NUDGE,
+	detectConfirmWithoutApply,
 	detectCopilotDeflection,
 } from "../app/lib/copilot/deflection.server";
 import {
@@ -78,6 +99,7 @@ import {
 	COPILOT_MCP_SCOPES,
 	toAiSdkTools,
 } from "../app/lib/copilot/tools.server";
+import { countUserMessages, lastUserText } from "../app/lib/copilot/turn-text";
 import {
 	copilotBillingBlockAfterBalanceCheck,
 	copilotStepExceedsBalance,
@@ -227,32 +249,6 @@ function decodeAgentName(name: string) {
 	};
 }
 
-function lastUserText(ctx: TurnContext): string {
-	for (let index = ctx.messages.length - 1; index >= 0; index -= 1) {
-		const message = ctx.messages[index];
-		if (message?.role !== "user") continue;
-		const content = message.content;
-		if (typeof content === "string") return content;
-		if (Array.isArray(content)) {
-			return content
-				.map((part) =>
-					typeof part === "object" &&
-					part !== null &&
-					"text" in part &&
-					typeof part.text === "string"
-						? part.text
-						: "",
-				)
-				.join("\n");
-		}
-	}
-	return "";
-}
-
-function countUserMessages(ctx: TurnContext): number {
-	return ctx.messages.filter((message) => message.role === "user").length;
-}
-
 type CopilotAgentUsageConfig = {
 	totalUsageTokens: number;
 	sessionWarningsEmitted: SessionLimitWarningSeverity[];
@@ -267,7 +263,46 @@ type CopilotAgentUsageConfig = {
 	billingBlocked?: boolean;
 	/** An approved tool already ran in this turn. Survives hibernation. */
 	toolRanThisTurn?: boolean;
+	/**
+	 * Write domains kept open for 15 minutes after a successful preview
+	 * (flag `copilot-confirm-scope`). Per conversation DO. Survives hibernation.
+	 */
+	writeCarryForward?: CopilotWriteCarryForwardEntry[];
 };
+
+/** A tool that returned an MCP `ok: false` envelope did not succeed. */
+function isFailedToolEnvelope(output: unknown): boolean {
+	return (
+		typeof output === "object" &&
+		output !== null &&
+		(output as { ok?: unknown }).ok === false
+	);
+}
+
+/** `copilot_active_tools` metric path: which beforeTurn branch ran. */
+type CopilotTurnPath =
+	| "normal"
+	| "billing_blocked"
+	| "rate_limited"
+	| "session_msg_cap"
+	| "session_token_cap"
+	| "blocked_intent"
+	| "onboarding_rate_limited"
+	| "onboarding_exhausted"
+	| "onboarding_invalid_prompt"
+	| "onboarding_turn";
+
+function isCarryForwardEntry(
+	value: unknown,
+): value is CopilotWriteCarryForwardEntry {
+	if (typeof value !== "object" || value === null) return false;
+	const entry = value as { domain?: unknown; expiresAt?: unknown };
+	return (
+		(entry.domain === "inventory" || entry.domain === "manifest") &&
+		typeof entry.expiresAt === "number" &&
+		Number.isFinite(entry.expiresAt)
+	);
+}
 
 async function resolveNativeFeatureFlags(
 	env: Cloudflare.Env,
@@ -339,6 +374,37 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 	private turnDeflectionNudged = false;
 	private turnDeflectionMetricEmitted = false;
 	private turnSystemPrompt = "";
+	/** Flag `copilot-confirm-scope`, evaluated in beforeTurn and read lazily. */
+	private confirmScopeEnabled = false;
+	/** Flag `copilot-recovery-tuning`, evaluated in beforeTurn for in-turn hooks. */
+	private recoveryTuningEnabled = false;
+	/** When a turn last started in this isolate (0 after a fresh wake). */
+	private lastLiveTurnStartedAt = 0;
+	private turnMaxSteps = 0;
+	private turnPath: CopilotTurnPath = "normal";
+	private turnCarriedDomains: CopilotWriteCarryForwardDomain[] = [];
+	private turnStepCapMetricEmitted = false;
+	private turnBillingStopNotified = false;
+	private turnConfirmMetricEmitted = false;
+	private writeCarryForward: CopilotWriteCarryForwardEntry[] = [];
+	/** Last base prompt handed to Think by getSystemPrompt(). */
+	private lastBaseSystemPrompt = "";
+	private copilotLanguageModelTuned: ReturnType<
+		typeof createCopilotGatewayModel
+	> | null = null;
+
+	/**
+	 * Static config (Think reads it before onStart). The flag narrows the
+	 * budget only for a turn that is live in this isolate; deploy / eviction
+	 * recovery in a fresh isolate keeps Think's defaults.
+	 */
+	override chatRecovery = createCopilotChatRecoveryConfig({
+		state: () => ({
+			tuningEnabled: this.recoveryTuningEnabled,
+			liveTurn: isCopilotLiveTurn(this.lastLiveTurnStartedAt, Date.now()),
+		}),
+		onExhausted: (ctx) => this.onCopilotRecoveryExhausted(ctx),
+	});
 
 	constructor(ctx: DurableObjectState, env: Cloudflare.Env) {
 		super(ctx, env);
@@ -391,6 +457,7 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 			uncommittedUsageTokens: this.uncommittedUsageTokens,
 			billingBlocked: this.billingBlocked,
 			toolRanThisTurn: this.toolRanThisTurn,
+			writeCarryForward: this.writeCarryForward,
 		});
 	}
 
@@ -440,6 +507,10 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 			}
 			if (cfg.billingBlocked === true) this.billingBlocked = true;
 			if (cfg.toolRanThisTurn === true) this.toolRanThisTurn = true;
+			if (Array.isArray(cfg.writeCarryForward)) {
+				this.writeCarryForward =
+					cfg.writeCarryForward.filter(isCarryForwardEntry);
+			}
 		}
 	}
 
@@ -546,6 +617,13 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 
 	getModel() {
 		try {
+			if (this.recoveryTuningEnabled) {
+				this.copilotLanguageModelTuned ??= createCopilotGatewayModel(this.env, {
+					requestTimeoutMs: COPILOT_GATEWAY_REQUEST_TIMEOUT_MS,
+					conversationId: decodeAgentName(this.name).conversationId,
+				});
+				return this.copilotLanguageModelTuned;
+			}
 			this.copilotLanguageModel ??= createCopilotGatewayModel(this.env);
 			return this.copilotLanguageModel;
 		} catch (error) {
@@ -565,8 +643,124 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 		return super.onChatError(error, ctx);
 	}
 
+	/** Flag on: 429 / 5xx / network reset route into the bounded recovery. */
+	override classifyChatError(
+		error: unknown,
+		_ctx?: ChatErrorContext,
+	): ChatErrorClassification | undefined {
+		return classifyCopilotChatError(error, this.recoveryTuningEnabled);
+	}
+
+	protected override async onChatRecovery(
+		ctx: ChatRecoveryContext,
+	): Promise<ChatRecoveryOptions> {
+		const identity = decodeAgentName(this.name);
+		const liveTurn = isCopilotLiveTurn(this.lastLiveTurnStartedAt, Date.now());
+		writeCopilotMetric(
+			this.env,
+			ctx.attempt <= 1 ? "copilot_stall" : "copilot_retry_scheduled",
+			{ ...identity, source: "agent" },
+			identity.conversationId,
+			{
+				blobs: [
+					ctx.recoveryKind,
+					this.conversationModelPreset,
+					liveTurn ? "live" : "wake",
+					this.recoveryTuningEnabled ? "tuned" : "default",
+				],
+				doubles: [ctx.attempt, Math.max(0, Date.now() - ctx.createdAt)],
+			},
+		);
+		if (
+			this.recoveryTuningEnabled &&
+			liveTurn &&
+			copilotClientNeedsStallDecline(this.originatingClient)
+		) {
+			// iOS < 1.6.40 ignores frames after the "recovering" done frame, so
+			// tell it now while its turn is still active, then decline the retry.
+			this.broadcast(
+				JSON.stringify({
+					type: "error",
+					error: {
+						code: "copilot_stalled",
+						message: COPILOT_RECOVERY_TERMINAL_MESSAGE,
+					},
+				}),
+			);
+			return { continue: false };
+		}
+		return {};
+	}
+
+	private onCopilotRecoveryExhausted(ctx: ChatRecoveryExhaustedContext): void {
+		try {
+			const identity = decodeAgentName(this.name);
+			writeCopilotMetric(
+				this.env,
+				"copilot_recovery_exhausted",
+				{ ...identity, source: "agent" },
+				identity.conversationId,
+				{
+					blobs: [ctx.reason, ctx.recoveryKind, this.conversationModelPreset],
+					doubles: [ctx.attempt],
+				},
+			);
+		} catch (error) {
+			log.error("[Copilot] recovery exhausted metric failed", error);
+		}
+	}
+
 	getSystemPrompt() {
-		return getCopilotSystemPrompt(this.nativeFeatureFlags);
+		this.lastBaseSystemPrompt = getCopilotSystemPrompt(
+			this.nativeFeatureFlags,
+			{
+				confirmScope: this.confirmScopeEnabled,
+			},
+		);
+		return this.lastBaseSystemPrompt;
+	}
+
+	/**
+	 * Think builds the base prompt before beforeTurn (one-turn flag lag). Swap
+	 * in a prompt built from this turn's flags, keeping Think's appended
+	 * capability block. Falls back to Think's prompt if it was not ours.
+	 */
+	private currentTurnSystem(ctxSystem: string): string {
+		const fresh = getCopilotSystemPrompt(this.nativeFeatureFlags, {
+			confirmScope: this.confirmScopeEnabled,
+		});
+		const stale = this.lastBaseSystemPrompt;
+		if (stale && stale !== fresh && ctxSystem.startsWith(stale)) {
+			return `${fresh}${ctxSystem.slice(stale.length)}`;
+		}
+		return ctxSystem;
+	}
+
+	private emitActiveToolsMetric(
+		identity: ReturnType<typeof decodeAgentName>,
+		activeTools: readonly string[] | undefined,
+		userTextLength: number,
+	): void {
+		const tools = activeTools ?? [];
+		writeCopilotMetric(
+			this.env,
+			"copilot_active_tools",
+			{ ...identity, source: "agent" },
+			identity.conversationId,
+			{
+				blobs: [
+					this.turnPath,
+					this.conversationModelPreset,
+					tools.includes("apply_inventory_remove") ? "1" : "0",
+					tools.includes("apply_inventory_import") ? "1" : "0",
+					tools.includes("commit_manifest_plan") ? "1" : "0",
+					this.turnCarriedDomains.length > 0
+						? this.turnCarriedDomains.join("+")
+						: "none",
+				],
+				doubles: [tools.length, userTextLength],
+			},
+		);
 	}
 
 	getTools(): ToolSet {
@@ -604,12 +798,36 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 			{
 				includeDiaryTools: this.diaryToolsEnabled,
 				includeSavedFoodTools: this.savedFoodToolsEnabled,
+				// Read at call time so this turn's flag value applies (A5).
+				approvalOverride: (toolName) =>
+					this.confirmScopeEnabled &&
+					(toolName === "apply_inventory_remove" ||
+						toolName === "apply_inventory_import")
+						? true
+						: undefined,
 			},
 		) as ToolSet;
 	}
 
 	async beforeTurn(ctx: TurnContext) {
+		this.turnPath = "normal";
+		this.turnCarriedDomains = [];
+		const config = await this.resolveBeforeTurn(ctx);
+		try {
+			this.emitActiveToolsMetric(
+				decodeAgentName(this.name),
+				config.activeTools,
+				lastUserText(ctx).length,
+			);
+		} catch (error) {
+			log.error("[Copilot] active tools metric failed", error);
+		}
+		return config;
+	}
+
+	private async resolveBeforeTurn(ctx: TurnContext) {
 		const identity = decodeAgentName(this.name);
+		this.lastLiveTurnStartedAt = Date.now();
 		this.suppressBlockedReplyCharge = false;
 		this.nativeFeatureFlags = await resolveNativeFeatureFlags(
 			this.env,
@@ -630,6 +848,15 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 			this.env,
 			copilotFlags,
 		);
+		[this.confirmScopeEnabled, this.recoveryTuningEnabled] = await Promise.all([
+			isFeatureEnabled(this.env, "copilot-confirm-scope", copilotFlags),
+			isFeatureEnabled(this.env, "copilot-recovery-tuning", copilotFlags),
+		]);
+		if (!ctx.continuation) {
+			this.turnStepCapMetricEmitted = false;
+			this.turnBillingStopNotified = false;
+			this.turnConfirmMetricEmitted = false;
+		}
 		this.sessionMessageCount = ctx.messages.length;
 		const charge = await this.hydrateCumulativeUsage(identity);
 		if (
@@ -651,6 +878,7 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 				identity.userId,
 			);
 			if (!rl.allowed) {
+				this.turnPath = "onboarding_rate_limited";
 				this.onboardingTurnDenied = true;
 				this.broadcast(
 					JSON.stringify({
@@ -675,6 +903,7 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 				isOnboardingBriefingExhausted(turnsUsed) ||
 				countUserMessages(ctx) > turnsUsed + 1
 			) {
+				this.turnPath = "onboarding_exhausted";
 				this.onboardingTurnDenied = true;
 				writeCopilotMetric(
 					this.env,
@@ -705,6 +934,7 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 				turnsUsed,
 			});
 			if (!briefingTurn) {
+				this.turnPath = "onboarding_invalid_prompt";
 				this.onboardingTurnDenied = true;
 				writeCopilotMetric(
 					this.env,
@@ -730,6 +960,7 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 				};
 			}
 
+			this.turnPath = "onboarding_turn";
 			this.onboardingActiveTurn = briefingTurn;
 			this.onboardingShouldCountTurn = true;
 			const policy = getOnboardingBriefingTurnPolicy(briefingTurn);
@@ -779,6 +1010,7 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 			}
 		}
 		if (this.billingBlocked) {
+			this.turnPath = "billing_blocked";
 			this.suppressBlockedReplyCharge = true;
 			return {
 				system: `${ctx.system}\n\nThis conversation exhausted its credit allowance. Do not call tools. Tell the user to add credits and start a new chat, or start a new chat after the allowance resets.`,
@@ -792,6 +1024,7 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 			identity.userId,
 		);
 		if (!rl.allowed) {
+			this.turnPath = "rate_limited";
 			this.broadcast(
 				JSON.stringify({
 					type: "error",
@@ -808,6 +1041,7 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 			};
 		}
 		if (ctx.messages.length > COPILOT_SESSION_MAX_MESSAGES) {
+			this.turnPath = "session_msg_cap";
 			this.broadcast(
 				JSON.stringify({
 					type: "error",
@@ -824,6 +1058,7 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 			};
 		}
 		if (this.totalUsageTokens >= COPILOT_SESSION_MAX_TOKENS) {
+			this.turnPath = "session_token_cap";
 			this.broadcast(
 				JSON.stringify({
 					type: "error",
@@ -850,6 +1085,7 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 			this.nativeFeatureFlags,
 		);
 		if (blocked) {
+			this.turnPath = "blocked_intent";
 			writeCopilotMetric(
 				this.env,
 				"blocked_feature",
@@ -903,9 +1139,14 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 		const profile = COPILOT_MODEL_PRESETS[preset];
 		const inference = copilotTurnInference(profile);
 
+		const carryForward = this.confirmScopeEnabled
+			? liveCarryForwardDomains(this.writeCarryForward, Date.now())
+			: [];
+		this.turnCarriedDomains = carryForward;
 		const scopedTools = resolveCopilotActiveTools(
 			Object.keys(ctx.tools),
 			userText,
+			{ carryForward, wordForms: this.confirmScopeEnabled },
 		);
 
 		this.turnToolCallCount = 0;
@@ -914,7 +1155,8 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 		this.turnNativeSuggestionMatched = nativeSuggestion != null;
 		this.turnDeflectionNudged = false;
 		this.turnDeflectionMetricEmitted = false;
-		this.turnSystemPrompt = `${ctx.system}${nativeAdvisory}${await formatCopilotTemporalContextForOrganization(this.env.DB, identity.organizationId)}`;
+		this.turnSystemPrompt = `${this.currentTurnSystem(ctx.system)}${nativeAdvisory}${await formatCopilotTemporalContextForOrganization(this.env.DB, identity.organizationId)}`;
+		this.turnMaxSteps = inference.maxSteps;
 
 		return {
 			system: this.turnSystemPrompt,
@@ -929,6 +1171,7 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 	}
 
 	beforeStep(ctx: PrepareStepContext) {
+		let system: string | undefined;
 		// After a no-tool first step, reinforce once if steps continue.
 		if (
 			ctx.stepNumber > 0 &&
@@ -941,10 +1184,34 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 			})
 		) {
 			this.turnDeflectionNudged = true;
-			return {
-				system: `${this.turnSystemPrompt}\n\n${COPILOT_DEFLECTION_NUDGE}`,
-			};
+			system = `${this.turnSystemPrompt}\n\n${COPILOT_DEFLECTION_NUDGE}`;
 		}
+		// Flag on: the last allowed step must answer, never end on a tool call.
+		if (this.recoveryTuningEnabled && this.turnMaxSteps > 0) {
+			const finalStep = copilotFinalStepConfig({
+				stepNumber: ctx.stepNumber,
+				maxSteps: this.turnMaxSteps,
+				system: system ?? this.turnSystemPrompt,
+			});
+			if (finalStep) {
+				if (!this.turnStepCapMetricEmitted) {
+					this.turnStepCapMetricEmitted = true;
+					const identity = decodeAgentName(this.name);
+					writeCopilotMetric(
+						this.env,
+						"copilot_step_cap",
+						{ ...identity, source: "agent" },
+						identity.conversationId,
+						{
+							blobs: [this.conversationModelPreset],
+							doubles: [ctx.stepNumber, this.turnMaxSteps],
+						},
+					);
+				}
+				return finalStep;
+			}
+		}
+		if (system) return { system };
 	}
 
 	beforeToolCall(ctx: ToolCallContext): ToolCallDecision | undefined {
@@ -986,6 +1253,14 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 
 	afterToolCall(ctx: ToolCallResultContext) {
 		this.toolRanThisTurn = true;
+		if (this.confirmScopeEnabled) {
+			this.writeCarryForward = nextCarryForwardEntries(
+				this.writeCarryForward,
+				ctx.toolName,
+				ctx.success && !isFailedToolEnvelope(ctx.output),
+				Date.now(),
+			);
+		}
 		this.persistUsageConfig();
 		const identity = decodeAgentName(this.name);
 		writeCopilotMetric(
@@ -1045,6 +1320,7 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 				})
 			) {
 				this.billingBlocked = true;
+				this.notifyBillingStop(identity);
 			}
 		}
 		this.persistUsageConfig();
@@ -1104,7 +1380,78 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 		}
 	}
 
+	/**
+	 * Flag `copilot-recovery-tuning`: the credit check stopped the turn
+	 * mid-stream. Say so once per turn instead of ending silently.
+	 */
+	private notifyBillingStop(identity: ReturnType<typeof decodeAgentName>) {
+		if (!this.recoveryTuningEnabled || this.turnBillingStopNotified) return;
+		this.turnBillingStopNotified = true;
+		this.broadcast(
+			JSON.stringify({
+				type: "error",
+				error: {
+					code: "billing_stopped",
+					message:
+						"Copilot stopped because this chat ran out of credits. Add credits and start a new chat.",
+				},
+			}),
+		);
+		writeCopilotMetric(
+			this.env,
+			"copilot_billing_stop",
+			{ ...identity, source: "agent" },
+			identity.conversationId,
+			{ blobs: [this.conversationModelPreset] },
+		);
+	}
+
+	private emitTurnOutcomeMetrics(result: ChatResponseResult) {
+		const identity = decodeAgentName(this.name);
+		if (
+			isCopilotEmptyTurn({
+				status: result.status,
+				parts: result.message.parts,
+			})
+		) {
+			writeCopilotMetric(
+				this.env,
+				"copilot_empty_turn",
+				{ ...identity, source: "agent" },
+				identity.conversationId,
+				{ blobs: [this.conversationModelPreset, this.turnPath] },
+			);
+		}
+		if (
+			!this.turnConfirmMetricEmitted &&
+			detectConfirmWithoutApply({
+				carriedDomains: this.turnCarriedDomains,
+				toolCallCount: this.turnToolCallCount,
+				userText: this.turnUserText,
+			})
+		) {
+			this.turnConfirmMetricEmitted = true;
+			writeCopilotMetric(
+				this.env,
+				"confirm_without_apply",
+				{ ...identity, source: "agent" },
+				identity.conversationId,
+				{
+					blobs: [
+						this.turnCarriedDomains.join("+"),
+						this.conversationModelPreset,
+					],
+				},
+			);
+		}
+	}
+
 	async onChatResponse(result: ChatResponseResult) {
+		try {
+			this.emitTurnOutcomeMetrics(result);
+		} catch (error) {
+			log.error("[Copilot] turn outcome metrics failed", error);
+		}
 		const toolRan = this.toolRanThisTurn;
 		const suppressCommit = this.suppressBlockedReplyCharge;
 		const decision = copilotTurnUsageDecision({

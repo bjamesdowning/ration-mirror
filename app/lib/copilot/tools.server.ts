@@ -181,7 +181,17 @@ export function toAiSdkTools(
 		onApprovalRequested?: (toolName: string) => void;
 		onApprovalResolved?: (toolName: string) => void;
 	},
-	options?: { includeDiaryTools?: boolean; includeSavedFoodTools?: boolean },
+	options?: {
+		includeDiaryTools?: boolean;
+		includeSavedFoodTools?: boolean;
+		/**
+		 * Copilot-only approval override, read at call time (so a flag resolved
+		 * in `beforeTurn` applies to the same turn). Return `true` to require
+		 * host Approve/Deny, `false` to skip it, `undefined` to keep the shared
+		 * definition's `needsApproval`. MCP clients never see this.
+		 */
+		approvalOverride?: (toolName: string) => boolean | undefined;
+	},
 ): ToolSet {
 	const toolEnv = envWithCopilotContext(env, ctx);
 	const defs = createCopilotToolDefs(toolEnv, options);
@@ -189,6 +199,8 @@ export function toAiSdkTools(
 	return Object.fromEntries(
 		defs.map((def) => {
 			const resolveNeedsApproval = (args: Record<string, unknown>): boolean => {
+				const override = options?.approvalOverride?.(def.name);
+				if (override !== undefined) return override;
 				const approval = def.needsApproval;
 				if (approval == null) return false;
 				if (typeof approval === "function") {

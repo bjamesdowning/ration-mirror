@@ -101,6 +101,10 @@ final class AskViewModel {
     var activeRequestId: String?
     /// Request id from `cf_agent_stream_resuming` or a continuation done frame.
     var continuationRequestId: String?
+    /// Server is retrying a stalled turn ("Still working… retrying").
+    var isRecovering = false
+    /// A tool finished in this turn (a tool-only turn is not an empty answer).
+    var sawToolThisTurn = false
     var briefingComplete = false
     var introComplete = false
     /// True when the intro assistant reply had usable content (not empty / failed soft end).
@@ -643,6 +647,8 @@ final class AskViewModel {
         continuationRequestId = nil
         replayBaselineByRequestId = [:]
         replayTextByRequestId = [:]
+        isRecovering = false
+        sawToolThisTurn = false
         turnPhase = .idle
         self.state = state
     }

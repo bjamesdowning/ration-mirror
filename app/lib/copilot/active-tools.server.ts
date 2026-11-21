@@ -3,7 +3,7 @@
  * Always include core read/context tools; add domain writes by keyword match.
  */
 
-const CORE_TOOLS = [
+export const CORE_TOOLS = [
 	"search_docs",
 	"get_context",
 	"get_kitchen_summary",
@@ -27,7 +27,7 @@ const CORE_TOOLS = [
 	"propose_manifest_plan",
 ] as const;
 
-const INVENTORY_WRITE = [
+export const INVENTORY_WRITE = [
 	"add_cargo_item",
 	"update_cargo_item",
 	"adjust_cargo_item",
@@ -39,7 +39,7 @@ const INVENTORY_WRITE = [
 	"import_inventory_csv",
 ] as const;
 
-const GALLEY_WRITE = [
+export const GALLEY_WRITE = [
 	"create_meal",
 	"update_meal",
 	"delete_meal",
@@ -48,7 +48,7 @@ const GALLEY_WRITE = [
 	"consume_meal",
 ] as const;
 
-const MANIFEST_WRITE = [
+export const MANIFEST_WRITE = [
 	"propose_manifest_plan",
 	"commit_manifest_plan",
 	"add_meal_plan_entry",
@@ -58,7 +58,7 @@ const MANIFEST_WRITE = [
 	"consume_manifest_entries",
 ] as const;
 
-const SUPPLY_WRITE = [
+export const SUPPLY_WRITE = [
 	"add_supply_item",
 	"update_supply_item",
 	"remove_supply_item",
@@ -73,9 +73,9 @@ const SUPPLY_WRITE = [
 	"save_receipt_as_supply_list",
 ] as const;
 
-const PREFERENCES_WRITE = ["update_user_preferences"] as const;
+export const PREFERENCES_WRITE = ["update_user_preferences"] as const;
 
-const NUTRITION_TOOLS = [
+export const NUTRITION_TOOLS = [
 	"get_nutrition_summary",
 	"list_nutrition_intakes",
 	"set_nutrition_goal",
@@ -99,6 +99,98 @@ function includesAny(text: string, needles: RegExp[]): boolean {
 	return needles.some((needle) => needle.test(text));
 }
 
+/** Write domains that stay open for a short time after a preview tool ran. */
+export type CopilotWriteCarryForwardDomain = "inventory" | "manifest";
+
+/** Matches the 15-minute preview token TTL in mcp/tools/inventory.ts. */
+export const COPILOT_WRITE_CARRY_FORWARD_MS = 15 * 60 * 1000;
+
+export type CopilotWriteCarryForwardEntry = {
+	domain: CopilotWriteCarryForwardDomain;
+	expiresAt: number;
+};
+
+/** Preview tools that open a carry-forward domain when they succeed. */
+export const COPILOT_CARRY_FORWARD_PREVIEW_TOOLS: Record<
+	string,
+	CopilotWriteCarryForwardDomain
+> = {
+	preview_inventory_remove: "inventory",
+	preview_inventory_import: "inventory",
+	propose_manifest_plan: "manifest",
+};
+
+/** Commit tools that close their carry-forward domain when they succeed. */
+export const COPILOT_CARRY_FORWARD_COMMIT_TOOLS: Record<
+	string,
+	CopilotWriteCarryForwardDomain
+> = {
+	apply_inventory_remove: "inventory",
+	apply_inventory_import: "inventory",
+	commit_manifest_plan: "manifest",
+};
+
+/** Live (unexpired) carry-forward domains at `now`. */
+export function liveCarryForwardDomains(
+	entries: readonly CopilotWriteCarryForwardEntry[] | undefined,
+	now: number,
+): CopilotWriteCarryForwardDomain[] {
+	if (!entries) return [];
+	const domains = new Set<CopilotWriteCarryForwardDomain>();
+	for (const entry of entries) {
+		if (entry.expiresAt > now) domains.add(entry.domain);
+	}
+	return [...domains];
+}
+
+/**
+ * Next carry-forward list after a tool finished. A successful preview opens
+ * (or refreshes) its domain for 15 minutes. A successful commit closes it.
+ * Expired entries are dropped. Returns the same array when nothing changed.
+ */
+export function nextCarryForwardEntries(
+	entries: readonly CopilotWriteCarryForwardEntry[],
+	toolName: string,
+	succeeded: boolean,
+	now: number,
+): CopilotWriteCarryForwardEntry[] {
+	const live = entries.filter((entry) => entry.expiresAt > now);
+	if (!succeeded) {
+		return live.length === entries.length ? [...entries] : live;
+	}
+	const opened = COPILOT_CARRY_FORWARD_PREVIEW_TOOLS[toolName];
+	if (opened) {
+		return [
+			...live.filter((entry) => entry.domain !== opened),
+			{ domain: opened, expiresAt: now + COPILOT_WRITE_CARRY_FORWARD_MS },
+		];
+	}
+	const closed = COPILOT_CARRY_FORWARD_COMMIT_TOOLS[toolName];
+	if (closed) {
+		return live.filter((entry) => entry.domain !== closed);
+	}
+	return live.length === entries.length ? [...entries] : live;
+}
+
+export type ResolveCopilotActiveToolsOptions = {
+	/** Live carry-forward domains (flag `copilot-confirm-scope`). */
+	carryForward?: readonly CopilotWriteCarryForwardDomain[];
+	/** Extra delete word forms (flag `copilot-confirm-scope`). */
+	wordForms?: boolean;
+};
+
+/** Delete phrasing beyond `remove` / `delete` (flag `copilot-confirm-scope`). */
+const INVENTORY_DELETE_WORD_FORMS: RegExp[] = [
+	/\bremov(?:e|al|ing|ed)\b/,
+	/\bdelet(?:e|es|ing|ed)\b/,
+	/\bbin\b/,
+	/\btoss/,
+	/\bthrow (?:it |them |these |those )?(?:out|away)\b/,
+	/\bget rid of\b/,
+	/\bclear out\b/,
+	/\bdiscard/,
+];
+
 /**
  * Filter available tool names for this turn based on the latest user text.
  * Empty text never expands capability — only core read/context tools.
@@ -107,6 +199,7 @@ function includesAny(text: string, needles: RegExp[]): boolean {
 export function resolveCopilotActiveTools(
 	availableToolNames: string[],
 	userText: string,
+	options: ResolveCopilotActiveToolsOptions = {},
 ): string[] {
 	const available = new Set(availableToolNames);
 	const text = userText.trim().toLowerCase();
@@ -115,7 +208,23 @@ export function resolveCopilotActiveTools(
 	for (const name of CORE_TOOLS) {
 		if (available.has(name)) selected.add(name);
 	}
+	// Carry-forward only re-opens groups the caller already authorized
+	// (`available`). It never adds a tool outside that set.
+	const carryForward = new Set(options.carryForward ?? []);
+	const addCarryForward = () => {
+		if (carryForward.has("inventory")) {
+			for (const name of INVENTORY_WRITE) {
+				if (available.has(name)) selected.add(name);
+			}
+		}
+		if (carryForward.has("manifest")) {
+			for (const name of MANIFEST_WRITE) {
+				if (available.has(name)) selected.add(name);
+			}
+		}
+	};
 	if (!text) {
+		addCarryForward();
 		return availableToolNames.filter((name) => selected.has(name));
 	}
 
@@ -141,6 +250,9 @@ export function resolveCopilotActiveTools(
 		/\bate\b/,
 		/\bused\b/,
 	]);
+	const wantInventoryWordForms =
+		options.wordForms === true &&
+		includesAny(text, INVENTORY_DELETE_WORD_FORMS);
 	const wantGalley = includesAny(text, [
 		/\bmeal\b/,
 		/\brecipe\b/,
@@ -209,7 +321,7 @@ export function resolveCopilotActiveTools(
 	};
 
 	const matchedDomains = [
-		wantInventory,
+		wantInventory || wantInventoryWordForms,
 		wantGalley,
 		wantManifest,
 		wantSupply,
@@ -226,13 +338,15 @@ export function resolveCopilotActiveTools(
 		addGroup(PREFERENCES_WRITE);
 		addGroup(NUTRITION_TOOLS);
 	} else {
-		if (wantInventory) addGroup(INVENTORY_WRITE);
+		if (wantInventory || wantInventoryWordForms) addGroup(INVENTORY_WRITE);
 		if (wantGalley) addGroup(GALLEY_WRITE);
 		if (wantManifest) addGroup(MANIFEST_WRITE);
 		if (wantSupply) addGroup(SUPPLY_WRITE);
 		if (wantPrefs) addGroup(PREFERENCES_WRITE);
 		if (wantNutrition) addGroup(NUTRITION_TOOLS);
 	}
+
+	addCarryForward();
 
 	// No write-domain match: keep core reads only (plus any already selected).
 	// If the user asked something that needs writes but keywords missed, they can

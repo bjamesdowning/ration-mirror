@@ -6,7 +6,14 @@ export type AgentResponseFrame = {
 	id?: string;
 	body?: string;
 	done?: boolean;
+	/**
+	 * Set on the `done` frame when the turn did not end normally. Think sends
+	 * `"recovering"` when a stalled turn will be retried under a new request id.
+	 */
+	outcome?: string;
 	error?: boolean | { code?: string; message?: string };
+	/** `cf_agent_chat_recovering` status frame. */
+	recovering?: boolean;
 };
 
 export type AgentFrameAction =
@@ -25,6 +32,10 @@ export type AgentFrameAction =
 	  }
 	| { kind: "approval_requested"; toolName: string; toolCallId?: string }
 	| { kind: "turn_end" }
+	/** The turn stalled; Think will retry it. Keep the turn alive. */
+	| { kind: "turn_recovering" }
+	/** `cf_agent_chat_recovering` status: true while a retry is pending. */
+	| { kind: "recovering"; recovering: boolean }
 	| { kind: "error"; message: string };
 
 type AgentChunk = {
@@ -42,6 +53,9 @@ type AgentChunk = {
 export function decodeAgentResponseFrame(
 	frame: AgentResponseFrame,
 ): AgentFrameAction {
+	if (frame.type === "cf_agent_chat_recovering") {
+		return { kind: "recovering", recovering: frame.recovering === true };
+	}
 	if (frame.type !== "cf_agent_use_chat_response") {
 		return { kind: "noop" };
 	}
@@ -55,7 +69,9 @@ export function decodeAgentResponseFrame(
 	}
 
 	if (frame.done) {
-		return { kind: "turn_end" };
+		return frame.outcome === "recovering"
+			? { kind: "turn_recovering" }
+			: { kind: "turn_end" };
 	}
 
 	if (!frame.body) {

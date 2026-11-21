@@ -164,6 +164,9 @@ function toAgentMessages(messages: CopilotMessage[]): AgentUiMessage[] {
 	}));
 }
 
+const COPILOT_EMPTY_TURN_MESSAGE =
+	"Copilot didn't return an answer. Try again, or shorten the question.";
+
 function cancelCopilotRequest(
 	socket: WebSocket | null,
 	requestId: string | null,
@@ -229,6 +232,10 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 	const [needsConsent, setNeedsConsent] = useState(false);
 	const [approval, setApproval] = useState<ApprovalRequest | null>(null);
 	const [turnPhase, setTurnPhase] = useState<TurnPhase>("idle");
+	/** Think is retrying a stalled turn under a new request id. */
+	const [isRecovering, setIsRecovering] = useState(false);
+	/** Any answer text, tool result, or transcript arrived for this turn. */
+	const turnHadOutputRef = useRef(false);
 	const [turnState, setTurnState] = useState<CopilotTurnState>(
 		INITIAL_COPILOT_TURN_STATE,
 	);
@@ -432,6 +439,8 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 			replayTextRef.current.clear();
 			replayBaselineRef.current.clear();
 			setTurnPhase("idle");
+			setIsRecovering(false);
+			turnHadOutputRef.current = false;
 			setApproval(null);
 			transitionTurn({ type: "ended" });
 			if (options.persist !== false) {
@@ -698,6 +707,8 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 					return next;
 				});
 				if (hasAnswer) {
+					turnHadOutputRef.current = true;
+					setIsRecovering(false);
 					markPostApprovalActivity();
 					if (isCopilotTurnActive(turnStateRef.current)) {
 						setTurnPhase("streaming");
@@ -707,14 +718,34 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 					);
 				}
 			}
+			if (event.type === "cf_agent_chat_recovering") {
+				const action = decodeAgentResponseFrame(event as AgentResponseFrame);
+				if (
+					action.kind === "recovering" &&
+					isCopilotTurnActive(turnStateRef.current)
+				) {
+					setIsRecovering(action.recovering);
+					if (action.recovering) lastActivityAtRef.current = Date.now();
+				}
+				return;
+			}
 			if (event.type === "cf_agent_use_chat_response") {
 				const action = decodeAgentResponseFrame(event as AgentResponseFrame);
+				if (
+					action.kind === "text_delta" ||
+					action.kind === "tool_end" ||
+					action.kind === "tool_start"
+				) {
+					if (action.kind !== "tool_start") turnHadOutputRef.current = true;
+					setIsRecovering(false);
+				}
 				const turnStatus = turnStateRef.current.status;
 				const expectingContinuation =
 					turnStateRef.current.expectingApprovalContinuation;
 				if (
 					turnStatus === "idle" &&
 					action.kind !== "turn_end" &&
+					action.kind !== "turn_recovering" &&
 					action.kind !== "approval_requested" &&
 					!(
 						expectingContinuation &&
@@ -792,10 +823,37 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 						if (
 							copilotTurnEndTargetsCurrentTurn(turnStateRef.current, requestId)
 						) {
+							if (
+								turnStateRef.current.status === "active" &&
+								!turnStateRef.current.expectingApprovalContinuation &&
+								!turnHadOutputRef.current &&
+								event.replay !== true
+							) {
+								setError(COPILOT_EMPTY_TURN_MESSAGE);
+							}
 							endTurn({ requestId });
 						}
 						break;
 					}
+					case "turn_recovering": {
+						// Think will retry under a new request id (adopted via
+						// continuation_started). Keep the turn and watchdog alive.
+						const requestId =
+							typeof event.id === "string"
+								? event.id
+								: turnStateRef.current.activeRequestId;
+						if (
+							isCopilotTurnActive(turnStateRef.current) &&
+							copilotTurnEndTargetsCurrentTurn(turnStateRef.current, requestId)
+						) {
+							lastActivityAtRef.current = Date.now();
+							setIsRecovering(true);
+							setTurnPhase("thinking");
+						}
+						break;
+					}
+					case "recovering":
+						break;
 					case "approval_requested":
 						setTurnPhase("idle");
 						if (!action.toolCallId) {
@@ -967,7 +1025,8 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 					}
 					if (
 						typeof event.error === "object" &&
-						event.error?.code === "insufficient_credits"
+						(event.error?.code === "insufficient_credits" ||
+							event.error?.code === "billing_stopped")
 					) {
 						setNeedsCredits(event.error.message);
 						setError(null);
@@ -1619,6 +1678,11 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 						doneLabel={toolDoneLabel}
 					/>
 				)}
+				{isRecovering ? (
+					<p className="text-muted text-xs" role="status" aria-live="polite">
+						Still working… retrying
+					</p>
+				) : null}
 				{blocked ? (
 					<div className="rounded-xl border border-platinum bg-white/80 p-3 text-sm">
 						<p className="font-semibold">

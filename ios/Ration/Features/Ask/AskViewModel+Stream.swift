@@ -13,6 +13,16 @@ extension AskViewModel {
     }
 
     func apply(_ event: CopilotStreamEvent) {
+        if let adopted = CopilotTurnReducer.adoptedRecoveryRequestId(
+            isRecovering: isRecovering,
+            activeRequestId: activeRequestId,
+            continuationRequestId: continuationRequestId,
+            eventRequestId: event.messageId,
+            eventType: event.type
+        ) {
+            continuationRequestId = adopted
+            isRecovering = false
+        }
         switch event.type {
         case "message_start":
             beginTurnIfNeeded()
@@ -68,6 +78,18 @@ extension AskViewModel {
             turnPhase = .thinking
         case "reasoning_end":
             appendReasoningDelta("", mode: .end, messageId: event.messageId)
+        case "turn_recovering":
+            // Think will retry the stalled turn; keep it (and the watchdog) alive.
+            guard isTurnActive else { return }
+            isRecovering = true
+            lastActivityAt = Date()
+            turnPhase = .thinking
+        case "recovering_started":
+            guard isTurnActive else { return }
+            isRecovering = true
+            lastActivityAt = Date()
+        case "recovering_ended":
+            isRecovering = false
         case "message_end":
             if event.continuation == true, let id = event.messageId, !id.isEmpty {
                 continuationRequestId = id
@@ -132,6 +154,18 @@ extension AskViewModel {
                     briefingComplete = true
                 }
             }
+            if !tracksBriefingSession,
+               isTurnActive,
+               event.replay != true,
+               CopilotTurnReducer.isEmptyAnswer(
+                   lastMessageRole: messages.last?.role,
+                   lastMessageContent: messages.last?.content,
+                   sawToolThisTurn: sawToolThisTurn
+               ) {
+                completeTurn(state: .error(CopilotTurnReducer.emptyAnswerMessage))
+                scheduleImmediateSnapshotSave()
+                return
+            }
             completeTurn(state: .idle)
             scheduleImmediateSnapshotSave()
         case "tool_start":
@@ -150,6 +184,7 @@ extension AskViewModel {
             turnPhase = .toolRunning
         case "tool_end":
             markPostApprovalActivity()
+            sawToolThisTurn = true
             let toolName = activeTool?.toolName ?? "tool"
             let succeeded = event.ok == true
             if tracksBriefingSession, toolName == "add_cargo_item", succeeded {
@@ -265,7 +300,7 @@ extension AskViewModel {
                 scheduleImmediateSnapshotSave()
                 return
             }
-            if event.error?.code == "insufficient_credits" {
+            if event.error?.code == "insufficient_credits" || event.error?.code == "billing_stopped" {
                 // Preserve transcript; user needs to add credits before continuing.
                 dropLiveSocket()
                 completeTurn(state: .insufficientCredits(event.error?.message ?? "Copilot needs more credits."))
@@ -273,6 +308,11 @@ extension AskViewModel {
                 return
             }
             if !wasTurnActive {
+                return
+            }
+            if event.error?.code == "copilot_stalled" {
+                completeTurn(state: .error(event.error?.message ?? CopilotTurnReducer.stalledMessage))
+                scheduleImmediateSnapshotSave()
                 return
             }
             completeTurn(

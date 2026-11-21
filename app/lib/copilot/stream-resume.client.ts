@@ -31,6 +31,7 @@ const LIVE_TURN_EVENTS = new Set([
 	"cf_agent_use_chat_response",
 	"cf_agent_stream_resuming",
 	"cf_agent_stream_pending",
+	"cf_agent_chat_recovering",
 	"cf_agent_message_updated",
 	"cf_agent_chat_messages",
 	"text_delta",

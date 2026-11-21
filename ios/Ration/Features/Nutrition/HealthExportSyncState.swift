@@ -63,5 +63,7 @@ struct HealthExportSyncState {
         for key in defaults.dictionaryRepresentation().keys where key.hasPrefix(keyPrefix) {
             defaults.removeObject(forKey: key)
         }
+        // Leftover key written by pre-1.6.39 account deletion; nothing reads it.
+        defaults.removeObject(forKey: "ration.fuel.healthSyncIdentifiers")
     }
 }

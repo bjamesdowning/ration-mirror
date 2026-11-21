@@ -222,8 +222,10 @@ final class HealthExportCoordinatorTests: XCTestCase {
         XCTAssertNil(personA.syncedThrough)
         XCTAssertNil(coordinator.lastSyncedAt)
         personB.syncedThrough = "2026-11-09T10:00:00.000Z"
+        defaults.set(["ration:old"], forKey: "ration.fuel.healthSyncIdentifiers")
         HealthExportSyncState.clearAll(defaults: defaults)
         XCTAssertNil(personB.syncedThrough)
+        XCTAssertNil(defaults.stringArray(forKey: "ration.fuel.healthSyncIdentifiers"))
     }
 
     func testPurgeAllUsesScopeAllAndWorksWhileExportIsOff() async {

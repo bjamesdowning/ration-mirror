@@ -177,8 +177,6 @@ struct AccountDeletionView: View {
             // Remove this account's Apple Health copies (live and removed foods)
             // before the server forgets which samples are Ration's.
             let pending = try? await env.api.pendingHealthExport(scope: "all")
-            let identifiers = FuelAccountDeletion.rationIdentifiers(from: pending)
-            FuelAccountDeletion.store(identifiers)
             if let pending {
                 _ = await env.healthExport.purgeAll(prefetched: pending)
             }

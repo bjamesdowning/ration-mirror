@@ -10,6 +10,12 @@ export const NUTRITION_FAST_LOG_IOS_MIN = "1.6.0";
 /** Plan-or-log actions. iOS below 1.6.16 fails closed. Not iosAlwaysOn. */
 export const PLAN_FUEL_ACTIONS_IOS_MIN = "1.6.16";
 
+/**
+ * Apple Health export. iOS below 1.6.39 wrote nothing after the first sync
+ * and could not delete edits or removals, so it fails closed. Not iosAlwaysOn.
+ */
+export const NUTRITION_HEALTH_EXPORT_IOS_MIN = "1.6.39";
+
 export const FUEL_CAPTURE_SCAN_TO_CARGO = "Scan to Cargo";
 export const FUEL_CAPTURE_LOG_TO_FUEL = "Log to Fuel";
 
@@ -47,6 +53,15 @@ export function planFuelActionsClientAllowed(
 	const version = context.clientVersion;
 	if (typeof version !== "string") return false;
 	return isVersionAtLeast(version, PLAN_FUEL_ACTIONS_IOS_MIN);
+}
+
+export function healthExportClientAllowed(
+	context: ClientVersionContext,
+): boolean {
+	if (context.clientPlatform !== "ios") return true;
+	const version = context.clientVersion;
+	if (typeof version !== "string") return false;
+	return isVersionAtLeast(version, NUTRITION_HEALTH_EXPORT_IOS_MIN);
 }
 
 /** A second void of a row that is already voided. */

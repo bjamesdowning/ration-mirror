@@ -1,5 +1,6 @@
 import { isVersionAtLeast } from "~/lib/client-version";
 import {
+	healthExportClientAllowed,
 	nutritionFastLogClientAllowed,
 	planFuelActionsClientAllowed,
 } from "~/lib/nutrition/fuel-capture";
@@ -186,6 +187,13 @@ export async function getClientSafeFlags(
 			if (
 				flag === "plan-fuel-actions" &&
 				!planFuelActionsClientAllowed(context)
+			) {
+				result[clientKey] = false;
+				return;
+			}
+			if (
+				flag === "nutrition-health-export" &&
+				!healthExportClientAllowed(context)
 			) {
 				result[clientKey] = false;
 				return;

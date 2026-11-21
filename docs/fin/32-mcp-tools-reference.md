@@ -120,7 +120,7 @@ These personal Macro Tracking tools only appear when the matching nutrition feat
 | Tool | Scope | Purpose |
 |------|-------|---------|
 | `quote_food_log` | `mcp:nutrition:read` | Quote the credit cost of a food log before it runs. Typed, recent and custom-macro logs cost 0. No writes. |
-| `log_diary_food` | `mcp:nutrition:write` | Log one food you ate (typed macros or a saved food). Approval required. Does not change Cargo, Galley, Manifest or Supply. 0 credits. |
+| `log_diary_food` | `mcp:nutrition:write` | Log one food you ate (typed macros or a saved food). `estimated` marks an AI estimate. Approval required. Does not change Cargo, Galley, Manifest or Supply. 0 credits. |
 | `update_diary_food` | `mcp:nutrition:write` | Replace one of your food logs. Approval required. 0 credits. |
 | `void_diary_food` | `mcp:nutrition:write` | Void one of your food logs. Destructive; approval required; **requires `confirm: true`**. |
 | `save_diary_food_to_kitchen` | `mcp:nutrition:write` | Copy a food log into the kitchen as a Cargo item or a Meal. Destructive for the shared kitchen; approval required; **requires `confirm: true`**. |
@@ -129,9 +129,9 @@ These personal Macro Tracking tools only appear when the matching nutrition feat
 | `save_food` | `mcp:nutrition:write` | Save a food for yourself (needs `nutrition-saved-food`). Approval required. |
 | `delete_saved_food` | `mcp:nutrition:write` | Delete one of your saved foods (needs `nutrition-saved-food`). Approval required; **requires `confirm: true`**. |
 | `lookup_food_barcode` | `mcp:nutrition:read` | Look up a packaged barcode in USDA Branded Foods (needs `nutrition-barcode-diary`). No writes. |
-| `propose_food_log` | `mcp:nutrition:write` | Draft a food log from a photo (needs `nutrition-photo-log`). A model call costs **2 credits**. Approval required. Commit with `log_diary_food`. |
+| `propose_food_log` | `mcp:nutrition:write` | Draft a food log from a photo (needs `nutrition-photo-log`). A model call costs **2 credits**. Approval required. Commit with `log_diary_food` and `estimated: true`. |
 | `get_health_export_status` | `mcp:nutrition:read` | Read the Apple Health export switch (needs `nutrition-health-export`). |
-| `get_health_export_preview` | `mcp:nutrition:read` | Preview the eaten foods you could export, and how many foods were kept out (AI estimates, unconfirmed, meals) (needs `nutrition-health-export`). |
+| `get_health_export_preview` | `mcp:nutrition:read` | Preview the Fuel logs you could export, and how many were kept out (missing or implausible numbers, or older logs without a Health id) (needs `nutrition-health-export`). |
 | `set_health_export` | `mcp:nutrition:write` | Turn Apple Health export on or off (needs `nutrition-health-export`). Approval required; **requires `confirm: true`**. |
 | `clear_health_export` | `mcp:nutrition:write` | Ask your iPhone to remove every Apple Health sample Ration wrote for your account on its next sync (needs `nutrition-health-export`). Destructive; approval required; **requires `confirm: true`**. |
 

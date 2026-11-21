@@ -6,6 +6,7 @@ Developer-facing diagrams for the three Cloudflare Workers that make up Ration. 
 |------|---------------|
 | [Request flow](./request-flow.md) | Clients, public hostnames, the `ration`, `ration-mcp` and `ration-copilot` Workers, and the bindings each one has. |
 | [Auth: sessions, OAuth and MCP](./auth.md) | Better Auth sessions, the MCP OAuth flow (authorization_code + PKCE + refresh_token, dynamic client registration, loopback redirects), how `ration-mcp` validates tokens and resolves the organization, API keys, and `confirm` gates on destructive tools. |
+| [Copilot turn](./copilot-turn.md) | One Ask Ration turn in `ration-copilot`: guards, tool scoping, host approval, stall recovery, and the metrics each path writes. |
 | [Queue and AI pipeline](./queue-ai-pipeline.md) | Queue producers and consumers, Gemini calls through AI Gateway, Workers AI embeddings, Vectorize indexing, R2 usage, and Copilot AI Search. |
 
 ## Conventions

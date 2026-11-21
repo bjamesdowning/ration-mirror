@@ -62,7 +62,7 @@ Prefer resource `ration://schemas/inventory-import` for the item shape.
 | Tool | Scope | Purpose |
 |------|-------|---------|
 | `preview_inventory_import` | `mcp:inventory:write` | Dry-run import. Returns `previewToken`, `totals`, sample rows + `rowsOmitted`, warnings. |
-| `apply_inventory_import` | `mcp:inventory:write` | Commits a preview after chat confirmation (no second host approval card). Idempotent. Embeddings do not block return. |
+| `apply_inventory_import` | `mcp:inventory:write` | Commits a preview the user has seen. Marked destructive and idempotent, so AI apps that support approval ask first. In Ask Ration with `copilot-confirm-scope` on, you tap Approve. Idempotent. Embeddings do not block return. |
 | `import_inventory_csv` | `mcp:inventory:write` | Parse a CSV string and apply directly. Destructive (adds or overwrites Cargo). Approval required; **requires `confirm: true`**. Prefer preview → apply for large or untrusted input. |
 
 ### Bulk Cargo remove (no credits)
@@ -70,7 +70,7 @@ Prefer resource `ration://schemas/inventory-import` for the item shape.
 | Tool | Scope | Purpose |
 |------|-------|---------|
 | `preview_inventory_remove` | `mcp:inventory:write` | Dry-run bulk deletes (prefer for **2+** items). |
-| `apply_inventory_remove` | `mcp:inventory:write` | Commits a remove preview after chat confirmation (no second host card). Idempotent. |
+| `apply_inventory_remove` | `mcp:inventory:write` | Commits a remove preview the user has seen. Marked destructive and idempotent, so AI apps that support approval ask first. In Ask Ration with `copilot-confirm-scope` on, you tap Approve. Idempotent. |
 
 ## Galley (Meals)
 

@@ -152,9 +152,9 @@ OAuth issues tokens only through `authorization_code` and `refresh_token`; there
 | `adjust_cargo_item` | `mcp:inventory:write` | Relative `delta` change (e.g. `-2`). Floors at 0; keeps the row. Exact name, or a semantic match at ≥ 0.78. A weaker name returns candidates and does not change quantity. |
 | `remove_cargo_item` | `mcp:inventory:write` | Permanently delete a pantry line. **Requires `confirm: true`.** |
 | `preview_inventory_import` | `mcp:inventory:write` | Dry-run receipt/bulk import — returns `previewToken` and sample rows. Prefer `ration://schemas/inventory-import` for shape. |
-| `apply_inventory_import` | `mcp:inventory:write` | Commit a previewed import after chat confirmation. Idempotent via `idempotencyKey`. |
+| `apply_inventory_import` | `mcp:inventory:write` | Commit a previewed import after the user has seen the preview. Annotated `destructiveHint` and `idempotentHint`, so hosts that support approval ask the user first. Idempotent via `idempotencyKey`. |
 | `preview_inventory_remove` | `mcp:inventory:write` | Dry-run bulk Cargo deletes (prefer for 2+ items). |
-| `apply_inventory_remove` | `mcp:inventory:write` | Commit a remove preview after chat confirmation. Idempotent. |
+| `apply_inventory_remove` | `mcp:inventory:write` | Commit a remove preview after the user has seen it. Annotated `destructiveHint` and `idempotentHint`, so hosts that support approval ask the user first. Idempotent. |
 | `import_inventory_csv` | `mcp:inventory:write` | Parse and apply a CSV string in one call (convenience wrapper). Approval required; pass `confirm: true`. |
 
 ### Galley (recipes)

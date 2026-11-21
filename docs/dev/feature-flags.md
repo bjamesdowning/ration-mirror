@@ -158,6 +158,15 @@ All eight are `iosAlwaysOn`: on for iOS ≥ 1.5.0, Flagship-controlled elsewhere
 | `nutrition-health-export` | `nutritionHealthExport` | One-way Apple Health export of the signed-in person's confirmed eaten food. The device writes HealthKit and can delete samples Ration wrote. No import. Child of `nutrition-fast-log`. Default off. `iosAlwaysOn: false`. iOS below 1.6.0 fails closed. Flag off is `FEATURE_DISABLED` and hides the switch |
 | `share-extension-import` | `shareExtensionImport` | Visible Share Extension recipe import. Default off. Not `iosAlwaysOn`. Enforced only when the request sends `X-Ration-Surface: share-extension`, and only with the existing source-lane flag. The extension runs the import and waits for the server to acknowledge the job. An interrupted job resumes that `clientRequestId` in the app and is not charged again, including after the person switches back to the named kitchen. A page saved as needing the app uses the existing device capture. The extension sends `X-Ration-Client: ios/<version>` on every request so `ai-import-url`, `ai-import-web`, and `ai-import-social` see a shipped iOS client. A row from a signed-out or previous session is dropped once the session is known, before any import UI, so the next account is not offered Continue and does not see that URL. A cold launch waits through session restore, so the same signed-in person can still continue. Flag off keeps today's in-app import and does not submit from the extension. Do not create this flag in Flagship and do not turn it on |
 
+## Copilot flags
+
+Both default **off**, `clientVisible: false`, `iosAlwaysOn: false`. Evaluated per turn in the Copilot Worker (`beforeTurn`) with the Ask client's identity. See [Copilot turn](../architecture/copilot-turn.md).
+
+| Key | What it gates |
+|-----|---------------|
+| `copilot-confirm-scope` | Bulk remove / import consent. `apply_inventory_remove` and `apply_inventory_import` get a host Approve card in Ask (Copilot-only `approvalOverride`; MCP clients unchanged). The prompt asks for preview and apply in the same turn. A successful preview keeps its write tools available for 15 minutes so a short "yes" can still apply (carry-forward). Adds delete word forms (removing, bin, toss, throw out, get rid of) to tool scoping. |
+| `copilot-recovery-tuning` | Stall and error recovery. One retry within 60 seconds for a turn that stalled in a live isolate (deploy recovery keeps Think defaults), 429 / 5xx routed to that retry, a 40-second AI Gateway request timeout, a tool-free final step at the step cap, a `billing_stopped` message when credits stop a turn, and an immediate `copilot_stalled` message for iOS below 1.6.40. |
+
 ## Supply list library
 
 | Flag key | Client key | Purpose |

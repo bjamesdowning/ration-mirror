@@ -8,6 +8,8 @@ struct SettingsView: View {
     var onAskRation: () -> Void = {}
     @State private var model = SettingsSessionViewModel()
     @State private var healthExportMessage: String?
+    @State private var confirmingHealthExportOff = false
+    @State private var healthExportBusy = false
     @State private var showingPaywall = false
     @State private var showingPrivacy = false
     @State private var showingNutritionGoals = false
@@ -206,12 +208,35 @@ struct SettingsView: View {
                         isOn: Binding(
                             get: { model.settings?.healthExport?.enabled == true },
                             set: { enabled in
-                                Task { await setHealthExport(enabled) }
+                                if enabled {
+                                    Task { await turnOnHealthExport() }
+                                } else {
+                                    confirmingHealthExportOff = true
+                                }
                             }
                         )
                     )
-                    Text("Draft, pending review. Copies confirmed foods you logged as eaten, and can delete the samples Ration wrote. Nothing is imported.")
+                    .disabled(healthExportBusy)
+                    .confirmationDialog(
+                        "Turn off Apple Health?",
+                        isPresented: $confirmingHealthExportOff,
+                        titleVisibility: .visible
+                    ) {
+                        Button("Remove from Apple Health", role: .destructive) {
+                            Task { await turnOffHealthExport(remove: true) }
+                        }
+                        Button("Keep in Apple Health") {
+                            Task { await turnOffHealthExport(remove: false) }
+                        }
+                        Button("Cancel", role: .cancel) {}
+                    } message: {
+                        Text("Ration will stop copying foods. You can also remove the foods Ration already copied.")
+                    }
+                    Text("Copies the foods you log to Apple Health: calories, protein, carbs, fat, and fiber when known. Ration only writes to Health and never reads your Health data.")
                         .rationCaption()
+                    if model.settings?.healthExport?.enabled == true {
+                        healthExportStatusRows
+                    }
                     if let healthExportMessage {
                         Text(healthExportMessage)
                             .rationCaption()
@@ -286,47 +311,144 @@ struct SettingsView: View {
         return "Version \(short) (\(build))"
     }
 
-    /// Ask HealthKit first, then store the preference. Sample writes wait for that save,
-    /// which the server rejects until intake consent exists.
-    private func setHealthExport(_ enabled: Bool) async {
-        healthExportMessage = nil
-        if enabled {
-            do {
-                try await HealthKitExporter.requestAuthorization()
-            } catch {
-                healthExportMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
-                return
+    @ViewBuilder
+    private var healthExportStatusRows: some View {
+        let exporter = env.healthExport
+        if HealthKitExporter.shared.authorizedTypes().isEmpty {
+            Button("Allow Apple Health access on this iPhone") {
+                Task { await turnOnHealthExport() }
+            }
+        } else {
+            HStack {
+                Text(HealthExportStatusText.lastSynced(exporter.lastSyncedAt))
+                    .rationCaption()
+                Spacer()
+                Button(exporter.isSyncing ? "Syncing…" : "Sync now") {
+                    healthExportMessage = nil
+                    Task { await exporter.sync(.manual) }
+                }
+                .disabled(exporter.isSyncing || healthExportBusy)
             }
         }
-        let sharing = enabled && HealthKitExporter.sharingAuthorized()
+        Text(HealthExportStatusText.exclusionNote(excluded: exporter.excluded))
+            .rationCaption()
+        if let failure = HealthExportStatusText.failure(
+            failed: exporter.lastFailures,
+            unauthorized: exporter.lastUnauthorized,
+            error: exporter.lastError
+        ) {
+            HStack {
+                Text(failure)
+                    .rationCaption()
+                    .foregroundStyle(Theme.danger)
+                Spacer()
+                Button("Try again") {
+                    Task { await exporter.sync(.manual) }
+                }
+                .disabled(exporter.isSyncing)
+            }
+        }
+    }
+
+    /// Ask HealthKit for write access first, then store the preference, then copy
+    /// the whole window. The server rejects the save until intake consent exists.
+    private func turnOnHealthExport() async {
+        healthExportMessage = nil
+        healthExportBusy = true
+        defer { healthExportBusy = false }
+        do {
+            try await HealthKitExporter.shared.requestWriteAuthorization()
+        } catch {
+            healthExportMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            return
+        }
+        let sharing = !HealthKitExporter.shared.authorizedTypes().isEmpty
         let deviceStatus = HealthExportToggle.deviceStatus(
-            enabled: enabled,
+            enabled: true,
             sharingAuthorized: sharing
         )
         do {
             let response = try await env.api.setHealthExport(
-                enabled: enabled,
+                enabled: true,
                 confirm: true,
                 deviceStatus: deviceStatus
             )
-            if var settings = model.settings {
-                settings.healthExport = HealthExportPreference(
-                    enabled: response.enabled ?? enabled,
-                    deviceStatus: response.status ?? deviceStatus,
-                    clearRequested: settings.healthExport?.clearRequested
-                )
-                model.applySettings(settings)
-            }
-            guard enabled, sharing else {
-                if enabled {
-                    healthExportMessage = "Apple Health access is off for Ration."
-                }
+            applyHealthExport(enabled: response.enabled ?? true, status: response.status ?? deviceStatus)
+            guard sharing else {
+                healthExportMessage = "Apple Health access is off for Ration. Turn it on in the Health app under Sharing."
                 return
             }
-            let pending = try await env.api.pendingHealthExport()
-            try await HealthKitExporter.apply(pending)
+            await env.healthExport.sync(.enabled)
         } catch {
             healthExportMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
         }
+    }
+
+    /// Remove first (while the server still has the list), then turn the preference off.
+    private func turnOffHealthExport(remove: Bool) async {
+        healthExportMessage = nil
+        healthExportBusy = true
+        defer { healthExportBusy = false }
+        if remove {
+            let removed = await env.healthExport.purgeAll()
+            if !removed {
+                healthExportMessage = "Some foods couldn't be removed from Apple Health. Try again, or delete them in the Health app."
+                return
+            }
+        }
+        do {
+            let response = try await env.api.setHealthExport(
+                enabled: false,
+                confirm: true,
+                deviceStatus: "off"
+            )
+            applyHealthExport(enabled: response.enabled ?? false, status: response.status ?? "off")
+            env.healthExport.forget()
+        } catch {
+            healthExportMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+        }
+    }
+
+    private func applyHealthExport(enabled: Bool, status: String) {
+        guard var settings = model.settings else { return }
+        settings.healthExport = HealthExportPreference(
+            enabled: enabled,
+            deviceStatus: status,
+            clearRequested: settings.healthExport?.clearRequested
+        )
+        model.applySettings(settings)
+    }
+}
+
+/// Settings strings for Apple Health. Pure so tests can pin the copy.
+enum HealthExportStatusText {
+    static let exclusionRule =
+        "Not copied: AI estimates until you change the numbers, and meals logged from Galley or Manifest."
+
+    static func lastSynced(_ date: Date?, now: Date = Date()) -> String {
+        guard let date else { return "Not synced yet" }
+        if now.timeIntervalSince(date) < 60 { return "Last synced just now" }
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .full
+        return "Last synced \(formatter.localizedString(for: date, relativeTo: now))"
+    }
+
+    static func exclusionNote(excluded: Int) -> String {
+        switch excluded {
+        case 0: exclusionRule
+        case 1: "\(exclusionRule) 1 food in your log wasn't copied."
+        default: "\(exclusionRule) \(excluded) foods in your log weren't copied."
+        }
+    }
+
+    static func failure(failed: Int, unauthorized: Int, error: String?) -> String? {
+        if let error { return error }
+        if failed > 0 {
+            return "Some foods weren't copied to Apple Health. \(failed) failed."
+        }
+        if unauthorized > 0 {
+            return "Some nutrients are turned off for Ration in the Health app."
+        }
+        return nil
     }
 }

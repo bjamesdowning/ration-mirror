@@ -256,6 +256,89 @@ final class HealthExportTests: XCTestCase {
         }
     }
 
+    func testSampleDecodesWithAndWithoutTheEstimateKey() throws {
+        let base = """
+        {"syncIdentifier":"ration:s:dietaryEnergyConsumed","syncVersion":1,\
+        "quantityType":"dietaryEnergyConsumed","value":120,"unit":"kcal",\
+        "healthSyncId":"s","occurredAt":"2026-11-09T08:30:00.000Z","foodName":"Toast"
+        """
+        let plain = try JSONDecoder().decode(
+            HealthExportPendingResponse.Sample.self,
+            from: Data((base + "}").utf8)
+        )
+        XCTAssertNil(plain.estimate)
+        let marked = try JSONDecoder().decode(
+            HealthExportPendingResponse.Sample.self,
+            from: Data((base + ",\"estimate\":true}").utf8)
+        )
+        XCTAssertEqual(marked.estimate, true)
+    }
+
+    func testFuelItemDecodesWithAndWithoutTheEstimateKey() throws {
+        let base = """
+        {"id":"i","name":"Toast","energyKcal":120,"proteinG":4,"carbsG":20,"fatG":2,\
+        "occurredAt":"2026-11-09T08:30:00.000Z","slotType":null,"notes":null,\
+        "servings":1,"loggedAmount":null,"loggedUnit":null,"entryId":null,"tagNames":null
+        """
+        let plain = try JSONDecoder().decode(FuelDayResponse.Item.self, from: Data((base + "}").utf8))
+        XCTAssertNil(plain.estimate)
+        let marked = try JSONDecoder().decode(
+            FuelDayResponse.Item.self,
+            from: Data((base + ",\"estimate\":true}").utf8)
+        )
+        XCTAssertEqual(marked.estimate, true)
+    }
+
+    func testPlanCarriesTheEstimateMarker() {
+        var estimate = healthPendingSample("sync-e")
+        estimate.estimate = true
+        let plan = HealthExportDevicePlan.make(
+            samples: [healthPendingSample("sync-1"), estimate],
+            deletes: [],
+            authorizedTypes: Set(HealthExportPolicy.quantityTypes)
+        )
+        XCTAssertEqual(plan.saveBatches.first?.map(\.estimate), [false, true])
+    }
+
+    func testOnlyAnEstimateCarriesRationMetadata() {
+        XCTAssertEqual(HealthExportPolicy.customMetadata(estimate: true), ["ration.estimate": true])
+        XCTAssertEqual(HealthExportPolicy.customMetadata(estimate: false), [:])
+    }
+
+    func testFullPullDecision() {
+        let rules = HealthExportPolicy.exportRulesVersion
+        let since = "2026-11-09T10:00:00.000Z"
+        XCTAssertFalse(
+            HealthExportFullPull.required(forced: false, repair: false, syncedThrough: since, storedRulesVersion: rules)
+        )
+        XCTAssertTrue(
+            HealthExportFullPull.required(forced: false, repair: false, syncedThrough: since, storedRulesVersion: 0)
+        )
+        XCTAssertTrue(
+            HealthExportFullPull.required(forced: false, repair: false, syncedThrough: nil, storedRulesVersion: rules)
+        )
+        XCTAssertTrue(
+            HealthExportFullPull.required(forced: true, repair: false, syncedThrough: since, storedRulesVersion: rules)
+        )
+        XCTAssertTrue(
+            HealthExportFullPull.required(forced: false, repair: true, syncedThrough: since, storedRulesVersion: rules)
+        )
+    }
+
+    func testFuelEstimateCopy() {
+        XCTAssertEqual(FuelScanCopy.rowCalories(319.6, estimate: false), "320 kcal")
+        XCTAssertEqual(FuelScanCopy.rowCalories(319.6, estimate: true), "320 kcal · AI estimate")
+        XCTAssertEqual(FuelScanCopy.estimateDetail, "AI estimate. Change any number to adjust it.")
+        XCTAssertEqual(
+            FuelScanCopy.readyHint,
+            "AI estimate. Tap edit to adjust name, amount, unit, calories, protein, carbs, or fat."
+        )
+        XCTAssertEqual(
+            FuelScanCopy.draftHint,
+            "A photo or barcode fills this draft. Photo numbers are AI estimates you can change. It is not logged until you save."
+        )
+    }
+
     func testSinceTrailsTheLastSyncByTenMinutes() {
         XCTAssertEqual(
             HealthExportSince.make(syncedThrough: "2026-11-09T12:00:00.000Z"),
@@ -274,7 +357,11 @@ final class HealthExportTests: XCTestCase {
         )
         XCTAssertEqual(
             HealthExportStatusText.exclusionNote(excluded: 0),
-            "Not copied: AI estimates until you change the numbers, and meals logged from Galley or Manifest."
+            "Not copied: a few older or incomplete logs."
+        )
+        XCTAssertEqual(
+            HealthExportStatusText.footer,
+            "Copies everything you log in Fuel to Apple Health: calories, protein, carbs, fat, and fiber when known. AI estimates are copied as estimates; edit any food to update it in Health. Ration only writes to Health and never reads your Health data."
         )
         XCTAssertTrue(
             HealthExportStatusText.exclusionNote(excluded: 3).hasSuffix("3 foods in your log weren't copied.")

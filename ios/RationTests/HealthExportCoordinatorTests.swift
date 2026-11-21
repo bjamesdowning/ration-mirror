@@ -177,6 +177,8 @@ final class HealthExportCoordinatorTests: XCTestCase {
             "2026-11-09T10:00:00.000Z"
         HealthExportSyncState(defaults: defaults, userId: "user-a").schemaVersion =
             HealthExportSyncState.currentSchemaVersion
+        HealthExportSyncState(defaults: defaults, userId: "user-a").rulesVersion =
+            HealthExportPolicy.exportRulesVersion
         HealthExportSyncState(defaults: defaults, userId: "user-a").lastEnabled = true
         backend.responses = [
             HealthExportBackendFake.response(truncated: true),
@@ -242,6 +244,57 @@ final class HealthExportCoordinatorTests: XCTestCase {
         XCTAssertTrue(removed)
         XCTAssertEqual(backend.calls.first?.scope, "all")
         XCTAssertEqual(store.events.count, 5)
+    }
+
+    func testUpgradeRunsOneFullPullThenGoesBackToIncremental() async {
+        let state = HealthExportSyncState(defaults: defaults, userId: "user-a")
+        state.syncedThrough = "2026-11-09T10:00:00.000Z"
+        state.schemaVersion = HealthExportSyncState.currentSchemaVersion
+        state.lastEnabled = true
+        let store = HealthExportStoreSpy()
+        let backend = HealthExportBackendFake()
+        backend.responses = [
+            HealthExportBackendFake.response(samples: [healthPendingSample("sync-1")]),
+            HealthExportBackendFake.response(syncedThrough: "2026-11-09T13:00:00.000Z"),
+        ]
+        let coordinator = makeCoordinator(store: store, backend: backend)
+        await coordinator.sync(.sceneActive)
+        XCTAssertEqual(state.rulesVersion, HealthExportPolicy.exportRulesVersion)
+        await coordinator.sync(.diaryChanged)
+        XCTAssertEqual(backend.calls.map { $0.since }, [nil, "2026-11-09T11:50:00.000Z"])
+        // Not a repair: nothing is deleted before the full copy is saved.
+        XCTAssertEqual(store.events, [.save(["ration:sync-1:dietaryEnergyConsumed"])])
+    }
+
+    func testAFailedSaveDoesNotStoreTheRulesVersion() async {
+        let store = HealthExportStoreSpy()
+        store.failingIdentifiers = ["ration:sync-1:dietaryEnergyConsumed"]
+        let backend = HealthExportBackendFake()
+        backend.responses = [
+            HealthExportBackendFake.response(samples: [healthPendingSample("sync-1")]),
+        ]
+        await makeCoordinator(store: store, backend: backend).sync(.sceneActive)
+        XCTAssertEqual(HealthExportSyncState(defaults: defaults, userId: "user-a").rulesVersion, 0)
+    }
+
+    func testAPurgeDoesNotStoreTheRulesVersion() async {
+        let backend = HealthExportBackendFake()
+        backend.responses = [
+            HealthExportBackendFake.response(
+                deletes: [healthPendingDelete("sync-1")],
+                enabled: false,
+                purge: true
+            ),
+        ]
+        await makeCoordinator(backend: backend).sync(.manual)
+        XCTAssertEqual(HealthExportSyncState(defaults: defaults, userId: "user-a").rulesVersion, 0)
+    }
+
+    func testClearForgetsTheRulesVersion() {
+        let state = HealthExportSyncState(defaults: defaults, userId: "user-a")
+        state.rulesVersion = HealthExportPolicy.exportRulesVersion
+        state.clear()
+        XCTAssertEqual(state.rulesVersion, 0)
     }
 
     func testAFullSyncRecordsHowManyFoodsWereKeptOut() async {

@@ -174,16 +174,13 @@ struct AccountDeletionView: View {
         errorMessage = nil
         defer { isDeleting = false }
         do {
-            let pending = try? await env.api.pendingHealthExport()
-            let identifiers = FuelAccountDeletion.rationIdentifiers(from: pending)
-            FuelAccountDeletion.store(identifiers)
+            // Remove this account's Apple Health copies (live and removed foods)
+            // before the server forgets which samples are Ration's.
+            let pending = try? await env.api.pendingHealthExport(scope: "all")
             if let pending {
-                let deletes = HealthExportPendingResponse(
-                    samples: [],
-                    deletes: pending.deletes
-                )
-                try? await HealthKitExporter.apply(deletes)
+                _ = await env.healthExport.purgeAll(prefetched: pending)
             }
+            env.healthExport.forget()
             let response = try await env.api.deleteAccount()
             deletionStartedMessage = response.message
                 ?? String(localized: "Your account is being deleted. This usually finishes within a few minutes.")

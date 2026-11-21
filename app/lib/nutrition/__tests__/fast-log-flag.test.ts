@@ -107,7 +107,7 @@ describe("nutrition-fast-log client gate", () => {
 		).resolves.toBe(true);
 	});
 
-	it("keeps Health export off unless the parent is on and iOS is at least 1.6", async () => {
+	it("keeps Health export off unless the parent is on and iOS is at least 1.6.39", async () => {
 		vi.mocked(isFeatureEnabled).mockImplementation(
 			async (_env, key) => key === "nutrition-health-export",
 		);
@@ -121,6 +121,18 @@ describe("nutrition-fast-log client gate", () => {
 				clientVersion: "1.5.18",
 			}),
 		).resolves.toBe(false);
+		await expect(
+			isNutritionHealthExportEnabled({} as Env, {
+				clientPlatform: "ios",
+				clientVersion: "1.6.38",
+			}),
+		).resolves.toBe(false);
+		await expect(
+			isNutritionHealthExportEnabled({} as Env, {
+				clientPlatform: "ios",
+				clientVersion: "1.6.39",
+			}),
+		).resolves.toBe(true);
 		await expect(
 			isNutritionHealthExportEnabled({} as Env, { clientPlatform: "web" }),
 		).resolves.toBe(true);

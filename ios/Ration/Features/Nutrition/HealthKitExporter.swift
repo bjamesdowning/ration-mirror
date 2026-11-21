@@ -1,62 +1,59 @@
 import Foundation
 import HealthKit
 
-/// Writes dietary samples on the phone. The server never calls this type.
-enum HealthKitExporter {
-    static let store = HKHealthStore()
+/// Writes and deletes Ration's dietary samples on the phone. The server never calls this type.
+/// Ration asks for write (share) permission only and never reads Health.
+@MainActor
+final class HealthKitExporter: HealthSampleWriting {
+    static let shared = HealthKitExporter()
 
-    static func dietaryTypes() -> Set<HKSampleType> {
-        Set(quantityTypes().values)
+    private let store = HKHealthStore()
+
+    static var isAvailable: Bool { HKHealthStore.isHealthDataAvailable() }
+
+    func requestWriteAuthorization() async throws {
+        guard Self.isAvailable else { return }
+        let shareTypes = Set<HKSampleType>(Self.types().values.map { $0 as HKSampleType })
+        try await store.requestAuthorization(toShare: shareTypes, read: [])
     }
 
-    static func requestAuthorization() async throws {
-        guard HKHealthStore.isHealthDataAvailable() else { return }
-        try await store.requestAuthorization(toShare: dietaryTypes(), read: dietaryTypes())
+    /// HealthKit reports write status per type, so a person can allow calories
+    /// and deny fiber. Only allowed types are written or deleted.
+    func authorizedTypes() -> Set<String> {
+        guard Self.isAvailable else { return [] }
+        var allowed = Set<String>()
+        for (name, type) in Self.types() where store.authorizationStatus(for: type) == .sharingAuthorized {
+            allowed.insert(name)
+        }
+        return allowed
     }
 
-    static func sharingAuthorized() -> Bool {
-        guard let energy = HKQuantityType.quantityType(forIdentifier: .dietaryEnergyConsumed) else {
-            return false
-        }
-        return store.authorizationStatus(for: energy) == .sharingAuthorized
+    func save(_ samples: [HealthQuantitySample]) async throws {
+        let objects = samples.compactMap(Self.quantitySample)
+        guard !objects.isEmpty else { return }
+        try await store.save(objects)
     }
 
-    /// Saves one sample per nutrient. The same sync id and version are left alone.
-    /// A denied or missing authorization returns without saving or deleting.
-    static func apply(
-        _ pending: HealthExportPendingResponse,
-        localVersions: [String: Int] = [:]
-    ) async throws {
-        guard sharingAuthorized() else { return }
-        let planned = pending.samples.map {
-            HealthQuantitySample(
-                syncIdentifier: $0.syncIdentifier,
-                syncVersion: $0.syncVersion,
-                quantityType: $0.quantityType,
-                value: $0.value,
-                healthSyncId: $0.healthSyncId
-            )
+    /// Deletes only samples this app wrote with these sync identifiers.
+    func delete(_ group: HealthDeleteGroup) async throws {
+        guard let type = Self.types()[group.quantityType], !group.syncIdentifiers.isEmpty else {
+            return
         }
-        let safe = HealthExportSession.samplesToWrite(planned, localVersions: localVersions)
-        if !safe.isEmpty {
-            let objects = try safe.compactMap { try quantitySample($0, pending: pending) }
-            try await store.save(objects)
-        }
-        for item in pending.deletes where item.syncIdentifiers.allSatisfy({
-            $0.hasPrefix("ration:\(item.healthSyncId):")
-        }) {
-            for identifier in item.syncIdentifiers {
-                guard let type = type(forSyncIdentifier: identifier) else { continue }
-                let predicate = HKQuery.predicateForObjects(
-                    withMetadataKey: HKMetadataKeySyncIdentifier,
-                    allowedValues: [identifier]
-                )
-                try await store.deleteObjects(of: type, predicate: predicate)
-            }
+        let predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
+            HKQuery.predicateForObjects(from: HKSource.default()),
+            HKQuery.predicateForObjects(
+                withMetadataKey: HKMetadataKeySyncIdentifier,
+                allowedValues: group.syncIdentifiers
+            ),
+        ])
+        do {
+            _ = try await store.deleteObjects(of: type, predicate: predicate)
+        } catch let error as HKError where error.code == .errorNoData {
+            // Nothing matched: already removed, or never written on this iPhone.
         }
     }
 
-    private static func quantityTypes() -> [String: HKQuantityType] {
+    private static func types() -> [String: HKQuantityType] {
         let pairs: [(String, HKQuantityTypeIdentifier)] = [
             ("dietaryEnergyConsumed", .dietaryEnergyConsumed),
             ("dietaryProtein", .dietaryProtein),
@@ -66,38 +63,26 @@ enum HealthKitExporter {
         ]
         var types: [String: HKQuantityType] = [:]
         for (name, identifier) in pairs {
-            if let type = HKQuantityType.quantityType(forIdentifier: identifier) {
-                types[name] = type
-            }
+            types[name] = HKQuantityType(identifier)
         }
         return types
     }
 
-    private static func type(forSyncIdentifier identifier: String) -> HKQuantityType? {
-        guard let name = identifier.split(separator: ":").last else { return nil }
-        return quantityTypes()[String(name)]
-    }
-
-    private static func quantitySample(
-        _ sample: HealthQuantitySample,
-        pending: HealthExportPendingResponse
-    ) throws -> HKQuantitySample? {
-        guard let type = quantityTypes()[sample.quantityType] else { return nil }
-        let source = pending.samples.first { $0.syncIdentifier == sample.syncIdentifier }
+    private static func quantitySample(_ sample: HealthQuantitySample) -> HKQuantitySample? {
+        guard let type = types()[sample.quantityType] else { return nil }
         let unit: HKUnit = sample.quantityType == "dietaryEnergyConsumed"
             ? .kilocalorie()
             : .gram()
-        let date = ISO8601DateFormatter().date(from: source?.occurredAt ?? "") ?? Date()
         let metadata: [String: Any] = [
             HKMetadataKeySyncIdentifier: sample.syncIdentifier,
             HKMetadataKeySyncVersion: NSNumber(value: sample.syncVersion),
-            HKMetadataKeyFoodType: source?.foodName ?? "Food",
+            HKMetadataKeyFoodType: sample.foodName,
         ]
         return HKQuantitySample(
             type: type,
             quantity: HKQuantity(unit: unit, doubleValue: sample.value),
-            start: date,
-            end: date,
+            start: sample.occurredAt,
+            end: sample.occurredAt,
             metadata: metadata
         )
     }

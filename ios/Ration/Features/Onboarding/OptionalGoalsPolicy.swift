@@ -1,7 +1,7 @@
 import Foundation
 
 /// Optional empty targets after Macro Tracking is on.
-/// Draft copy, pending review. No calculator and no suggested numbers.
+/// No calculator and no suggested numbers.
 enum OptionalGoalsPolicy {
     static let draftCopy = "Enter targets you already use"
     static let notMedical = "Targets are optional. Ration does not prescribe them."

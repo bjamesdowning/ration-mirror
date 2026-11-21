@@ -51,6 +51,8 @@ final class AppEnvironment {
     let snapshotLoads: SnapshotLoadCoordinator
     let lifecycle: AppLifecycleCoordinator
     let refreshOutcomes: SnapshotRefreshOutcomeStore
+    /// Apple Health export on this iPhone. Off unless the flag and the person's switch are on.
+    let healthExport: HealthExportCoordinator
     private(set) var cargoDataRevision = 0
     private(set) var manifestDataRevision = 0
     private(set) var updateRequirement: AppUpdateRequirement?
@@ -90,6 +92,11 @@ final class AppEnvironment {
         self.lifecycle = AppLifecycleCoordinator()
         let refreshOutcomes = SnapshotRefreshOutcomeStore()
         self.refreshOutcomes = refreshOutcomes
+        let healthExport = HealthExportCoordinator(
+            store: HealthKitExporter.shared,
+            backend: api
+        )
+        self.healthExport = healthExport
 
         client.orgAccessLostHandler = { [snapshots, nutrition, nutritionConsent, refreshOutcomes, session] in
             guard !session.needsOrgSelection else { return }
@@ -111,7 +118,7 @@ final class AppEnvironment {
         }
 
         // A forced 401 logout must match explicit sign-out's full wipe.
-        auth.onSignedOut = { [snapshots, nutrition, nutritionConsent, billing, session, theme, unitDisplayMode, launch, onboarding, deepLinkRouter, refreshOutcomes, nextActionDismiss] in
+        auth.onSignedOut = { [snapshots, nutrition, nutritionConsent, billing, session, theme, unitDisplayMode, launch, onboarding, deepLinkRouter, refreshOutcomes, nextActionDismiss, healthExport] in
             nutrition.invalidate()
             nutritionConsent.invalidate()
             await snapshots.clearAll()
@@ -127,7 +134,27 @@ final class AppEnvironment {
             AuthImageLoader.shared.clearAll()
             SharedImportHandoff.clear()
             SupplyOutbox.clear()
+            HealthExportSyncState.clearAll()
+            healthExport.resetDisplayedState()
         }
+
+        healthExport.contextProvider = { [weak self] in
+            self?.healthExportContext()
+        }
+    }
+
+    /// Signed-in person and whether this build may show Apple Health.
+    func healthExportContext() -> HealthExportContext? {
+        guard auth.phase == .signedIn, let userId = session.session?.user.id else {
+            return nil
+        }
+        return HealthExportContext(
+            userId: userId,
+            flagVisible: HealthExportPolicy.switchVisible(
+                flagEnabled: session.clientFlags.isNutritionHealthExportEnabled,
+                appVersion: AppMarketingVersion.current
+            )
+        )
     }
 
     /// Configures private nutrition caches for the signed-in user + active org.

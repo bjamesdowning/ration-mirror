@@ -172,20 +172,4 @@ enum FuelPhotoFailureMapping {
 enum FuelAccountDeletion {
     static let healthSamplesRemain =
         "Apple Health samples Ration already wrote stay in the Health app until you delete them there. A deletion started on another device cannot remove them."
-    static let storedIdentifiersKey = "ration.fuel.healthSyncIdentifiers"
-
-    static func rationIdentifiers(from pending: HealthExportPendingResponse?) -> [String] {
-        guard let pending else { return [] }
-        var ids = pending.deletes.flatMap(\.syncIdentifiers)
-        ids.append(contentsOf: pending.samples.map(\.syncIdentifier))
-        return ids.filter { $0.hasPrefix("ration:") }
-    }
-
-    static func store(_ identifiers: [String], defaults: UserDefaults = .standard) {
-        defaults.set(identifiers, forKey: storedIdentifiersKey)
-    }
-
-    static func storedIdentifiers(defaults: UserDefaults = .standard) -> [String] {
-        defaults.stringArray(forKey: storedIdentifiersKey) ?? []
-    }
 }

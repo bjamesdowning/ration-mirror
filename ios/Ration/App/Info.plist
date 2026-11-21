@@ -42,10 +42,18 @@
 	</array>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
+	</array>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>com.mayutic.ration.health-export</string>
+	</array>
 	<key>NSHealthShareUsageDescription</key>
-	<string>Draft, pending review. Ration reads the food samples it wrote so it can delete or replace them when you edit, void, or turn off Apple Health export. It does not read weight, steps, workouts, or calories burned.</string>
+	<string>Ration doesn't read data from Apple Health. It only writes the foods you log, and it can remove the foods it wrote when you edit or delete a log or turn off Apple Health in Ration.</string>
 	<key>NSHealthUpdateUsageDescription</key>
-	<string>Draft, pending review. Ration writes confirmed foods you logged as eaten — energy, protein, carbohydrates, fat, and fiber when known — to Apple Health. It does not write a daily total, and it does not import anything from Health.</string>
+	<string>Ration writes the foods you log, with calories, protein, carbohydrates, fat, and fiber when known, to Apple Health. It updates or removes them when you edit or delete a log. It doesn't write daily totals, weight, or activity.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Ration uses the camera to scan grocery receipts and pantry labels, and to photograph a meal when you log what you ate.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

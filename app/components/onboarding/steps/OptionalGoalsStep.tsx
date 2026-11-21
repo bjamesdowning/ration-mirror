@@ -62,7 +62,6 @@ export function OptionalGoalsStep({
 				<h2 className="text-xl font-bold text-carbon dark:text-white leading-tight">
 					{OPTIONAL_GOALS_DRAFT_COPY}
 				</h2>
-				<p className="text-xs text-muted">Draft, pending review.</p>
 				<p className="text-xs text-muted">{OPTIONAL_GOALS_NOT_MEDICAL}</p>
 				<div className="grid grid-cols-2 gap-3">
 					<Field

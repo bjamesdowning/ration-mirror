@@ -1771,9 +1771,9 @@ function NutritionGoalsSection({
 		>
 			<h3 className="text-xs text-label text-muted mb-1">Nutrition goals</h3>
 			<p className="text-sm text-muted mb-2">
-				Enter targets you already use. Draft, pending review. Set only the
-				nutrients you care about. Manifest shows those targets as consumed /
-				goal (adherence-neutral). Leave a field empty to hide it.
+				Enter targets you already use. Set only the nutrients you care about.
+				Manifest shows those targets as consumed / goal (adherence-neutral).
+				Leave a field empty to hide it.
 			</p>
 			<p className="text-xs text-muted mb-4">
 				Not medical advice. Goals and totals are planning aids only. Requires
@@ -1970,10 +1970,12 @@ function PreferencesSection({
 				<div className="glass-panel rounded-xl p-6">
 					<h3 className="text-xs text-label text-muted mb-1">Apple Health</h3>
 					<p className="text-sm text-muted mb-4">
-						Draft, pending review. When this is on, the iPhone can copy
-						confirmed foods you logged as eaten into Apple Health, and it can
-						delete the samples Ration wrote. The browser does not write
-						HealthKit. Nothing is imported.
+						When this is on, the Ration app on your iPhone copies the foods you
+						log, including logs made here, to Apple Health. Ration only writes
+						to Health and never reads it. AI estimates you haven't changed and
+						meals logged from Galley or Manifest aren't copied. To remove
+						copies, turn this off in the iPhone app and choose Remove from Apple
+						Health, or delete them in the Health app.
 					</p>
 					<healthFetcher.Form method="post">
 						<input type="hidden" name="intent" value="update-health-export" />

@@ -1,3 +1,5 @@
+import BackgroundTasks
+import Combine
 import GoogleSignIn
 import SwiftUI
 import WidgetKit
@@ -53,6 +55,9 @@ struct RationApp: App {
                 .onChange(of: scenePhase) { _, phase in
                     if phase == .background {
                         WidgetCenter.shared.reloadAllTimelines()
+                        if env.healthExport.wantsBackgroundRefresh {
+                            HealthExportBackground.schedule()
+                        }
                     }
                     // Share Extension may fail to open the host (host-app policy).
                     // App Group payload is still consumed when the user returns to Ration.
@@ -60,6 +65,10 @@ struct RationApp: App {
                     WidgetAPIBase.publish(AppConfig.apiBaseURL)
                     WidgetCenter.shared.reloadAllTimelines()
                     handleShareOnForeground()
+                    env.healthExport.trigger(.sceneActive)
+                }
+                .onReceive(NotificationCenter.default.publisher(for: .rationDiaryDidChange)) { _ in
+                    env.healthExport.trigger(.diaryChanged)
                 }
                 .onChange(of: env.auth.phase) { previous, phase in
                     if previous == .signedOut, phase == .signedIn {
@@ -71,7 +80,12 @@ struct RationApp: App {
                 .onChange(of: env.session.orgGeneration) { _, generation in
                     guard generation > 0, env.auth.phase == .signedIn else { return }
                     Task { await resumeSharedImportQueue() }
+                    env.healthExport.restoreDisplayedState()
+                    env.healthExport.trigger(.sessionReady)
                 }
+        }
+        .backgroundTask(.appRefresh(HealthExportBackground.identifier)) { [env] in
+            await HealthExportBackground.run(env)
         }
     }
 
@@ -228,5 +242,25 @@ struct RationApp: App {
         return components.queryItems?
             .first(where: { $0.name == "code" })?
             .value
+    }
+}
+
+/// Best-effort Apple Health catch-up for foods logged on the web or by an
+/// assistant while the app is closed. iOS decides when (and whether) it runs.
+enum HealthExportBackground {
+    static let identifier = "com.mayutic.ration.health-export"
+    static let earliestDelay: TimeInterval = 4 * 60 * 60
+
+    static func schedule() {
+        let request = BGAppRefreshTaskRequest(identifier: identifier)
+        request.earliestBeginDate = Date(timeIntervalSinceNow: earliestDelay)
+        try? BGTaskScheduler.shared.submit(request)
+    }
+
+    @MainActor
+    static func run(_ env: AppEnvironment) async {
+        guard env.healthExport.wantsBackgroundRefresh else { return }
+        schedule()
+        await env.healthExport.sync(.backgroundRefresh)
     }
 }

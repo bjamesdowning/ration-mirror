@@ -6,14 +6,18 @@ import {
 import type { FlagshipEvaluationContext } from "~/lib/feature-flags/context.server";
 import { isFeatureEnabled } from "~/lib/feature-flags/flags.server";
 import {
+	healthExportClientAllowed,
 	NUTRITION_FAST_LOG_IOS_MIN,
+	NUTRITION_HEALTH_EXPORT_IOS_MIN,
 	nutritionFastLogClientAllowed,
 	PLAN_FUEL_ACTIONS_IOS_MIN,
 	planFuelActionsClientAllowed,
 } from "./fuel-capture";
 
 export {
+	healthExportClientAllowed,
 	NUTRITION_FAST_LOG_IOS_MIN,
+	NUTRITION_HEALTH_EXPORT_IOS_MIN,
 	nutritionFastLogClientAllowed,
 	PLAN_FUEL_ACTIONS_IOS_MIN,
 	planFuelActionsClientAllowed,
@@ -177,17 +181,31 @@ export function assertNutritionPhotoLog(
 	);
 }
 
-export function isNutritionHealthExportEnabled(
+/** iOS below 1.6.39 fails closed: its exporter could not keep Health current. */
+export async function isNutritionHealthExportEnabled(
 	env: Env,
 	context: FlagshipEvaluationContext,
 ): Promise<boolean> {
+	if (!healthExportClientAllowed(context)) return false;
 	return isNutritionChildEnabled(env, context, "nutrition-health-export");
 }
 
-export function assertNutritionHealthExport(
+export async function assertNutritionHealthExport(
 	env: Env,
 	context: FlagshipEvaluationContext,
 ): Promise<void> {
+	if (
+		nutritionFastLogClientAllowed(context) &&
+		!healthExportClientAllowed(context)
+	) {
+		throw data(
+			{
+				error: `Apple Health export requires iOS ${NUTRITION_HEALTH_EXPORT_IOS_MIN} or later.`,
+				code: FEATURE_DISABLED_CODE,
+			},
+			{ status: 403 },
+		);
+	}
 	return assertNutritionChild(
 		env,
 		context,

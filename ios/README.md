@@ -39,6 +39,16 @@ The `RationWidgets` extension ships three widgets, unflagged in 1.5.x:
 
 Add them from the Home Screen widget gallery. Signed out, each widget shows **Open Ration to sign in** and no kitchen data. Timelines refresh hourly, when the app moves to the background, and after a widget tap. The widget process reads the refresh token from the shared keychain access group and never deletes it. Sign out, or signing in as a different account, clears the widget tokens and snapshot.
 
+## Apple Health export
+
+Behind `nutrition-health-export` and iOS 1.6.39+. `HealthExportCoordinator` (Features/Nutrition) runs one sync at a time when the session is ready, when the app becomes active (30 s debounce), after each diary write (`Notification.Name.rationDiaryDidChange`), on **Sync now**, and from a best-effort background refresh. It pulls `nutrition/health-export/pending?since=` (the stored `syncedThrough` less 10 minutes), deletes first, then saves in batches of 50 with `HKMetadataKeySyncIdentifier` / `HKMetadataKeySyncVersion`. Ration requests HealthKit share (write) permission only. Per-person state (`ration.health.<userId>.*` in `UserDefaults`, timestamps and counts only) is cleared on sign-out and when export is turned off.
+
+The background task id is `com.mayutic.ration.health-export` (`UIBackgroundModes` `fetch` + `BGTaskSchedulerPermittedIdentifiers`). It is scheduled when the app goes to the background with export on. iOS decides when it runs, and it only helps while the app process is alive and signed in. To force it on a device, pause in the debugger after backgrounding and run:
+
+```
+e -l objc -- (void)[[BGTaskScheduler sharedScheduler] _simulateLaunchForTaskWithIdentifier:@"com.mayutic.ration.health-export"]
+```
+
 ## Minimum supported version
 
 The server returns **426** `upgrade_required` to any iOS build below the `IOS_MIN_SUPPORTED_VERSION` wrangler var (see the root README, *Minimum iOS version*). `APIClient` turns that into `AppUpdateRequirement`, and `RootView` replaces the app with `UpdateRequiredView`: **Update Ration**, the server message, and **Open the App Store**. To test, point a debug build at a dev Worker with `IOS_MIN_SUPPORTED_VERSION` above `MARKETING_VERSION`.

@@ -30,6 +30,19 @@ export const COPILOT_GATEWAY_MODEL_OPTIONS = {
 	skipCache: true,
 };
 
+export type CopilotGatewayModelOptions = {
+	/**
+	 * AI Gateway time-to-first-byte budget (`cf-aig-request-timeout`). Flag
+	 * `copilot-recovery-tuning` only. Omitted means the gateway default.
+	 */
+	requestTimeoutMs?: number;
+	/**
+	 * Opaque conversation id for gateway log correlation (no user text or
+	 * user id). Flag `copilot-recovery-tuning` only.
+	 */
+	conversationId?: string;
+};
+
 /**
  * Think LanguageModel for Copilot: Gemini 3.7 Flash through ration-gateway.
  * Returns a LanguageModel (not a string) so Think does not fall back to its
@@ -41,6 +54,7 @@ export const COPILOT_GATEWAY_MODEL_OPTIONS = {
  */
 export function createCopilotGatewayModel(
 	env: CopilotGatewayEnv,
+	options: CopilotGatewayModelOptions = {},
 ): LanguageModel {
 	const gatewayId = env.AI_GATEWAY_ID?.trim();
 	if (!gatewayId) {
@@ -54,9 +68,15 @@ export function createCopilotGatewayModel(
 			id: gatewayId,
 			skipCache: true,
 			retries: { maxAttempts: 1 },
+			...(options.requestTimeoutMs !== undefined
+				? { requestTimeoutMs: options.requestTimeoutMs }
+				: {}),
 			metadata: {
 				feature: "copilot",
 				env: env.RATION_ENV?.trim() || "unknown",
+				...(options.conversationId
+					? { conversationId: options.conversationId }
+					: {}),
 			},
 		},
 	});

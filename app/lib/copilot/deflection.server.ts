@@ -61,3 +61,22 @@ export function detectCopilotDeflection(
 
 export const COPILOT_DEFLECTION_NUDGE =
 	"You have the tools to complete this request — proceed with tools now; disclose the native option only after acting.";
+
+/** Short replies like "yes", "go ahead", "do it" (≤ 40 chars). */
+export const COPILOT_SHORT_CONFIRM_MAX_CHARS = 40;
+
+/**
+ * A carried write domain was live, the user sent a short reply, and the turn
+ * made no tool call. Metric-only signal that carry-forward did not help
+ * (`confirm_without_apply`); never changes behaviour.
+ */
+export function detectConfirmWithoutApply(input: {
+	carriedDomains: readonly string[];
+	toolCallCount: number;
+	userText: string;
+}): boolean {
+	if (input.carriedDomains.length === 0) return false;
+	if (input.toolCallCount > 0) return false;
+	const text = input.userText.trim();
+	return text.length > 0 && text.length <= COPILOT_SHORT_CONFIRM_MAX_CHARS;
+}

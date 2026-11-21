@@ -69,11 +69,23 @@ export type PlannedHealthDelete = {
 	syncIdentifiers: string[];
 };
 
+/**
+ * Lines Ration kept out of Apple Health, by reason. Shown to the person so a
+ * missing food is explained rather than silent. Meals are counted under
+ * notExportable until a meal classifier exists.
+ */
+export type HealthExportExclusions = {
+	aiEstimate: number;
+	unconfirmed: number;
+	notExportable: number;
+};
+
 export type HealthExportPlan = {
 	samples: PlannedHealthSample[];
 	deletes: PlannedHealthDelete[];
 	/** Always empty. A daily sum would double-count foods already written. */
 	dailyTotals: readonly [];
+	excluded: HealthExportExclusions;
 };
 
 const NUTRIENTS: ReadonlyArray<{
@@ -131,16 +143,82 @@ export function mayOpenHealthStore(input: {
 	return input.intakeConsent && input.enabled;
 }
 
+export function emptyHealthExclusions(): HealthExportExclusions {
+	return { aiEstimate: 0, unconfirmed: 0, notExportable: 0 };
+}
+
+function allSyncIdentifiers(healthSyncId: string): string[] {
+	return HEALTH_QUANTITY_TYPES.map((nutrient) =>
+		healthSyncIdentifier(healthSyncId, nutrient),
+	);
+}
+
+function fullDelete(healthSyncId: string): PlannedHealthDelete {
+	return {
+		action: "delete",
+		healthSyncId,
+		syncIdentifiers: allSyncIdentifiers(healthSyncId),
+	};
+}
+
+function validSyncId(row: HealthIntakeRow): string | null {
+	const healthSyncId = row.healthSyncId?.trim() ?? "";
+	const version = row.healthSyncVersion;
+	if (!healthSyncId || version == null || !Number.isInteger(version)) {
+		return null;
+	}
+	return healthSyncId;
+}
+
+function exclusionReason(
+	row: HealthIntakeRow,
+): keyof HealthExportExclusions | null {
+	if (row.compositionSource === "ai_estimate") return "aiEstimate";
+	if (
+		healthExportAllowed({
+			compositionSource: row.compositionSource,
+			compositionConfirmedAt: row.compositionConfirmedAt,
+		})
+	) {
+		return null;
+	}
+	if (
+		healthExportAllowed({
+			compositionSource: row.compositionSource,
+			compositionConfirmedAt: new Date(0),
+		})
+	) {
+		return "unconfirmed";
+	}
+	return "notExportable";
+}
+
+/**
+ * Plan the HealthKit writes and deletes for one person.
+ *
+ * An edit voids the old row and inserts a new live row that keeps the same
+ * healthSyncId with a higher healthSyncVersion. The voided predecessor must
+ * never delete the live samples, so live ids are collected first. A voided id
+ * is fully deleted only when no live row (in this window or in `liveSyncIds`,
+ * which the caller looks up outside the window) still carries it. When an
+ * edit clears a nutrient, only that nutrient's stale sample is deleted.
+ */
 export function planHealthExport(input: {
 	rows: readonly HealthIntakeRow[];
 	viewerUserId: string;
 	activeOrganizationId: string;
 	crossKitchen: boolean;
-	cursor: HealthCursor;
+	cursor?: HealthCursor;
+	liveSyncIds?: ReadonlySet<string>;
 }): HealthExportPlan {
+	const cursor = input.cursor ?? emptyHealthCursor();
 	const samples: PlannedHealthSample[] = [];
 	const deletes: PlannedHealthDelete[] = [];
-	const deleted = new Set(input.cursor.deleted);
+	const excluded = emptyHealthExclusions();
+	const deleted = new Set(cursor.deleted);
+	const live = new Map<string, { row: HealthIntakeRow; version: number }>();
+	const voidedIds: string[] = [];
+	const voidedSeen = new Set<string>();
 
 	for (const row of input.rows) {
 		if (row.userId !== input.viewerUserId) continue;
@@ -150,39 +228,58 @@ export function planHealthExport(input: {
 		) {
 			continue;
 		}
-		const healthSyncId = row.healthSyncId?.trim() ?? "";
-		const version = row.healthSyncVersion;
-		if (!healthSyncId || version == null || !Number.isInteger(version)) {
-			continue;
-		}
+		const healthSyncId = validSyncId(row);
 		if (row.voidedAt != null) {
-			if (deleted.has(healthSyncId)) continue;
-			deletes.push({
-				action: "delete",
-				healthSyncId,
-				syncIdentifiers: HEALTH_QUANTITY_TYPES.map((nutrient) =>
-					healthSyncIdentifier(healthSyncId, nutrient),
-				),
-			});
+			if (healthSyncId && !voidedSeen.has(healthSyncId)) {
+				voidedSeen.add(healthSyncId);
+				voidedIds.push(healthSyncId);
+			}
 			continue;
 		}
-		if (
-			!healthExportAllowed({
-				compositionSource: row.compositionSource,
-				compositionConfirmedAt: row.compositionConfirmedAt,
-			})
-		) {
+		if (!healthSyncId) {
+			excluded.notExportable += 1;
 			continue;
 		}
-		const seen = input.cursor.written[healthSyncId];
+		const version = row.healthSyncVersion as number;
+		const prior = live.get(healthSyncId);
+		if (!prior || version > prior.version) {
+			live.set(healthSyncId, { row, version });
+		}
+	}
+
+	const liveIds = new Set<string>([
+		...live.keys(),
+		...(input.liveSyncIds ?? []),
+	]);
+	for (const healthSyncId of voidedIds) {
+		if (liveIds.has(healthSyncId)) continue;
+		if (deleted.has(healthSyncId)) continue;
+		deletes.push(fullDelete(healthSyncId));
+	}
+
+	for (const [healthSyncId, { row, version }] of live) {
+		const reason = exclusionReason(row);
+		if (reason) {
+			excluded[reason] += 1;
+			// An edit can turn an exported line into one Health may not hold.
+			if (voidedSeen.has(healthSyncId) && !deleted.has(healthSyncId)) {
+				deletes.push(fullDelete(healthSyncId));
+			}
+			continue;
+		}
+		const seen = cursor.written[healthSyncId];
 		if (seen != null && seen >= version) continue;
 		const action: PlannedHealthSample["action"] =
-			seen == null ? "write" : "replace";
+			seen == null && !voidedSeen.has(healthSyncId) ? "write" : "replace";
 		const occurredAt = toIso(row.occurredAt);
 		const foodName = row.name?.trim() || "Food";
+		const stale: string[] = [];
 		for (const nutrient of NUTRIENTS) {
 			const value = nutrient.read(row);
-			if (value == null) continue;
+			if (value == null) {
+				stale.push(healthSyncIdentifier(healthSyncId, nutrient.type));
+				continue;
+			}
 			samples.push({
 				action,
 				syncIdentifier: healthSyncIdentifier(healthSyncId, nutrient.type),
@@ -196,14 +293,51 @@ export function planHealthExport(input: {
 				foodName,
 			});
 		}
+		if (voidedSeen.has(healthSyncId) && stale.length > 0) {
+			deletes.push({
+				action: "delete",
+				healthSyncId,
+				syncIdentifiers: stale,
+			});
+		}
 	}
 
-	return { samples, deletes, dailyTotals: [] };
+	return { samples, deletes, dailyTotals: [], excluded };
+}
+
+/**
+ * Delete every Ration sample this person could have written: used when the
+ * person removes Ration data from Health, turns export off with removal, or
+ * deletes their account. Kitchen scope is ignored on purpose, because a
+ * sample written while in another kitchen still sits in the same Health store.
+ */
+export function planHealthPurge(input: {
+	rows: readonly HealthIntakeRow[];
+	viewerUserId: string;
+	extraSyncIds?: readonly string[];
+}): PlannedHealthDelete[] {
+	const ids: string[] = [];
+	const seen = new Set<string>();
+	const add = (healthSyncId: string) => {
+		if (seen.has(healthSyncId)) return;
+		seen.add(healthSyncId);
+		ids.push(healthSyncId);
+	};
+	for (const row of input.rows) {
+		if (row.userId !== input.viewerUserId) continue;
+		const healthSyncId = validSyncId(row);
+		if (healthSyncId) add(healthSyncId);
+	}
+	for (const raw of input.extraSyncIds ?? []) {
+		const healthSyncId = raw.trim();
+		if (healthSyncId) add(healthSyncId);
+	}
+	return ids.map(fullDelete);
 }
 
 export function advanceHealthCursor(
 	cursor: HealthCursor,
-	plan: HealthExportPlan,
+	plan: Pick<HealthExportPlan, "samples" | "deletes">,
 ): HealthCursor {
 	const written = { ...cursor.written };
 	const deleted = new Set(cursor.deleted);
@@ -213,6 +347,8 @@ export function advanceHealthCursor(
 			written[sample.healthSyncId] = sample.syncVersion;
 	}
 	for (const item of plan.deletes) {
+		// A stale-nutrient delete leaves the live line in Health.
+		if (item.syncIdentifiers.length < HEALTH_QUANTITY_TYPES.length) continue;
 		deleted.add(item.healthSyncId);
 		delete written[item.healthSyncId];
 	}

@@ -29,7 +29,11 @@ import {
 } from "./fuel-cap.server";
 import { secondVoidDecision } from "./fuel-capture";
 import { assertFuelDateUnchanged } from "./fuel-date";
-import { diaryCompositionStamp } from "./health-exportability";
+import {
+	diaryCompositionStamp,
+	editCompositionStamp,
+	healthSyncVersionAfterEdit,
+} from "./health-exportability";
 import {
 	resolveHouseholdPortion,
 	storedPortionFromFdc,
@@ -1005,12 +1009,26 @@ export async function updateDiaryFood(
 		now,
 		replacesIntakeId: current.id,
 		healthSyncId: current.healthSyncId ?? crypto.randomUUID(),
-		healthSyncVersion:
-			(current.healthSyncVersion ?? 1) + (nutrientsChanged ? 1 : 0),
+		healthSyncVersion: healthSyncVersionAfterEdit(current.healthSyncVersion, {
+			nutrientsChanged,
+			occurredAtChanged:
+				current.occurredAt.getTime() !== food.occurredAt.getTime(),
+			nameChanged: (current.mealNameSnapshot ?? "") !== food.name,
+		}),
 		savedFoodId: materialized.savedFoodId,
 		barcode: materialized.barcode,
 		fdcId: materialized.fdcId,
 		fuelDate: keptFuelDate ?? current.fuelDate,
+		...editCompositionStamp({
+			current: {
+				compositionSource: current.compositionSource,
+				compositionConfirmedAt: current.compositionConfirmedAt,
+			},
+			nutrientsChanged,
+			requestedSource: input.compositionSource,
+			savedFood: Boolean(input.savedFoodId),
+			now,
+		}),
 	});
 	try {
 		await db.batch([

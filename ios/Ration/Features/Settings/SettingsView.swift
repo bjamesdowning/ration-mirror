@@ -232,7 +232,7 @@ struct SettingsView: View {
                     } message: {
                         Text("Ration will stop copying foods. You can also remove the foods Ration already copied.")
                     }
-                    Text("Copies the foods you log to Apple Health: calories, protein, carbs, fat, and fiber when known. Ration only writes to Health and never reads your Health data.")
+                    Text(HealthExportStatusText.footer)
                         .rationCaption()
                     if model.settings?.healthExport?.enabled == true {
                         healthExportStatusRows
@@ -422,8 +422,10 @@ struct SettingsView: View {
 
 /// Settings strings for Apple Health. Pure so tests can pin the copy.
 enum HealthExportStatusText {
-    static let exclusionRule =
-        "Not copied: AI estimates until you change the numbers, and meals logged from Galley or Manifest."
+    static let footer =
+        "Copies everything you log in Fuel to Apple Health: calories, protein, carbs, fat, and fiber when known. AI estimates are copied as estimates; edit any food to update it in Health. Ration only writes to Health and never reads your Health data."
+
+    static let exclusionRule = "Not copied: a few older or incomplete logs."
 
     static func lastSynced(_ date: Date?, now: Date = Date()) -> String {
         guard let date else { return "Not synced yet" }

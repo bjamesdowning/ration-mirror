@@ -73,7 +73,7 @@ export function createFoodLogToolDefs(env: McpToolsEnv) {
 		defineSharedTool({
 			name: "propose_food_log",
 			description:
-				"Draft a personal food log from a photo reference. Returns a draft id and lines. Does not insert intake, Cargo, or Supply. Commit the edited lines with log_diary_food. A model call costs 2 credits, the same as a Cargo scan, and requires approval. No photo reference returns capability_unavailable and does not debit. Typed, recent, and custom-amount logs do not use this tool and debit 0. Requires nutrition-photo-log and nutrition-fast-log. iOS below 1.6.0 stays disabled. Not medical advice.",
+				"Draft a personal food log from a photo reference. Returns a draft id and lines. Does not insert intake, Cargo, or Supply. Commit the edited lines with log_diary_food and estimated: true, and tell the person: This is an AI estimate; you can change any number before or after logging. A model call costs 2 credits, the same as a Cargo scan, and requires approval. No photo reference returns capability_unavailable and does not debit. Typed, recent, and custom-amount logs do not use this tool and debit 0. Requires nutrition-photo-log and nutrition-fast-log. iOS below 1.6.0 stays disabled. Not medical advice.",
 			inputSchema: z.object({
 				operationKey: UuidSchema,
 				photoRef: z.string().trim().min(1).max(8_000_000).optional(),

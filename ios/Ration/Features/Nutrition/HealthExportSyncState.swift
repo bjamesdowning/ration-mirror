@@ -44,7 +44,14 @@ struct HealthExportSyncState {
         nonmutating set { defaults.set(newValue, forKey: key("enabled")) }
     }
 
-    /// Foods kept out of Health on the last full sync.
+    /// Server export rule the last full sync used (`HealthExportPolicy.exportRulesVersion`).
+    /// 0 when never stored, which forces one full sync.
+    var rulesVersion: Int {
+        get { defaults.integer(forKey: key("rulesVersion")) }
+        nonmutating set { defaults.set(newValue, forKey: key("rulesVersion")) }
+    }
+
+    /// Fuel logs kept out of Health on the last full sync.
     var lastExcluded: Int {
         get { defaults.integer(forKey: key("excluded")) }
         nonmutating set { defaults.set(newValue, forKey: key("excluded")) }
@@ -53,7 +60,9 @@ struct HealthExportSyncState {
     var needsRepair: Bool { schemaVersion < Self.currentSchemaVersion }
 
     func clear() {
-        for name in ["syncedThrough", "lastSyncedAt", "schemaVersion", "enabled", "excluded"] {
+        for name in [
+            "syncedThrough", "lastSyncedAt", "schemaVersion", "enabled", "excluded", "rulesVersion",
+        ] {
             defaults.removeObject(forKey: key(name))
         }
     }

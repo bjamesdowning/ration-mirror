@@ -433,6 +433,7 @@ export default function FuelPage({ loaderData }: Route.ComponentProps) {
 							<span className="text-sm">{item.mealName ?? "Food"}</span>
 							<span className="text-xs text-muted">
 								{Math.round(item.energyKcal)} kcal
+								{item.estimate ? " · AI estimate" : ""}
 							</span>
 							<button
 								type="button"
@@ -782,8 +783,7 @@ function ScanToFuel({
 					<p className="text-sm">Ready to review</p>
 					<p className="text-sm text-muted">1 item found</p>
 					<p className="text-sm text-muted">
-						Tap edit to adjust name, amount, unit, calories, protein, carbs, or
-						fat.
+						AI estimate. Adjust any number before you add it.
 					</p>
 					<label className="block text-sm">
 						Name

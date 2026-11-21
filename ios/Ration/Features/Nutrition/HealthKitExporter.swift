@@ -73,11 +73,14 @@ final class HealthKitExporter: HealthSampleWriting {
         let unit: HKUnit = sample.quantityType == "dietaryEnergyConsumed"
             ? .kilocalorie()
             : .gram()
-        let metadata: [String: Any] = [
+        var metadata: [String: Any] = [
             HKMetadataKeySyncIdentifier: sample.syncIdentifier,
             HKMetadataKeySyncVersion: NSNumber(value: sample.syncVersion),
             HKMetadataKeyFoodType: sample.foodName,
         ]
+        for (key, value) in HealthExportPolicy.customMetadata(estimate: sample.estimate) {
+            metadata[key] = NSNumber(value: value)
+        }
         return HKQuantitySample(
             type: type,
             quantity: HKQuantity(unit: unit, doubleValue: sample.value),

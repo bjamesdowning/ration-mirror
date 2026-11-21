@@ -1008,13 +1008,17 @@ export async function updateDiaryFood(
 		notes,
 		now,
 		replacesIntakeId: current.id,
+		// A row logged before Health ids existed gets a fresh id at version 1.
 		healthSyncId: current.healthSyncId ?? crypto.randomUUID(),
-		healthSyncVersion: healthSyncVersionAfterEdit(current.healthSyncVersion, {
-			nutrientsChanged,
-			occurredAtChanged:
-				current.occurredAt.getTime() !== food.occurredAt.getTime(),
-			nameChanged: (current.mealNameSnapshot ?? "") !== food.name,
-		}),
+		healthSyncVersion:
+			current.healthSyncId == null
+				? 1
+				: healthSyncVersionAfterEdit(current.healthSyncVersion, {
+						nutrientsChanged,
+						occurredAtChanged:
+							current.occurredAt.getTime() !== food.occurredAt.getTime(),
+						nameChanged: (current.mealNameSnapshot ?? "") !== food.name,
+					}),
 		savedFoodId: materialized.savedFoodId,
 		barcode: materialized.barcode,
 		fdcId: materialized.fdcId,

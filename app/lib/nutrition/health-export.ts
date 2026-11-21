@@ -1,4 +1,7 @@
-import { healthExportAllowed } from "./health-exportability";
+import {
+	healthSampleUsable,
+	legacyHealthExportAllowed,
+} from "./health-exportability";
 
 /** Quantity types Ration can fill with a real number. Nothing else is written. */
 export const HEALTH_QUANTITY_TYPES = [
@@ -61,6 +64,8 @@ export type PlannedHealthSample = {
 	healthSyncId: string;
 	occurredAt: string;
 	foodName: string;
+	/** Present (true) only for an AI estimate. The device marks the sample. */
+	estimate?: true;
 };
 
 export type PlannedHealthDelete = {
@@ -71,14 +76,24 @@ export type PlannedHealthDelete = {
 
 /**
  * Lines Ration kept out of Apple Health, by reason. Shown to the person so a
- * missing food is explained rather than silent. Meals are counted under
- * notExportable until a meal classifier exists.
+ * missing food is explained rather than silent. All three keys stay on the
+ * wire because iOS 1.6.39+ requires them. Under the current rule aiEstimate
+ * and unconfirmed are always 0, and notExportable counts logs with missing or
+ * implausible numbers plus older logs without a Health id. The legacy rule
+ * (iOS 1.6.39/1.6.40) counts meals under notExportable.
  */
 export type HealthExportExclusions = {
 	aiEstimate: number;
 	unconfirmed: number;
 	notExportable: number;
 };
+
+/**
+ * Which exportability rule a pull uses. `current`: every live, usable Fuel
+ * log. `legacy`: the rule iOS 1.6.39/1.6.40 shipped with (confirmed
+ * non-estimate, non-meal lines only).
+ */
+export type HealthExportRules = "current" | "legacy";
 
 export type HealthExportPlan = {
 	samples: PlannedHealthSample[];
@@ -170,12 +185,12 @@ function validSyncId(row: HealthIntakeRow): string | null {
 	return healthSyncId;
 }
 
-function exclusionReason(
+function legacyExclusionReason(
 	row: HealthIntakeRow,
 ): keyof HealthExportExclusions | null {
 	if (row.compositionSource === "ai_estimate") return "aiEstimate";
 	if (
-		healthExportAllowed({
+		legacyHealthExportAllowed({
 			compositionSource: row.compositionSource,
 			compositionConfirmedAt: row.compositionConfirmedAt,
 		})
@@ -183,7 +198,7 @@ function exclusionReason(
 		return null;
 	}
 	if (
-		healthExportAllowed({
+		legacyHealthExportAllowed({
 			compositionSource: row.compositionSource,
 			compositionConfirmedAt: new Date(0),
 		})
@@ -202,6 +217,13 @@ function exclusionReason(
  * is fully deleted only when no live row (in this window or in `liveSyncIds`,
  * which the caller looks up outside the window) still carries it. When an
  * edit clears a nutrient, only that nutrient's stale sample is deleted.
+ *
+ * `rules: "current"` exports every live Fuel log whose numbers pass
+ * `healthSampleUsable`, whatever its source, and marks AI estimates. A live
+ * row that fails the check is counted and fully deleted, so a 0 kcal or
+ * implausible sample written earlier is removed. `rules: "legacy"` (the
+ * default) is the iOS 1.6.39/1.6.40 rule; it never deletes a row the current
+ * rule would export, so an old phone cannot remove a newer phone's samples.
  */
 export function planHealthExport(input: {
 	rows: readonly HealthIntakeRow[];
@@ -210,7 +232,9 @@ export function planHealthExport(input: {
 	crossKitchen: boolean;
 	cursor?: HealthCursor;
 	liveSyncIds?: ReadonlySet<string>;
+	rules?: HealthExportRules;
 }): HealthExportPlan {
+	const current = input.rules === "current";
 	const cursor = input.cursor ?? emptyHealthCursor();
 	const samples: PlannedHealthSample[] = [];
 	const deletes: PlannedHealthDelete[] = [];
@@ -258,15 +282,29 @@ export function planHealthExport(input: {
 	}
 
 	for (const [healthSyncId, { row, version }] of live) {
-		const reason = exclusionReason(row);
+		const usable = healthSampleUsable(row);
+		if (current && !usable) {
+			excluded.notExportable += 1;
+			// Remove anything Ration wrote for it before this rule existed.
+			if (!deleted.has(healthSyncId)) deletes.push(fullDelete(healthSyncId));
+			continue;
+		}
+		const reason = current ? null : legacyExclusionReason(row);
 		if (reason) {
 			excluded[reason] += 1;
 			// An edit can turn an exported line into one Health may not hold.
-			if (voidedSeen.has(healthSyncId) && !deleted.has(healthSyncId)) {
+			// A row the current rule exports keeps its samples: a newer phone
+			// on the same account may have written them.
+			if (
+				voidedSeen.has(healthSyncId) &&
+				!deleted.has(healthSyncId) &&
+				!usable
+			) {
 				deletes.push(fullDelete(healthSyncId));
 			}
 			continue;
 		}
+		const estimate = current && row.compositionSource === "ai_estimate";
 		const seen = cursor.written[healthSyncId];
 		if (seen != null && seen >= version) continue;
 		const action: PlannedHealthSample["action"] =
@@ -291,6 +329,7 @@ export function planHealthExport(input: {
 				healthSyncId,
 				occurredAt,
 				foodName,
+				...(estimate ? { estimate: true as const } : {}),
 			});
 		}
 		if (voidedSeen.has(healthSyncId) && stale.length > 0) {

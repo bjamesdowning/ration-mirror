@@ -1695,18 +1695,22 @@ export const nutritionIntake = sqliteTable(
 			{ name: string; slug?: string }[]
 		>(),
 		/**
-		 * Stable Health identity for one logical food. Null until the first
-		 * exportable save, then copied onto replacements. Not a HealthKit UUID.
+		 * Stable Health identity for one logical food. Set on every new Fuel
+		 * log and copied onto replacements; older rows get one on the first
+		 * iOS 1.6.41+ Health pull. Not a HealthKit UUID.
 		 */
 		healthSyncId: text("health_sync_id"),
 		/** Monotonic export version for that healthSyncId. */
 		healthSyncVersion: integer("health_sync_version"),
 		/**
 		 * usda | user_override | manual_macros | barcode | ai_estimate | meal.
-		 * Health export must not treat `verified` or `source` as this signal.
+		 * Provenance; Health reads it only to mark ai_estimate samples.
 		 */
 		compositionSource: text("composition_source"),
-		/** Null means Health must skip the row. Typed macros are stamped at save. */
+		/**
+		 * When the person confirmed the numbers; informational. Only the legacy
+		 * Health rule (iOS 1.6.39/1.6.40) reads it. Typed macros are stamped at save.
+		 */
 		compositionConfirmedAt: integer("composition_confirmed_at", {
 			mode: "timestamp",
 		}),

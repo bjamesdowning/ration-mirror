@@ -414,6 +414,8 @@ struct HealthExportPendingResponse: Decodable, Sendable {
         let healthSyncId: String
         let occurredAt: String
         let foodName: String
+        /// True for an AI estimate (server 1.11.28+). Missing means not an estimate.
+        var estimate: Bool? = nil
     }
 
     struct Delete: Decodable, Sendable {
@@ -521,6 +523,8 @@ struct FuelDayResponse: Decodable, Sendable {
         let loggedUnit: String?
         let entryId: String?
         let tagNames: [String]?
+        /// True for an AI estimate (server 1.11.28+). Older servers omit it.
+        var estimate: Bool? = nil
     }
 
     let date: String

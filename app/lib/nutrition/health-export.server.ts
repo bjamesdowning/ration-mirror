@@ -5,10 +5,11 @@ import { z } from "zod";
 import * as schema from "~/db/schema";
 import { getUserSettings, patchUserSettings } from "~/lib/auth.server";
 import { isFeatureEnabled } from "~/lib/feature-flags/flags.server";
-import { chunkedQuery } from "~/lib/query-utils.server";
+import { chunkArray, chunkedQuery } from "~/lib/query-utils.server";
 import type { UserSettings } from "~/lib/types";
 import { assertActiveNutritionConsent } from "./consent.server";
 import { assertNutritionHealthExport } from "./fast-log-flag.server";
+import { healthExportRulesFor } from "./fuel-capture";
 import { nutritionIntakeRetentionCutoff } from "./goal-effective";
 import {
 	advanceHealthCursor,
@@ -18,6 +19,7 @@ import {
 	type HealthExportExclusions,
 	type HealthExportPlan,
 	type HealthExportPreference,
+	type HealthExportRules,
 	type HealthExportStatus,
 	type HealthIntakeRow,
 	healthExportStatusOf,
@@ -61,6 +63,9 @@ export const HEALTH_EXPORT_SINCE_ROW_CAP = 500;
 
 /** Liveness lookups bind the user id plus one id per chunk entry. */
 const LIVENESS_CHUNK = 90;
+
+/** Sync-id updates sent in one D1 batch (each binds 4 values). */
+const SYNC_ID_BATCH = 50;
 
 /**
  * `syncedThrough` trails the server clock so a row committed in the same
@@ -184,6 +189,73 @@ async function liveSyncIdsFor(
 	return liveHere;
 }
 
+/**
+ * Give the person's live rows that have no Health sync id (logged before ids
+ * existed, or by Manifest/Quick Eat before 1.11.28) an id at version 1, so
+ * the current rule can export them. Person-scoped and race-safe: the update
+ * only matches the caller's own row while its id is still null, and the ids
+ * are read back from D1 so a concurrent assignment wins consistently.
+ * Voided rows are skipped. Only the iOS device pull calls this.
+ */
+async function assignMissingSyncIds(
+	env: Env,
+	principal: NutritionPrincipal,
+	rows: HealthIntakeRow[],
+): Promise<HealthIntakeRow[]> {
+	const missing = rows.filter(
+		(row) =>
+			row.userId === principal.userId &&
+			row.voidedAt == null &&
+			row.healthSyncId == null,
+	);
+	if (missing.length === 0) return rows;
+	const db = drizzle(env.DB, { schema });
+	const statements = missing.map((row) =>
+		db
+			.update(schema.nutritionIntake)
+			.set({ healthSyncId: crypto.randomUUID(), healthSyncVersion: 1 })
+			.where(
+				and(
+					eq(schema.nutritionIntake.id, row.id),
+					eq(schema.nutritionIntake.userId, principal.userId),
+					isNull(schema.nutritionIntake.healthSyncId),
+				),
+			),
+	);
+	for (const batch of chunkArray(statements, SYNC_ID_BATCH)) {
+		await db.batch(batch as [(typeof batch)[number], ...typeof batch]);
+	}
+	const fresh = await chunkedQuery(
+		missing.map((row) => row.id),
+		(chunk) =>
+			db
+				.select({
+					id: schema.nutritionIntake.id,
+					healthSyncId: schema.nutritionIntake.healthSyncId,
+					healthSyncVersion: schema.nutritionIntake.healthSyncVersion,
+				})
+				.from(schema.nutritionIntake)
+				.where(
+					and(
+						eq(schema.nutritionIntake.userId, principal.userId),
+						inArray(schema.nutritionIntake.id, chunk),
+					),
+				),
+		LIVENESS_CHUNK,
+	);
+	const byId = new Map(fresh.map((row) => [row.id, row]));
+	return rows.map((row) => {
+		const next = byId.get(row.id);
+		return next
+			? {
+					...row,
+					healthSyncId: next.healthSyncId,
+					healthSyncVersion: next.healthSyncVersion,
+				}
+			: row;
+	});
+}
+
 async function assertCallerConsent(
 	env: Env,
 	principal: NutritionPrincipal,
@@ -300,6 +372,11 @@ export type HealthExportPending = HealthExportPlan & {
  *   used for turning export off with removal and account deletion. It works
  *   while export is off and without intake consent (it only returns ids).
  * - `cursor`: legacy per-id state (MCP preview). Optional.
+ *
+ * iOS 1.6.41+ and non-iOS callers get the current rule (every usable Fuel
+ * log, AI estimates marked). Older iOS gets the legacy rule. Only the iOS
+ * device pull on the current rule assigns missing sync ids; the MCP preview
+ * stays read-only.
  */
 export async function getHealthExportPending(
 	env: Env,
@@ -367,7 +444,9 @@ export async function getHealthExportPending(
 		"nutrition-cross-org-diary",
 		flags,
 	);
-	const { rows, truncated } = await loadRows(env, principal, now, input.since);
+	const rules: HealthExportRules = healthExportRulesFor(flags);
+	const loaded = await loadRows(env, principal, now, input.since);
+	const { truncated } = loaded;
 	if (truncated) {
 		return {
 			...empty,
@@ -379,6 +458,13 @@ export async function getHealthExportPending(
 			nextCursor: cursor,
 		};
 	}
+	const rows =
+		rules === "current" &&
+		flags.clientPlatform === "ios" &&
+		principal.surface !== "mcp" &&
+		principal.surface !== "copilot"
+			? await assignMissingSyncIds(env, principal, loaded.rows)
+			: loaded.rows;
 	const liveSyncIds = await liveSyncIdsFor(env, principal, rows);
 	const plan = planHealthExport({
 		rows,
@@ -387,6 +473,7 @@ export async function getHealthExportPending(
 		crossKitchen,
 		cursor,
 		liveSyncIds,
+		rules,
 	});
 	return {
 		...plan,

@@ -198,7 +198,7 @@ export const FLAG_REGISTRY: Record<string, FlagRegistryEntry> = {
 	"nutrition-health-export": {
 		defaultEnabled: false,
 		description:
-			"One-way Apple Health export of confirmed eaten food: writes, edits, and removals. On only when nutrition-fast-log is on. iOS below 1.6.39 fails closed. The device writes HealthKit. No plan check",
+			"One-way Apple Health export of Fuel logs (every usable log from iOS 1.6.41, AI estimates marked): writes, edits, and removals. On only when nutrition-fast-log is on. iOS below 1.6.39 fails closed. The device writes HealthKit. No plan check",
 		clientVisible: true,
 		clientKey: "nutritionHealthExport",
 		iosAlwaysOn: false,

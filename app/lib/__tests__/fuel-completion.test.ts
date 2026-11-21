@@ -249,6 +249,37 @@ function envFor(db: D1Database, extras: Record<string, unknown> = {}): Env {
 	return { DB: db, ...extras } as Env;
 }
 
+describe("fuel logs and Apple Health ids", () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+	});
+
+	it("mints a Health id at version 1 when editing a log that has none", async () => {
+		const { db, sqlite } = await database();
+		const env = envFor(db);
+		const first = await logDiaryFood(env, owner, {}, diaryInput("Old log"));
+		sqlite
+			.prepare(
+				"update nutrition_intake set health_sync_id = null, health_sync_version = null where id = ?",
+			)
+			.run(first.intakeId);
+		const updated = await updateDiaryFood(
+			env,
+			owner,
+			{},
+			first.intakeId,
+			diaryInput("Old log edited"),
+		);
+		const row = sqlite
+			.prepare(
+				"select health_sync_id syncId, health_sync_version version from nutrition_intake where id = ?",
+			)
+			.get(updated.intakeId) as { syncId: string | null; version: number };
+		expect(row.syncId).toMatch(/^[0-9a-f-]{36}$/);
+		expect(row.version).toBe(1);
+	});
+});
+
 describe("fuel writers at the cap", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();

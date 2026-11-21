@@ -51,7 +51,7 @@ final class HealthExportCoordinator {
     private(set) var lastFailures = 0
     /// Nutrients the person turned off for Ration in the Health app.
     private(set) var lastUnauthorized = 0
-    /// Foods kept out of Health on the last full sync (AI estimates, meals).
+    /// Fuel logs kept out of Health on the last full sync (incomplete or older logs).
     private(set) var excluded = 0
 
     /// Set by `AppEnvironment`. Nil while signed out.
@@ -202,7 +202,12 @@ final class HealthExportCoordinator {
         defer { isSyncing = false }
         do {
             let repair = state.needsRepair
-            let full = reason.forcesFullSync || repair || state.syncedThrough == nil
+            let full = HealthExportFullPull.required(
+                forced: reason.forcesFullSync,
+                repair: repair,
+                syncedThrough: state.syncedThrough,
+                storedRulesVersion: state.rulesVersion
+            )
             var pending = try await backend.healthExportPending(
                 since: full ? nil : HealthExportSince.make(syncedThrough: state.syncedThrough),
                 scope: nil
@@ -237,6 +242,9 @@ final class HealthExportCoordinator {
                 state.syncedThrough = pending.syncedThrough
                 if repair, fullPull {
                     state.schemaVersion = HealthExportSyncState.currentSchemaVersion
+                }
+                if fullPull {
+                    state.rulesVersion = HealthExportPolicy.exportRulesVersion
                 }
             }
             if fullPull, !purge, let counts = pending.excluded {

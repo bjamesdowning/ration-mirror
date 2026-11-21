@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
+import { DiaryFoodWriteSchema } from "~/lib/schemas/diary";
 import type { McpToolContext } from "../auth";
 import type { McpToolsEnv } from "../tool-runtime";
-import { createDiaryToolDefs } from "../tools/diary";
+import { createDiaryToolDefs, toDiaryWrite } from "../tools/diary";
 
 const mcp = {
 	organizationId: "org-1",
@@ -59,5 +60,41 @@ describe("diary MCP tools", () => {
 		const result = await quote.handler(env.__mcp, {});
 		expect(result.ok).toBe(true);
 		if (result.ok) expect(result.data).toEqual({ credits: 0 });
+	});
+
+	it("marks an estimated log as an AI estimate unless it names a saved food", () => {
+		const typed = {
+			name: "Plate",
+			energyKcal: 450,
+			proteinG: 20,
+			carbsG: 50,
+			fatG: 15,
+			idempotencyKey: "22222222-2222-4222-8222-222222222222",
+			operationKey: "33333333-3333-4333-8333-333333333333",
+		};
+		const estimated = toDiaryWrite({ ...typed, estimated: true });
+		expect(estimated.compositionSource).toBe("ai_estimate");
+		const parsed = DiaryFoodWriteSchema.safeParse(estimated);
+		expect(parsed.success).toBe(true);
+		if (parsed.success)
+			expect(parsed.data.compositionSource).toBe("ai_estimate");
+		expect(toDiaryWrite(typed).compositionSource).toBeUndefined();
+		expect(
+			toDiaryWrite({ ...typed, estimated: false }).compositionSource,
+		).toBeUndefined();
+		expect(
+			toDiaryWrite({
+				...typed,
+				savedFoodId: "44444444-4444-4444-8444-444444444444",
+				estimated: true,
+			}).compositionSource,
+		).toBeUndefined();
+		const log = createDiaryToolDefs(env).find(
+			(tool) => tool.name === "log_diary_food",
+		);
+		expect(log?.description).toContain("Set estimated: true");
+		expect(
+			log?.inputSchema.safeParse({ ...typed, estimated: true }).success,
+		).toBe(true);
 	});
 });

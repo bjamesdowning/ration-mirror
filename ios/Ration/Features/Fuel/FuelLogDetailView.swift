@@ -115,6 +115,10 @@ struct FuelLogDetailView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.vertical, 4)
                 }
+            } footer: {
+                if item.estimate == true {
+                    Text(FuelScanCopy.estimateDetail)
+                }
             }
         }
         .listStyle(.insetGrouped)

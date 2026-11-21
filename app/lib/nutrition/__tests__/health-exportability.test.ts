@@ -3,14 +3,15 @@ import { subjectSkipsExternalFoodApi } from "../food-log-cost";
 import {
 	diaryCompositionStamp,
 	healthExportAllowed,
+	legacyHealthExportAllowed,
 } from "../health-exportability";
 
 const confirmed = new Date("2026-08-01T12:00:00.000Z");
 
-describe("health export predicate", () => {
+describe("legacy health export predicate (iOS 1.6.39/1.6.40)", () => {
 	it("fails an AI line even when a timestamp is present", () => {
 		expect(
-			healthExportAllowed({
+			legacyHealthExportAllowed({
 				compositionSource: "ai_estimate",
 				compositionConfirmedAt: confirmed,
 			}),
@@ -28,13 +29,13 @@ describe("health export predicate", () => {
 			"barcode",
 		]) {
 			expect(
-				healthExportAllowed({
+				legacyHealthExportAllowed({
 					compositionSource,
 					compositionConfirmedAt: confirmed,
 				}),
 			).toBe(true);
 			expect(
-				healthExportAllowed({
+				legacyHealthExportAllowed({
 					compositionSource,
 					compositionConfirmedAt: null,
 				}),
@@ -42,9 +43,13 @@ describe("health export predicate", () => {
 		}
 	});
 
+	it("keeps the older name as the same rule", () => {
+		expect(healthExportAllowed).toBe(legacyHealthExportAllowed);
+	});
+
 	it("fails a meal line", () => {
 		expect(
-			healthExportAllowed({
+			legacyHealthExportAllowed({
 				compositionSource: "meal",
 				compositionConfirmedAt: confirmed,
 			}),

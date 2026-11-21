@@ -5,6 +5,20 @@ enum HealthExportPolicy {
     /// iOS below this version could not keep Health current; the server fails it closed.
     static let minimumAppVersion = "1.6.39"
 
+    /// Which server export rule this build last fully synced. 2 (1.6.41):
+    /// every usable Fuel log, AI estimates marked. A lower stored value forces
+    /// one full sync so older logs are written once.
+    static let exportRulesVersion = 2
+
+    /// HealthKit metadata key on an AI-estimate sample. Not an HK key, so
+    /// HealthKit stores it as custom metadata.
+    static let estimateMetadataKey = "ration.estimate"
+
+    /// Ration's own metadata on a sample. Only an AI estimate carries any.
+    static func customMetadata(estimate: Bool) -> [String: Bool] {
+        estimate ? [estimateMetadataKey: true] : [:]
+    }
+
     static let quantityTypes = [
         "dietaryEnergyConsumed",
         "dietaryProtein",
@@ -61,6 +75,8 @@ struct HealthQuantitySample: Equatable, Sendable {
     var healthSyncId: String
     var occurredAt: Date
     var foodName: String
+    /// True for an AI estimate. Written as `ration.estimate` metadata.
+    var estimate: Bool = false
 }
 
 struct HealthSampleDelete: Equatable, Sendable {
@@ -157,7 +173,8 @@ struct HealthExportDevicePlan: Equatable, Sendable {
                     value: sample.value,
                     healthSyncId: sample.healthSyncId,
                     occurredAt: occurredAt,
-                    foodName: sample.foodName
+                    foodName: sample.foodName,
+                    estimate: sample.estimate == true
                 )
             )
         }
@@ -257,6 +274,19 @@ enum HealthExportApplier {
             }
         }
         return result
+    }
+}
+
+/// Whether a sync must pull everything rather than changes since the last sync.
+enum HealthExportFullPull {
+    static func required(
+        forced: Bool,
+        repair: Bool,
+        syncedThrough: String?,
+        storedRulesVersion: Int
+    ) -> Bool {
+        forced || repair || syncedThrough == nil
+            || storedRulesVersion < HealthExportPolicy.exportRulesVersion
     }
 }
 

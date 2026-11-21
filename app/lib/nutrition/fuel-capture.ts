@@ -16,6 +16,14 @@ export const PLAN_FUEL_ACTIONS_IOS_MIN = "1.6.16";
  */
 export const NUTRITION_HEALTH_EXPORT_IOS_MIN = "1.6.39";
 
+/**
+ * iOS from this build gets the current Health rule: every usable Fuel log is
+ * exported, AI estimates are marked, and logs without a sync id get one.
+ * Older iOS keeps the 1.6.39 rule. Non-iOS callers (the MCP preview) get the
+ * current rule.
+ */
+export const HEALTH_EXPORT_RULES_IOS_MIN = "1.6.41";
+
 export const FUEL_CAPTURE_SCAN_TO_CARGO = "Scan to Cargo";
 export const FUEL_CAPTURE_LOG_TO_FUEL = "Log to Fuel";
 
@@ -62,6 +70,17 @@ export function healthExportClientAllowed(
 	const version = context.clientVersion;
 	if (typeof version !== "string") return false;
 	return isVersionAtLeast(version, NUTRITION_HEALTH_EXPORT_IOS_MIN);
+}
+
+export function healthExportRulesFor(
+	context: ClientVersionContext,
+): "current" | "legacy" {
+	if (context.clientPlatform !== "ios") return "current";
+	const version = context.clientVersion;
+	if (typeof version !== "string") return "legacy";
+	return isVersionAtLeast(version, HEALTH_EXPORT_RULES_IOS_MIN)
+		? "current"
+		: "legacy";
 }
 
 /** A second void of a row that is already voided. */

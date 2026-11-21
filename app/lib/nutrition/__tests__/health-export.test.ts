@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it } from "vitest";
+import { getClientSafeFlags } from "~/lib/feature-flags/flags.server";
 import { createMockKV } from "~/test/helpers/mock-env";
 import { createSqliteD1 } from "~/test/helpers/sqlite-d1";
 import { getNutritionConsentStatement } from "../consent-policy";
@@ -10,10 +11,15 @@ import {
 	type HealthIntakeRow,
 	mayOpenHealthStore,
 	planHealthExport,
+	planHealthPurge,
 	samplesSafeToWrite,
 } from "../health-export";
 import {
+	clearHealthExport,
 	getHealthExportPending,
+	HEALTH_EXPORT_SINCE_ROW_CAP,
+	HEALTH_EXPORT_SYNC_OVERLAP_MS,
+	parseHealthPendingQuery,
 	setHealthExportPreference,
 } from "../health-export.server";
 import type { NutritionPrincipal } from "../service.server";
@@ -224,6 +230,211 @@ describe("health export plan", () => {
 	});
 });
 
+describe("health export plan: edits, removals, and exclusions", () => {
+	const base = {
+		viewerUserId: "user-a",
+		activeOrganizationId: "org-1",
+		crossKitchen: false,
+	};
+
+	it("works without a cursor", () => {
+		const plan = planHealthExport({
+			...base,
+			rows: [row({ id: "food-1", healthSyncId: "sync-1" })],
+		});
+		expect(plan.samples).toHaveLength(4);
+		expect(plan.excluded).toEqual({
+			aiEstimate: 0,
+			unconfirmed: 0,
+			notExportable: 0,
+		});
+	});
+
+	it("an edit replaces the samples and never deletes the live line", () => {
+		const plan = planHealthExport({
+			...base,
+			rows: [
+				row({
+					id: "food-1",
+					healthSyncId: "sync-1",
+					healthSyncVersion: 1,
+					voidedAt: recent,
+					fiberG: 3,
+				}),
+				row({
+					id: "food-2",
+					healthSyncId: "sync-1",
+					healthSyncVersion: 2,
+					energyKcal: 200,
+				}),
+			],
+		});
+		expect(new Set(plan.samples.map((sample) => sample.action))).toEqual(
+			new Set(["replace"]),
+		);
+		expect(plan.samples.every((sample) => sample.syncVersion === 2)).toBe(true);
+		expect(plan.samples[0]?.value).toBe(200);
+		expect(plan.samples.every((sample) => sample.intakeId === "food-2")).toBe(
+			true,
+		);
+		// Only the nutrient the edit cleared is deleted.
+		expect(plan.deletes).toEqual([
+			{
+				action: "delete",
+				healthSyncId: "sync-1",
+				syncIdentifiers: ["ration:sync-1:dietaryFiber"],
+			},
+		]);
+	});
+
+	it("does not delete a voided id that a live row outside the window still carries", () => {
+		const plan = planHealthExport({
+			...base,
+			rows: [row({ id: "food-1", healthSyncId: "sync-1", voidedAt: recent })],
+			liveSyncIds: new Set(["sync-1"]),
+		});
+		expect(plan.deletes).toEqual([]);
+		expect(plan.samples).toEqual([]);
+	});
+
+	it("deletes a removal once and keeps it deleted after the cursor advances", () => {
+		const plan = planHealthExport({
+			...base,
+			rows: [
+				row({ id: "food-1", healthSyncId: "sync-1", voidedAt: recent }),
+				row({ id: "food-0", healthSyncId: "sync-1", voidedAt: recent }),
+			],
+		});
+		expect(plan.deletes.map((item) => item.healthSyncId)).toEqual(["sync-1"]);
+		expect(plan.deletes[0]?.syncIdentifiers).toHaveLength(5);
+	});
+
+	it("keeps the highest version when two live rows share an id", () => {
+		const plan = planHealthExport({
+			...base,
+			rows: [
+				row({
+					id: "food-3",
+					healthSyncId: "sync-1",
+					healthSyncVersion: 3,
+					energyKcal: 300,
+				}),
+				row({
+					id: "food-2",
+					healthSyncId: "sync-1",
+					healthSyncVersion: 2,
+					energyKcal: 200,
+				}),
+			],
+		});
+		const energy = plan.samples.filter(
+			(sample) => sample.quantityType === "dietaryEnergyConsumed",
+		);
+		expect(energy).toHaveLength(1);
+		expect(energy[0]?.value).toBe(300);
+		expect(energy[0]?.syncVersion).toBe(3);
+	});
+
+	it("removes an exported line from Health when an edit makes it an AI estimate", () => {
+		const plan = planHealthExport({
+			...base,
+			rows: [
+				row({ id: "food-1", healthSyncId: "sync-1", voidedAt: recent }),
+				row({
+					id: "food-2",
+					healthSyncId: "sync-1",
+					healthSyncVersion: 2,
+					compositionSource: "ai_estimate",
+					compositionConfirmedAt: null,
+				}),
+			],
+		});
+		expect(plan.samples).toEqual([]);
+		expect(plan.deletes.map((item) => item.syncIdentifiers.length)).toEqual([
+			5,
+		]);
+		expect(plan.excluded.aiEstimate).toBe(1);
+	});
+
+	it("counts what it kept out of Health, by reason", () => {
+		const plan = planHealthExport({
+			...base,
+			rows: [
+				row({ id: "usda", healthSyncId: "sync-usda" }),
+				row({
+					id: "ai",
+					healthSyncId: "sync-ai",
+					compositionSource: "ai_estimate",
+				}),
+				row({
+					id: "pending",
+					healthSyncId: "sync-pending",
+					compositionSource: "barcode",
+					compositionConfirmedAt: null,
+				}),
+				row({
+					id: "meal",
+					healthSyncId: "sync-meal",
+					compositionSource: "meal",
+				}),
+				row({ id: "legacy", healthSyncId: null }),
+				row({ id: "gone", healthSyncId: "sync-gone", voidedAt: recent }),
+				row({ id: "other", userId: "user-b", compositionSource: "meal" }),
+			],
+		});
+		expect(plan.excluded).toEqual({
+			aiEstimate: 1,
+			unconfirmed: 1,
+			notExportable: 2,
+		});
+	});
+
+	it("does not move a stale-nutrient delete into the deleted cursor", () => {
+		const cursor = advanceHealthCursor(
+			{ written: { "sync-1": 1 }, deleted: [] },
+			{
+				samples: [],
+				deletes: [
+					{
+						action: "delete",
+						healthSyncId: "sync-1",
+						syncIdentifiers: ["ration:sync-1:dietaryFiber"],
+					},
+				],
+			},
+		);
+		expect(cursor).toEqual({ written: { "sync-1": 1 }, deleted: [] });
+	});
+
+	it("purges every id the person has in any kitchen and nobody else's", () => {
+		const deletes = planHealthPurge({
+			rows: [
+				row({ id: "a", healthSyncId: "sync-a" }),
+				row({ id: "b", healthSyncId: "sync-b", organizationId: "org-2" }),
+				row({ id: "c", healthSyncId: "sync-a", voidedAt: recent }),
+				row({
+					id: "d",
+					healthSyncId: "sync-ai",
+					compositionSource: "ai_estimate",
+				}),
+				row({ id: "e", healthSyncId: "sync-other", userId: "user-b" }),
+				row({ id: "f", healthSyncId: null }),
+			],
+			viewerUserId: "user-a",
+			extraSyncIds: ["sync-old", " ", "sync-a"],
+		});
+		expect(deletes.map((item) => item.healthSyncId)).toEqual([
+			"sync-a",
+			"sync-b",
+			"sync-ai",
+			"sync-old",
+		]);
+		expect(deletes.every((item) => item.syncIdentifiers.length === 5)).toBe(
+			true,
+		);
+	});
+});
+
 describe("health export handler", () => {
 	it("does not read tier, and a free account matches a Crew account", async () => {
 		const source = readFileSync(
@@ -346,7 +557,283 @@ describe("health export handler", () => {
 		expect(pending.deletes).toEqual([]);
 		expect(pending.status).toBe("off");
 	});
+	it("returns only rows changed since the last sync, with a trailing syncedThrough", async () => {
+		const { database, sqlite } = setup();
+		await grant(sqlite);
+		await enable(database);
+		const since = new Date(now.getTime() - 60 * 60 * 1000);
+		sqlite
+			.prepare("update nutrition_intake set created_at = ?")
+			.run(Math.floor((since.getTime() - 60_000) / 1000));
+		insertIntake(sqlite, {
+			id: "fresh",
+			sync: "sync-fresh",
+			source: "usda",
+			confirmed: recent,
+		});
+		const pending = await getHealthExportPending(
+			envFor(database),
+			principal,
+			webFlags,
+			{ since, now },
+		);
+		expect(
+			new Set(pending.samples.map((sample) => sample.healthSyncId)),
+		).toEqual(new Set(["sync-fresh"]));
+		// sync-void was voided "recent", which is after since.
+		expect(pending.deletes.map((item) => item.healthSyncId)).toEqual([
+			"sync-void",
+		]);
+		expect(pending.truncated).toBe(false);
+		expect(pending.purge).toBe(false);
+		expect(pending.syncedThrough).toBe(
+			new Date(now.getTime() - HEALTH_EXPORT_SYNC_OVERLAP_MS).toISOString(),
+		);
+	});
+
+	it("keeps a line in Health when its voided row is newer than the live row", async () => {
+		const { database, sqlite } = setup();
+		await grant(sqlite);
+		await enable(database);
+		const since = new Date(now.getTime() - 60 * 60 * 1000);
+		const before = Math.floor((since.getTime() - 60_000) / 1000);
+		sqlite.prepare("update nutrition_intake set created_at = ?").run(before);
+		insertIntake(sqlite, {
+			id: "kept-live",
+			sync: "sync-kept",
+			source: "usda",
+			confirmed: recent,
+			version: 2,
+			created: before,
+		});
+		insertIntake(sqlite, {
+			id: "kept-old",
+			sync: "sync-kept",
+			source: "usda",
+			confirmed: recent,
+			voided: recent,
+			created: before,
+		});
+		const pending = await getHealthExportPending(
+			envFor(database),
+			principal,
+			webFlags,
+			{ since, now },
+		);
+		expect(pending.deletes.map((item) => item.healthSyncId)).not.toContain(
+			"sync-kept",
+		);
+	});
+
+	it("says truncated and plans nothing when an incremental pull is too large", async () => {
+		const { database, sqlite } = setup();
+		await grant(sqlite);
+		await enable(database);
+		for (let index = 0; index <= HEALTH_EXPORT_SINCE_ROW_CAP; index += 1) {
+			insertIntake(sqlite, {
+				id: `bulk-${index}`,
+				sync: `sync-bulk-${index}`,
+				source: "usda",
+				confirmed: recent,
+			});
+		}
+		const pending = await getHealthExportPending(
+			envFor(database),
+			principal,
+			webFlags,
+			{ since: new Date(now.getTime() - 60_000), now },
+		);
+		expect(pending.truncated).toBe(true);
+		expect(pending.samples).toEqual([]);
+		expect(pending.deletes).toEqual([]);
+		const full = await getHealthExportPending(
+			envFor(database),
+			principal,
+			webFlags,
+			{ now },
+		);
+		expect(full.truncated).toBe(false);
+		expect(full.samples.length).toBeGreaterThan(
+			HEALTH_EXPORT_SINCE_ROW_CAP * 4,
+		);
+	});
+
+	it("reports exclusions on a full pull", async () => {
+		const { database, sqlite } = setup();
+		await grant(sqlite);
+		await enable(database);
+		const pending = await getHealthExportPending(
+			envFor(database),
+			principal,
+			webFlags,
+			{ now },
+		);
+		expect(pending.excluded).toEqual({
+			aiEstimate: 1,
+			unconfirmed: 0,
+			notExportable: 1,
+		});
+	});
+
+	it("purges every Ration sample with scope all, even while export is off", async () => {
+		const { database, sqlite } = setup();
+		await grant(sqlite);
+		const pending = await getHealthExportPending(
+			envFor(database),
+			principal,
+			webFlags,
+			{ scope: "all", now },
+		);
+		expect(pending.purge).toBe(true);
+		expect(pending.samples).toEqual([]);
+		expect(pending.enabled).toBe(false);
+		const ids = pending.deletes.map((item) => item.healthSyncId);
+		expect(new Set(ids)).toEqual(
+			new Set([
+				"sync-usda",
+				"sync-ai",
+				"sync-meal",
+				"sync-kitchen",
+				"sync-void",
+			]),
+		);
+		expect(ids).not.toContain("sync-other");
+	});
+
+	it("still purges with scope all after intake consent is withdrawn, but nothing else", async () => {
+		const { database, sqlite } = setup();
+		await grant(sqlite);
+		sqlite.prepare("update nutrition_consent set withdrawn_at = 2").run();
+		const purge = await getHealthExportPending(
+			envFor(database),
+			principal,
+			webFlags,
+			{ scope: "all", now },
+		);
+		expect(purge.purge).toBe(true);
+		expect(purge.samples).toEqual([]);
+		expect(purge.deletes.length).toBeGreaterThan(0);
+		const changes = await capture(() =>
+			getHealthExportPending(envFor(database), principal, webFlags, { now }),
+		);
+		expect(codeOf(changes)).toBe("nutrition_consent_required");
+	});
+
+	it("purges after Remove Ration data and lowers the request once the device is done", async () => {
+		const { database, sqlite } = setup();
+		await grant(sqlite);
+		await enable(database);
+		await clearHealthExport(envFor(database), principal, webFlags, {
+			confirm: true,
+		});
+		const pending = await getHealthExportPending(
+			envFor(database),
+			principal,
+			webFlags,
+			{ now },
+		);
+		expect(pending.purge).toBe(true);
+		expect(pending.clearRequested).toBe(true);
+		expect(pending.samples).toEqual([]);
+		expect(pending.deletes.length).toBeGreaterThan(0);
+		sqlite.prepare("update nutrition_consent set withdrawn_at = 2").run();
+		const done = await clearHealthExport(
+			envFor(database),
+			principal,
+			webFlags,
+			{ confirm: true, completed: true },
+		);
+		expect(done.clearRequested).toBe(false);
+		const settings = sqlite
+			.prepare("select settings from user where id = 'user-a'")
+			.get() as { settings: string };
+		expect(JSON.parse(settings.settings).healthExport.clearRequested).toBe(
+			false,
+		);
+	});
+
+	it("fails closed for iOS below 1.6.39 and opens at 1.6.39", async () => {
+		const { database, sqlite } = setup();
+		await grant(sqlite);
+		const old = await capture(() =>
+			getHealthExportPending(
+				envFor(database),
+				principal,
+				{ userId: "user-a", clientPlatform: "ios", clientVersion: "1.6.38" },
+				{ now },
+			),
+		);
+		expect(codeOf(old)).toBe("FEATURE_DISABLED");
+		const missing = await capture(() =>
+			getHealthExportPending(
+				envFor(database),
+				principal,
+				{ userId: "user-a", clientPlatform: "ios" },
+				{ now },
+			),
+		);
+		expect(codeOf(missing)).toBe("FEATURE_DISABLED");
+		const current = await getHealthExportPending(
+			envFor(database),
+			principal,
+			{ userId: "user-a", clientPlatform: "ios", clientVersion: "1.6.39" },
+			{ now },
+		);
+		expect(current.status).toBe("off");
+	});
+
+	it("hides the client flag from iOS below 1.6.39", async () => {
+		const { database } = setup();
+		const old = await getClientSafeFlags(envFor(database), {
+			userId: "user-a",
+			clientPlatform: "ios",
+			clientVersion: "1.6.38",
+		});
+		expect(old.nutritionHealthExport).toBe(false);
+		const current = await getClientSafeFlags(envFor(database), {
+			userId: "user-a",
+			clientPlatform: "ios",
+			clientVersion: "1.6.39",
+		});
+		expect(current.nutritionHealthExport).toBe(true);
+		const web = await getClientSafeFlags(envFor(database), webFlags);
+		expect(web.nutritionHealthExport).toBe(true);
+	});
+
+	it("parses since and scope, and refuses a bad scope or a future since", () => {
+		const at = (query: string) =>
+			new Request(`https://ration.test/api/x?${query}`);
+		expect(parseHealthPendingQuery(at(""), now)).toEqual({
+			since: undefined,
+			scope: undefined,
+		});
+		expect(
+			parseHealthPendingQuery(
+				at("since=2026-11-09T11:00:00.000Z&scope=changes"),
+				now,
+			),
+		).toEqual({
+			since: new Date("2026-11-09T11:00:00.000Z"),
+			scope: "changes",
+		});
+		expect(parseHealthPendingQuery(at("scope=all"), now).scope).toBe("all");
+		for (const query of [
+			"scope=everything",
+			"since=yesterday",
+			"since=2026-11-10T12:00:00.000Z",
+		]) {
+			expect(() => parseHealthPendingQuery(at(query), now)).toThrow();
+		}
+	});
 });
+
+async function enable(database: D1Database) {
+	await setHealthExportPreference(envFor(database), principal, webFlags, {
+		enabled: true,
+		confirm: true,
+		deviceStatus: "on",
+	});
+}
 
 function setup() {
 	const { database, sqlite } = createSqliteD1();
@@ -411,7 +898,8 @@ function setup() {
 			fat_g real,
 			fiber_g real,
 			occurred_at integer not null,
-			verified integer not null
+			verified integer not null,
+			created_at integer not null default 0
 		);
 	`);
 	insertIntake(sqlite, {
@@ -476,6 +964,8 @@ function insertIntake(
 		occurred?: number;
 		verified?: number;
 		voided?: number | null;
+		version?: number;
+		created?: number;
 	},
 ) {
 	sqlite
@@ -484,8 +974,8 @@ function insertIntake(
 				id, user_id, organization_id, meal_name_snapshot, voided_at,
 				health_sync_id, health_sync_version, composition_source,
 				composition_confirmed_at, energy_kcal, protein_g, carbs_g, fat_g,
-				fiber_g, occurred_at, verified
-			) values (?, ?, ?, 'Yogurt', ?, ?, 1, ?, ?, 120, 10, 8, 4, null, ?, ?)`,
+				fiber_g, occurred_at, verified, created_at
+			) values (?, ?, ?, 'Yogurt', ?, ?, ?, ?, ?, 120, 10, 8, 4, null, ?, ?, ?)`,
 		)
 		.run(
 			input.id,
@@ -493,10 +983,12 @@ function insertIntake(
 			input.organizationId ?? "org-1",
 			input.voided ?? null,
 			input.sync,
+			input.version ?? 1,
 			input.source,
 			input.confirmed,
 			input.occurred ?? recent,
 			input.verified ?? 0,
+			input.created ?? recent,
 		);
 }
 

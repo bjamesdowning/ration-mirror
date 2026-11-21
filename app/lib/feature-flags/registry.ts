@@ -249,6 +249,20 @@ export const FLAG_REGISTRY: Record<string, FlagRegistryEntry> = {
 		clientVisible: false,
 		iosAlwaysOn: false,
 	},
+	"copilot-confirm-scope": {
+		defaultEnabled: false,
+		description:
+			"Copilot bulk Cargo apply asks for host Approve/Deny in the same turn as the preview, and keeps write tools for 15 minutes after a preview so a short reply like 'yes' can apply. Off keeps typed confirmation and keyword-only tool scoping.",
+		clientVisible: false,
+		iosAlwaysOn: false,
+	},
+	"copilot-recovery-tuning": {
+		defaultEnabled: false,
+		description:
+			"Copilot stall recovery: one retry within 60s for live turns, 429/5xx retry, final-step answer guard, billing_stopped notice, AI Gateway request timeout, and an immediate stall message for iOS builds before 1.6.40. Off keeps Think's default recovery.",
+		clientVisible: false,
+		iosAlwaysOn: false,
+	},
 };
 
 /** Registry keys — narrows as entries are added to FLAG_REGISTRY. */

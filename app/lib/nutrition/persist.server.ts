@@ -831,6 +831,8 @@ export type NutritionIntakeRow = {
 	loggedAmount?: number | null;
 	loggedUnit?: "serving" | "g" | "oz" | null;
 	tagNames?: string[] | null;
+	/** Set only with `withEstimate`: true when the row is an AI estimate. */
+	estimate?: true;
 };
 
 export type ListNutritionIntakesOptions = {
@@ -841,6 +843,8 @@ export type ListNutritionIntakesOptions = {
 	crossOrgDiary?: boolean;
 	/** Fuel page reads the person calendar day and ignores kitchen provenance. */
 	dateField?: "manifest" | "fuel";
+	/** Fuel day rows: mark AI estimates with `estimate: true`. */
+	withEstimate?: boolean;
 };
 
 export type NutritionDiaryReadOptions = {
@@ -989,6 +993,7 @@ export async function listNutritionIntakesForRange(
 			loggedAmount: schema.nutritionIntake.loggedAmount,
 			loggedUnit: schema.nutritionIntake.loggedUnit,
 			tagNames: schema.nutritionIntake.tagNames,
+			compositionSource: schema.nutritionIntake.compositionSource,
 		})
 		.from(schema.nutritionIntake)
 		.leftJoin(schema.meal, eq(schema.nutritionIntake.mealId, schema.meal.id))
@@ -1029,6 +1034,9 @@ export async function listNutritionIntakesForRange(
 		loggedAmount: r.loggedAmount ?? null,
 		loggedUnit: coerceIntakeLoggedUnit(r.loggedUnit),
 		tagNames: publishableTagNames(r.tagNames),
+		...(options.withEstimate && r.compositionSource === "ai_estimate"
+			? { estimate: true as const }
+			: {}),
 	}));
 
 	const last = page.at(-1);

@@ -19,6 +19,8 @@ export type FuelItemSource = {
 	loggedUnit?: string | null;
 	entryId?: string | null;
 	tagNames?: unknown;
+	/** True for an AI estimate (from `listNutritionIntakesForRange` withEstimate). */
+	estimate?: boolean | null;
 };
 
 export type PublishableFuelItem = {
@@ -38,6 +40,8 @@ export type PublishableFuelItem = {
 	notes?: string | null;
 	/** Display names stored on the log. Absent when the row has none. */
 	tagNames?: string[];
+	/** Present (true) only for an AI estimate. Changing the numbers clears it. */
+	estimate?: true;
 };
 
 export type FuelDiagnostic = {
@@ -119,6 +123,7 @@ export function selectPublishableFuelItems(
 		}
 		const tagNames = publishableTagNames(item.tagNames);
 		if (tagNames) row.tagNames = tagNames;
+		if (item.estimate === true) row.estimate = true;
 		published.push(row);
 	}
 	if (skipped > 0) {

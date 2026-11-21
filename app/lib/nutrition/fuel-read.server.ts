@@ -44,6 +44,7 @@ export async function loadFuelDay(
 		listNutritionIntakesForRange(db, userId, "", date, date, {
 			dateField: "fuel",
 			limit: 100,
+			withEstimate: true,
 		}),
 		personIsCrew(db, userId, now),
 		readFuelUsed(db, userId, date),

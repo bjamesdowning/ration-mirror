@@ -375,6 +375,52 @@ describe("canonical nutrition service with transactional SQLite", () => {
 		expect(activeAfterUndo).toEqual([{ id: first.items[0]?.intake.id }]);
 	});
 
+	it("gives Manifest logs a Health id, keeps it on replace, and outranks the replacement on undo", async () => {
+		const { env, sqlite } = setup();
+		const first = await logManifestIntakes(env, principal, flags, {
+			operationKey: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+			planId: "plan-1",
+			items: [firstItem],
+		});
+		const health = (id: string | undefined) =>
+			sqlite
+				.prepare(
+					"select health_sync_id syncId, health_sync_version version, composition_source source, composition_confirmed_at confirmed from nutrition_intake where id = ?",
+				)
+				.get(id ?? "") as {
+				syncId: string | null;
+				version: number | null;
+				source: string | null;
+				confirmed: number | null;
+			};
+		const logged = health(first.items[0]?.intake.id);
+		expect(logged.syncId).toMatch(/^[0-9a-f-]{36}$/);
+		expect(logged.version).toBe(1);
+		expect(logged.source).toBe("meal");
+		expect(logged.confirmed).not.toBeNull();
+
+		const edit = await logManifestIntakes(env, principal, flags, {
+			operationKey: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+			planId: "plan-1",
+			items: [
+				{
+					...firstItem,
+					servings: 2,
+					idempotencyKey: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+				},
+			],
+		});
+		const replaced = health(edit.items[0]?.intake.id);
+		expect(replaced.syncId).toBe(logged.syncId);
+		expect(replaced.version).toBe(2);
+
+		await undoIntake(env, principal, flags, edit.operationId);
+		const restored = health(first.items[0]?.intake.id);
+		expect(restored.syncId).toBe(logged.syncId);
+		expect(restored.version).toBe(3);
+		expect(health(edit.items[0]?.intake.id).version).toBe(2);
+	});
+
 	it("rolls back the entire batch when the final audit write fails", async () => {
 		const { env, sqlite } = setup();
 		sqlite.exec("drop table nutrition_access_audit");

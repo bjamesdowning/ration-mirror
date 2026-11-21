@@ -335,7 +335,38 @@ describe("health export plan: edits, removals, and exclusions", () => {
 		expect(energy[0]?.syncVersion).toBe(3);
 	});
 
-	it("removes an exported line from Health when an edit makes it an AI estimate", () => {
+	it("legacy rule: an edit into an AI estimate keeps the samples a newer phone wrote", () => {
+		const rows = [
+			row({ id: "food-1", healthSyncId: "sync-1", voidedAt: recent }),
+			row({
+				id: "food-2",
+				healthSyncId: "sync-1",
+				healthSyncVersion: 2,
+				compositionSource: "ai_estimate",
+				compositionConfirmedAt: null,
+			}),
+		];
+		const legacy = planHealthExport({ ...base, rows, rules: "legacy" });
+		expect(legacy.samples).toEqual([]);
+		expect(legacy.deletes).toEqual([]);
+		expect(legacy.excluded.aiEstimate).toBe(1);
+		const current = planHealthExport({ ...base, rows, rules: "current" });
+		// Only the cleared fiber goes; the live samples are replaced.
+		expect(current.deletes.map((item) => item.syncIdentifiers)).toEqual([
+			["ration:sync-1:dietaryFiber"],
+		]);
+		expect(current.samples.map((sample) => sample.action)).toEqual([
+			"replace",
+			"replace",
+			"replace",
+			"replace",
+		]);
+		expect(current.samples.every((sample) => sample.estimate === true)).toBe(
+			true,
+		);
+	});
+
+	it("legacy rule: an edit into an unusable line still removes it", () => {
 		const plan = planHealthExport({
 			...base,
 			rows: [
@@ -344,16 +375,15 @@ describe("health export plan: edits, removals, and exclusions", () => {
 					id: "food-2",
 					healthSyncId: "sync-1",
 					healthSyncVersion: 2,
-					compositionSource: "ai_estimate",
-					compositionConfirmedAt: null,
+					compositionSource: "meal",
+					energyKcal: 0,
 				}),
 			],
+			rules: "legacy",
 		});
-		expect(plan.samples).toEqual([]);
 		expect(plan.deletes.map((item) => item.syncIdentifiers.length)).toEqual([
 			5,
 		]);
-		expect(plan.excluded.aiEstimate).toBe(1);
 	});
 
 	it("counts what it kept out of Health, by reason", () => {
@@ -473,10 +503,11 @@ describe("health export handler", () => {
 		expect(free.samples.map((sample) => sample.healthSyncId)).toContain(
 			"sync-usda",
 		);
-		expect(free.samples.map((sample) => sample.healthSyncId)).not.toContain(
+		// Non-iOS callers (the MCP preview) get the current rule.
+		expect(free.samples.map((sample) => sample.healthSyncId)).toContain(
 			"sync-ai",
 		);
-		expect(free.samples.map((sample) => sample.healthSyncId)).not.toContain(
+		expect(free.samples.map((sample) => sample.healthSyncId)).toContain(
 			"sync-meal",
 		);
 		expect(free.samples.map((sample) => sample.healthSyncId)).not.toContain(
@@ -662,16 +693,27 @@ describe("health export handler", () => {
 		const { database, sqlite } = setup();
 		await grant(sqlite);
 		await enable(database);
-		const pending = await getHealthExportPending(
+		const legacy = await getHealthExportPending(
+			envFor(database),
+			principal,
+			{ userId: "user-a", clientPlatform: "ios", clientVersion: "1.6.40" },
+			{ now },
+		);
+		expect(legacy.excluded).toEqual({
+			aiEstimate: 1,
+			unconfirmed: 0,
+			notExportable: 1,
+		});
+		const current = await getHealthExportPending(
 			envFor(database),
 			principal,
 			webFlags,
 			{ now },
 		);
-		expect(pending.excluded).toEqual({
-			aiEstimate: 1,
+		expect(current.excluded).toEqual({
+			aiEstimate: 0,
 			unconfirmed: 0,
-			notExportable: 1,
+			notExportable: 0,
 		});
 	});
 

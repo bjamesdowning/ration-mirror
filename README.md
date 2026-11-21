@@ -1788,7 +1788,7 @@ A separate Cloudflare Worker (`ration-mcp`) exposes the Ration pantry to AI agen
 | `preview_inventory_import` | Write | `mcp:inventory:write` | Validates parsed receipt items, returns `previewToken` (15-min KV TTL) | mcp_write (15/min) |
 | `apply_inventory_import` | Write | `mcp:inventory:write` | Applies a confirmed preview; idempotent via `idempotencyKey` (24h KV TTL). MCP: `destructiveHint` + `idempotentHint`. Copilot: chat confirmation by default; host Approve/Deny card when `copilot-confirm-scope` is on | mcp_write (15/min) |
 | `preview_inventory_remove` | Write | `mcp:inventory:write` | Dry-run bulk Cargo deletes (2+); returns `previewToken` | mcp_write (15/min) |
-| `apply_inventory_remove` | Write | `mcp:inventory:write` | Applies a chat-confirmed remove preview (no second host card); idempotent | mcp_write (15/min) |
+| `apply_inventory_remove` | Write | `mcp:inventory:write` | Applies a confirmed remove preview; idempotent. MCP: `destructiveHint` + `idempotentHint`. Copilot: chat confirmation by default; host Approve/Deny card when `copilot-confirm-scope` is on | mcp_write (15/min) |
 | `import_inventory_csv` | Write | `mcp:inventory:write` | Parse a CSV string and apply directly | mcp_write (15/min) |
 | `add_cargo_item` | Write | `mcp:inventory:write` | Add a single pantry item, qty > 0 (skips embedding, no credit cost). Prefer import for bulk. | mcp_write (15/min) |
 | `update_cargo_item` | Write | `mcp:inventory:write` | Set absolute fields; quantity may be 0 (restock reminder; item kept) | mcp_write (15/min) |

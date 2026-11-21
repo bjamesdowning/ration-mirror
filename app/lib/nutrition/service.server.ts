@@ -1202,10 +1202,12 @@ export async function logManifestIntakes(
 				notes,
 				loggedAmount: item.loggedAmount,
 				loggedUnit: item.loggedUnit,
-				healthSyncId: null,
-				healthSyncVersion: null,
-				compositionSource: null,
-				compositionConfirmedAt: null,
+				// A replacement keeps the Health id so HealthKit replaces the
+				// sample; the version must rise for that to happen.
+				healthSyncId: prior?.healthSyncId ?? crypto.randomUUID(),
+				healthSyncVersion: (prior?.healthSyncVersion ?? 0) + 1,
+				compositionSource: "meal",
+				compositionConfirmedAt: committedAt,
 				fdcId: null,
 				barcode: null,
 				savedFoodId: null,
@@ -2386,6 +2388,9 @@ export async function undoIntake(
 				voidedAt: null,
 				voidedByUserId: null,
 				voidOperationId: null,
+				// The restored row must outrank the replacement (prior + 1) that
+				// Health may already hold, or HealthKit keeps the undone numbers.
+				healthSyncVersion: sql`case when ${schema.nutritionIntake.healthSyncId} is null then ${schema.nutritionIntake.healthSyncVersion} else coalesce(${schema.nutritionIntake.healthSyncVersion}, 0) + 2 end`,
 			})
 			.where(
 				and(

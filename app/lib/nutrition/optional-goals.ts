@@ -1,6 +1,6 @@
 import { nutritionFastLogClientAllowed } from "./fuel-capture";
 
-/** Draft, pending review. The same five Nutrition Goals fields, with no suggested numbers. */
+/** The same five Nutrition Goals fields, with no suggested numbers. */
 export const OPTIONAL_GOALS_DRAFT_COPY = "Enter targets you already use";
 
 export const OPTIONAL_GOALS_NOT_MEDICAL =

@@ -301,7 +301,8 @@ struct ScanToFuelView: View {
                     FuelPhotoSubmitBody(
                         operationKey: UUID().uuidString,
                         contentType: "image/jpeg",
-                        imageBase64: jpeg.base64EncodedString()
+                        imageBase64: jpeg.base64EncodedString(),
+                        fuelDate: fuelDate
                     )
                 )
                 let status = try await poll(queued.requestId)
@@ -426,7 +427,10 @@ struct ScanToFuelView: View {
                     ),
                     idempotencyKey: key,
                     operationKey: key,
-                    compositionSource: source
+                    compositionSource: source,
+                    fuelDate: LocalDay.isoString(
+                        from: logDay ?? LocalDay.date(from: fuelDate) ?? Date()
+                    )
                 )
             )
             onSaved()

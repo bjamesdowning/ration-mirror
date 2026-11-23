@@ -142,6 +142,7 @@ struct FuelView: View {
         }
         .sheet(isPresented: $showingAdd) {
             AddFuelSheet(
+                fuelDate: day?.date ?? LocalDay.todayISO(),
                 onSaved: { Task { await load(date: day?.date ?? LocalDay.todayISO()) } },
                 onError: { error in Task { await handleWrite(error) } }
             )
@@ -182,6 +183,7 @@ struct FuelView: View {
                 photoLogEnabled: env.session.clientFlags.isNutritionPhotoLogEnabled,
                 used: day?.used ?? 0,
                 limit: day?.limit,
+                fuelDate: day?.date ?? LocalDay.todayISO(),
                 onSaved: {
                     showingScan = false
                     Task { await load(date: day?.date ?? LocalDay.todayISO()) }

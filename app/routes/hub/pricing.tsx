@@ -15,6 +15,10 @@ import * as schema from "~/db/schema";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { WELCOME_CREDITS } from "~/lib/billing.constants";
 import type { DisplayCurrency } from "~/lib/currency";
+import {
+	FREE_FUEL_LOGS_LABEL,
+	UNLIMITED_FUEL_LOGS,
+} from "~/lib/crew-fuel-copy";
 import { shouldSyncCheckoutFromFetcher } from "~/lib/pricing-checkout";
 import { TIER_LIMITS } from "~/lib/tiers.server";
 import type { Route } from "./+types/pricing";
@@ -225,6 +229,9 @@ export default function PricingPage({ loaderData }: Route.ComponentProps) {
 						<li>Cargo items: {loaderData.tierLimits.free.maxInventoryItems}</li>
 						<li>Meals: {loaderData.tierLimits.free.maxMeals}</li>
 						<li>{loaderData.tierLimits.free.maxGroceryLists} supply lists</li>
+						<li>
+							{FUEL_LOGS_LABEL}: {FREE_FUEL_LOGS_LABEL}
+						</li>
 						<li>No member invites</li>
 					</ul>
 					<div className="mt-4 text-xs text-muted">
@@ -243,6 +250,7 @@ export default function PricingPage({ loaderData }: Route.ComponentProps) {
 					<ul className="space-y-2 text-sm text-carbon">
 						<li>Unlimited Cargo items and meals</li>
 						<li>25 supply lists (Live included)</li>
+						<li>{UNLIMITED_FUEL_LOGS}</li>
 						<li>Shared supply lists and member invites</li>
 						<li>1 free Ask Ration (Copilot) conversation per group per day</li>
 						<li>No included subscription credits</li>

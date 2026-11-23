@@ -7,6 +7,13 @@ import {
 	retryFuelZoneOnce,
 	withDeviceFuelZone,
 } from "~/lib/nutrition/fuel-zone-client";
+import { healthExportPreferenceEnabled } from "~/lib/nutrition/health-export-client";
+import {
+	HEALTH_ESTIMATE_ACCEPT_NOTE,
+	healthEstimateAcceptNeeded,
+	intakeCompositionAfterEstimate,
+	nutrientAmountsEdited,
+} from "~/lib/nutrition/health-exportability";
 
 type RecentFood = {
 	name: string;
@@ -33,6 +40,10 @@ type LogDraft = {
 	idempotencyKey: string;
 	savedFoodId: string | null;
 	compositionSource?: string;
+	estimateEnergy?: number;
+	estimateProtein?: number;
+	estimateCarbs?: number;
+	estimateFat?: number;
 };
 
 function emptyDraft(now = new Date()): LogDraft {
@@ -108,10 +119,12 @@ export function LogToFuelDialog({
 	const [barcodeCode, setBarcodeCode] = useState("");
 	const [lookingUp, setLookingUp] = useState(false);
 	const [saving, setSaving] = useState(false);
+	const [askingAccept, setAskingAccept] = useState(false);
 
 	useEffect(() => {
 		if (!open) return;
 		setDraft(intake ? draftFromRow(intake) : emptyDraft());
+		setAskingAccept(false);
 		setError(null);
 	}, [open, intake]);
 
@@ -244,6 +257,10 @@ export function LogToFuelDialog({
 						body.macros != null ? String(body.macros.carbsG) : current.carbs,
 					fat: body.macros != null ? String(body.macros.fatG) : current.fat,
 					compositionSource: "usda",
+					estimateEnergy: undefined,
+					estimateProtein: undefined,
+					estimateCarbs: undefined,
+					estimateFat: undefined,
 				}));
 			}
 		} catch {
@@ -299,7 +316,13 @@ export function LogToFuelDialog({
 				carbs: String(line.carbsG),
 				fat: String(line.fatG),
 				compositionSource: "ai_estimate",
+				estimateEnergy: line.energyKcal,
+				estimateProtein: line.proteinG,
+				estimateCarbs: line.carbsG,
+				estimateFat: line.fatG,
+				savedFoodId: null,
 			}));
+			setAskingAccept(false);
 		} catch {
 			setError("Could not read that photo.");
 		} finally {
@@ -309,7 +332,7 @@ export function LogToFuelDialog({
 
 	if (!open) return null;
 
-	async function save() {
+	async function save(accepted?: boolean) {
 		const amount = Number(draft.amount);
 		const energy = Number(draft.energy);
 		const protein = Number(draft.protein);
@@ -331,7 +354,46 @@ export function LogToFuelDialog({
 			setError(FUEL_ZONE_UNUSABLE);
 			return;
 		}
+		const amountsEdited =
+			draft.compositionSource === "ai_estimate" &&
+			draft.estimateEnergy != null &&
+			draft.estimateProtein != null &&
+			draft.estimateCarbs != null &&
+			draft.estimateFat != null &&
+			nutrientAmountsEdited(
+				{
+					energyKcal: draft.estimateEnergy,
+					proteinG: draft.estimateProtein,
+					carbsG: draft.estimateCarbs,
+					fatG: draft.estimateFat,
+				},
+				{
+					energyKcal: energy,
+					proteinG: protein,
+					carbsG: carbs,
+					fatG: fat,
+				},
+			);
+		if (
+			!intake &&
+			!draft.savedFoodId &&
+			accepted === undefined &&
+			healthEstimateAcceptNeeded({
+				healthExportEnabled: await healthExportPreferenceEnabled(),
+				compositionSource: draft.compositionSource,
+				amountsEdited,
+			})
+		) {
+			setAskingAccept(true);
+			return;
+		}
+		const compositionSource = intakeCompositionAfterEstimate({
+			compositionSource: draft.compositionSource,
+			amountsEdited,
+			accepted: accepted === true,
+		});
 		setSaving(true);
+		setAskingAccept(false);
 		setError(null);
 		const payload = draft.savedFoodId
 			? {
@@ -353,9 +415,7 @@ export function LogToFuelDialog({
 					},
 					idempotencyKey: draft.idempotencyKey,
 					operationKey: draft.operationKey,
-					...(draft.compositionSource
-						? { compositionSource: draft.compositionSource }
-						: {}),
+					...(compositionSource ? { compositionSource } : {}),
 				};
 		try {
 			const send = () =>
@@ -395,7 +455,13 @@ export function LogToFuelDialog({
 			carbs: String(food.carbsG),
 			fat: String(food.fatG),
 			savedFoodId,
+			compositionSource: undefined,
+			estimateEnergy: undefined,
+			estimateProtein: undefined,
+			estimateCarbs: undefined,
+			estimateFat: undefined,
 		}));
+		setAskingAccept(false);
 	}
 
 	async function starFood(food: RecentFood) {
@@ -695,14 +761,40 @@ export function LogToFuelDialog({
 					>
 						Cancel
 					</button>
-					<button
-						type="button"
-						onClick={() => void save()}
-						disabled={saving}
-						className="px-4 py-2 bg-hyper-green text-on-hyper-green font-semibold rounded-lg"
-					>
-						Save
-					</button>
+					{askingAccept ? (
+						<div className="flex flex-col items-end gap-2">
+							<p className="max-w-sm text-right text-sm text-muted">
+								{HEALTH_ESTIMATE_ACCEPT_NOTE}
+							</p>
+							<div className="flex gap-2">
+								<button
+									type="button"
+									onClick={() => void save(true)}
+									disabled={saving}
+									className="px-4 py-2 bg-hyper-green text-on-hyper-green font-semibold rounded-lg"
+								>
+									Accept
+								</button>
+								<button
+									type="button"
+									onClick={() => void save(false)}
+									disabled={saving}
+									className="btn-secondary px-4 py-2"
+								>
+									Skip
+								</button>
+							</div>
+						</div>
+					) : (
+						<button
+							type="button"
+							onClick={() => void save()}
+							disabled={saving}
+							className="px-4 py-2 bg-hyper-green text-on-hyper-green font-semibold rounded-lg"
+						>
+							Save
+						</button>
+					)}
 				</div>
 			</div>
 		</div>

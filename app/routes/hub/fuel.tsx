@@ -1287,6 +1287,7 @@ type AddFuelMeal = {
 };
 
 function AddFuelPanel({
+	defaultDate,
 	onSave,
 }: {
 	onSave: (entry: {

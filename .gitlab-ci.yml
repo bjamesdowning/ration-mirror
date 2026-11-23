@@ -184,14 +184,15 @@ assemble-1-6-frames:
       }
       url = os.environ["CI_API_V4_URL"] + "/projects/" + os.environ["CI_PROJECT_ID"] + "/repository/commits"
       data = json.dumps(payload).encode()
-      names = sorted(k for k in os.environ if "TOKEN" in k or k.startswith("CI_"))
-      print("env", ",".join(names))
-      req = urllib.request.Request(
-          url,
-          data=data,
-          method="POST",
-          headers={"JOB-TOKEN": os.environ["CI_JOB_TOKEN"], "Content-Type": "application/json"},
-      )
+      headers = {"Content-Type": "application/json"}
+      group_token = os.environ.get("GROUP_API_TOKEN")
+      if group_token:
+          headers["PRIVATE-TOKEN"] = group_token
+          print("auth group token")
+      else:
+          headers["JOB-TOKEN"] = os.environ["CI_JOB_TOKEN"]
+          print("auth job token")
+      req = urllib.request.Request(url, data=data, method="POST", headers=headers)
       try:
           with urllib.request.urlopen(req, timeout=180) as response:
               body = response.read().decode()

@@ -1,5 +1,22 @@
 # App Store Connect upload checklist (UK)
 
+## iOS 1.6 — iPhone 6.9" only
+
+Upload [`framed/6.9/1.6/`](framed/6.9/1.6/) into **iPhone 6.9" Display**. Do not upload `framed/6.5/` for this submission, and do not upload the older `framed/6.9/01-hub.png` … `10-theme.png` set.
+
+| Order | File | Pixels |
+|------:|------|--------|
+| 1 | `01-daily-fuel.png` | 1320×2868 |
+| 2 | `02-agent-sets-fuel.png` | 1320×2868 |
+| 3 | `03-import.png` | 1320×2868 |
+| 4 | `04-scan.png` | 1320×2868 |
+| 5 | `05-galley.png` | 1320×2868 |
+| 6 | `06-manifest.png` | 1320×2868 |
+| 7 | `07-supply.png` | 1320×2868 |
+| 8 | `08-hub.png` | 1320×2868 |
+
+PNG, RGB, no alpha. `03-import.png` is the existing TikTok import frame. `02-agent-sets-fuel.png` adds `Use Grok, Hermes, Dots, or Claude.` under the headline, in type only. `06-manifest.png` is the current week Manifest. `07-supply.png` is the existing supply frame plus a Saved lists cutout. `08-hub.png` is the Hub screen. Do not upload `08-your-agent.png`.
+
 ## Screenshots — fix “dimensions are wrong”
 
 That error means you dropped files into the **wrong display class**.

@@ -1306,6 +1306,7 @@ function AddFuelPanel({
 	}) => void;
 }) {
 	const [query, setQuery] = useState("");
+	const [logDate, setLogDate] = useState(defaultDate);
 	const [cargoPage, setCargoPage] = useState<AddFuelCargo[]>([]);
 	const [searchHits, setSearchHits] = useState<
 		{ id: string; name: string; unit: string }[]

@@ -2,11 +2,11 @@ import { data } from "react-router";
 import { isVersionAtLeast } from "~/lib/client-version";
 import type { FlagshipEvaluationContext } from "~/lib/feature-flags/context.server";
 
-/** Share kitchen picker. Older iOS builds keep the active-kitchen submit. */
-export const SHARE_IMPORT_KITCHEN_PICKER_IOS_MIN = "1.6.48";
+/** Share kitchen picker. Builds below this one keep the active-kitchen submit. */
+export const SHARE_IMPORT_KITCHEN_PICKER_IOS_MIN = "1.6.49";
 
 /**
- * The picker is an iOS share-sheet control. Web and iOS below 1.6.48 fail closed
+ * The picker is an iOS share-sheet control. Web and iOS below 1.6.49 fail closed
  * even when Flagship is on. `X-Ration-Client` is the only version source.
  */
 export function shareImportKitchenPickerClientAllowed(

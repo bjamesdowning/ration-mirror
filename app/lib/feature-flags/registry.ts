@@ -245,7 +245,7 @@ export const FLAG_REGISTRY: Record<string, FlagRegistryEntry> = {
 	"share-import-kitchen-picker": {
 		defaultEnabled: false,
 		description:
-			"Share import asks which kitchen to charge before credits move. Default off. Not iosAlwaysOn. iOS below 1.6.48 fails closed via X-Ration-Client.",
+			"Share import asks which kitchen to charge before credits move. Default off. Not iosAlwaysOn. iOS below 1.6.49 fails closed via X-Ration-Client.",
 		clientVisible: true,
 		clientKey: "shareImportKitchenPicker",
 		iosAlwaysOn: false,

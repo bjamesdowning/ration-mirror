@@ -107,13 +107,13 @@ describe("share import kitchen", () => {
 		expect(
 			shareImportKitchenPickerClientAllowed({
 				clientPlatform: "ios",
-				clientVersion: "1.6.47",
+				clientVersion: "1.6.48",
 			}),
 		).toBe(false);
 		expect(
 			shareImportKitchenPickerClientAllowed({
 				clientPlatform: "ios",
-				clientVersion: "1.6.48",
+				clientVersion: "1.6.49",
 			}),
 		).toBe(true);
 		expect(

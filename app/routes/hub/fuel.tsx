@@ -1290,6 +1290,7 @@ function AddFuelPanel({
 	defaultDate,
 	onSave,
 }: {
+	defaultDate: string;
 	onSave: (entry: {
 		name: string;
 		amount: number;

@@ -20,9 +20,11 @@ final class ShareImportCoordinatorTests: XCTestCase {
         XCTAssertEqual(coordinator.preparedHost, "example.com")
         XCTAssertEqual(coordinator.preparedCost, 3)
         XCTAssertEqual(coordinator.state, .started)
+        XCTAssertFalse(coordinator.claimsSuccess)
         XCTAssertEqual(store.records.first?.ownerUserId, "user-1")
         XCTAssertEqual(store.records.first?.organizationId, "org-1")
         XCTAssertEqual(store.records.first?.state, "processing")
+        XCTAssertEqual(store.records.first?.acknowledged, false)
         XCTAssertEqual(
             service.submitBodies.first?.clientRequestId,
             store.records.first?.clientRequestId
@@ -179,7 +181,7 @@ final class ShareImportCoordinatorTests: XCTestCase {
         XCTAssertEqual(store.records.first?.acknowledged, true)
     }
 
-    func testFailedJobDoesNotClaimSuccess() async {
+    func testAcceptedSubmitDoesNotReadALaterFailure() async {
         let store = MemoryShareImportStore()
         let service = ScriptedShareImportService(session: .make())
         service.statuses = [.success(.make(status: "failed", error: "No recipe"))]
@@ -191,8 +193,11 @@ final class ShareImportCoordinatorTests: XCTestCase {
             store: store,
             sleep: { _ in }
         )
-        XCTAssertEqual(coordinator.state, .failed("No recipe"))
+        XCTAssertEqual(coordinator.state, .started)
+        XCTAssertEqual(service.statuses.count, 1)
         XCTAssertFalse(coordinator.claimsSuccess)
+        XCTAssertEqual(store.records.first?.state, "processing")
+        XCTAssertEqual(store.records.first?.acknowledged, false)
     }
 
     func testSiteBlockedNeedsTheAppAndDoesNotClaimSuccess() async {
@@ -207,8 +212,9 @@ final class ShareImportCoordinatorTests: XCTestCase {
             store: store,
             sleep: { _ in }
         )
-        XCTAssertEqual(coordinator.state, .siteBlocked)
-        XCTAssertEqual(store.records.first?.state, "needsApp")
+        XCTAssertEqual(coordinator.state, .started)
+        XCTAssertEqual(service.statuses.count, 1)
+        XCTAssertEqual(store.records.first?.state, "processing")
         XCTAssertFalse(coordinator.claimsSuccess)
         coordinator.noteTimerElapsed()
         XCTAssertEqual(coordinator.completionCount, 0)
@@ -255,7 +261,9 @@ final class ShareImportCoordinatorTests: XCTestCase {
             sleep: { _ in }
         )
         XCTAssertEqual(coordinator.submitCount, 1)
-        XCTAssertEqual(coordinator.state, .progress(ShareImportCopy.readingPage))
+        XCTAssertEqual(coordinator.state, .started)
+        XCTAssertEqual(service.statuses.count, 1)
+        XCTAssertFalse(coordinator.claimsSuccess)
     }
 
     func testProgressThenConfirmedSaysAddedToGalley() async {
@@ -276,12 +284,12 @@ final class ShareImportCoordinatorTests: XCTestCase {
             maxPolls: 4,
             sleep: { _ in }
         )
-        XCTAssertEqual(coordinator.state, .addedToGalley)
+        XCTAssertEqual(coordinator.state, .started)
         XCTAssertEqual(service.confirmCount, 0)
-        XCTAssertTrue(coordinator.trace.contains("ui:\(ShareImportCopy.readingPage)"))
-        XCTAssertTrue(coordinator.trace.contains("ui:\(ShareImportCopy.listeningToVideo)"))
-        XCTAssertTrue(coordinator.trace.contains("ui:\(ShareImportCopy.buildingRecipe)"))
-        XCTAssertEqual(store.records.first?.acknowledged, true)
+        XCTAssertEqual(service.statuses.count, 4)
+        XCTAssertFalse(coordinator.trace.contains("ui:\(ShareImportCopy.readingPage)"))
+        XCTAssertEqual(store.records.first?.acknowledged, false)
+        XCTAssertFalse(coordinator.claimsSuccess)
     }
 
     func testLogoutEpochLeavesTheRecordUnowned() async {
@@ -421,6 +429,7 @@ final class ShareImportCoordinatorTests: XCTestCase {
             store: store,
             sleep: { _ in }
         )
+        await coordinator.followUntilSettled()
         XCTAssertEqual(coordinator.state, .readyToAdd)
         await coordinator.addToGalley()
         XCTAssertEqual(service.confirmCount, 1)
@@ -690,6 +699,25 @@ final class ShareImportQueueTests: XCTestCase {
         stale.savedAt = Date().timeIntervalSince1970 - (25 * 60 * 60)
         try store.insert(stale)
         XCTAssertNil(store.peekOldest())
+    }
+
+    func testSubmittedRecordStaysThroughTheDay() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let store = SharedImportStore(directory: directory, defaults: nil)
+        var fresh = ShareImportQueueTests.record(0)
+        fresh.state = "processing"
+        fresh.requestId = "req"
+        fresh.savedAt = Date().timeIntervalSince1970 - (2 * 60 * 60)
+        try store.insert(fresh)
+        var older = ShareImportQueueTests.record(1)
+        older.state = "processing"
+        older.requestId = "req-old"
+        older.savedAt = Date().timeIntervalSince1970 - (25 * 60 * 60)
+        try store.insert(older)
+        XCTAssertEqual(store.peekOldest()?.id, "0")
+        XCTAssertNil(store.record(id: "1"))
     }
 
     private static func record(_ index: Int) -> ShareImportRecord {

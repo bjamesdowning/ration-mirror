@@ -10,6 +10,7 @@ workflow:
   auto_cancel:
     on_new_commit: interruptible
   rules:
+    - if: $CI_COMMIT_BRANCH == "cursor/ios-1-6-app-store-screenshots-9566"
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
 
 stages:
@@ -117,3 +118,51 @@ ai_search_sync:
       bunx wrangler r2 object put "ration-copilot-docs/README.md" --file "README.md" --remote
     - bunx wrangler ai-search jobs create ration-docs
   allow_failure: false
+
+# One-shot for the iOS 1.6 screenshot branch. It commits the frames, then
+# restores this file from main so the job does not stay on the branch.
+assemble-1-6-frames:
+  stage: install
+  image: alpine:3.20
+  rules:
+    - if: $CI_COMMIT_BRANCH == "cursor/ios-1-6-app-store-screenshots-9566" && $CI_PIPELINE_SOURCE == "push"
+  interruptible: false
+  script:
+    - apk add --no-cache git curl python3
+    - |
+      set -eu
+      DEST="marketing/appstore/uk/framed/6.9/1.6"
+      BASE="https://gitlab.com/bjamesdowning/ration/-/raw/cursor/ios-1-6-screenshot-ferry-9566/export/appstore-1.6"
+      mkdir -p "$DEST"
+      for f in 01-daily-fuel.png 02-agent-sets-fuel.png 03-import.png 04-scan.png 05-galley.png 06-manifest.png 07-supply.png 08-your-agent.png; do
+        curl -fsSL "$BASE/$f" -o "$DEST/$f"
+      done
+      python3 - <<'PY'
+      import pathlib, struct
+      expected = {
+          "01-daily-fuel.png": 276013,
+          "02-agent-sets-fuel.png": 448017,
+          "03-import.png": 1725193,
+          "04-scan.png": 420458,
+          "05-galley.png": 232013,
+          "06-manifest.png": 248242,
+          "07-supply.png": 331932,
+          "08-your-agent.png": 117323,
+      }
+      root = pathlib.Path("marketing/appstore/uk/framed/6.9/1.6")
+      for name, size in expected.items():
+          data = (root / name).read_bytes()
+          assert data[:8] == b"\x89PNG\r\n\x1a\n", name
+          w, h = struct.unpack(">II", data[16:24])
+          assert (w, h) == (1320, 2868), (name, w, h)
+          assert len(data) == size, (name, len(data), size)
+          print(name, w, h, len(data))
+      PY
+      git config user.email "ci@ration.mayutic.com"
+      git config user.name "Ration screenshots"
+      git fetch origin main
+      git checkout origin/main -- .gitlab-ci.yml
+      git add "$DEST" .gitlab-ci.yml
+      git status --short
+      git commit -m "Add the iOS 1.6 App Store 6.9-inch screenshot set"
+      git push "https://gitlab-ci-token:${CI_JOB_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git" "HEAD:${CI_COMMIT_BRANCH}"

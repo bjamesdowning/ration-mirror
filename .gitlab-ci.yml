@@ -117,3 +117,22 @@ ai_search_sync:
       bunx wrangler r2 object put "ration-copilot-docs/README.md" --file "README.md" --remote
     - bunx wrangler ai-search jobs create ration-docs
   allow_failure: false
+
+# Temporary. Publishes the Copilot screenshot as text so the frame
+# generator can read it. Removed before this request is ready.
+export-copilot-frame:
+  stage: test
+  image: alpine:3.20
+  needs: []
+  interruptible: false
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  script:
+    - mkdir -p out
+    - base64 marketing/appstore/uk/framed/6.9/09-ask.png > out/09-ask.b64
+    - base64 marketing/appstore/uk/raw/09-ask.png > out/09-ask-raw.b64
+    - wc -c out/09-ask.b64 out/09-ask-raw.b64
+  artifacts:
+    paths:
+      - out/
+    expire_in: 1 day

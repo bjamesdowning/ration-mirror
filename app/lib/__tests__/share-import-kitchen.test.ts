@@ -154,11 +154,10 @@ describe("share import kitchen", () => {
 			.get() as { state: string; organization_id: string };
 		expect(parked).toEqual({ state: "reserved", organization_id: "personal" });
 
-		const { send } = envFor(database);
-		const moved = await submitDurableRecipeImport(
-			{ ...envFor(database).env, IMPORT_URL_QUEUE: { send } } as Cloudflare.Env,
-			{ ...input, organizationId: "crew" },
-		);
+		const moved = await submitDurableRecipeImport(envFor(database).env, {
+			...input,
+			organizationId: "crew",
+		});
 		expect(moved).toEqual({ status: "processing", requestId });
 		const credits = sqlite
 			.prepare("SELECT id, credits FROM organization ORDER BY id")

@@ -42,7 +42,7 @@ final class ShareImportCoordinator {
 
     var claimsSuccess: Bool {
         switch state {
-        case .started, .readyToAdd, .addedToGalley, .progress: true
+        case .readyToAdd, .addedToGalley: true
         default: false
         }
     }
@@ -244,6 +244,11 @@ final class ShareImportCoordinator {
         trace.append("processing")
         trace.append("ui:started")
         state = .started
+    }
+
+    /// The share sheet does not call this. Ration resumes the job when it next opens.
+    func followUntilSettled() async {
+        guard let requestId = record?.requestId, let service else { return }
         await poll(requestId, service: service)
     }
 

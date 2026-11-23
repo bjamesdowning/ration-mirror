@@ -69,4 +69,25 @@ final class SharedImportHandoffTests: XCTestCase {
         SharedImportHandoff.clear()
         XCTAssertNil(SharedImportHandoff.consumePending())
     }
+
+    func testConsumeKeepsAPayloadFromEarlierToday() {
+        SharedImportHandoff.writePendingForTesting(
+            url: "https://example.com/recipe",
+            autoStart: true,
+            at: Date().timeIntervalSince1970 - (2 * 60 * 60)
+        )
+        XCTAssertEqual(
+            SharedImportHandoff.consumePending()?.url,
+            "https://example.com/recipe"
+        )
+    }
+
+    func testConsumeDropsAPayloadAfterADay() {
+        SharedImportHandoff.writePendingForTesting(
+            url: "https://example.com/recipe",
+            autoStart: true,
+            at: Date().timeIntervalSince1970 - (25 * 60 * 60)
+        )
+        XCTAssertNil(SharedImportHandoff.consumePending())
+    }
 }

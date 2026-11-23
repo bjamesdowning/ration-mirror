@@ -3,10 +3,84 @@ import SwiftUI
 struct ShareImportView: View {
     let url: URL
     let userText: String?
+    let onOpen: () async -> Bool
     let onFinish: () -> Void
     @State private var coordinator = ShareImportCoordinator()
+    @State private var openRefused = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
+        Group {
+            if coordinator.state == .started {
+                handoff
+            } else {
+                statusStack
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(coordinator.state == .started ? ShareImportPalette.carbon : background)
+        .task {
+            guard let store = SharedImportStore.appGroup() else {
+                coordinator.failClosed()
+                return
+            }
+            await coordinator.begin(
+                url: url,
+                userText: userText,
+                service: ShareImportLiveService(),
+                store: store
+            )
+        }
+    }
+
+    private var handoff: some View {
+        VStack(spacing: 24) {
+            ShareImportMark(reduceMotion: reduceMotion)
+            VStack(spacing: 8) {
+                Text(ShareImportCopy.importingTitle)
+                    .font(.system(.headline, design: .monospaced))
+                    .foregroundStyle(ShareImportPalette.ink)
+                    .multilineTextAlignment(.center)
+                Text(ShareImportCopy.importingBody)
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(ShareImportPalette.muted)
+                    .multilineTextAlignment(.center)
+            }
+            .accessibilityElement(children: .combine)
+            VStack(spacing: 12) {
+                Button(ShareImportCopy.openRation) {
+                    Task {
+                        let opened = await onOpen()
+                        if opened {
+                            if coordinator.userRequestedFinish() {
+                                onFinish()
+                            }
+                        } else {
+                            openRefused = true
+                        }
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(ShareImportPalette.hyperGreen)
+                Button("Done") {
+                    if coordinator.userRequestedFinish() {
+                        onFinish()
+                    }
+                }
+                .buttonStyle(.bordered)
+                .tint(ShareImportPalette.ink)
+            }
+            if openRefused {
+                Text(ShareImportCopy.openRationRefused)
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(ShareImportPalette.muted)
+                    .multilineTextAlignment(.center)
+            }
+        }
+        .padding(24)
+    }
+
+    private var statusStack: some View {
         VStack(spacing: 16) {
             Text(title)
                 .font(.system(.body, design: .monospaced))
@@ -20,14 +94,14 @@ struct ShareImportView: View {
                     Task { await coordinator.allowAndImport() }
                 }
                 .buttonStyle(.borderedProminent)
-                .tint(Color(red: 0, green: 0.878, blue: 0.533))
+                .tint(ShareImportPalette.hyperGreen)
             }
             if case .readyToAdd = coordinator.state {
                 Button(ShareImportCopy.addToGalley) {
                     Task { await coordinator.addToGalley() }
                 }
                 .buttonStyle(.borderedProminent)
-                .tint(Color(red: 0, green: 0.878, blue: 0.533))
+                .tint(ShareImportPalette.hyperGreen)
             }
             if coordinator.finishAllowed {
                 Button("Done") {
@@ -38,20 +112,6 @@ struct ShareImportView: View {
             }
         }
         .padding(24)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(background)
-        .task {
-            guard let store = SharedImportStore.appGroup() else {
-                coordinator.failClosed()
-                return
-            }
-            await coordinator.begin(
-                url: url,
-                userText: userText,
-                service: ShareImportLiveService(),
-                store: store
-            )
-        }
     }
 
     private var title: String {
@@ -87,7 +147,7 @@ struct ShareImportView: View {
         case .progress(let label):
             label
         case .started:
-            ShareImportCopy.importStarted
+            ShareImportCopy.importingTitle
         case .readyToAdd:
             "Recipe ready"
         case .addedToGalley:
@@ -104,5 +164,58 @@ struct ShareImportView: View {
             }
             return UIColor(red: 0.973, green: 0.976, blue: 0.980, alpha: 1)
         })
+    }
+}
+
+/// Colors copied from AiWaitChrome and Theme. The share target does not compile those types.
+private enum ShareImportPalette {
+    static let carbon = Color(red: 17 / 255, green: 17 / 255, blue: 17 / 255)
+    static let ink = Color(red: 248 / 255, green: 249 / 255, blue: 250 / 255)
+    static let muted = Color(red: 156 / 255, green: 163 / 255, blue: 175 / 255)
+    static let hyperGreen = Color(red: 0, green: 224 / 255, blue: 136 / 255)
+}
+
+/// Link mark from AIFeature.importRecipe. Space Mono and AiWaitMark are not in this target.
+private struct ShareImportMark: View {
+    let reduceMotion: Bool
+    @State private var sweep = false
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .stroke(ShareImportPalette.hyperGreen.opacity(0.28), lineWidth: 1)
+                .frame(width: 88, height: 88)
+            if !reduceMotion {
+                Circle()
+                    .trim(from: 0, to: 0.22)
+                    .stroke(
+                        ShareImportPalette.hyperGreen,
+                        style: StrokeStyle(lineWidth: 1.5, lineCap: .round)
+                    )
+                    .frame(width: 88, height: 88)
+                    .rotationEffect(.degrees(sweep ? 360 : 0))
+            }
+            Image(systemName: "link")
+                .font(.system(size: 22))
+                .foregroundStyle(ShareImportPalette.hyperGreen)
+        }
+        .frame(width: 120, height: 120)
+        .accessibilityHidden(true)
+        .onAppear { syncMotion() }
+        .onChange(of: reduceMotion) { _, _ in syncMotion() }
+    }
+
+    private func syncMotion() {
+        guard !reduceMotion else {
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) {
+                sweep = false
+            }
+            return
+        }
+        withAnimation(.linear(duration: 2.4).repeatForever(autoreverses: false)) {
+            sweep = true
+        }
     }
 }

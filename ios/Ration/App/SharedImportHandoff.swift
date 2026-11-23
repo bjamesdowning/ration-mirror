@@ -7,8 +7,8 @@ enum SharedImportHandoff {
     static let pendingAtKey = "pendingImportURLAt"
     static let pendingAutoStartKey = "pendingImportAutoStart"
     static let pendingUserTextKey = "pendingImportUserText"
-    /// Ignore stale share payloads older than 10 minutes.
-    private static let maxAgeSeconds: TimeInterval = 600
+    /// Same 24-hour window as ShareImportCopy.savedForLater.
+    private static let maxAgeSeconds: TimeInterval = 24 * 60 * 60
 
     struct PendingImport: Equatable, Sendable {
         let url: String

@@ -9,6 +9,12 @@ enum ShareImportCopy {
     static let addToGalley = "Add to Galley"
     static let addedToGalley = "Added to Galley"
     static let importStarted = "Import started"
+    static let importingTitle = "Importing recipe…"
+    static let importingBody =
+        "Ration is importing this link. AI is reading the recipe. It keeps going after you leave, and it is in Ration the next time you open the app."
+    static let openRation = "Open Ration"
+    static let openRationRefused =
+        "Ration could not open from here. Open the Ration app from your Home Screen. This import is waiting there."
     static func preparing(host: String, cost: Int?) -> String {
         if let cost {
             return "Preparing import from \(host). This import uses \(cost) credits."

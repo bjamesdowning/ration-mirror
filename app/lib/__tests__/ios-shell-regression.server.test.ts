@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { patchUserSettings } from "~/lib/auth.server";
 import {
 	IMPORT_DISPATCH_DEADLINE_SECONDS,
+	IMPORT_JOB_TTL_SECONDS,
 	submitDurableRecipeImport,
 	sweepImportDispatches,
 } from "~/lib/import-dispatch.server";
@@ -330,6 +331,11 @@ describe("fuel reads", () => {
 		expect(source).not.toContain("scheduledTimer");
 		expect(source).not.toContain("asyncAfter");
 		expect(source).not.toContain('title = "Open Ration"');
+		expect(source).toContain("ration://galley/import");
+		expect(source).not.toContain("ration://galley/import?");
+		expect(source).toContain("Importing recipe");
+		expect(source).toContain("context.open(url)");
+		expect(source).not.toContain("print(");
 		expect(source).toContain("if !flagOn");
 		const client = readFileSync(
 			"ios/Shared/ShareImport/ShareImportClient.swift",
@@ -801,6 +807,12 @@ describe("import dispatch", () => {
 			.prepare("SELECT credits FROM organization WHERE id = 'org-1'")
 			.get() as { credits: number };
 		expect(credits.credits).toBe(6);
+		const job = sqlite
+			.prepare(
+				"SELECT expires_at - created_at AS ttl FROM queue_job WHERE request_id = ?",
+			)
+			.get(requestId) as { ttl: number };
+		expect(job.ttl).toBe(IMPORT_JOB_TTL_SECONDS);
 		const ledgers = sqlite
 			.prepare("SELECT count(*) AS n FROM ledger")
 			.get() as { n: number };

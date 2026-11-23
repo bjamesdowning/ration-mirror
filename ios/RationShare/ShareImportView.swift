@@ -86,6 +86,9 @@ struct ShareImportView: View {
                 .font(.system(.body, design: .monospaced))
                 .multilineTextAlignment(.center)
                 .foregroundStyle(Color.primary)
+            if case .chooseKitchen(let host, let cost, let selectedId) = coordinator.state {
+                kitchenChoice(host: host, cost: cost, selectedId: selectedId)
+            }
             if case .needsConsent = coordinator.state {
                 Text(ShareImportCopy.disclosure)
                     .font(.system(.footnote, design: .monospaced))
@@ -154,7 +157,47 @@ struct ShareImportView: View {
             ShareImportCopy.addedToGalley
         case .queueFull:
             ShareImportCopy.queueFull
+        case .chooseKitchen(let host, let cost, _):
+            ShareImportCopy.preparing(host: host, cost: cost)
         }
+    }
+
+    @ViewBuilder
+    private func kitchenChoice(host: String, cost: Int, selectedId: String) -> some View {
+        let selected = coordinator.kitchens.first { $0.id == selectedId }
+        let balance = selected?.credits ?? 0
+        let canConfirm = balance >= cost
+        VStack(spacing: 12) {
+            if coordinator.kitchens.count > 1 {
+                Picker("Kitchen", selection: Binding(
+                    get: { selectedId },
+                    set: { coordinator.selectKitchen($0) }
+                )) {
+                    ForEach(coordinator.kitchens) { kitchen in
+                        Text(kitchen.name).tag(kitchen.id)
+                    }
+                }
+            } else if let selected {
+                Text(selected.name)
+                    .font(.system(.body, design: .monospaced))
+            }
+            Text("\(balance) credits in this kitchen. This import uses \(cost) credits.")
+                .font(.system(.footnote, design: .monospaced))
+                .multilineTextAlignment(.center)
+            if !canConfirm {
+                Text(ShareImportCopy.addByHand)
+                    .font(.system(.footnote, design: .monospaced))
+                    .multilineTextAlignment(.center)
+            }
+            Button("Confirm") {
+                Task { await coordinator.confirmKitchen() }
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(ShareImportPalette.hyperGreen)
+            .disabled(!canConfirm)
+        }
+        .accessibilityElement(children: .contain)
+        let _ = host
     }
 
     private var background: Color {

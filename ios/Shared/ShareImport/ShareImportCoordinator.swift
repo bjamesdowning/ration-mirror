@@ -303,7 +303,7 @@ final class ShareImportCoordinator {
         )
         let requestId: String
         do {
-            requestId = try await serviceSubmit(body, service: service)
+            requestId = try await submitOnce(body, service: service)
         } catch let error as ShareImportServiceError {
             apply(error, cost: sessionCost)
             return

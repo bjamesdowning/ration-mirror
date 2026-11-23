@@ -1561,6 +1561,17 @@ function AddFuelPanel({
 			}}
 		>
 			<h2 className="text-base">Add Fuel</h2>
+			<label className="block text-sm">
+				Date
+				<input
+					type="date"
+					value={logDate}
+					required
+					aria-label="Date"
+					className="mt-1 block min-h-11 w-full"
+					onChange={(event) => setLogDate(event.target.value)}
+				/>
+			</label>
 			{formError ? <p className="text-sm text-carbon">{formError}</p> : null}
 			<label className="block text-sm">
 				Search

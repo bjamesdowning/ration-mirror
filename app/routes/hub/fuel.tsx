@@ -207,6 +207,7 @@ export default function FuelPage({ loaderData }: Route.ComponentProps) {
 		};
 		compositionSource: "manual_macros" | "meal";
 		tagNames: { name: string; slug?: string }[];
+		fuelDate: string;
 	}) {
 		if (!online) {
 			setError(
@@ -220,12 +221,18 @@ export default function FuelPage({ loaderData }: Route.ComponentProps) {
 			return;
 		}
 		setError(null);
+		if (!/^\d{4}-\d{2}-\d{2}$/.test(entry.fuelDate)) {
+			setPendingName(null);
+			setError("Pick a date.");
+			return;
+		}
 		const operationKey = crypto.randomUUID();
 		const controller = new AbortController();
 		const timer = setTimeout(() => controller.abort(), 15000);
 		try {
 			const payload = {
 				name: entry.name,
+				fuelDate: entry.fuelDate,
 				occurredAt: new Date().toISOString(),
 				amount: entry.amount,
 				unit: entry.unit,
@@ -401,6 +408,7 @@ export default function FuelPage({ loaderData }: Route.ComponentProps) {
 					photoLog={photoLog}
 					credits={credits}
 					scanCreditCost={scanCreditCost}
+					defaultDate={day.date}
 					onClose={() => setShowScan(false)}
 					onLimit={() => openFuelPurchase()}
 					onSaved={() => {
@@ -460,6 +468,7 @@ export default function FuelPage({ loaderData }: Route.ComponentProps) {
 
 			{showAdd ? (
 				<AddFuelPanel
+					defaultDate={day.date}
 					onSave={(entry) => {
 						void submitAdd(entry);
 					}}

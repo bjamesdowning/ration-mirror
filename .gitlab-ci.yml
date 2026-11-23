@@ -118,26 +118,14 @@ ai_search_sync:
     - bunx wrangler ai-search jobs create ration-docs
   allow_failure: false
 
-# Temporary. Publishes the Copilot screenshot as text so the frame
-# generator can read it. Removed before this request is ready.
-export-copilot-frame:
+# Temporary. Lands the revamped frames, then deletes itself and
+# restores this file to main. Not part of the finished diff.
+assemble-frames:
   stage: test
-  image: alpine:3.20
+  image: python:3.12-alpine
   needs: []
   interruptible: false
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
   script:
-    - mkdir -p out
-    - |
-      for f in marketing/appstore/uk/raw/04-scan.png marketing/appstore/uk/raw/05-galley.png marketing/appstore/uk/raw/08-supply.png marketing/appstore/uk/raw/03-share.png; do
-        name=$(basename "$f" .png)
-        echo "$f"
-        od -An -t u1 -j 16 -N 8 "$f"
-        base64 "$f" > "out/${name}.b64"
-        wc -c "out/${name}.b64"
-      done
-  artifacts:
-    paths:
-      - out/
-    expire_in: 1 day
+    - python3 tools/assemble_frames.py

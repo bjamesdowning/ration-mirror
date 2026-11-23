@@ -37,6 +37,7 @@ export type FuelPhotoApproveBody = {
 	idempotencyKey: string;
 	operationKey: string;
 	compositionSource: "ai_estimate" | "user_override";
+	fuelDate?: string;
 };
 
 function sumLine(
@@ -81,7 +82,12 @@ export function fuelPhotoReviewFromLines(
  */
 export function fuelPhotoApproveBody(
 	review: FuelPhotoReviewDraft,
-	keys: { idempotencyKey: string; operationKey: string; occurredAt: string },
+	keys: {
+		idempotencyKey: string;
+		operationKey: string;
+		occurredAt: string;
+		fuelDate?: string;
+	},
 	compositionSource: FuelPhotoApproveBody["compositionSource"] = "ai_estimate",
 ): FuelPhotoApproveBody | null {
 	const name = review.name.trim();
@@ -112,6 +118,7 @@ export function fuelPhotoApproveBody(
 		idempotencyKey: keys.idempotencyKey,
 		operationKey: keys.operationKey,
 		compositionSource,
+		...(keys.fuelDate ? { fuelDate: keys.fuelDate } : {}),
 	};
 }
 

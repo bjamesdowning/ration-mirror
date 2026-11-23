@@ -28,7 +28,11 @@ import {
 	stampFuelDate,
 } from "./fuel-cap.server";
 import { secondVoidDecision } from "./fuel-capture";
-import { assertFuelDateUnchanged } from "./fuel-date";
+import {
+	assertFuelDateUnchanged,
+	isCalendarDate,
+	noonOnFuelDate,
+} from "./fuel-date";
 import {
 	diaryCompositionStamp,
 	editCompositionStamp,
@@ -708,6 +712,9 @@ export async function logDiaryFood(
 					notesEnabled,
 					previewNotes,
 					"log_diary_food",
+					input.pinnedFuelDate || input.fuelDate
+						? { fuelDate: input.pinnedFuelDate ?? input.fuelDate }
+						: {},
 				),
 			)
 		: null;
@@ -732,6 +739,21 @@ export async function logDiaryFood(
 		now,
 	);
 	const food = materialized.food;
+	const chosenFuelDate = input.pinnedFuelDate ?? input.fuelDate;
+	if (chosenFuelDate && (await isNutritionFuelPageEnabled(env, flags))) {
+		if (!isCalendarDate(chosenFuelDate)) {
+			throw Object.assign(new Error("fuelDate must be a real day"), {
+				code: "invalid_request",
+				status: 400,
+			});
+		}
+		const zone = await ensureFuelTimeZone(
+			env.DB,
+			principal.userId,
+			input.fuelTimeZone,
+		);
+		food.occurredAt = noonOnFuelDate(chosenFuelDate, zone);
+	}
 	const notes = resolveIntakeNotesForWrite({
 		notesEnabled,
 		requestedNotes: food.requestedNotes,
@@ -796,12 +818,14 @@ export async function logDiaryFood(
 		try {
 			const fuelDate = input.pinnedFuelDate
 				? input.pinnedFuelDate
-				: await stampFuelDate(
-						env.DB,
-						principal.userId,
-						food.occurredAt,
-						input.fuelTimeZone,
-					);
+				: input.fuelDate
+					? input.fuelDate
+					: await stampFuelDate(
+							env.DB,
+							principal.userId,
+							food.occurredAt,
+							input.fuelTimeZone,
+						);
 			const crew = await personIsCrew(env.DB, principal.userId, now);
 			await reserveFuelSlot(env.DB, principal.userId, fuelDate, crew);
 			reservedFuelDate = fuelDate;

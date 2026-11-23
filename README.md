@@ -1598,6 +1598,7 @@ flowchart TB
         F4["1 Owned Group"]
         F5["No Invitations"]
         F6["No List or Plan Sharing"]
+        F7["3 Fuel logs"]
     end
 
     subgraph CrewTier["Crew Member — 12/year"]
@@ -1608,6 +1609,7 @@ flowchart TB
         C5["Invite Members"]
         C6["Share Lists and Plans publicly"]
         C7["65 Credits on Signup and Annual Renewal (Annual plan only)"]
+        C8["Unlimited Fuel logs"]
     end
 
     CheckRequest["API Write Request"] --> GetTier["getGroupTierLimits() — KV cached 60s"]

@@ -370,7 +370,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 					name: "Free",
 					price: "0",
 					priceCurrency: "EUR",
-					description: `Up to ${loaderData.tierLimits.free.maxInventoryItems} pantry items, ${loaderData.tierLimits.free.maxMeals} recipes, ${loaderData.tierLimits.free.maxGroceryLists} supply lists. Includes 12 welcome credits for new human accounts.`,
+					description: `Up to ${loaderData.tierLimits.free.maxInventoryItems} pantry items, ${loaderData.tierLimits.free.maxMeals} recipes, ${loaderData.tierLimits.free.maxGroceryLists} supply lists, ${FREE_FUEL_LOGS_LABEL} Fuel logs. Includes 12 welcome credits for new human accounts.`,
 				},
 				{
 					name: "Crew Member (Monthly)",

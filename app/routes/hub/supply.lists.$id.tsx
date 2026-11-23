@@ -21,6 +21,10 @@ import {
 import { requireActiveGroup } from "~/lib/auth.server";
 import { useConfirm } from "~/lib/confirm-context";
 import { handleApiError } from "~/lib/error-handler";
+import {
+	CREW_PAYWALL_HREF,
+	isSupplyListCapacityError,
+} from "~/lib/supply-list-capacity-gate";
 import { buildWebFlagContext } from "~/lib/feature-flags/context.server";
 import {
 	deleteSupplyItem,
@@ -247,6 +251,7 @@ export async function action({ request, params, context }: Route.ActionArgs) {
 		return { error: "Invalid intent" };
 	} catch (error) {
 		if (error instanceof Response) throw error;
+		if (isSupplyListCapacityError(error)) throw redirect(CREW_PAYWALL_HREF);
 		return handleApiError(error);
 	}
 }

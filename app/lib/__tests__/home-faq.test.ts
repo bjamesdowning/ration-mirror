@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { buildHomeFaqEntries } from "~/lib/home-faq";
+import {
+	FREE_FUEL_LOGS_LABEL,
+	UNLIMITED_FUEL_LOGS,
+} from "~/lib/crew-fuel-copy";
 
 const tierLimits = {
 	free: {
@@ -40,6 +44,8 @@ describe("buildHomeFaqEntries", () => {
 		const free = entries.find((entry) => entry.question === "Is Ration free?");
 		expect(free?.answer).toContain("50 pantry items");
 		expect(free?.answer).toContain("€2/month");
+		expect(free?.answer).toContain(`${FREE_FUEL_LOGS_LABEL} Fuel logs`);
+		expect(free?.answer).toContain(UNLIMITED_FUEL_LOGS);
 		expect(free?.answer).toContain("12 welcome credits");
 		expect(free?.answer).toContain(
 			"1 free Ask Ration (Copilot) conversation per group per day",

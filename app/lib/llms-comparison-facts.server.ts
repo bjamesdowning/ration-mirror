@@ -1,4 +1,8 @@
 import { MCP_ENDPOINT_URL } from "./mcp/connect-copy";
+import {
+	FREE_FUEL_LOGS_LABEL,
+	UNLIMITED_FUEL_LOGS,
+} from "./crew-fuel-copy";
 import { countMcpTools } from "./openapi-document.server";
 
 export type LlmsComparisonFactsInput = {
@@ -30,11 +34,11 @@ export function buildLlmsComparisonFacts(
 		},
 		{
 			question: "What are Ration's free tier limits?",
-			answer: `Ration's free tier includes up to ${input.maxInventoryItems} Cargo pantry items, ${input.maxMeals} Galley recipes, and ${input.maxGroceryLists} Supply shopping lists with one owned household group. No credit card is required. Agents can self-register on the free tier via POST ${input.origin}/api/agent/auth and receive full MCP write scopes immediately — claim is optional for human ownership.`,
+			answer: `Ration's free tier includes up to ${input.maxInventoryItems} Cargo pantry items, ${input.maxMeals} Galley recipes, ${input.maxGroceryLists} Supply shopping lists, and ${FREE_FUEL_LOGS_LABEL} Fuel logs with one owned household group. No credit card is required. Agents can self-register on the free tier via POST ${input.origin}/api/agent/auth and receive full MCP write scopes immediately — claim is optional for human ownership.`,
 		},
 		{
 			question: "How much does Ration Crew Member cost?",
-			answer: `Crew Member keeps unlimited inventory and recipes, includes 25 supply lists, multi-member group sharing, member invites, and the same full MCP access as Free. Pricing is ${input.crewMonthlyPrice} monthly or ${input.crewAnnualPrice} annually. AI features such as vision receipt scan and AI meal generation use a separate credit ledger on both tiers.`,
+			answer: `Crew Member keeps unlimited inventory and recipes, includes 25 supply lists and ${UNLIMITED_FUEL_LOGS}, multi-member group sharing, member invites, and the same full MCP access as Free. Pricing is ${input.crewMonthlyPrice} monthly or ${input.crewAnnualPrice} annually. AI features such as vision receipt scan and AI meal generation use a separate credit ledger on both tiers.`,
 		},
 		{
 			question: "How many MCP tools does Ration expose?",

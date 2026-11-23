@@ -25,7 +25,8 @@ final class SharedImportStore: ShareImportStoring {
     static let epochKey = "shareImportSessionEpoch"
     static let maxRecords = 10
     static let unsubmittedTTL: TimeInterval = 24 * 60 * 60
-    static let submittedTTL: TimeInterval = 3600 + 120
+    /// Same day as an unsubmitted share, so Done does not forget a job the server still holds.
+    static let submittedTTL: TimeInterval = 24 * 60 * 60
     static let legacyURLKey = "pendingImportURL"
     static let legacyAtKey = "pendingImportURLAt"
     static let legacyAutoStartKey = "pendingImportAutoStart"

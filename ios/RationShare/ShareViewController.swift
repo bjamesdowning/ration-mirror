@@ -107,9 +107,16 @@ final class ShareViewController: UIViewController {
     private func presentImport(url: URL, userText: String?) {
         statusLabel?.isHidden = true
         doneButton?.isHidden = true
-        let root = ShareImportView(url: url, userText: userText) { [weak self] in
-            self?.extensionContext?.completeRequest(returningItems: nil, completionHandler: nil)
-        }
+        let root = ShareImportView(
+            url: url,
+            userText: userText,
+            onOpen: { [weak self] in
+                await self?.openRation() ?? false
+            },
+            onFinish: { [weak self] in
+                self?.extensionContext?.completeRequest(returningItems: nil, completionHandler: nil)
+            }
+        )
         let host = UIHostingController(rootView: root)
         host.view.backgroundColor = Self.ceramicBackground
         host.view.translatesAutoresizingMaskIntoConstraints = false
@@ -126,6 +133,18 @@ final class ShareViewController: UIViewController {
 
     @objc private func finish() {
         extensionContext?.completeRequest(returningItems: nil, completionHandler: nil)
+    }
+
+    /// Public open only. A share extension is not one of the extension points Apple lets this launch.
+    private func openRation() async -> Bool {
+        guard let url = URL(string: "ration://galley/import"),
+              let context = extensionContext
+        else { return false }
+        return await withCheckedContinuation { continuation in
+            context.open(url) { accepted in
+                continuation.resume(returning: accepted)
+            }
+        }
     }
 
     private func clearLegacyPending() {

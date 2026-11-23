@@ -18,7 +18,9 @@ import {
 import type { RecipeImportRequest } from "~/lib/schemas/recipe-import";
 
 export const IMPORT_DISPATCH_DEADLINE_SECONDS = 15 * 60;
-const JOB_TTL_SECONDS = 3600;
+/** How long an import result stays readable for confirm. Matches the phone share queue. */
+export const IMPORT_JOB_TTL_SECONDS = 24 * 60 * 60;
+const JOB_TTL_SECONDS = IMPORT_JOB_TTL_SECONDS;
 
 export type ImportDispatchState =
 	| "reserved"

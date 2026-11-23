@@ -1302,6 +1302,7 @@ function AddFuelPanel({
 		};
 		compositionSource: "manual_macros" | "meal";
 		tagNames: AddFuelTag[];
+		fuelDate: string;
 	}) => void;
 }) {
 	const [query, setQuery] = useState("");

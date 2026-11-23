@@ -99,6 +99,7 @@ struct PaywallView: View {
                 .rationHeadline()
             VStack(alignment: .leading, spacing: 8) {
                 benefitRow("Unlimited Cargo, Meals, and Supply lists")
+                benefitRow(TierLimits.unlimitedFuelLogs)
                 benefitRow("Up to \(TierLimits.crewMaxOwnedGroups) owned groups + member invites")
                 benefitRow("Share Manifest & Supply via public links")
                 benefitRow("1 free Ask Ration chat per group per day")
@@ -143,6 +144,7 @@ struct PaywallView: View {
                 comparisonRow("Cargo items", free: "\(TierLimits.freeMaxInventoryItems)", crew: "Unlimited")
                 comparisonRow("Meals", free: "\(TierLimits.freeMaxMeals)", crew: "Unlimited")
                 comparisonRow("Supply lists", free: "\(TierLimits.freeMaxGroceryLists)", crew: "Unlimited")
+                comparisonRow(TierLimits.fuelLogsRowLabel, free: "\(TierLimits.freeMaxFuelLogs)", crew: "Unlimited")
                 comparisonRow("Owned groups", free: "\(TierLimits.freeMaxOwnedGroups)", crew: "\(TierLimits.crewMaxOwnedGroups)")
                 comparisonRow("Invites & share links", free: "—", crew: "Yes")
             }

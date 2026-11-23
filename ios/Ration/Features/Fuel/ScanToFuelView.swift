@@ -8,11 +8,13 @@ struct ScanToFuelView: View {
     var photoLogEnabled: Bool
     var used: Int
     var limit: Int?
+    var fuelDate: String
     var onSaved: () -> Void
     var onPaywall: () -> Void
     var onCredits: () -> Void
 
     @State private var phase: Phase = .idle
+    @State private var logDay: Date?
     @State private var consent = AIConsentCoordinator()
     @State private var showingCamera = false
     @State private var cameraDenied = false
@@ -167,6 +169,15 @@ struct ScanToFuelView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
+            DatePicker(
+                "Date",
+                selection: Binding(
+                    get: { logDay ?? LocalDay.date(from: fuelDate) ?? Date() },
+                    set: { logDay = $0 }
+                ),
+                displayedComponents: .date
+            )
+            .frame(minHeight: 44)
             HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(name).rationBody()
@@ -290,7 +301,8 @@ struct ScanToFuelView: View {
                     FuelPhotoSubmitBody(
                         operationKey: UUID().uuidString,
                         contentType: "image/jpeg",
-                        imageBase64: jpeg.base64EncodedString()
+                        imageBase64: jpeg.base64EncodedString(),
+                        fuelDate: fuelDate
                     )
                 )
                 let status = try await poll(queued.requestId)
@@ -415,7 +427,10 @@ struct ScanToFuelView: View {
                     ),
                     idempotencyKey: key,
                     operationKey: key,
-                    compositionSource: source
+                    compositionSource: source,
+                    fuelDate: LocalDay.isoString(
+                        from: logDay ?? LocalDay.date(from: fuelDate) ?? Date()
+                    )
                 )
             )
             onSaved()

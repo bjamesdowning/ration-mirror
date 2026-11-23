@@ -32,6 +32,7 @@ import {
 } from "./fast-log-flag.server";
 import { lookupFoodBarcode } from "./food-barcode.server";
 import { assertFuelCreateRoom } from "./fuel-cap.server";
+import { isCalendarDate } from "./fuel-date";
 import {
 	confirmFuelPhoto,
 	readFuelPhoto,
@@ -307,6 +308,11 @@ const FuelPhotoSubmitSchema = z.object({
 	contentType: FuelPhotoContentTypeSchema,
 	imageBase64: z.string().min(1),
 	fuelTimeZone: FuelTimeZoneSchema.optional(),
+	fuelDate: z
+		.string()
+		.regex(/^\d{4}-\d{2}-\d{2}$/)
+		.refine(isCalendarDate, "Must be a real date")
+		.optional(),
 });
 
 export async function postFuelPhoto(
@@ -345,6 +351,7 @@ export async function postFuelPhoto(
 			contentType: parsed.data.contentType,
 			bytes,
 			fuelTimeZone: parsed.data.fuelTimeZone,
+			fuelDate: parsed.data.fuelDate,
 		});
 	} catch (error) {
 		if (error instanceof InsufficientCreditsError) {

@@ -207,6 +207,7 @@ export default function FuelPage({ loaderData }: Route.ComponentProps) {
 		};
 		compositionSource: "manual_macros" | "meal";
 		tagNames: { name: string; slug?: string }[];
+		fuelDate: string;
 	}) {
 		if (!online) {
 			setError(
@@ -220,12 +221,18 @@ export default function FuelPage({ loaderData }: Route.ComponentProps) {
 			return;
 		}
 		setError(null);
+		if (!/^\d{4}-\d{2}-\d{2}$/.test(entry.fuelDate)) {
+			setPendingName(null);
+			setError("Pick a date.");
+			return;
+		}
 		const operationKey = crypto.randomUUID();
 		const controller = new AbortController();
 		const timer = setTimeout(() => controller.abort(), 15000);
 		try {
 			const payload = {
 				name: entry.name,
+				fuelDate: entry.fuelDate,
 				occurredAt: new Date().toISOString(),
 				amount: entry.amount,
 				unit: entry.unit,
@@ -401,6 +408,7 @@ export default function FuelPage({ loaderData }: Route.ComponentProps) {
 					photoLog={photoLog}
 					credits={credits}
 					scanCreditCost={scanCreditCost}
+					defaultDate={day.date}
 					onClose={() => setShowScan(false)}
 					onLimit={() => openFuelPurchase()}
 					onSaved={() => {
@@ -460,6 +468,7 @@ export default function FuelPage({ loaderData }: Route.ComponentProps) {
 
 			{showAdd ? (
 				<AddFuelPanel
+					defaultDate={day.date}
 					onSave={(entry) => {
 						void submitAdd(entry);
 					}}
@@ -553,6 +562,7 @@ function ScanToFuel({
 	photoLog,
 	credits,
 	scanCreditCost,
+	defaultDate,
 	onClose,
 	onLimit,
 	onSaved,
@@ -563,6 +573,7 @@ function ScanToFuel({
 	photoLog: boolean;
 	credits: number;
 	scanCreditCost: number;
+	defaultDate: string;
 	onClose: () => void;
 	onLimit: () => void;
 	onSaved: () => void;
@@ -580,6 +591,7 @@ function ScanToFuel({
 		| null
 	>(null);
 	const [askingAccept, setAskingAccept] = useState(false);
+	const [logDate, setLogDate] = useState(defaultDate);
 	const [busy, setBusy] = useState(false);
 	const [photoPhase, setPhotoPhase] = useState<
 		"idle" | "queued" | "analyzing" | "failed"
@@ -644,6 +656,7 @@ function ScanToFuel({
 				operationKey: crypto.randomUUID(),
 				contentType: "image/jpeg",
 				imageBase64: btoa(binary),
+				fuelDate: defaultDate,
 			};
 			const send = () =>
 				fetch("/api/nutrition/diary/photo", {
@@ -707,6 +720,10 @@ function ScanToFuel({
 
 	async function confirm(accepted?: boolean) {
 		if (!review) return;
+		if (!/^\d{4}-\d{2}-\d{2}$/.test(logDate)) {
+			onError("Pick a date.");
+			return;
+		}
 		if (!deviceFuelTimeZone()) {
 			onError(FUEL_ZONE_UNUSABLE);
 			return;
@@ -748,6 +765,7 @@ function ScanToFuel({
 				idempotencyKey: key,
 				operationKey: key,
 				occurredAt: new Date().toISOString(),
+				fuelDate: logDate,
 			},
 			compositionSource === "user_override" ? "user_override" : "ai_estimate",
 		);
@@ -841,6 +859,17 @@ function ScanToFuel({
 					<p className="text-sm text-muted">
 						AI estimate. Adjust any number before you add it.
 					</p>
+					<label className="block text-sm">
+						Date
+						<input
+							type="date"
+							value={logDate}
+							required
+							aria-label="Date"
+							className="mt-1 block min-h-11 w-full"
+							onChange={(event) => setLogDate(event.target.value)}
+						/>
+					</label>
 					<label className="block text-sm">
 						Name
 						<input
@@ -1258,8 +1287,10 @@ type AddFuelMeal = {
 };
 
 function AddFuelPanel({
+	defaultDate,
 	onSave,
 }: {
+	defaultDate: string;
 	onSave: (entry: {
 		name: string;
 		amount: number;
@@ -1272,9 +1303,11 @@ function AddFuelPanel({
 		};
 		compositionSource: "manual_macros" | "meal";
 		tagNames: AddFuelTag[];
+		fuelDate: string;
 	}) => void;
 }) {
 	const [query, setQuery] = useState("");
+	const [logDate, setLogDate] = useState(defaultDate);
 	const [cargoPage, setCargoPage] = useState<AddFuelCargo[]>([]);
 	const [searchHits, setSearchHits] = useState<
 		{ id: string; name: string; unit: string }[]
@@ -1524,10 +1557,22 @@ function AddFuelPanel({
 					macros: entry.macros,
 					compositionSource: source,
 					tagNames: named,
+				fuelDate: logDate,
 				});
 			}}
 		>
 			<h2 className="text-base">Add Fuel</h2>
+			<label className="block text-sm">
+				Date
+				<input
+					type="date"
+					value={logDate}
+					required
+					aria-label="Date"
+					className="mt-1 block min-h-11 w-full"
+					onChange={(event) => setLogDate(event.target.value)}
+				/>
+			</label>
 			{formError ? <p className="text-sm text-carbon">{formError}</p> : null}
 			<label className="block text-sm">
 				Search

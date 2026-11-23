@@ -30,7 +30,12 @@ import {
 	assertNutritionFuelPage,
 	assertNutritionPhotoLog,
 } from "./fast-log-flag.server";
-import { assertFuelCreateRoom, assertFuelDayRoom } from "./fuel-cap.server";
+import {
+	assertFuelCreateRoom,
+	assertFuelDayRoom,
+	ensureFuelTimeZone,
+} from "./fuel-cap.server";
+import { isCalendarDate } from "./fuel-date";
 import { FuelPhotoTooLargeError, FuelPhotoTypeError } from "./fuel-errors";
 import { fuelPhotoClientStatus } from "./fuel-photo-status";
 import type { FoodLogLine } from "./propose-food-log.server";
@@ -271,6 +276,7 @@ export async function submitFuelPhoto(
 		contentType: string;
 		now?: Date;
 		fuelTimeZone?: string | null;
+		fuelDate?: string | null;
 	},
 	deps: FuelPhotoDeps = {},
 ): Promise<{ requestId: string; status: "queued"; replayed: boolean }> {
@@ -322,13 +328,30 @@ export async function submitFuelPhoto(
 
 	const rate = await checkRateLimit(env.RATION_KV, "scan", principal.userId);
 	if (!rate.allowed) throw rateLimitResponse(rate);
-	const room = await assertFuelCreateRoom(
-		env.DB,
-		principal.userId,
-		now,
-		now,
-		input.fuelTimeZone,
-	);
+	let room: { fuelDate: string };
+	if (input.fuelDate) {
+		if (!isCalendarDate(input.fuelDate)) {
+			throw Object.assign(new Error("Invalid request"), {
+				code: "invalid_request",
+				status: 400,
+			});
+		}
+		await ensureFuelTimeZone(env.DB, principal.userId, input.fuelTimeZone);
+		room = await assertFuelDayRoom(
+			env.DB,
+			principal.userId,
+			input.fuelDate,
+			now,
+		);
+	} else {
+		room = await assertFuelCreateRoom(
+			env.DB,
+			principal.userId,
+			now,
+			now,
+			input.fuelTimeZone,
+		);
+	}
 	const balance = await checkBalance(env, principal.organizationId);
 	if (balance < AI_COSTS.SCAN) {
 		throw new InsufficientCreditsError(AI_COSTS.SCAN, balance);
@@ -479,20 +502,24 @@ export async function confirmFuelPhoto(
 		.where(eq(schema.nutritionOperation.id, meta.operationId))
 		.limit(1);
 	const stored = operation?.resultJson?.fuelDate;
+	const storedDate =
+		typeof stored === "string" && isCalendarDate(stored) ? stored : null;
+	const chosenDate =
+		input.fuelDate && isCalendarDate(input.fuelDate) ? input.fuelDate : null;
 	const pinned =
-		typeof stored === "string" && stored.length > 0
-			? stored
-			: (
-					await assertFuelCreateRoom(
-						env.DB,
-						principal.userId,
-						occurredAt,
-						now,
-						input.fuelTimeZone,
-					)
-				).fuelDate;
-	if (typeof stored === "string" && stored.length > 0) {
-		await assertFuelDayRoom(env.DB, principal.userId, stored, now);
+		chosenDate ??
+		storedDate ??
+		(
+			await assertFuelCreateRoom(
+				env.DB,
+				principal.userId,
+				occurredAt,
+				now,
+				input.fuelTimeZone,
+			)
+		).fuelDate;
+	if (chosenDate || storedDate) {
+		await assertFuelDayRoom(env.DB, principal.userId, pinned, now);
 	}
 	return (deps.logIntake ?? logDiaryFood)(env, principal, flags, {
 		...input,

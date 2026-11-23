@@ -12,6 +12,10 @@ import { JsonLd } from "~/components/seo/JsonLd";
 import { PublicFooter } from "~/components/shell/PublicFooter";
 import { PublicHeader } from "~/components/shell/PublicHeader";
 import { createAuth } from "~/lib/auth.server";
+import {
+	FREE_FUEL_LOGS_LABEL,
+	UNLIMITED_FUEL_LOGS,
+} from "~/lib/crew-fuel-copy";
 import type { DisplayCurrency } from "~/lib/currency";
 import { buildHomeFaqEntries } from "~/lib/home-faq";
 import { EXPLAINER_VIDEO_EMBED_URL } from "~/lib/marketing";
@@ -130,6 +134,7 @@ function PricingSection({
 						<li>{loaderData.tierLimits.free.maxInventoryItems} Cargo items</li>
 						<li>{loaderData.tierLimits.free.maxMeals} meals in Galley</li>
 						<li>{loaderData.tierLimits.free.maxGroceryLists} Supply lists</li>
+						<li>{FREE_FUEL_LOGS_LABEL} Fuel logs per day</li>
 						<li>12 welcome credits for new human accounts</li>
 						<li>AI credits available as one-time packs</li>
 						<li>AI agent access (autonomous MCP registration + OAuth)</li>
@@ -156,6 +161,7 @@ function PricingSection({
 					</div>
 					<ul className="space-y-3 text-sm text-muted">
 						<li>Unlimited Cargo and Galley; 25 Supply lists</li>
+						<li>{UNLIMITED_FUEL_LOGS}</li>
 						<li>
 							Up to {loaderData.tierLimits.crew_member.maxOwnedGroups} owned
 							groups
@@ -364,21 +370,21 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 					name: "Free",
 					price: "0",
 					priceCurrency: "EUR",
-					description: `Up to ${loaderData.tierLimits.free.maxInventoryItems} pantry items, ${loaderData.tierLimits.free.maxMeals} recipes, ${loaderData.tierLimits.free.maxGroceryLists} supply lists. Includes 12 welcome credits for new human accounts.`,
+					description: `Up to ${loaderData.tierLimits.free.maxInventoryItems} pantry items, ${loaderData.tierLimits.free.maxMeals} recipes, ${loaderData.tierLimits.free.maxGroceryLists} supply lists, ${FREE_FUEL_LOGS_LABEL} Fuel logs. Includes 12 welcome credits for new human accounts.`,
 				},
 				{
 					name: "Crew Member (Monthly)",
 					price: "2",
 					priceCurrency: "EUR",
 					description:
-						"Unlimited inventory and recipes, 25 supply lists; group sharing; 1 free Ask Ration conversation per group per day; autonomous MCP registration and OAuth access.",
+						"Unlimited inventory and recipes, 25 supply lists; Unlimited Fuel logs; group sharing; 1 free Ask Ration conversation per group per day; autonomous MCP registration and OAuth access.",
 				},
 				{
 					name: "Crew Member (Annual)",
 					price: "12",
 					priceCurrency: "EUR",
 					description:
-						"Unlimited inventory and recipes, 25 supply lists; group sharing; 1 free Ask Ration conversation per group per day; capacity-only subscription (no included credits).",
+						"Unlimited inventory and recipes, 25 supply lists; Unlimited Fuel logs; group sharing; 1 free Ask Ration conversation per group per day; capacity-only subscription (no included credits).",
 				},
 			],
 		}),

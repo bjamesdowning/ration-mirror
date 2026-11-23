@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Form, Link, redirect, useNavigation } from "react-router";
+import { Form, Link, redirect, useNavigate, useNavigation } from "react-router";
 import { EmptyPanel } from "~/components/hub/EmptyPanel";
 import { ShoppingCartIcon } from "~/components/icons/PageIcons";
 import { PageHeader } from "~/components/shell/PageHeader";
@@ -7,6 +7,10 @@ import { ListOriginChip } from "~/components/supply/ListOriginChip";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { handleApiError } from "~/lib/error-handler";
 import { buildWebFlagContext } from "~/lib/feature-flags/context.server";
+import {
+	CREW_PAYWALL_HREF,
+	isSupplyListCapacityError,
+} from "~/lib/supply-list-capacity-gate";
 import { isSupplyMultiListsEnabled } from "~/lib/supply-list-flag.server";
 import {
 	createCatalogList,
@@ -92,6 +96,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 		throw redirect(`/hub/supply/lists/${list.id}`);
 	} catch (error) {
 		if (error instanceof Response) throw error;
+		if (isSupplyListCapacityError(error)) throw redirect(CREW_PAYWALL_HREF);
 		return handleApiError(error);
 	}
 }
@@ -107,6 +112,7 @@ export default function SupplyListsLibrary({
 }: Route.ComponentProps) {
 	const { catalog, saved, archived } = loaderData;
 	const navigation = useNavigation();
+	const navigate = useNavigate();
 	const [composer, setComposer] = useState<"new" | "snapshot" | null>(null);
 	const busy = navigation.state !== "idle";
 	const live = catalog.live;
@@ -156,18 +162,28 @@ export default function SupplyListsLibrary({
 				<button
 					type="button"
 					className="btn-secondary min-h-11 rounded-lg px-3 text-sm font-semibold"
-					disabled={!catalog.capacity.canAdd || busy}
-					onClick={() => setComposer(composer === "new" ? null : "new")}
+					disabled={busy}
+					onClick={() => {
+						if (!catalog.capacity.canAdd) {
+							navigate(CREW_PAYWALL_HREF);
+							return;
+						}
+						setComposer(composer === "new" ? null : "new");
+					}}
 				>
 					New list
 				</button>
 				<button
 					type="button"
 					className="btn-secondary min-h-11 rounded-lg px-3 text-sm font-semibold"
-					disabled={!catalog.capacity.canAdd || busy}
-					onClick={() =>
-						setComposer(composer === "snapshot" ? null : "snapshot")
-					}
+					disabled={busy}
+					onClick={() => {
+						if (!catalog.capacity.canAdd) {
+							navigate(CREW_PAYWALL_HREF);
+							return;
+						}
+						setComposer(composer === "snapshot" ? null : "snapshot");
+					}}
 				>
 					Save Live as list
 				</button>

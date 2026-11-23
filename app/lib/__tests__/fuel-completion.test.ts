@@ -315,6 +315,51 @@ describe("fuel writers at the cap", () => {
 		expect(await readFuelUsed(db, "user-1", "2026-11-10")).toBe(2);
 	});
 
+	it("counts the chosen day, and the fourth non-voided log on that day is the cap", async () => {
+		const { db, sqlite } = await database();
+		const env = envFor(db);
+		const day = "2026-11-01";
+		const first = await logDiaryFood(env, owner, {}, {
+			...diaryInput("One"),
+			fuelDate: day,
+		});
+		await logDiaryFood(env, owner, {}, { ...diaryInput("Two"), fuelDate: day });
+		await logDiaryFood(env, owner, {}, {
+			...diaryInput("Three"),
+			fuelDate: day,
+		});
+		expect(await readFuelUsed(db, "user-1", day)).toBe(3);
+		expect(await readFuelUsed(db, "user-1", "2026-11-10")).toBe(0);
+		await expect(
+			logDiaryFood(env, owner, {}, {
+				...diaryInput("Fourth"),
+				fuelDate: day,
+			}),
+		).rejects.toBeInstanceOf(FuelDailyLimitError);
+
+		const elsewhere = await logDiaryFood(env, owner, {}, {
+			...diaryInput("Elsewhere"),
+			fuelDate: "2026-11-02",
+		});
+		const row = sqlite
+			.prepare("select fuel_date fuelDate from nutrition_intake where id = ?")
+			.get(elsewhere.intakeId) as { fuelDate: string };
+		expect(row.fuelDate).toBe("2026-11-02");
+		expect(await readFuelUsed(db, "user-1", "2026-11-02")).toBe(1);
+
+		await voidDiaryFood(env, owner, {}, first.intakeId, {
+			confirm: true,
+			operationKey: crypto.randomUUID(),
+			now,
+		});
+		expect(await readFuelUsed(db, "user-1", day)).toBe(2);
+		await logDiaryFood(env, owner, {}, {
+			...diaryInput("After void"),
+			fuelDate: day,
+		});
+		expect(await readFuelUsed(db, "user-1", day)).toBe(3);
+	});
+
 	it("frees one slot when two voids overlap", async () => {
 		const { db } = await database();
 		const env = envFor(db);

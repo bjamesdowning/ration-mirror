@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isCalendarDate } from "~/lib/nutrition/fuel-date";
 import { MAX_TAG_SLUG_LENGTH, MAX_TAGS_PER_ENTITY } from "~/lib/tags";
 import { FuelTimeZoneSchema } from "./fuel";
 import { IntakeNotesSchema, SLOT_TYPES } from "./manifest";
@@ -54,10 +55,22 @@ export const DiaryFoodWriteSchema = z
 		notes: IntakeNotesSchema.optional(),
 		/** Display names copied onto this log. Empty stores null. Photo confirm omits this. */
 		tagNames: DiaryTagNamesSchema.optional(),
-		/** Device IANA zone. The server stamps fuel_date. Not a client day. */
+		/**
+		 * Calendar day from Add Fuel or the scan result.
+		 * Omitted writes still stamp fuel_date from the clock.
+		 */
+		fuelDate: IsoDateSchema.optional(),
+		/** Device IANA zone. Not a client day. */
 		fuelTimeZone: FuelTimeZoneSchema.optional(),
 	})
 	.superRefine((value, ctx) => {
+		if (value.fuelDate && !isCalendarDate(value.fuelDate)) {
+			ctx.addIssue({
+				code: z.ZodIssueCode.custom,
+				message: "Must be a real date",
+				path: ["fuelDate"],
+			});
+		}
 		const hasAmount = value.amount != null;
 		const hasUnit = value.unit != null;
 		if (hasAmount !== hasUnit) {

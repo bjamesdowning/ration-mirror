@@ -1,6 +1,11 @@
 import { CheckIcon } from "~/components/icons/PageIcons";
 import { WELCOME_CREDITS } from "~/lib/billing.constants";
 import { CREW_COPILOT_DAILY_CONVERSATIONS } from "~/lib/copilot/constants";
+import {
+	CREW_FUEL_LOGS_LABEL,
+	FREE_FUEL_LOGS_LABEL,
+	FUEL_LOGS_ROW_LABEL,
+} from "~/lib/crew-fuel-copy";
 import type { TierLimits, TierSlug } from "~/lib/tiers";
 
 type FeatureValue = boolean | string;
@@ -102,6 +107,11 @@ export function PricingFeatureMatrix({
 					label="Supply lists"
 					free={`${free.maxGroceryLists}`}
 					crew={`${crew.maxGroceryLists}`}
+				/>
+				<FeatureRow
+					label={FUEL_LOGS_ROW_LABEL}
+					free={FREE_FUEL_LOGS_LABEL}
+					crew={CREW_FUEL_LOGS_LABEL}
 				/>
 				<FeatureRow label="Auto-generate from Galley & Manifest" free crew />
 				<FeatureRow label="Dock Cargo (list → inventory)" free crew />

@@ -11,6 +11,11 @@ enum TierLimits {
     static let freeMaxGroceryLists = 3
     static let freeMaxOwnedGroups = 1
 
+    /// Daily Fuel logs on Free. Mirrors `FUEL_DAILY_LIMIT` (the 4th log on that day is the gate).
+    static let freeMaxFuelLogs = 3
+    static let fuelLogsRowLabel = "Fuel logs per day"
+    static let unlimitedFuelLogs = "Unlimited Fuel logs"
+
     static let crewMaxOwnedGroups = 5
 
     /// Soft warning threshold matching web `CapacityIndicator` (≥80%).

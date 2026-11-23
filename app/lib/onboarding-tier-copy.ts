@@ -1,4 +1,8 @@
 import { WELCOME_CREDITS } from "~/lib/billing.constants";
+import {
+	FREE_FUEL_LOGS_LABEL,
+	UNLIMITED_FUEL_LOGS,
+} from "~/lib/crew-fuel-copy";
 import { CREW_MEMBER_PRODUCT, TIER_LIMITS } from "~/lib/tiers";
 
 export interface OnboardingTierCopy {
@@ -19,6 +23,7 @@ export function getOnboardingTierCopy(): OnboardingTierCopy[] {
 				`${free.maxInventoryItems} cargo`,
 				`${free.maxMeals} meals`,
 				`${free.maxGroceryLists} ${listLabel}`,
+				`${FREE_FUEL_LOGS_LABEL} Fuel logs per day`,
 				`${WELCOME_CREDITS} welcome credits`,
 				"+ AI Features (credits)",
 			],
@@ -30,6 +35,7 @@ export function getOnboardingTierCopy(): OnboardingTierCopy[] {
 				"Unlimited Cargo",
 				"Unlimited Meals",
 				"25 Supply lists",
+				UNLIMITED_FUEL_LOGS,
 				"Groups & invites",
 			],
 			highlight: true,

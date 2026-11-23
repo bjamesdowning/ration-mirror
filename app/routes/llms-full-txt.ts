@@ -1,4 +1,8 @@
 import { ABOUT_MARKDOWN, HOME_MARKDOWN } from "~/lib/agent-readiness";
+import {
+	FREE_FUEL_LOGS_LABEL,
+	UNLIMITED_FUEL_LOGS,
+} from "~/lib/crew-fuel-copy";
 import type { Route } from "./+types/llms-full-txt";
 
 /**
@@ -61,8 +65,8 @@ advice. Intake history is retained about 13 months. MCP tools: \`get_nutrition_s
 
 ## Pricing
 
-- **Free:** ${opts.maxInventoryItems} inventory items, ${opts.maxMeals} recipes, ${opts.maxGroceryLists} supply lists, 1 owned group, and full MCP access.
-- **Crew Member (${opts.crewMonthlyPrice} or ${opts.crewAnnualPrice}):** Unlimited inventory and recipes, 25 supply lists,
+- **Free:** ${opts.maxInventoryItems} inventory items, ${opts.maxMeals} recipes, ${opts.maxGroceryLists} supply lists, ${FREE_FUEL_LOGS_LABEL} Fuel logs, 1 owned group, and full MCP access.
+- **Crew Member (${opts.crewMonthlyPrice} or ${opts.crewAnnualPrice}):** Unlimited inventory and recipes, 25 supply lists, ${UNLIMITED_FUEL_LOGS},
   and multi-member group sharing. MCP access is the same on both tiers.
 
 Visual scanning and AI meal generation use a credit-based ledger (purchasable via

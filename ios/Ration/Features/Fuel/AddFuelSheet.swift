@@ -4,9 +4,11 @@ import SwiftUI
 struct AddFuelSheet: View {
     @Environment(AppEnvironment.self) private var env
     @Environment(\.dismiss) private var dismiss
+    var fuelDate: String
     var onSaved: () -> Void
     var onError: (Error) -> Void
 
+    @State private var logDay: Date?
     @State private var query = ""
     @State private var cargoPage: [CargoItem] = []
     @State private var searchHits: [SearchResult] = []
@@ -37,9 +39,23 @@ struct AddFuelSheet: View {
         case meal(Meal)
     }
 
+    private var chosenFuelDate: String {
+        LocalDay.isoString(from: logDay ?? LocalDay.date(from: fuelDate) ?? Date())
+    }
+
     var body: some View {
         NavigationStack {
             Form {
+                Section {
+                    DatePicker(
+                        "Date",
+                        selection: Binding(
+                            get: { logDay ?? LocalDay.date(from: fuelDate) ?? Date() },
+                            set: { logDay = $0 }
+                        ),
+                        displayedComponents: .date
+                    )
+                }
                 Section {
                     TextField("Search Cargo and Galley", text: $query)
                         .textInputAutocapitalization(.never)
@@ -414,7 +430,8 @@ struct AddFuelSheet: View {
             idempotencyKey: key,
             operationKey: key,
             compositionSource: source,
-            tagNames: tags.isEmpty ? nil : tags
+            tagNames: tags.isEmpty ? nil : tags,
+            fuelDate: chosenFuelDate
         )
         do {
             _ = try await env.api.logDiaryFood(body)

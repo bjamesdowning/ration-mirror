@@ -351,19 +351,9 @@ describe("health export plan: edits, removals, and exclusions", () => {
 		expect(legacy.deletes).toEqual([]);
 		expect(legacy.excluded.aiEstimate).toBe(1);
 		const current = planHealthExport({ ...base, rows, rules: "current" });
-		// Only the cleared fiber goes; the live samples are replaced.
-		expect(current.deletes.map((item) => item.syncIdentifiers)).toEqual([
-			["ration:sync-1:dietaryFiber"],
-		]);
-		expect(current.samples.map((sample) => sample.action)).toEqual([
-			"replace",
-			"replace",
-			"replace",
-			"replace",
-		]);
-		expect(current.samples.every((sample) => sample.estimate === true)).toBe(
-			true,
-		);
+		expect(current.samples).toEqual([]);
+		expect(current.deletes).toEqual([]);
+		expect(current.excluded.aiEstimate).toBe(1);
 	});
 
 	it("legacy rule: an edit into an unusable line still removes it", () => {
@@ -503,10 +493,11 @@ describe("health export handler", () => {
 		expect(free.samples.map((sample) => sample.healthSyncId)).toContain(
 			"sync-usda",
 		);
-		// Non-iOS callers (the MCP preview) get the current rule.
-		expect(free.samples.map((sample) => sample.healthSyncId)).toContain(
+		// An unaccepted AI estimate stays out of Health on the current rule.
+		expect(free.samples.map((sample) => sample.healthSyncId)).not.toContain(
 			"sync-ai",
 		);
+		expect(free.excluded.aiEstimate).toBe(1);
 		expect(free.samples.map((sample) => sample.healthSyncId)).toContain(
 			"sync-meal",
 		);
@@ -711,7 +702,7 @@ describe("health export handler", () => {
 			{ now },
 		);
 		expect(current.excluded).toEqual({
-			aiEstimate: 0,
+			aiEstimate: 1,
 			unconfirmed: 0,
 			notExportable: 0,
 		});

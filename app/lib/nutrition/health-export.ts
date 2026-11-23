@@ -219,9 +219,11 @@ function legacyExclusionReason(
  * edit clears a nutrient, only that nutrient's stale sample is deleted.
  *
  * `rules: "current"` exports every live Fuel log whose numbers pass
- * `healthSampleUsable`, whatever its source, and marks AI estimates. A live
- * row that fails the check is counted and fully deleted, so a 0 kcal or
- * implausible sample written earlier is removed. `rules: "legacy"` (the
+ * `healthSampleUsable`, except a row whose `compositionSource` is still
+ * `ai_estimate`. That row is counted and not written. Accepting restamps it
+ * as `user_override` before export. The food name is not prefixed. A live
+ * row that fails the number check is counted and fully deleted, so a 0 kcal
+ * or implausible sample written earlier is removed. `rules: "legacy"` (the
  * default) is the iOS 1.6.39/1.6.40 rule; it never deletes a row the current
  * rule would export, so an old phone cannot remove a newer phone's samples.
  */
@@ -287,6 +289,10 @@ export function planHealthExport(input: {
 			excluded.notExportable += 1;
 			// Remove anything Ration wrote for it before this rule existed.
 			if (!deleted.has(healthSyncId)) deletes.push(fullDelete(healthSyncId));
+			continue;
+		}
+		if (current && row.compositionSource === "ai_estimate") {
+			excluded.aiEstimate += 1;
 			continue;
 		}
 		const reason = current ? null : legacyExclusionReason(row);

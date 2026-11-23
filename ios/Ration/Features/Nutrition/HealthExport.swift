@@ -6,8 +6,8 @@ enum HealthExportPolicy {
     static let minimumAppVersion = "1.6.39"
 
     /// Which server export rule this build last fully synced. 2 (1.6.41):
-    /// every usable Fuel log, AI estimates marked. A lower stored value forces
-    /// one full sync so older logs are written once.
+    /// every usable Fuel log except an unaccepted AI estimate. A lower stored
+    /// value forces one full sync so older logs are written once.
     static let exportRulesVersion = 2
 
     /// HealthKit metadata key on an AI-estimate sample. Not an HK key, so
@@ -56,6 +56,31 @@ enum HealthExportPolicy {
         else { return nil }
         let type = String(last)
         return quantityTypes.contains(type) ? type : nil
+    }
+}
+
+/// Intake prompt for an AI estimate when Apple Health export is on.
+enum HealthEstimateAccept {
+    static let note = "These numbers are an estimate. Accepting copies them to Apple Health."
+
+    /// Prompt only for a new estimate whose nutrient amounts were not edited.
+    static func promptNeeded(
+        healthExportEnabled: Bool,
+        compositionSource: String?,
+        amountsEdited: Bool
+    ) -> Bool {
+        healthExportEnabled && !amountsEdited && compositionSource == "ai_estimate"
+    }
+
+    /// Accept, or an amount edit, is the same user override the server already uses.
+    static func compositionSource(
+        proposed: String?,
+        amountsEdited: Bool,
+        accepted: Bool
+    ) -> String? {
+        guard proposed == "ai_estimate" else { return proposed }
+        if amountsEdited || accepted { return "user_override" }
+        return "ai_estimate"
     }
 }
 

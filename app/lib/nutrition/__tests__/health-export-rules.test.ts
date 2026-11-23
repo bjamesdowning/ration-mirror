@@ -9,7 +9,12 @@ import {
 	getHealthExportPending,
 	setHealthExportPreference,
 } from "../health-export.server";
-import { healthSampleUsable } from "../health-exportability";
+import {
+	acceptedEstimateStamp,
+	healthEstimateAcceptNeeded,
+	healthSampleUsable,
+	intakeCompositionAfterEstimate,
+} from "../health-exportability";
 import type { NutritionPrincipal } from "../service.server";
 
 const databases: Array<ReturnType<typeof createSqliteD1>["sqlite"]> = [];
@@ -85,7 +90,7 @@ function exportedIds(plan: ReturnType<typeof planHealthExport>): string[] {
 }
 
 describe("current Health rule: every usable Fuel log", () => {
-	it("exports every source and marks only AI estimates", () => {
+	it("exports every usable source except an unaccepted AI estimate", () => {
 		const plan = planHealthExport({
 			...base,
 			rows: everySource(),
@@ -93,29 +98,106 @@ describe("current Health rule: every usable Fuel log", () => {
 		});
 		expect(exportedIds(plan)).toEqual([
 			"sync-usda",
-			"sync-ai",
 			"sync-meal",
 			"sync-barcode",
 			"sync-typed",
 			"sync-override",
 			"sync-unknown",
 		]);
+		expect(plan.samples.some((sample) => sample.estimate)).toBe(false);
 		expect(
-			plan.samples
-				.filter((sample) => sample.estimate === true)
-				.map((sample) => sample.healthSyncId),
-		).toEqual(Array(5).fill("sync-ai"));
-		expect(
-			plan.samples
-				.filter((sample) => sample.healthSyncId !== "sync-ai")
-				.every((sample) => !("estimate" in sample)),
+			plan.samples.every((sample) => !sample.foodName.startsWith("Estimate")),
 		).toBe(true);
 		expect(plan.excluded).toEqual({
-			aiEstimate: 0,
+			aiEstimate: 1,
 			unconfirmed: 0,
 			notExportable: 0,
 		});
 		expect(plan.deletes).toEqual([]);
+	});
+
+	it("does not export an unaccepted ai_estimate and does export an accepted one", () => {
+		const accepted = acceptedEstimateStamp(now);
+		const plan = planHealthExport({
+			...base,
+			rows: [
+				row({
+					id: "open",
+					name: "Soup",
+					compositionSource: "ai_estimate",
+					compositionConfirmedAt: null,
+				}),
+				row({
+					id: "accepted",
+					name: "Soup",
+					compositionSource: accepted.compositionSource,
+					compositionConfirmedAt: Math.floor(
+						(accepted.compositionConfirmedAt ?? now).getTime() / 1000,
+					),
+				}),
+			],
+			rules: "current",
+		});
+		expect(accepted).toEqual({
+			compositionSource: "user_override",
+			compositionConfirmedAt: now,
+		});
+		expect(exportedIds(plan)).toEqual(["sync-accepted"]);
+		expect(plan.samples.every((sample) => sample.foodName === "Soup")).toBe(
+			true,
+		);
+		expect(plan.samples.some((sample) => "estimate" in sample)).toBe(false);
+		expect(plan.excluded.aiEstimate).toBe(1);
+		expect(plan.deletes).toEqual([]);
+		expect(
+			healthEstimateAcceptNeeded({
+				healthExportEnabled: true,
+				compositionSource: "ai_estimate",
+				amountsEdited: false,
+			}),
+		).toBe(true);
+		expect(
+			healthEstimateAcceptNeeded({
+				healthExportEnabled: false,
+				compositionSource: "ai_estimate",
+				amountsEdited: false,
+			}),
+		).toBe(false);
+		expect(
+			healthEstimateAcceptNeeded({
+				healthExportEnabled: true,
+				compositionSource: "ai_estimate",
+				amountsEdited: true,
+			}),
+		).toBe(false);
+		expect(
+			healthEstimateAcceptNeeded({
+				healthExportEnabled: true,
+				compositionSource: "usda",
+				amountsEdited: false,
+			}),
+		).toBe(false);
+		expect(
+			intakeCompositionAfterEstimate({
+				compositionSource: "ai_estimate",
+				amountsEdited: false,
+				accepted: true,
+			}),
+		).toBe("user_override");
+		expect(
+			intakeCompositionAfterEstimate({
+				compositionSource: "ai_estimate",
+				amountsEdited: true,
+				accepted: false,
+			}),
+		).toBe("user_override");
+		expect(
+			intakeCompositionAfterEstimate({
+				compositionSource: "ai_estimate",
+				amountsEdited: false,
+				accepted: false,
+			}),
+		).toBe("ai_estimate");
 	});
 
 	it("leaves the legacy rule unchanged for iOS 1.6.39/1.6.40", () => {

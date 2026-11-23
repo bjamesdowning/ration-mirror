@@ -52,6 +52,11 @@ struct LogToFuelSheet: View {
     @State private var showCamera = false
     @State private var photoRef = ""
     @State private var compositionSource: String?
+    @State private var estimateEnergy: Double?
+    @State private var estimateProtein: Double?
+    @State private var estimateCarbs: Double?
+    @State private var estimateFat: Double?
+    @State private var showingHealthAccept = false
 
     private var savedFoodsVisible: Bool {
         SavedFoodPolicy.controlVisible(
@@ -155,7 +160,7 @@ struct LogToFuelSheet: View {
                     Button("Cancel", action: onClose)
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") { Task { await save() } }
+                    Button("Save") { Task { await save(accepted: nil) } }
                         .disabled(saving)
                 }
             }
@@ -181,7 +186,24 @@ struct LogToFuelSheet: View {
                     Task { await lookupBarcode() }
                 }
             }
+            .confirmationDialog(
+                "Apple Health",
+                isPresented: $showingHealthAccept,
+                titleVisibility: .visible
+            ) {
+                Button("Accept") { Task { await save(accepted: true) } }
+                Button("Skip", role: .cancel) { Task { await save(accepted: false) } }
+            } message: {
+                Text(HealthEstimateAccept.note)
+            }
         }
+    }
+
+    private var healthExportEnabled: Bool {
+        HealthExportPolicy.switchVisible(
+            flagEnabled: env.session.clientFlags.isNutritionHealthExportEnabled,
+            appVersion: AppMarketingVersion.current
+        ) && env.launch.userSettings?.healthExport?.enabled == true
     }
 
     /// Editable amount. Servings stay fractional; the digits come from the presenter formatter.
@@ -203,6 +225,8 @@ struct LogToFuelSheet: View {
 
     private func apply(_ food: RecentFuelFood) {
         savedFoodId = nil
+        compositionSource = nil
+        clearEstimateBaseline()
         name = food.name
         amount = amountText(food.amount, unit: food.unit)
         unit = food.unit
@@ -214,6 +238,8 @@ struct LogToFuelSheet: View {
 
     private func applySaved(_ food: SavedFoodRow) {
         savedFoodId = food.id
+        compositionSource = nil
+        clearEstimateBaseline()
         name = food.name
         let savedUnit = food.defaultUnit ?? "serving"
         amount = amountText(food.defaultAmount ?? 1, unit: savedUnit)
@@ -245,6 +271,7 @@ struct LogToFuelSheet: View {
                     fat = String(macros.fatG)
                 }
                 compositionSource = "usda"
+                clearEstimateBaseline()
             }
         } catch {
             errorMessage = "Could not look up that barcode."
@@ -267,6 +294,10 @@ struct LogToFuelSheet: View {
                 carbs = String(line.carbsG)
                 fat = String(line.fatG)
                 compositionSource = "ai_estimate"
+                estimateEnergy = line.energyKcal
+                estimateProtein = line.proteinG
+                estimateCarbs = line.carbsG
+                estimateFat = line.fatG
             }
         } catch {
             errorMessage = "Could not read that photo."
@@ -366,7 +397,14 @@ struct LogToFuelSheet: View {
         recent = foods
     }
 
-    private func save() async {
+    private func clearEstimateBaseline() {
+        estimateEnergy = nil
+        estimateProtein = nil
+        estimateCarbs = nil
+        estimateFat = nil
+    }
+
+    private func save(accepted: Bool?) async {
         guard let amountValue = Double(amount), amountValue > 0, !name.trimmingCharacters(in: .whitespaces).isEmpty else {
             errorMessage = "Add a name and an amount."
             return
@@ -379,6 +417,33 @@ struct LogToFuelSheet: View {
             errorMessage = "Enter kcal, protein, carbs, and fat."
             return
         }
+        let amountsEdited: Bool = {
+            guard compositionSource == "ai_estimate",
+                  let estimateEnergy,
+                  let estimateProtein,
+                  let estimateCarbs,
+                  let estimateFat
+            else { return false }
+            return estimateEnergy != energyValue
+                || estimateProtein != proteinValue
+                || estimateCarbs != carbsValue
+                || estimateFat != fatValue
+        }()
+        if existing == nil && savedFoodId == nil && accepted == nil && HealthEstimateAccept.promptNeeded(
+            healthExportEnabled: healthExportEnabled,
+            compositionSource: compositionSource,
+            amountsEdited: amountsEdited
+        ) {
+            showingHealthAccept = true
+            return
+        }
+        let source = existing == nil
+            ? HealthEstimateAccept.compositionSource(
+                proposed: compositionSource,
+                amountsEdited: amountsEdited,
+                accepted: accepted == true
+            )
+            : compositionSource
         saving = true
         errorMessage = nil
         let body = DiaryFoodBody(
@@ -394,7 +459,7 @@ struct LogToFuelSheet: View {
             ),
             idempotencyKey: idempotencyKey,
             operationKey: operationKey,
-            compositionSource: compositionSource
+            compositionSource: source
         )
         do {
             if let existing {

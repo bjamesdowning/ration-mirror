@@ -423,9 +423,9 @@ struct SettingsView: View {
 /// Settings strings for Apple Health. Pure so tests can pin the copy.
 enum HealthExportStatusText {
     static let footer =
-        "Copies everything you log in Fuel to Apple Health: calories, protein, carbs, fat, and fiber when known. AI estimates are copied as estimates; edit any food to update it in Health. Ration only writes to Health and never reads your Health data."
+        "Copies the foods you log in Fuel to Apple Health: calories, protein, carbs, fat, and fiber when known. An AI estimate is copied only after you accept it. Ration only writes to Health and never reads your Health data."
 
-    static let exclusionRule = "Not copied: a few older or incomplete logs."
+    static let exclusionRule = "Not copied: an AI estimate you have not accepted, and a few older or incomplete logs."
 
     static func lastSynced(_ date: Date?, now: Date = Date()) -> String {
         guard let date else { return "Not synced yet" }

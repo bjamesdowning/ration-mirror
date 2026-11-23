@@ -89,6 +89,17 @@ describe("fuel photo client", () => {
 			operationKey: "key",
 			compositionSource: "ai_estimate",
 		});
+		expect(
+			fuelPhotoApproveBody(
+				review,
+				{
+					idempotencyKey: "key",
+					operationKey: "key",
+					occurredAt: "2026-11-10T12:00:00.000Z",
+				},
+				"user_override",
+			)?.compositionSource,
+		).toBe("user_override");
 	});
 
 	it("does not approve a blank name, a non-positive amount, or a missing macro", () => {

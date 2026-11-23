@@ -18,7 +18,7 @@ export const NUTRITION_HEALTH_EXPORT_IOS_MIN = "1.6.39";
 
 /**
  * iOS from this build gets the current Health rule: every usable Fuel log is
- * exported, AI estimates are marked, and logs without a sync id get one.
+ * exported except an unaccepted AI estimate, and logs without a sync id get one.
  * Older iOS keeps the 1.6.39 rule. Non-iOS callers (the MCP preview) get the
  * current rule.
  */

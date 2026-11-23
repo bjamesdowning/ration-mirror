@@ -1972,10 +1972,11 @@ function PreferencesSection({
 					<p className="text-sm text-muted mb-4">
 						When this is on, the Ration app on your iPhone copies the foods you
 						log, including logs made here, to Apple Health. Ration only writes
-						to Health and never reads it. AI estimates you haven't changed and
-						meals logged from Galley or Manifest aren't copied. To remove
-						copies, turn this off in the iPhone app and choose Remove from Apple
-						Health, or delete them in the Health app.
+						to Health and never reads it. An AI estimate is copied only after
+						you accept it. Skipping or dismissing keeps the log in Ration and
+						does not copy it. To remove copies, turn this off in the iPhone app
+						and choose Remove from Apple Health, or delete them in the Health
+						app.
 					</p>
 					<healthFetcher.Form method="post">
 						<input type="hidden" name="intent" value="update-health-export" />

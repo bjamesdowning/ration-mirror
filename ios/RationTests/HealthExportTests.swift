@@ -357,11 +357,67 @@ final class HealthExportTests: XCTestCase {
         )
         XCTAssertEqual(
             HealthExportStatusText.exclusionNote(excluded: 0),
-            "Not copied: a few older or incomplete logs."
+            "Not copied: an AI estimate you have not accepted, and a few older or incomplete logs."
         )
         XCTAssertEqual(
             HealthExportStatusText.footer,
-            "Copies everything you log in Fuel to Apple Health: calories, protein, carbs, fat, and fiber when known. AI estimates are copied as estimates; edit any food to update it in Health. Ration only writes to Health and never reads your Health data."
+            "Copies the foods you log in Fuel to Apple Health: calories, protein, carbs, fat, and fiber when known. An AI estimate is copied only after you accept it. Ration only writes to Health and never reads your Health data."
+        )
+        XCTAssertEqual(
+            HealthEstimateAccept.note,
+            "These numbers are an estimate. Accepting copies them to Apple Health."
+        )
+        XCTAssertTrue(
+            HealthEstimateAccept.promptNeeded(
+                healthExportEnabled: true,
+                compositionSource: "ai_estimate",
+                amountsEdited: false
+            )
+        )
+        XCTAssertFalse(
+            HealthEstimateAccept.promptNeeded(
+                healthExportEnabled: false,
+                compositionSource: "ai_estimate",
+                amountsEdited: false
+            )
+        )
+        XCTAssertFalse(
+            HealthEstimateAccept.promptNeeded(
+                healthExportEnabled: true,
+                compositionSource: "ai_estimate",
+                amountsEdited: true
+            )
+        )
+        XCTAssertFalse(
+            HealthEstimateAccept.promptNeeded(
+                healthExportEnabled: true,
+                compositionSource: "usda",
+                amountsEdited: false
+            )
+        )
+        XCTAssertEqual(
+            HealthEstimateAccept.compositionSource(
+                proposed: "ai_estimate",
+                amountsEdited: false,
+                accepted: true
+            ),
+            "user_override"
+        )
+        XCTAssertEqual(
+            HealthEstimateAccept.compositionSource(
+                proposed: "ai_estimate",
+                amountsEdited: true,
+                accepted: false
+            ),
+            "user_override"
+        )
+        XCTAssertEqual(
+            HealthEstimateAccept.compositionSource(
+                proposed: "ai_estimate",
+                amountsEdited: false,
+                accepted: false
+            ),
+            "ai_estimate"
         )
         XCTAssertTrue(
             HealthExportStatusText.exclusionNote(excluded: 3).hasSuffix("3 foods in your log weren't copied.")

@@ -31,6 +31,7 @@ import {
 	fuelPhotoReviewFromLines,
 	pollFuelPhoto,
 } from "~/lib/nutrition/fuel-photo-client";
+import { loadFuelDay } from "~/lib/nutrition/fuel-read.server";
 import {
 	FUEL_SCAN_ANALYZING,
 	FUEL_SCAN_ANALYZING_DETAIL,
@@ -38,14 +39,20 @@ import {
 	FUEL_SCAN_NOT_MEDICAL,
 	FUEL_SCAN_UNAVAILABLE,
 } from "~/lib/nutrition/fuel-scan-copy";
-import { loadFuelDay } from "~/lib/nutrition/fuel-read.server";
-import type { NutritionSnapshot } from "~/lib/nutrition/types";
 import {
 	deviceFuelTimeZone,
 	FUEL_ZONE_UNUSABLE,
 	retryFuelZoneOnce,
 	withDeviceFuelZone,
 } from "~/lib/nutrition/fuel-zone-client";
+import { healthExportPreferenceEnabled } from "~/lib/nutrition/health-export-client";
+import {
+	HEALTH_ESTIMATE_ACCEPT_NOTE,
+	healthEstimateAcceptNeeded,
+	intakeCompositionAfterEstimate,
+	nutrientAmountsEdited,
+} from "~/lib/nutrition/health-exportability";
+import type { NutritionSnapshot } from "~/lib/nutrition/types";
 import { FUEL_PHOTO_MAX_BYTES } from "~/lib/schemas/fuel";
 import type { Route } from "./+types/fuel";
 
@@ -563,8 +570,16 @@ function ScanToFuel({
 	pollAbort: { current: AbortController | null };
 }) {
 	const [review, setReview] = useState<
-		(FuelPhotoReviewDraft & { requestId: string }) | null
+		| (FuelPhotoReviewDraft & {
+				requestId: string;
+				originalEnergy: number;
+				originalProtein: number;
+				originalCarbs: number;
+				originalFat: number;
+		  })
+		| null
 	>(null);
+	const [askingAccept, setAskingAccept] = useState(false);
 	const [busy, setBusy] = useState(false);
 	const [photoPhase, setPhotoPhase] = useState<
 		"idle" | "queued" | "analyzing" | "failed"
@@ -601,6 +616,7 @@ function ScanToFuel({
 		}
 		setBusy(true);
 		setReview(null);
+		setAskingAccept(false);
 		setFailure("");
 		setPhotoPhase("queued");
 		onError("");
@@ -665,10 +681,16 @@ function ScanToFuel({
 				setPhotoPhase("failed");
 				return;
 			}
+			const draft = fuelPhotoReviewFromLines(polled.lines);
 			setReview({
 				requestId: body.requestId,
-				...fuelPhotoReviewFromLines(polled.lines),
+				...draft,
+				originalEnergy: Number(draft.energy),
+				originalProtein: Number(draft.protein),
+				originalCarbs: Number(draft.carbs),
+				originalFat: Number(draft.fat),
 			});
+			setAskingAccept(false);
 			setPhotoPhase("idle");
 			settled = true;
 		} catch (error) {
@@ -683,18 +705,52 @@ function ScanToFuel({
 		}
 	}
 
-	async function confirm() {
+	async function confirm(accepted?: boolean) {
 		if (!review) return;
 		if (!deviceFuelTimeZone()) {
 			onError(FUEL_ZONE_UNUSABLE);
 			return;
 		}
-		const key = crypto.randomUUID();
-		const payload = fuelPhotoApproveBody(review, {
-			idempotencyKey: key,
-			operationKey: key,
-			occurredAt: new Date().toISOString(),
+		const amountsEdited = nutrientAmountsEdited(
+			{
+				energyKcal: review.originalEnergy,
+				proteinG: review.originalProtein,
+				carbsG: review.originalCarbs,
+				fatG: review.originalFat,
+			},
+			{
+				energyKcal: Number(review.energy),
+				proteinG: Number(review.protein),
+				carbsG: Number(review.carbs),
+				fatG: Number(review.fat),
+			},
+		);
+		if (
+			accepted === undefined &&
+			healthEstimateAcceptNeeded({
+				healthExportEnabled: await healthExportPreferenceEnabled(),
+				compositionSource: "ai_estimate",
+				amountsEdited,
+			})
+		) {
+			setAskingAccept(true);
+			return;
+		}
+		const compositionSource = intakeCompositionAfterEstimate({
+			compositionSource: "ai_estimate",
+			amountsEdited,
+			accepted: accepted === true,
 		});
+		const key = crypto.randomUUID();
+		const payload = fuelPhotoApproveBody(
+			review,
+			{
+				idempotencyKey: key,
+				operationKey: key,
+				occurredAt: new Date().toISOString(),
+			},
+			compositionSource === "user_override" ? "user_override" : "ai_estimate",
+		);
 		if (!payload) {
 			onError("Add a name, amount, and unit.");
 			return;
@@ -867,17 +923,40 @@ function ScanToFuel({
 							}
 						/>
 					</label>
-					<button
-						type="submit"
-						className="min-h-11 rounded-xl bg-carbon px-4 text-ceramic"
-					>
-						Add to Fuel
-					</button>
+					{askingAccept ? (
+						<div className="space-y-2">
+							<p className="text-sm">{HEALTH_ESTIMATE_ACCEPT_NOTE}</p>
+							<div className="flex gap-2">
+								<button
+									type="button"
+									className="min-h-11 rounded-xl bg-carbon px-4 text-ceramic"
+									onClick={() => void confirm(true)}
+								>
+									Accept
+								</button>
+								<button
+									type="button"
+									className="min-h-11 rounded-xl border border-platinum px-4"
+									onClick={() => void confirm(false)}
+								>
+									Skip
+								</button>
+							</div>
+						</div>
+					) : (
+						<button
+							type="submit"
+							className="min-h-11 rounded-xl bg-carbon px-4 text-ceramic"
+						>
+							Add to Fuel
+						</button>
+					)}
 					<button
 						type="button"
 						className="min-h-11 text-sm underline"
 						onClick={() => {
 							setReview(null);
+							setAskingAccept(false);
 							setPhotoPhase("idle");
 						}}
 					>

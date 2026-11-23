@@ -374,7 +374,7 @@ export type HealthExportPending = HealthExportPlan & {
  * - `cursor`: legacy per-id state (MCP preview). Optional.
  *
  * iOS 1.6.41+ and non-iOS callers get the current rule (every usable Fuel
- * log, AI estimates marked). Older iOS gets the legacy rule. Only the iOS
+ * log except an unaccepted AI estimate). Older iOS gets the legacy rule. Only the iOS
  * device pull on the current rule assigns missing sync ids; the MCP preview
  * stays read-only.
  */

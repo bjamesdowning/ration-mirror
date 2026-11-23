@@ -53,7 +53,7 @@
 	<key>NSHealthShareUsageDescription</key>
 	<string>Ration doesn't read data from Apple Health. It only writes the foods you log, and it can remove the foods it wrote when you edit or delete a log or turn off Apple Health in Ration.</string>
 	<key>NSHealthUpdateUsageDescription</key>
-	<string>Ration writes the foods you log, with calories, protein, carbohydrates, fat, and fiber when known, to Apple Health. It updates or removes them when you edit or delete a log. It doesn't write daily totals, weight, or activity.</string>
+	<string>Ration writes foods you log, and it does not copy an AI estimate until you accept it. It updates or removes them when you edit or delete a log. It doesn't write daily totals, weight, or activity.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Ration uses the camera to scan grocery receipts and pantry labels, and to photograph a meal when you log what you ate.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

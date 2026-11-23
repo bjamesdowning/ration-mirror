@@ -36,7 +36,7 @@ export type FuelPhotoApproveBody = {
 	};
 	idempotencyKey: string;
 	operationKey: string;
-	compositionSource: "ai_estimate";
+	compositionSource: "ai_estimate" | "user_override";
 };
 
 function sumLine(
@@ -82,6 +82,7 @@ export function fuelPhotoReviewFromLines(
 export function fuelPhotoApproveBody(
 	review: FuelPhotoReviewDraft,
 	keys: { idempotencyKey: string; operationKey: string; occurredAt: string },
+	compositionSource: FuelPhotoApproveBody["compositionSource"] = "ai_estimate",
 ): FuelPhotoApproveBody | null {
 	const name = review.name.trim();
 	const unit = review.unit.trim();
@@ -110,7 +111,7 @@ export function fuelPhotoApproveBody(
 		macros: { energyKcal, proteinG, carbsG, fatG },
 		idempotencyKey: keys.idempotencyKey,
 		operationKey: keys.operationKey,
-		compositionSource: "ai_estimate",
+		compositionSource,
 	};
 }
 

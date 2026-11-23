@@ -200,7 +200,7 @@ final class ShareImportCoordinatorTests: XCTestCase {
         XCTAssertEqual(store.records.first?.acknowledged, false)
     }
 
-    func testSiteBlockedNeedsTheAppAndDoesNotClaimSuccess() async {
+    func testAcceptedSubmitDoesNotReadALaterSiteBlock() async {
         let store = MemoryShareImportStore()
         let service = ScriptedShareImportService(session: .make())
         service.statuses = [.success(.make(code: "SITE_BLOCKED"))]
@@ -266,7 +266,7 @@ final class ShareImportCoordinatorTests: XCTestCase {
         XCTAssertFalse(coordinator.claimsSuccess)
     }
 
-    func testProgressThenConfirmedSaysAddedToGalley() async {
+    func testAcceptedSubmitDoesNotWaitForTheRecipe() async {
         let store = MemoryShareImportStore()
         let service = ScriptedShareImportService(session: .make())
         service.statuses = [

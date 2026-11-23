@@ -17,6 +17,7 @@ final class ShareImportCoordinator {
     private(set) var trace: [String] = []
     private(set) var completionCount = 0
     private(set) var submitCount = 0
+    private(set) var kitchens: [ShareImportKitchen] = []
     private(set) var preparedHost: String?
     private(set) var preparedCost: Int?
     private var stopPolling = false
@@ -108,13 +109,13 @@ final class ShareImportCoordinator {
                 return
             }
             created.ownerUserId = session.userId
-            created.organizationId = session.organizationId
-            created.organizationName = session.organizationName
-            created.state = "bound"
+            created.organizationId = nil
+            created.organizationName = nil
+            created.state = "saved"
             created.sessionEpoch = startedEpoch
             try store.update(created)
             record = created
-            trace.append("bound")
+            trace.append("saved")
             showPreparing(host: host, cost: session.importCost)
             guard epochStillValid() else {
                 state = .signedOut
@@ -128,11 +129,21 @@ final class ShareImportCoordinator {
                 state = .needsConsent
                 return
             }
+            if session.shareImportKitchenPicker {
+                showKitchenChoice(session: session, host: host)
+                return
+            }
             guard session.credits >= session.importCost else {
                 state = .needsCredits(required: session.importCost)
                 return
             }
-            await submitAndFollow(sessionCost: session.importCost)
+            let active = ShareImportKitchen(
+                id: session.organizationId,
+                name: session.organizationName,
+                credits: session.credits
+            )
+            bind(active)
+            await submitAndFollow(sessionCost: session.importCost, organizationId: active.id)
         } catch let error as ShareImportServiceError {
             apply(error)
         } catch is URLError {
@@ -157,6 +168,11 @@ final class ShareImportCoordinator {
                 state = .unavailable
                 return
             }
+            if session.shareImportKitchenPicker {
+                let host = URL(string: record.url)?.host ?? "this page"
+                showKitchenChoice(session: session, host: host)
+                return
+            }
             guard session.credits >= session.importCost else {
                 state = .needsCredits(required: session.importCost)
                 return
@@ -164,7 +180,13 @@ final class ShareImportCoordinator {
             if let host = URL(string: record.url)?.host {
                 showPreparing(host: host, cost: session.importCost)
             }
-            await submitAndFollow(sessionCost: session.importCost)
+            let active = ShareImportKitchen(
+                id: session.organizationId,
+                name: session.organizationName,
+                credits: session.credits
+            )
+            bind(active)
+            await submitAndFollow(sessionCost: session.importCost, organizationId: active.id)
         } catch let error as ShareImportServiceError {
             apply(error)
         } catch {
@@ -202,16 +224,72 @@ final class ShareImportCoordinator {
         }
     }
 
-    private func submitAndFollow(sessionCost: Int?) async {
+    func selectKitchen(_ id: String) {
+        guard case .chooseKitchen(let host, let cost, _) = state else { return }
+        guard kitchens.contains(where: { $0.id == id }) else { return }
+        state = .chooseKitchen(host: host, cost: cost, selectedId: id)
+    }
+
+    func confirmKitchen() async {
+        guard case .chooseKitchen(_, let cost, let selectedId) = state else { return }
+        guard let kitchen = kitchens.first(where: { $0.id == selectedId }),
+              kitchen.credits >= cost
+        else { return }
+        bind(kitchen)
+        await submitAndFollow(sessionCost: cost, organizationId: kitchen.id)
+    }
+
+    private func showKitchenChoice(session: ShareImportSessionSnapshot, host: String) {
+        var list = session.kitchens
+        if !list.contains(where: { $0.id == session.organizationId }) {
+            list.insert(
+                ShareImportKitchen(
+                    id: session.organizationId,
+                    name: session.organizationName,
+                    credits: session.credits
+                ),
+                at: 0
+            )
+        }
+        kitchens = list
+        state = .chooseKitchen(host: host, cost: session.importCost, selectedId: session.organizationId)
+    }
+
+    private func bind(_ kitchen: ShareImportKitchen) {
+        guard var created = record else { return }
+        created.organizationId = kitchen.id
+        created.organizationName = kitchen.name
+        created.state = "bound"
+        try? store?.update(created)
+        record = created
+    }
+
+    /// A failed submit that never received a request id is not stuck on a kitchen.
+    private func clearKitchenBinding() {
+        guard var created = record, created.requestId == nil else { return }
+        created.organizationId = nil
+        created.organizationName = nil
+        if created.state == "bound" || created.state == "submitting" {
+            created.state = "saved"
+        }
+        record = created
+        try? store?.update(created)
+    }
+
+    private func submitAndFollow(sessionCost: Int?, organizationId: String?) async {
         guard var record, let service, let store else { return }
         guard epochStillValid() else {
             state = .signedOut
             return
         }
         record.state = "submitting"
+        if let organizationId {
+            record.organizationId = organizationId
+        }
         do {
             try store.update(record)
         } catch {
+            clearKitchenBinding()
             state = .failed("Could not save this share.")
             return
         }
@@ -220,15 +298,17 @@ final class ShareImportCoordinator {
         let body = ShareImportSubmitBody(
             clientRequestId: record.clientRequestId,
             url: record.url,
-            userText: record.userText
+            userText: record.userText,
+            organizationId: organizationId
         )
         let requestId: String
         do {
-            requestId = try await submitOnce(body, service: service)
+            requestId = try await serviceSubmit(body, service: service)
         } catch let error as ShareImportServiceError {
             apply(error, cost: sessionCost)
             return
         } catch {
+            clearKitchenBinding()
             state = .failed("Could not start the import.")
             return
         }
@@ -344,6 +424,7 @@ final class ShareImportCoordinator {
     }
 
     private func apply(_ error: ShareImportServiceError, cost: Int? = nil) {
+        clearKitchenBinding()
         switch error {
         case .offline:
             state = .offline

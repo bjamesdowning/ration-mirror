@@ -104,11 +104,87 @@ final class ShareImportCoordinatorTests: XCTestCase {
         )
         XCTAssertEqual(coordinator.state, .needsCredits(required: 3))
         XCTAssertEqual(coordinator.submitCount, 0)
+        XCTAssertNil(store.records.first?.organizationId)
+        XCTAssertNotEqual(store.records.first?.state, "bound")
         XCTAssertEqual(
             ShareImportCopy.insufficientCredits(required: 3),
             "This import uses 3 credits. Open Ration from your Home Screen to add credits."
         )
         XCTAssertFalse(coordinator.claimsSuccess)
+    }
+
+    func testPickerKeepsTheActiveKitchenUntilConfirm() async {
+        var session = ShareImportSessionSnapshot.make(credits: 0, cost: 3)
+        session.shareImportKitchenPicker = true
+        session.kitchens = [
+            ShareImportKitchen(id: "org-1", name: "Personal", credits: 0),
+            ShareImportKitchen(id: "org-2", name: "Crew", credits: 9),
+        ]
+        let store = MemoryShareImportStore()
+        let service = ScriptedShareImportService(session: session)
+        let coordinator = ShareImportCoordinator()
+        await coordinator.begin(
+            url: URL(string: "https://example.com/soup")!,
+            userText: nil,
+            service: service,
+            store: store,
+            sleep: { _ in }
+        )
+        XCTAssertEqual(
+            coordinator.state,
+            .chooseKitchen(host: "example.com", cost: 3, selectedId: "org-1")
+        )
+        XCTAssertEqual(coordinator.submitCount, 0)
+        XCTAssertNil(store.records.first?.organizationId)
+        await coordinator.confirmKitchen()
+        XCTAssertEqual(coordinator.submitCount, 0)
+        XCTAssertNil(store.records.first?.organizationId)
+        coordinator.selectKitchen("org-2")
+        await coordinator.confirmKitchen()
+        XCTAssertEqual(coordinator.submitCount, 1)
+        XCTAssertEqual(service.submitBodies.first?.organizationId, "org-2")
+        XCTAssertEqual(store.records.first?.organizationId, "org-2")
+    }
+
+    func testUnchargedWrongKitchenReleasesGalleyWithoutCredits() {
+        var stuck = ShareImportRecord(
+            id: "1",
+            clientRequestId: "11111111-1111-1111-1111-111111111111",
+            url: "https://example.com/soup",
+            userText: nil,
+            savedAt: 0,
+            state: "bound"
+        )
+        stuck.ownerUserId = "user-1"
+        stuck.organizationId = "personal"
+        stuck.organizationName = "Billy James Downing's Personal Group"
+        let sequence = ShareImportRecovery.unchargedMismatchSequence(
+            record: stuck,
+            userId: "user-1",
+            organizationId: "crew",
+            memberships: ["personal", "crew"],
+            currentEpoch: 0
+        )
+        let alert = "This import belongs to Billy James Downing's Personal Group. Switch to that kitchen to finish it."
+        XCTAssertEqual(sequence.afterAlert.alert, alert)
+        XCTAssertFalse(sequence.afterAlert.canAddMeal)
+        XCTAssertFalse(sequence.afterAlert.canGenerateMeal)
+        XCTAssertFalse(sequence.afterAlert.canImportMeal)
+        XCTAssertNil(sequence.afterDismiss.alert)
+        XCTAssertFalse(sequence.afterDismiss.canAddMeal)
+        XCTAssertFalse(sequence.afterDismiss.canGenerateMeal)
+        XCTAssertFalse(sequence.afterDismiss.canImportMeal)
+        XCTAssertEqual(
+            sequence.afterRelease.action,
+            .retarget(clientRequestId: stuck.clientRequestId)
+        )
+        XCTAssertNil(sequence.afterRelease.record.organizationId)
+        XCTAssertEqual(sequence.afterRelease.record.state, "saved")
+        XCTAssertNil(sequence.afterRelease.chrome.alert)
+        XCTAssertTrue(sequence.afterRelease.chrome.canAddMeal)
+        XCTAssertTrue(sequence.afterRelease.chrome.canGenerateMeal)
+        XCTAssertTrue(sequence.afterRelease.chrome.canImportMeal)
+        XCTAssertFalse(sequence.afterRelease.chrome.locked)
     }
 
     func testOfflineDoesNotSubmit() async {
@@ -357,6 +433,19 @@ final class ShareImportCoordinatorTests: XCTestCase {
                 currentEpoch: 0
             ),
             .switchKitchen("Crew")
+        )
+        var uncharged = kitchen
+        uncharged.state = "bound"
+        uncharged.requestId = nil
+        XCTAssertEqual(
+            ShareImportResume.decide(
+                record: uncharged,
+                userId: "user-1",
+                organizationId: "org-1",
+                memberships: ["org-1", "org-2"],
+                currentEpoch: 0
+            ),
+            .retarget(clientRequestId: uncharged.clientRequestId)
         )
         var mine = kitchen
         mine.organizationId = "org-1"

@@ -510,14 +510,14 @@ export async function confirmFuelPhoto(
 		chosenDate ??
 		storedDate ??
 		(
-					await assertFuelCreateRoom(
-						env.DB,
-						principal.userId,
-						occurredAt,
-						now,
-						input.fuelTimeZone,
-					)
-				).fuelDate;
+			await assertFuelCreateRoom(
+				env.DB,
+				principal.userId,
+				occurredAt,
+				now,
+				input.fuelTimeZone,
+			)
+		).fuelDate;
 	if (chosenDate || storedDate) {
 		await assertFuelDayRoom(env.DB, principal.userId, pinned, now);
 	}

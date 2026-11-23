@@ -4,7 +4,7 @@ import Foundation
 ///
 /// A bottom `Menu` uses automatic element order, so the first action sits
 /// nearest the button. Manual add stays the lowest item, and Scan items sits above it.
-enum CargoFabAction: Equatable {
+enum CargoFabAction: Hashable {
     case addItem
     case scanItems
 

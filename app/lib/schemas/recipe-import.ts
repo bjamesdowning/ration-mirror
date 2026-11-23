@@ -44,6 +44,11 @@ export const RecipeImportRequestSchema = z
 		photoMimeType: z.enum(RECIPE_IMPORT_PHOTO_MIME).optional(),
 		/** Stable id from the Share Extension. Released clients omit it. */
 		clientRequestId: z.string().uuid().optional(),
+		/**
+		 * Kitchen to charge. Omitted means the active kitchen.
+		 * The server replaces this with a verified membership id.
+		 */
+		organizationId: z.string().uuid().optional(),
 	})
 	.strict()
 	.superRefine((data, ctx) => {

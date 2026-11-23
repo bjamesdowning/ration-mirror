@@ -53,6 +53,7 @@ describe("FLAG_REGISTRY validation", () => {
 			"nutrition-saved-food",
 			"plan-fuel-actions",
 			"share-extension-import",
+			"share-import-kitchen-picker",
 		]);
 	});
 });

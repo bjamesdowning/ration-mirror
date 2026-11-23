@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { InsufficientCreditsError } from "~/lib/ledger.server";
 import { submitDurableRecipeImport } from "~/lib/import-dispatch.server";
 import { RecipeImportRequestSchema } from "~/lib/schemas/recipe-import";

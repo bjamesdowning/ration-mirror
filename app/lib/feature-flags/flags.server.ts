@@ -4,6 +4,7 @@ import {
 	nutritionFastLogClientAllowed,
 	planFuelActionsClientAllowed,
 } from "~/lib/nutrition/fuel-capture";
+import { shareImportKitchenPickerClientAllowed } from "~/lib/share-import-kitchen.server";
 import type { FlagshipEvaluationContext } from "./context.server";
 import { FLAG_REGISTRY, type FlagKey, getClientFlagKey } from "./registry";
 
@@ -194,6 +195,13 @@ export async function getClientSafeFlags(
 			if (
 				flag === "nutrition-health-export" &&
 				!healthExportClientAllowed(context)
+			) {
+				result[clientKey] = false;
+				return;
+			}
+			if (
+				flag === "share-import-kitchen-picker" &&
+				!shareImportKitchenPickerClientAllowed(context)
 			) {
 				result[clientKey] = false;
 				return;

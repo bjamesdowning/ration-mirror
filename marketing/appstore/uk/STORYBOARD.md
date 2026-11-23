@@ -1,4 +1,25 @@
-# Screenshot storyboard — English (U.K.)
+# iOS 1.6 screenshot set — upload this
+
+App Store Connect → Media Manager → **iPhone 6.9" Display**. Upload only [`framed/6.9/1.6/`](framed/6.9/1.6/), in this order. Each file is **1320×2868** PNG, RGB, no alpha. Apple shows the first three in search.
+
+| Order | File | Caption |
+|------:|------|---------|
+| 1 | [`01-daily-fuel.png`](framed/6.9/1.6/01-daily-fuel.png) | Daily Fuel. / See what's left. |
+| 2 | [`02-agent-sets-fuel.png`](framed/6.9/1.6/02-agent-sets-fuel.png) | Your agent sets / Daily Fuel. You confirm. |
+| 3 | [`03-import.png`](framed/6.9/1.6/03-import.png) | Save recipes from / TikTok, Reels & the web |
+| 4 | [`04-scan.png`](framed/6.9/1.6/04-scan.png) | Scan a receipt / or the fridge |
+| 5 | [`05-galley.png`](framed/6.9/1.6/05-galley.png) | See what you can cook / with what's here |
+| 6 | [`06-manifest.png`](framed/6.9/1.6/06-manifest.png) | Cook for the house. / Log your plate. |
+| 7 | [`07-supply.png`](framed/6.9/1.6/07-supply.png) | Shop only what / you're still missing |
+| 8 | [`08-your-agent.png`](framed/6.9/1.6/08-your-agent.png) | Same kitchen. / Your agent. |
+
+Slide 3 is the existing TikTok import frame, copied unchanged from `framed/6.9/03-import.png`. Slides 4–7 are the existing scan, galley, manifest, and supply frames, copied into this folder (manifest and supply take slots 6 and 7). Slide 8 names agents in Space Mono only: `Grok · Hermes · Dots · Claude`. No logos.
+
+Leave these in the repo and do **not** upload them for 1.6 (same names under `framed/6.5/` as well): `01-hub.png`, `02-macros.png`, `06-plan.png`, `09-ask.png`, `10-theme.png`.
+
+# Previous storyboard — English (U.K.)
+
+The table below is the earlier ten-frame set. It is not the 1.6 upload.
 
 Upload order in App Store Connect → Media Manager → **iPhone 6.9"** (1320×2868). Apple shows the first three in search.
 

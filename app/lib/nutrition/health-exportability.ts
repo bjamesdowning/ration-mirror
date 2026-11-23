@@ -149,3 +149,80 @@ export function editCompositionStamp(input: {
 		input.now,
 	);
 }
+
+/** Shown when Health export is on and the intake is still an AI estimate. */
+export const HEALTH_ESTIMATE_ACCEPT_NOTE =
+	"These numbers are an estimate. Accepting copies them to Apple Health.";
+
+/**
+ * Prompt only at intake, and only when export is on, the row is still an
+ * AI estimate, and the person has not already edited the nutrient amounts.
+ */
+export function healthEstimateAcceptNeeded(input: {
+	healthExportEnabled: boolean;
+	compositionSource: string | null | undefined;
+	amountsEdited: boolean;
+}): boolean {
+	return (
+		input.healthExportEnabled &&
+		!input.amountsEdited &&
+		input.compositionSource === "ai_estimate"
+	);
+}
+
+/**
+ * Accept uses the same stamp as an amount edit that names no other source:
+ * a confirmed `user_override`.
+ */
+export function acceptedEstimateStamp(now: Date): {
+	compositionSource: string;
+	compositionConfirmedAt: Date | null;
+} {
+	return editCompositionStamp({
+		current: {
+			compositionSource: "ai_estimate",
+			compositionConfirmedAt: null,
+		},
+		nutrientsChanged: true,
+		requestedSource: undefined,
+		savedFood: false,
+		now,
+	});
+}
+
+/**
+ * Source written on a new intake. An edited amount or an accept is the
+ * user override. Skip and dismiss keep `ai_estimate`.
+ */
+export function intakeCompositionAfterEstimate(input: {
+	compositionSource: string | null | undefined;
+	amountsEdited: boolean;
+	accepted: boolean;
+}): string | null | undefined {
+	if (input.compositionSource !== "ai_estimate") return input.compositionSource;
+	if (input.amountsEdited || input.accepted) return "user_override";
+	return "ai_estimate";
+}
+
+/** True when kcal, protein, carbs, or fat differ from the model numbers. */
+export function nutrientAmountsEdited(
+	original: {
+		energyKcal: number;
+		proteinG: number;
+		carbsG: number;
+		fatG: number;
+	},
+	edited: {
+		energyKcal: number;
+		proteinG: number;
+		carbsG: number;
+		fatG: number;
+	},
+): boolean {
+	return (
+		original.energyKcal !== edited.energyKcal ||
+		original.proteinG !== edited.proteinG ||
+		original.carbsG !== edited.carbsG ||
+		original.fatG !== edited.fatG
+	);
+}

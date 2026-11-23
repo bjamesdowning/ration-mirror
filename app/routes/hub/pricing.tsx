@@ -17,6 +17,7 @@ import { WELCOME_CREDITS } from "~/lib/billing.constants";
 import type { DisplayCurrency } from "~/lib/currency";
 import {
 	FREE_FUEL_LOGS_LABEL,
+	FUEL_LOGS_ROW_LABEL,
 	UNLIMITED_FUEL_LOGS,
 } from "~/lib/crew-fuel-copy";
 import { shouldSyncCheckoutFromFetcher } from "~/lib/pricing-checkout";
@@ -230,7 +231,7 @@ export default function PricingPage({ loaderData }: Route.ComponentProps) {
 						<li>Meals: {loaderData.tierLimits.free.maxMeals}</li>
 						<li>{loaderData.tierLimits.free.maxGroceryLists} supply lists</li>
 						<li>
-							{FUEL_LOGS_LABEL}: {FREE_FUEL_LOGS_LABEL}
+							{FUEL_LOGS_ROW_LABEL}: {FREE_FUEL_LOGS_LABEL}
 						</li>
 						<li>No member invites</li>
 					</ul>

@@ -215,13 +215,20 @@ struct CargoListView: View {
         }
         .tabDockAction(tag: .cargo, layer: .root) {
             IconFABMenuCore(systemImage: "plus.circle.fill", accessibilityLabel: "Cargo actions") {
-                if env.session.clientFlags.isAiScanReceiptEnabled {
-                    Button(action: onScan) {
-                        Label("Scan items", systemImage: "camera.viewfinder")
+                ForEach(
+                    CargoFabMenu.actions(
+                        scanEnabled: env.session.clientFlags.isAiScanReceiptEnabled
+                    ),
+                    id: \.self
+                ) { action in
+                    Button(action.title, systemImage: action.systemImage) {
+                        switch action {
+                        case .addItem:
+                            showingAdd = true
+                        case .scanItems:
+                            onScan()
+                        }
                     }
-                }
-                Button { showingAdd = true } label: {
-                    Label("Add item", systemImage: "plus")
                 }
             }
         }

@@ -1556,6 +1556,7 @@ function AddFuelPanel({
 					macros: entry.macros,
 					compositionSource: source,
 					tagNames: named,
+				fuelDate: logDate,
 				});
 			}}
 		>

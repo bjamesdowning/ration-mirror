@@ -158,11 +158,46 @@ assemble-1-6-frames:
           assert len(data) == size, (name, len(data), size)
           print(name, w, h, len(data))
       PY
-      git config user.email "ci@ration.mayutic.com"
-      git config user.name "Ration screenshots"
       git fetch origin main
-      git checkout origin/main -- .gitlab-ci.yml
-      git add "$DEST" .gitlab-ci.yml
-      git status --short
-      git commit -m "Add the iOS 1.6 App Store 6.9-inch screenshot set"
-      git push "https://gitlab-ci-token:${CI_JOB_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git" "HEAD:${CI_COMMIT_BRANCH}"
+      git show origin/main:.gitlab-ci.yml > /tmp/gitlab-ci.main.yml
+      python3 - <<'PY'
+      import base64, json, os, pathlib, urllib.request
+      root = pathlib.Path("marketing/appstore/uk/framed/6.9/1.6")
+      actions = []
+      for path in sorted(root.glob("*.png")):
+          actions.append({
+              "action": "create",
+              "file_path": str(path),
+              "encoding": "base64",
+              "content": base64.b64encode(path.read_bytes()).decode(),
+          })
+      actions.append({
+          "action": "update",
+          "file_path": ".gitlab-ci.yml",
+          "encoding": "text",
+          "content": pathlib.Path("/tmp/gitlab-ci.main.yml").read_text(),
+      })
+      payload = {
+          "branch": os.environ["CI_COMMIT_BRANCH"],
+          "commit_message": "Add the iOS 1.6 App Store 6.9-inch screenshot set\n\nEight 1320x2868 frames in marketing/appstore/uk/framed/6.9/1.6, in upload order.",
+          "actions": actions,
+      }
+      url = os.environ["CI_API_V4_URL"] + "/projects/" + os.environ["CI_PROJECT_ID"] + "/repository/commits"
+      data = json.dumps(payload).encode()
+      names = sorted(k for k in os.environ if "TOKEN" in k or k.startswith("CI_"))
+      print("env", ",".join(names))
+      req = urllib.request.Request(
+          url,
+          data=data,
+          method="POST",
+          headers={"JOB-TOKEN": os.environ["CI_JOB_TOKEN"], "Content-Type": "application/json"},
+      )
+      try:
+          with urllib.request.urlopen(req, timeout=180) as response:
+              body = response.read().decode()
+              print(response.status, body[:400])
+      except Exception as exc:
+          detail = exc.read().decode() if hasattr(exc, "read") else str(exc)
+          print("commit API failed", getattr(exc, "code", ""), detail[:1500])
+          raise SystemExit(1)
+      PY

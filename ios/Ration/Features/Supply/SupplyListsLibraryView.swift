@@ -189,6 +189,7 @@ struct SavedListView: View {
     @State private var model: SavedListViewModel
     @State private var menuItem: SupplyItem?
     @State private var showingAddItem = false
+    @State private var showingPaywall = false
 
     init(listId: String, createdFrom: String?, listState: String) {
         self.listId = listId
@@ -317,6 +318,7 @@ struct SavedListView: View {
                 }
             }
         }
+        .sheet(isPresented: $showingPaywall) { PaywallView(context: .settings()) }
         .task { await model.load(api: env.api) }
     }
 
@@ -403,6 +405,10 @@ struct SavedListView: View {
             _ = try await env.api.duplicateSupplyList(id: listId, name: nil)
             model.toast = isArchived ? "Restored as a saved list" : "Duplicated"
         } catch {
+            if SavedListLogic.opensCrewPaywall(error) {
+                showingPaywall = true
+                return
+            }
             model.errorMessage = error.localizedDescription
         }
     }

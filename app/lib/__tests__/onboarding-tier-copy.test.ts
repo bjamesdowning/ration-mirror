@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { WELCOME_CREDITS } from "../billing.constants";
+import { UNLIMITED_FUEL_LOGS } from "../crew-fuel-copy";
 import { getOnboardingTierCopy } from "../onboarding-tier-copy";
 import { CREW_MEMBER_PRODUCT, TIER_LIMITS } from "../tiers";
 
@@ -22,6 +23,7 @@ describe("getOnboardingTierCopy", () => {
 		const crew = tiers.find((t) => t.name === CREW_MEMBER_PRODUCT.name);
 		expect(crew?.highlight).toBe(true);
 		expect(crew?.features).toContain("25 Supply lists");
+		expect(crew?.features).toContain(UNLIMITED_FUEL_LOGS);
 		expect(crew?.features.some((f) => f.includes("credits for AI"))).toBe(
 			false,
 		);

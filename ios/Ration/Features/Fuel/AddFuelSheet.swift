@@ -55,23 +55,30 @@ struct AddFuelSheet: View {
                             }
                         }
                     }
-                }
-                Section("Cargo") {
-                    if cargoRows.isEmpty {
-                        Text(searching ? "Searching" : "No cargo matches.").rationCaption()
-                    }
-                    ForEach(cargoRows, id: \.id) { row in
-                        Button(row.name) { Task { await pickCargo(row) } }
-                            .frame(minHeight: 44)
-                    }
-                }
-                Section("Galley") {
-                    if mealRows.isEmpty {
-                        Text("No meals match.").rationCaption()
-                    }
-                    ForEach(mealRows, id: \.id) { meal in
-                        Button(meal.name) { pickMeal(meal) }
-                            .frame(minHeight: 44)
+                    Menu {
+                        Section("Cargo") {
+                            if cargoRows.isEmpty {
+                                Button(searching ? "Searching" : "No cargo matches.") {}
+                                    .disabled(true)
+                            } else {
+                                ForEach(cargoRows, id: \.id) { row in
+                                    Button(row.name) { Task { await pickCargo(row) } }
+                                }
+                            }
+                        }
+                        Section("Galley") {
+                            if mealRows.isEmpty {
+                                Button("No meals match.") {}
+                                    .disabled(true)
+                            } else {
+                                ForEach(mealRows, id: \.id) { meal in
+                                    Button(meal.name) { pickMeal(meal) }
+                                }
+                            }
+                        }
+                    } label: {
+                        Text(kitchenLabel)
+                            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
                     }
                 }
                 if let selection {
@@ -156,33 +163,46 @@ struct AddFuelSheet: View {
         return names.sorted()
     }
 
-    private var cargoRows: [SearchResult] {
-        let names = Array(selectedTags)
-        let base: [SearchResult]
-        if trimmedQuery.count >= 2 {
-            base = searchHits
-        } else if trimmedQuery.count == 1 {
-            let needle = trimmedQuery.lowercased()
-            base = cargoPage
-                .filter { $0.name.lowercased().contains(needle) }
-                .map { SearchResult(id: $0.id, name: $0.name, quantity: $0.quantity, unit: $0.unit, baseQuantity: $0.baseQuantity, baseUnit: $0.baseUnit, domain: $0.domain) }
-        } else {
-            base = cargoPage.map {
-                SearchResult(id: $0.id, name: $0.name, quantity: $0.quantity, unit: $0.unit, baseQuantity: $0.baseQuantity, baseUnit: $0.baseUnit, domain: $0.domain)
+    private var kitchen: AddFuelKitchen.Picker {
+        AddFuelKitchen.picker(
+            query: query,
+            selectedTags: selectedTags,
+            cargoPage: cargoPage.map {
+                .init(id: $0.id, name: $0.name, tagNames: $0.tags.map(\.name))
+            },
+            searchHits: searchHits.map { .init(id: $0.id, name: $0.name) },
+            meals: meals.map {
+                .init(id: $0.id, name: $0.name, tagNames: $0.tags.map(\.name))
             }
+        )
+    }
+
+    private var kitchenLabel: String {
+        switch selection {
+        case .cargo(let item): item.name
+        case .meal(let meal): meal.name
+        case nil: "Cargo and Galley"
         }
-        guard !names.isEmpty else { return Array(base.prefix(20)) }
-        let allowed = Set(cargoPage.filter { matches($0.tags, names) }.map(\.id))
-        return Array(base.filter { allowed.contains($0.id) }.prefix(20))
+    }
+
+    private var cargoRows: [SearchResult] {
+        kitchen.cargo.compactMap { hit in
+            if let found = searchHits.first(where: { $0.id == hit.id }) { return found }
+            guard let item = cargoPage.first(where: { $0.id == hit.id }) else { return nil }
+            return SearchResult(
+                id: item.id,
+                name: item.name,
+                quantity: item.quantity,
+                unit: item.unit,
+                baseQuantity: item.baseQuantity,
+                baseUnit: item.baseUnit,
+                domain: item.domain
+            )
+        }
     }
 
     private var mealRows: [Meal] {
-        let names = Array(selectedTags)
-        let needle = trimmedQuery.lowercased()
-        return meals.filter { meal in
-            let nameOK = needle.isEmpty || meal.name.lowercased().contains(needle)
-            return nameOK && matches(meal.tags, names)
-        }.prefix(20).map { $0 }
+        kitchen.meals.compactMap { row in meals.first { $0.id == row.id } }
     }
 
     private var selectionUnit: String {
@@ -231,12 +251,6 @@ struct AddFuelSheet: View {
 
     private func toggleTag(_ name: String) {
         if selectedTags.contains(name) { selectedTags.remove(name) } else { selectedTags.insert(name) }
-    }
-
-    private func matches(_ tags: [Tag], _ selected: [String]) -> Bool {
-        if selected.isEmpty { return true }
-        let names = Set(tags.map(\.name))
-        return selected.contains { names.contains($0) }
     }
 
     private func loadSuggestions() async {

@@ -34,7 +34,7 @@ export function buildLlmsComparisonFacts(
 		},
 		{
 			question: "What are Ration's free tier limits?",
-			answer: `Ration's free tier includes up to ${input.maxInventoryItems} Cargo pantry items, ${input.maxMeals} Galley recipes, ${input.maxGroceryLists} Supply shopping lists, and ${FREE_FUEL_LOGS_LABEL} Fuel logs with one owned household group. No credit card is required. Agents can self-register on the free tier via POST ${input.origin}/api/agent/auth and receive full MCP write scopes immediately — claim is optional for human ownership.`,
+			answer: `Ration's free tier includes up to ${input.maxInventoryItems} Cargo pantry items, ${input.maxMeals} Galley recipes, ${input.maxGroceryLists} Supply shopping lists, and ${FREE_FUEL_LOGS_LABEL} Fuel logs per day with one owned household group. No credit card is required. Agents can self-register on the free tier via POST ${input.origin}/api/agent/auth and receive full MCP write scopes immediately — claim is optional for human ownership.`,
 		},
 		{
 			question: "How much does Ration Crew Member cost?",

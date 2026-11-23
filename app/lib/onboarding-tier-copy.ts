@@ -23,7 +23,7 @@ export function getOnboardingTierCopy(): OnboardingTierCopy[] {
 				`${free.maxInventoryItems} cargo`,
 				`${free.maxMeals} meals`,
 				`${free.maxGroceryLists} ${listLabel}`,
-				`${FREE_FUEL_LOGS_LABEL} Fuel logs`,
+				`${FREE_FUEL_LOGS_LABEL} Fuel logs per day`,
 				`${WELCOME_CREDITS} welcome credits`,
 				"+ AI Features (credits)",
 			],

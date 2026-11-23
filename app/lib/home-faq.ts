@@ -44,7 +44,7 @@ export function buildHomeFaqEntries(opts: {
 		},
 		{
 			question: "Is Ration free?",
-			answer: `Yes. The Free tier supports up to ${free.maxInventoryItems} pantry items, ${free.maxMeals} recipes, ${free.maxGroceryLists} supply lists, and ${FREE_FUEL_LOGS_LABEL} Fuel logs with no credit card required. New human accounts receive 12 welcome credits automatically. Agents can autonomously self-register via MCP on the same tier (without welcome credits). The Crew Member tier (${subscriptionProducts.CREW_MEMBER_MONTHLY.priceEur} or ${subscriptionProducts.CREW_MEMBER_ANNUAL.priceEur}) raises pantry and recipe caps to unlimited, includes 25 supply lists and ${UNLIMITED_FUEL_LOGS}, enables group sharing and member invitations, and includes 1 free Ask Ration (Copilot) conversation per group per day.`,
+			answer: `Yes. The Free tier supports up to ${free.maxInventoryItems} pantry items, ${free.maxMeals} recipes, ${free.maxGroceryLists} supply lists, and ${FREE_FUEL_LOGS_LABEL} Fuel logs per day with no credit card required. New human accounts receive 12 welcome credits automatically. Agents can autonomously self-register via MCP on the same tier (without welcome credits). The Crew Member tier (${subscriptionProducts.CREW_MEMBER_MONTHLY.priceEur} or ${subscriptionProducts.CREW_MEMBER_ANNUAL.priceEur}) raises pantry and recipe caps to unlimited, includes 25 supply lists and ${UNLIMITED_FUEL_LOGS}, enables group sharing and member invitations, and includes 1 free Ask Ration (Copilot) conversation per group per day.`,
 		},
 		{
 			question: "What is Cargo, Galley, Manifest, and Supply?",

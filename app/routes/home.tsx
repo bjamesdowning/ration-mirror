@@ -134,7 +134,7 @@ function PricingSection({
 						<li>{loaderData.tierLimits.free.maxInventoryItems} Cargo items</li>
 						<li>{loaderData.tierLimits.free.maxMeals} meals in Galley</li>
 						<li>{loaderData.tierLimits.free.maxGroceryLists} Supply lists</li>
-						<li>{FREE_FUEL_LOGS_LABEL} Fuel logs</li>
+						<li>{FREE_FUEL_LOGS_LABEL} Fuel logs per day</li>
 						<li>12 welcome credits for new human accounts</li>
 						<li>AI credits available as one-time packs</li>
 						<li>AI agent access (autonomous MCP registration + OAuth)</li>

@@ -4,7 +4,7 @@ import XCTest
 final class CrewFuelPaywallTests: XCTestCase {
     func testCrewCopyMatchesThePaywallPhrase() {
         XCTAssertEqual(TierLimits.unlimitedFuelLogs, "Unlimited Fuel logs")
-        XCTAssertEqual(TierLimits.fuelLogsRowLabel, "Fuel logs")
+        XCTAssertEqual(TierLimits.fuelLogsRowLabel, "Fuel logs per day")
         XCTAssertEqual(TierLimits.freeMaxFuelLogs, 3)
     }
 

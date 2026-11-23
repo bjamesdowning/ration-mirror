@@ -13,7 +13,7 @@ describe("crew fuel copy", () => {
 	});
 
 	it("keeps Free at the daily gate and Crew unlimited", () => {
-		expect(FUEL_LOGS_ROW_LABEL).toBe("Fuel logs");
+		expect(FUEL_LOGS_ROW_LABEL).toBe("Fuel logs per day");
 		expect(FREE_FUEL_LOGS_LABEL).toBe(String(FUEL_DAILY_LIMIT));
 		expect(FREE_FUEL_LOGS_LABEL).toBe("3");
 		expect(CREW_FUEL_LOGS_LABEL).toBe("Unlimited");

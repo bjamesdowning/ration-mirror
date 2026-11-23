@@ -24,9 +24,10 @@ struct DiaryFoodBody: Encodable, Sendable {
     var fuelTimeZone: String? = nil
     var notes: String? = nil
     var tagNames: [DiaryTagName]? = nil
+    var fuelDate: String? = nil
 
     enum CodingKeys: String, CodingKey {
-        case name, occurredAt, amount, unit, macros, idempotencyKey, operationKey, compositionSource, fuelTimeZone, notes, tagNames
+        case name, occurredAt, amount, unit, macros, idempotencyKey, operationKey, compositionSource, fuelTimeZone, notes, tagNames, fuelDate
     }
 
     func encode(to encoder: Encoder) throws {
@@ -42,6 +43,7 @@ struct DiaryFoodBody: Encodable, Sendable {
         try container.encodeIfPresent(fuelTimeZone, forKey: .fuelTimeZone)
         try container.encodeIfPresent(notes, forKey: .notes)
         try container.encodeIfPresent(tagNames, forKey: .tagNames)
+        try container.encodeIfPresent(fuelDate, forKey: .fuelDate)
     }
 }
 
@@ -563,9 +565,10 @@ struct FuelPhotoSubmitBody: Encodable, Sendable {
     let contentType: String
     let imageBase64: String
     var fuelTimeZone: String? = nil
+    var fuelDate: String? = nil
 
     enum CodingKeys: String, CodingKey {
-        case operationKey, contentType, imageBase64, fuelTimeZone
+        case operationKey, contentType, imageBase64, fuelTimeZone, fuelDate
     }
 
     func encode(to encoder: Encoder) throws {
@@ -574,6 +577,7 @@ struct FuelPhotoSubmitBody: Encodable, Sendable {
         try container.encode(contentType, forKey: .contentType)
         try container.encode(imageBase64, forKey: .imageBase64)
         try container.encodeIfPresent(fuelTimeZone, forKey: .fuelTimeZone)
+        try container.encodeIfPresent(fuelDate, forKey: .fuelDate)
     }
 }
 

@@ -14,12 +14,12 @@ import { PageHeader } from "~/components/shell/PageHeader";
 import * as schema from "~/db/schema";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { WELCOME_CREDITS } from "~/lib/billing.constants";
-import type { DisplayCurrency } from "~/lib/currency";
 import {
 	FREE_FUEL_LOGS_LABEL,
 	FUEL_LOGS_ROW_LABEL,
 	UNLIMITED_FUEL_LOGS,
 } from "~/lib/crew-fuel-copy";
+import type { DisplayCurrency } from "~/lib/currency";
 import { shouldSyncCheckoutFromFetcher } from "~/lib/pricing-checkout";
 import { TIER_LIMITS } from "~/lib/tiers.server";
 import type { Route } from "./+types/pricing";

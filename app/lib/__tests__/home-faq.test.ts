@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { buildHomeFaqEntries } from "~/lib/home-faq";
 import {
 	FREE_FUEL_LOGS_LABEL,
 	UNLIMITED_FUEL_LOGS,
 } from "~/lib/crew-fuel-copy";
+import { buildHomeFaqEntries } from "~/lib/home-faq";
 
 const tierLimits = {
 	free: {

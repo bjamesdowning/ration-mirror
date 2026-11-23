@@ -12,11 +12,11 @@ import { JsonLd } from "~/components/seo/JsonLd";
 import { PublicFooter } from "~/components/shell/PublicFooter";
 import { PublicHeader } from "~/components/shell/PublicHeader";
 import { createAuth } from "~/lib/auth.server";
-import type { DisplayCurrency } from "~/lib/currency";
 import {
 	FREE_FUEL_LOGS_LABEL,
 	UNLIMITED_FUEL_LOGS,
 } from "~/lib/crew-fuel-copy";
+import type { DisplayCurrency } from "~/lib/currency";
 import { buildHomeFaqEntries } from "~/lib/home-faq";
 import { EXPLAINER_VIDEO_EMBED_URL } from "~/lib/marketing";
 import { canonicalMeta, ogMeta } from "~/lib/seo";

@@ -219,16 +219,26 @@ struct GalleyView: View {
         }
         .tabDockAction(tag: .galley, layer: .root) {
             IconFABMenuCore(systemImage: "plus.circle.fill", accessibilityLabel: "Galley actions") {
-                Button { showingAddTypeChoice = true } label: {
+                let actionsEnabled = env.deepLinkRouter.galleyActionsEnabled
+                Button {
+                    guard actionsEnabled else { return }
+                    showingAddTypeChoice = true
+                } label: {
                     Label("Add Meal", systemImage: "plus")
                 }
+                .disabled(!actionsEnabled)
                 if env.session.clientFlags.isAiGenerateMealEnabled {
-                    Button { showingGenerate = true } label: {
+                    Button {
+                        guard actionsEnabled else { return }
+                        showingGenerate = true
+                    } label: {
                         Label("Generate meal", systemImage: "sparkles")
                     }
+                    .disabled(!actionsEnabled)
                 }
                 if env.session.clientFlags.isAiImportUrlEnabled {
                     Button {
+                        guard actionsEnabled else { return }
                         importPrefillURL = nil
                         importPrefillUserText = nil
                         importAutoStart = false
@@ -240,6 +250,7 @@ struct GalleyView: View {
                     } label: {
                         Label("Import recipe", systemImage: "link")
                     }
+                    .disabled(!actionsEnabled)
                 }
             }
         }

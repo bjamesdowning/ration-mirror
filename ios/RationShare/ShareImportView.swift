@@ -86,8 +86,8 @@ struct ShareImportView: View {
                 .font(.system(.body, design: .monospaced))
                 .multilineTextAlignment(.center)
                 .foregroundStyle(Color.primary)
-            if case .chooseKitchen(let host, let cost, let selectedId) = coordinator.state {
-                kitchenChoice(host: host, cost: cost, selectedId: selectedId)
+            if case .chooseKitchen(_, let cost, let selectedId) = coordinator.state {
+                kitchenChoice(cost: cost, selectedId: selectedId)
             }
             if case .needsConsent = coordinator.state {
                 Text(ShareImportCopy.disclosure)
@@ -163,11 +163,11 @@ struct ShareImportView: View {
     }
 
     @ViewBuilder
-    private func kitchenChoice(host: String, cost: Int, selectedId: String) -> some View {
+    private func kitchenChoice(cost: Int, selectedId: String) -> some View {
         let selected = coordinator.kitchens.first { $0.id == selectedId }
         let balance = selected?.credits ?? 0
         let canConfirm = balance >= cost
-        VStack(spacing: 12) {
+        return VStack(spacing: 12) {
             if coordinator.kitchens.count > 1 {
                 Picker("Kitchen", selection: Binding(
                     get: { selectedId },
@@ -197,7 +197,6 @@ struct ShareImportView: View {
             .disabled(!canConfirm)
         }
         .accessibilityElement(children: .contain)
-        let _ = host
     }
 
     private var background: Color {

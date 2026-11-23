@@ -106,4 +106,14 @@ enum SavedListLogic {
         if days < 30 { return "Last bought \(max(1, Int((Double(days) / 7).rounded()))) wk ago" }
         return "Last bought \(max(1, Int((Double(days) / 30).rounded()))) mo ago"
     }
+
+    /// A free account's next saved list is the same Crew paywall as the 4th Fuel log.
+    static func opensCrewPaywall(_ error: Error) -> Bool {
+        guard let api = error as? APIError else { return false }
+        if api.isCapacityExceeded { return true }
+        let candidates = [api.serverErrorCode, api.code, api.errorDescription].compactMap { $0 }
+        return candidates.contains { value in
+            value == "capacity_exceeded" || value.hasPrefix("capacity_exceeded:")
+        }
+    }
 }

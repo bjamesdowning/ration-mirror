@@ -8,6 +8,7 @@ struct SupplyListsLibraryView: View {
     @State private var showingNewList = false
     @State private var saveLive = false
     @State private var errorMessage: String?
+    @State private var showingPaywall = false
 
     var body: some View {
         List {
@@ -123,13 +124,14 @@ struct SupplyListsLibraryView: View {
                         await reload()
                         return true
                     } catch {
-                        errorMessage = error.localizedDescription
+                        reportCreateError(error)
                         return false
                     }
                 }
                 return await createList(name: name, text: text)
             }
         }
+        .sheet(isPresented: $showingPaywall) { PaywallView(context: .settings()) }
         .task { await reload() }
     }
 
@@ -161,9 +163,19 @@ struct SupplyListsLibraryView: View {
             await reload()
             return true
         } catch {
-            errorMessage = error.localizedDescription
+            reportCreateError(error)
             return false
         }
+    }
+
+    private func reportCreateError(_ error: Error) {
+        if SavedListLogic.opensCrewPaywall(error) {
+            showingNewList = false
+            errorMessage = nil
+            showingPaywall = true
+            return
+        }
+        errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
     }
 }
 

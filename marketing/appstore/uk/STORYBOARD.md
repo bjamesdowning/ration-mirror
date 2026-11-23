@@ -9,13 +9,13 @@ App Store Connect → Media Manager → **iPhone 6.9" Display**. Upload only [`f
 | 3 | [`03-import.png`](framed/6.9/1.6/03-import.png) | Save recipes from / TikTok, Reels & the web |
 | 4 | [`04-scan.png`](framed/6.9/1.6/04-scan.png) | Scan a receipt / or the fridge |
 | 5 | [`05-galley.png`](framed/6.9/1.6/05-galley.png) | See what you can cook / with what's here |
-| 6 | [`06-manifest.png`](framed/6.9/1.6/06-manifest.png) | Cook for the house. / Log your plate. |
+| 6 | [`06-manifest.png`](framed/6.9/1.6/06-manifest.png) | Plan the week. / AI fills the days. |
 | 7 | [`07-supply.png`](framed/6.9/1.6/07-supply.png) | Shop only what / you're still missing |
-| 8 | [`08-your-agent.png`](framed/6.9/1.6/08-your-agent.png) | Same kitchen. / Your agent. |
+| 8 | [`08-hub.png`](framed/6.9/1.6/08-hub.png) | The whole kitchen. / One screen. |
 
-Slide 3 is the existing TikTok import frame, copied unchanged from `framed/6.9/03-import.png`. Slides 4–7 are the existing scan, galley, manifest, and supply frames, copied into this folder (manifest and supply take slots 6 and 7). Slide 8 names agents in Space Mono only: `Grok · Hermes · Dots · Claude`. No logos.
+Slide 3 is the existing TikTok import frame, copied unchanged from `framed/6.9/03-import.png`. Slides 4 and 5 are the existing scan and galley frames. Slide 2 keeps the confirmation chat and adds one Space Mono line, with no logos: `Use Grok, Hermes, Dots, or Claude.` Slide 6 is the current week Manifest. Slide 7 is the existing supply frame with a cutout of Saved lists (Staples, Pets, Household Goods). Slide 8 is the Hub screen. `08-your-agent.png` is not in this set.
 
-Leave these in the repo and do **not** upload them for 1.6 (same names under `framed/6.5/` as well): `01-hub.png`, `02-macros.png`, `06-plan.png`, `09-ask.png`, `10-theme.png`.
+Leave these in the repo and do **not** upload them for 1.6 (same names under `framed/6.5/` as well): `01-hub.png`, `02-macros.png`, `06-plan.png`, `09-ask.png`, `10-theme.png`. The new Hub frame is `framed/6.9/1.6/08-hub.png`, not the older `01-hub.png`.
 
 # Previous storyboard — English (U.K.)
 

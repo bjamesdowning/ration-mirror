@@ -13,9 +13,9 @@ Upload [`framed/6.9/1.6/`](framed/6.9/1.6/) into **iPhone 6.9" Display**. Do not
 | 5 | `05-galley.png` | 1320×2868 |
 | 6 | `06-manifest.png` | 1320×2868 |
 | 7 | `07-supply.png` | 1320×2868 |
-| 8 | `08-your-agent.png` | 1320×2868 |
+| 8 | `08-hub.png` | 1320×2868 |
 
-PNG, RGB, no alpha. `03-import.png` is the existing TikTok import frame. `06-manifest.png` and `07-supply.png` are the existing manifest and supply frames, renamed into this folder.
+PNG, RGB, no alpha. `03-import.png` is the existing TikTok import frame. `02-agent-sets-fuel.png` adds `Use Grok, Hermes, Dots, or Claude.` under the headline, in type only. `06-manifest.png` is the current week Manifest. `07-supply.png` is the existing supply frame plus a Saved lists cutout. `08-hub.png` is the Hub screen. Do not upload `08-your-agent.png`.
 
 ## Screenshots — fix “dimensions are wrong”
 

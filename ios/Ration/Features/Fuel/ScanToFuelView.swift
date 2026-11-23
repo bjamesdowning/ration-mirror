@@ -32,6 +32,7 @@ struct ScanToFuelView: View {
     @State private var originalProtein = 0.0
     @State private var originalCarbs = 0.0
     @State private var originalFat = 0.0
+    @State private var showingHealthAccept = false
 
     private enum Phase {
         case idle
@@ -105,6 +106,23 @@ struct ScanToFuelView: View {
             )
         }
         .onDisappear { photoTask?.cancel() }
+        .confirmationDialog(
+            "Apple Health",
+            isPresented: $showingHealthAccept,
+            titleVisibility: .visible
+        ) {
+            Button("Accept") { Task { await confirm(accepted: true) } }
+            Button("Skip", role: .cancel) { Task { await confirm(accepted: false) } }
+        } message: {
+            Text(HealthEstimateAccept.note)
+        }
+    }
+
+    private var healthExportEnabled: Bool {
+        HealthExportPolicy.switchVisible(
+            flagEnabled: env.session.clientFlags.isNutritionHealthExportEnabled,
+            appVersion: AppMarketingVersion.current
+        ) && env.launch.userSettings?.healthExport?.enabled == true
     }
 
     private var idleContent: some View {
@@ -159,7 +177,7 @@ struct ScanToFuelView: View {
                 Button("Edit") { editing = true }
                     .frame(minHeight: 44)
             }
-            Button(FuelScanCopy.addToFuel) { Task { await confirm() } }
+            Button(FuelScanCopy.addToFuel) { Task { await confirm(accepted: nil) } }
                 .buttonStyle(AIButtonStyle())
                 .accessibilityIdentifier("fuel.photo.confirm")
             Button("Scan another") { resetToIdle() }
@@ -333,7 +351,7 @@ struct ScanToFuelView: View {
         fatText = FuelLogWrite.macroDisplay(fat)
     }
 
-    private func confirm() async {
+    private func confirm(accepted: Bool?) async {
         guard let requestId,
               let amount = FuelLogWrite.storedValue(
                 original: originalAmount,
@@ -363,6 +381,23 @@ struct ScanToFuelView: View {
               !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
               !unit.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         else { return }
+        let amountsEdited = energy != originalEnergy
+            || protein != originalProtein
+            || carbs != originalCarbs
+            || fat != originalFat
+        if accepted == nil && HealthEstimateAccept.promptNeeded(
+            healthExportEnabled: healthExportEnabled,
+            compositionSource: "ai_estimate",
+            amountsEdited: amountsEdited
+        ) {
+            showingHealthAccept = true
+            return
+        }
+        let source = HealthEstimateAccept.compositionSource(
+            proposed: "ai_estimate",
+            amountsEdited: amountsEdited,
+            accepted: accepted == true
+        )
         let key = UUID().uuidString
         do {
             _ = try await env.api.confirmFuelPhoto(
@@ -380,7 +415,7 @@ struct ScanToFuelView: View {
                     ),
                     idempotencyKey: key,
                     operationKey: key,
-                    compositionSource: "ai_estimate"
+                    compositionSource: source
                 )
             )
             onSaved()

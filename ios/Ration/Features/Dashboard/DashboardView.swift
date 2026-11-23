@@ -149,6 +149,7 @@ struct DashboardView: View {
                 photoLogEnabled: env.session.clientFlags.isNutritionPhotoLogEnabled,
                 used: 0,
                 limit: nil,
+                fuelDate: LocalDay.todayISO(),
                 onSaved: {
                     showLogToFuel = false
                     Task { await reload() }

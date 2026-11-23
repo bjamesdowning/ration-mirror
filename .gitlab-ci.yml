@@ -117,15 +117,3 @@ ai_search_sync:
       bunx wrangler r2 object put "ration-copilot-docs/README.md" --file "README.md" --remote
     - bunx wrangler ai-search jobs create ration-docs
   allow_failure: false
-
-# Temporary. Lands the revamped frames, then deletes itself and
-# restores this file to main. Not part of the finished diff.
-assemble-frames:
-  stage: test
-  image: python:3.12-alpine
-  needs: []
-  interruptible: false
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-  script:
-    - python3 tools/assemble_frames.py

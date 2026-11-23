@@ -4,18 +4,20 @@
 
 Upload [`framed/6.9/1.6/`](framed/6.9/1.6/) into **iPhone 6.9" Display**. Do not upload `framed/6.5/` for this submission, and do not upload the older `framed/6.9/01-hub.png` … `10-theme.png` set.
 
-| Order | File | Pixels |
-|------:|------|--------|
-| 1 | `01-daily-fuel.png` | 1320×2868 |
-| 2 | `02-agent-sets-fuel.png` | 1320×2868 |
-| 3 | `03-import.png` | 1320×2868 |
-| 4 | `04-scan.png` | 1320×2868 |
-| 5 | `05-galley.png` | 1320×2868 |
-| 6 | `06-manifest.png` | 1320×2868 |
-| 7 | `07-supply.png` | 1320×2868 |
-| 8 | `08-hub.png` | 1320×2868 |
+The filename order is the upload order. It stays in this order because the first three are what search shows: the job, the AI choice, then the import.
 
-PNG, RGB, no alpha. `03-import.png` is the existing TikTok import frame. `02-agent-sets-fuel.png` adds `Use Grok, Hermes, Dots, or Claude.` under the headline, in type only. `06-manifest.png` is the current week Manifest. `07-supply.png` is the existing supply frame plus a Saved lists cutout. `08-hub.png` is the Hub screen. Do not upload `08-your-agent.png`.
+| Order | File | Caption | Pixels |
+|------:|------|---------|--------|
+| 1 | `01-daily-fuel.png` | Daily Fuel. / Meals, across the days. | 1320×2868 |
+| 2 | `02-agent-sets-fuel.png` | Any agent can run it. / Or use the one inside. | 1320×2868 |
+| 3 | `03-import.png` | Save it from the video. / TikTok, Reels, and the web. | 1320×2868 |
+| 4 | `04-scan.png` | Scan the receipt. / The cupboard updates. | 1320×2868 |
+| 5 | `05-galley.png` | Cook from what's here. / Matched to the cupboard. | 1320×2868 |
+| 6 | `06-manifest.png` | The week's meals. / For everyone in the kitchen. | 1320×2868 |
+| 7 | `07-supply.png` | The list writes itself. / From the meals you planned. | 1320×2868 |
+| 8 | `08-hub.png` | The whole kitchen. / Stock, meals, and today. | 1320×2868 |
+
+PNG, RGB, no alpha. Slide 1 adds `Calories, protein, carbs, and fat.` Slide 2 names `Grok · Hermes · Dots · Claude` in type only, and shows Ask Ration beside the person's own agent. Slide 7 adds `Share it, or send it out.` Do not upload `08-your-agent.png`.
 
 ## Screenshots — fix “dimensions are wrong”
 

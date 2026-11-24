@@ -212,6 +212,7 @@ export function MealDetail({
 			entry?: {
 				id: string;
 				mealName: string;
+				date: string;
 				mealEnergyKcalPerServing?: number | null;
 				mealProteinGPerServing?: number | null;
 				mealCarbsGPerServing?: number | null;

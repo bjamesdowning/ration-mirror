@@ -154,7 +154,6 @@ struct DashboardView: View {
                     showLogToFuel = false
                     Task { await reload() }
                 },
-                onPaywall: { showLogToFuel = false },
                 onCredits: { showLogToFuel = false }
             )
         }

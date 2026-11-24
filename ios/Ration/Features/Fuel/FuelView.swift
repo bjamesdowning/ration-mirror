@@ -17,6 +17,9 @@ struct FuelView: View {
     @State private var showingScan = false
     @State private var showingCreditPaywall = false
     @State private var showingTypedBarcode = false
+    @State private var barcodePaywall = false
+    @State private var editPaywall = false
+    @State private var barcodeLogDay: Date?
     @State private var editingDraft: FuelLogWrite?
     @State private var path: [FuelLogRoute] = []
     @State private var barcode = ""
@@ -148,7 +151,7 @@ struct FuelView: View {
             )
         }
         .sheet(item: $editingDraft) { draft in
-            FuelLogEditSheet(draft: draft) { next in
+            FuelLogEditSheet(draft: draft, showingPaywall: $editPaywall) { next in
                 Task { await saveEdit(next) }
             }
         }
@@ -187,10 +190,6 @@ struct FuelView: View {
                 onSaved: {
                     showingScan = false
                     Task { await load(date: day?.date ?? LocalDay.todayISO()) }
-                },
-                onPaywall: {
-                    showingScan = false
-                    showingPaywall = true
                 },
                 onCredits: {
                     showingScan = false
@@ -334,6 +333,7 @@ struct FuelView: View {
             await load(date: today)
         }
         guard let day, FuelMenuRouting.canOpen(loadedDate: day.date, today: today) else {
+            message = "Fuel did not load."
             return
         }
         await perform(action, used: day.used, limit: day.limit)
@@ -406,6 +406,16 @@ struct FuelView: View {
             Form {
                 TextField("Barcode", text: $barcode)
                     .keyboardType(.numberPad)
+                DatePicker(
+                    "Date",
+                    selection: Binding(
+                        get: {
+                            barcodeLogDay ?? LocalDay.date(from: day?.date ?? LocalDay.todayISO()) ?? Date()
+                        },
+                        set: { barcodeLogDay = $0 }
+                    ),
+                    displayedComponents: .date
+                )
                 Button("Look up") { Task { await lookupBarcode() } }
                     .frame(minHeight: 44)
             }
@@ -417,6 +427,7 @@ struct FuelView: View {
             }
             .rationFormKeyboardToolbar()
         }
+        .sheet(isPresented: $barcodePaywall) { PaywallView(context: .settings()) }
     }
 
     private func saveEdit(_ draft: FuelLogWrite) async {
@@ -476,21 +487,16 @@ struct FuelView: View {
     }
 
     private func lookupBarcode() async {
-        guard let day else { return }
-        let decision = FuelActionPolicy.decide(
-            action: .barcode,
-            used: day.used,
-            limit: day.limit,
-            isOnline: env.network.isOnline,
-            cameraDenied: cameraDenied
-        )
-        if decision == .openPurchase {
-            showingPaywall = true
+        guard let day else {
+            message = "Fuel did not load."
+            return
+        }
+        guard env.network.isOnline else {
+            message = "You're offline."
             return
         }
         do {
             let result = try await env.api.lookupFoodBarcode(barcode)
-            showingTypedBarcode = false
             guard result.found == true, let foundName = result.name, let macros = result.macros else {
                 message = "No food matched that barcode."
                 return
@@ -504,13 +510,22 @@ struct FuelView: View {
                     carbs: macros.carbsG,
                     fat: macros.fatG,
                     key: key,
-                    source: "usda"
+                    source: "usda",
+                    fuelDate: barcodeFuelDate
                 )
             )
+            showingTypedBarcode = false
             await load(date: day.date)
         } catch {
             await handleWrite(error)
         }
+    }
+
+    private var barcodeFuelDate: String {
+        if let barcodeLogDay {
+            return LocalDay.isoString(from: barcodeLogDay)
+        }
+        return day?.date ?? LocalDay.todayISO()
     }
 
     private func diaryBody(
@@ -522,7 +537,8 @@ struct FuelView: View {
         key: String,
         source: String,
         amount: Double = 1,
-        unit: String = "serving"
+        unit: String = "serving",
+        fuelDate: String? = nil
     ) -> DiaryFoodBody {
         DiaryFoodBody(
             name: name,
@@ -532,19 +548,23 @@ struct FuelView: View {
             macros: DiaryMacrosBody(energyKcal: energy, proteinG: protein, carbsG: carbs, fatG: fat),
             idempotencyKey: key,
             operationKey: key,
-            compositionSource: source
+            compositionSource: source,
+            fuelDate: fuelDate
         )
     }
 
 
     private func handleWrite(_ error: Error) async {
         let code = (error as? APIError)?.code
-        if code == "fuel_daily_limit" {
-            showingAdd = false
-            editingDraft = nil
-            showingPaywall = true
-        } else {
-            message = "That log was not saved."
+        if FuelSaveLimit.presentsPaywall(code: code) {
+            if editingDraft != nil {
+                editPaywall = true
+                return
+            }
+            showingTypedBarcode = true
+            barcodePaywall = true
+            return
         }
+        message = (error as? APIError)?.errorDescription ?? "That log was not saved."
     }
 }

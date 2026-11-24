@@ -10,13 +10,13 @@ struct ScanToFuelView: View {
     var limit: Int?
     var fuelDate: String
     var onSaved: () -> Void
-    var onPaywall: () -> Void
     var onCredits: () -> Void
 
     @State private var phase: Phase = .idle
     @State private var logDay: Date?
     @State private var consent = AIConsentCoordinator()
     @State private var showingCamera = false
+    @State private var showingLimitPaywall = false
     @State private var cameraDenied = false
     @State private var failureMessage = ""
     @State private var requestId: String?
@@ -93,6 +93,7 @@ struct ScanToFuelView: View {
                 Task { await upload(image) }
             }
         }
+        .sheet(isPresented: $showingLimitPaywall) { PaywallView(context: .settings()) }
         .sheet(isPresented: $editing) {
             editSheet
         }
@@ -264,10 +265,6 @@ struct ScanToFuelView: View {
             cameraDenied: false,
             photoLogEnabled: true
         )
-        if decision == .openPurchase {
-            onPaywall()
-            return
-        }
         guard FuelDeviceZone.candidate != nil else {
             failureMessage = FuelDeviceZone.unusableMessage
             phase = .failed
@@ -443,7 +440,7 @@ struct ScanToFuelView: View {
     private func handlePhoto(_ error: Error) {
         switch FuelPhotoFailureMapping.decide(error) {
         case .crew:
-            onPaywall()
+            showingLimitPaywall = true
         case .credits:
             onCredits()
         case .message(let text):

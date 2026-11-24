@@ -176,10 +176,12 @@ struct FuelLogEditSheet: View {
     @State private var unit: String
     @State private var notes: String
     private let draft: FuelLogWrite
+    @Binding var showingPaywall: Bool
     var onSave: (FuelLogWrite) -> Void
 
-    init(draft: FuelLogWrite, onSave: @escaping (FuelLogWrite) -> Void) {
+    init(draft: FuelLogWrite, showingPaywall: Binding<Bool>, onSave: @escaping (FuelLogWrite) -> Void) {
         self.draft = draft
+        self._showingPaywall = showingPaywall
         self.onSave = onSave
         _name = State(initialValue: draft.name)
         _calories = State(initialValue: FuelLogWrite.macroDisplay(draft.energy))
@@ -231,6 +233,7 @@ struct FuelLogEditSheet: View {
                 }
             }
             .rationFormKeyboardToolbar()
+            .sheet(isPresented: $showingPaywall) { PaywallView(context: .settings()) }
         }
     }
 

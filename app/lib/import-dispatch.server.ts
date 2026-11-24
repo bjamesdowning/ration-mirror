@@ -109,13 +109,44 @@ async function readDispatch(
 }
 
 function assertSameOwner(row: DispatchRow, input: DurableImportInput): void {
-	if (
-		row.user_id !== input.userId ||
-		row.organization_id !== input.organizationId ||
-		row.job_type !== "import_url"
-	) {
+	if (row.user_id !== input.userId || row.job_type !== "import_url") {
 		throw data({ error: "Job not found" }, { status: 404 });
 	}
+	if (
+		row.organization_id !== input.organizationId &&
+		row.state !== "reserved"
+	) {
+		throw data(
+			{
+				error: "This import is already charged to another kitchen.",
+				code: "import_kitchen_locked",
+			},
+			{ status: 409 },
+		);
+	}
+}
+
+/** An uncharged reservation can move. A debited or dispatched row cannot. */
+async function retargetReservedKitchen(
+	db: D1Database,
+	row: DispatchRow,
+	organizationId: string,
+	now: number,
+): Promise<void> {
+	if (
+		row.organization_id === organizationId ||
+		row.state !== "reserved"
+	) {
+		return;
+	}
+	await db
+		.prepare(
+			`UPDATE import_dispatch
+			 SET organization_id = ?1, updated_at = ?2
+			 WHERE request_id = ?3 AND state = 'reserved'`,
+		)
+		.bind(organizationId, now, row.request_id)
+		.run();
 }
 
 async function stageBodies(
@@ -371,6 +402,12 @@ export async function submitDurableRecipeImport(
 				{ status: 409 },
 			);
 		}
+		await retargetReservedKitchen(
+			env.DB,
+			existing,
+			input.organizationId,
+			nowSec,
+		);
 		if (existing.state !== "reserved") {
 			return { status: "processing", requestId };
 		}
@@ -395,6 +432,12 @@ export async function submitDurableRecipeImport(
 					{ status: 409 },
 				);
 			}
+			await retargetReservedKitchen(
+				env.DB,
+				raced,
+				input.organizationId,
+				nowSec,
+			);
 			if (raced.state !== "reserved") {
 				return { status: "processing", requestId };
 			}

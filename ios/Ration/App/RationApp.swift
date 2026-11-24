@@ -152,13 +152,21 @@ struct RationApp: App {
               let record = store.peekOldest()
         else { return }
         let memberships = Set(session.organizations.map(\.id))
-        switch ShareImportResume.decide(
+        let outcome = ShareImportRecovery.recover(
             record: record,
             userId: session.user.id,
             organizationId: organization.id,
             memberships: memberships,
             currentEpoch: store.epoch
-        ) {
+        )
+        if outcome.record.organizationId != record.organizationId
+            || outcome.record.organizationName != record.organizationName
+            || outcome.record.state != record.state
+        {
+            try? store.update(outcome.record)
+        }
+        env.deepLinkRouter.applyShareChrome(outcome.chrome)
+        switch outcome.action {
         case .resume(let clientRequestId, let allowDeviceCapture):
             env.deepLinkRouter.acknowledgeShareNotice()
             SharedImportHandoff.clear()
@@ -184,9 +192,19 @@ struct RationApp: App {
         case .discard:
             store.acknowledge(id: record.id)
             SharedImportHandoff.clear()
-        case .switchKitchen(let name):
+        case .switchKitchen:
             SharedImportHandoff.clear()
-            env.deepLinkRouter.presentShareNotice(ShareImportCopy.switchKitchen(name))
+        case .retarget(let clientRequestId):
+            store.acknowledge(id: outcome.record.id)
+            SharedImportHandoff.clear()
+            env.deepLinkRouter.openShareResume(
+                requestId: clientRequestId,
+                url: record.url,
+                userText: record.userText,
+                autoResume: false,
+                allowDeviceCapture: false,
+                recordId: record.id
+            )
         }
     }
 

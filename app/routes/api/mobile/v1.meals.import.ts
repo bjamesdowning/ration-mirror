@@ -10,6 +10,7 @@ import {
 	submitRecipeImport,
 } from "~/lib/recipe-import-submit.server";
 import { RecipeImportRequestSchema } from "~/lib/schemas/recipe-import";
+import { resolveImportOrganization } from "~/lib/share-import-kitchen.server";
 import type { Route } from "./+types/v1.meals.import";
 
 export async function action({ request, context }: Route.ActionArgs) {
@@ -18,10 +19,8 @@ export async function action({ request, context }: Route.ActionArgs) {
 	}
 
 	try {
-		const { userId, organizationId } = await requireMobileActiveGroup(
-			context,
-			request,
-		);
+		const { userId, organizationId: activeOrganizationId } =
+			await requireMobileActiveGroup(context, request);
 		const env = context.cloudflare.env;
 
 		await requireMobileAIConsent(env, userId);
@@ -55,6 +54,12 @@ export async function action({ request, context }: Route.ActionArgs) {
 		if (request.headers.get("x-ration-surface") === "share-extension") {
 			await assertFeatureEnabled(env, "share-extension-import", flagContext);
 		}
+		const organizationId = await resolveImportOrganization(
+			env,
+			userId,
+			activeOrganizationId,
+			parsedRequest.data.organizationId,
+		);
 		const result = await submitRecipeImport(env, {
 			userId,
 			organizationId,

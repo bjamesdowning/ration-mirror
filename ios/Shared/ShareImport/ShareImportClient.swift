@@ -117,6 +117,13 @@ final class ShareImportLiveService: ShareImportServicing {
             surface: false
         )
         let consent = payload.user.settings?.aiConsentAt?.isEmpty == false
+        let kitchens = payload.organizations.map { membership in
+            ShareImportKitchen(
+                id: membership.id,
+                name: membership.name ?? (membership.id == payload.organization.id ? payload.organization.name : "Kitchen"),
+                credits: membership.credits ?? (membership.id == payload.organization.id ? payload.credits : 0)
+            )
+        }
         return ShareImportSessionSnapshot(
             userId: payload.user.id,
             organizationId: payload.organization.id,
@@ -127,7 +134,9 @@ final class ShareImportLiveService: ShareImportServicing {
             hasConsent: consent,
             shareExtensionImport: payload.clientFlags.shareExtensionImport ?? false,
             aiImportWeb: payload.clientFlags.aiImportWeb ?? false,
-            aiImportSocial: payload.clientFlags.aiImportSocial ?? false
+            aiImportSocial: payload.clientFlags.aiImportSocial ?? false,
+            kitchens: kitchens,
+            shareImportKitchenPicker: payload.clientFlags.shareImportKitchenPicker ?? false
         )
     }
 
@@ -153,6 +162,9 @@ final class ShareImportLiveService: ShareImportServicing {
         ]
         if let userText = body.userText, !userText.isEmpty {
             json["userText"] = userText
+        }
+        if let organizationId = body.organizationId {
+            json["organizationId"] = organizationId
         }
         let response: SubmitPayload = try await send(
             path: "meals/import",
@@ -350,6 +362,8 @@ private struct SessionPayload: Decodable {
     }
     struct Membership: Decodable {
         let id: String
+        let name: String?
+        let credits: Int?
     }
     struct Costs: Decodable {
         let importUrl: Int
@@ -359,6 +373,7 @@ private struct SessionPayload: Decodable {
     }
     struct Flags: Decodable {
         let shareExtensionImport: Bool?
+        let shareImportKitchenPicker: Bool?
         let aiImportWeb: Bool?
         let aiImportSocial: Bool?
     }

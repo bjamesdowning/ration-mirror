@@ -44,6 +44,9 @@ enum ShareImportCopy {
     static func insufficientCredits(required: Int) -> String {
         "This import uses \(required) credits. Open Ration from your Home Screen to add credits."
     }
+
+    static let addByHand =
+        "This kitchen does not have enough credits. You can add the meal by hand in Ration."
 }
 
 enum ShareImportState: Equatable, Sendable {
@@ -64,6 +67,7 @@ enum ShareImportState: Equatable, Sendable {
     case readyToAdd
     case addedToGalley
     case queueFull
+    case chooseKitchen(host: String, cost: Int, selectedId: String)
 }
 
 struct ShareImportRecord: Codable, Equatable, Sendable {
@@ -130,6 +134,12 @@ struct ShareImportRecord: Codable, Equatable, Sendable {
     }
 }
 
+struct ShareImportKitchen: Equatable, Sendable, Identifiable {
+    var id: String
+    var name: String
+    var credits: Int
+}
+
 struct ShareImportSessionSnapshot: Equatable, Sendable {
     var userId: String
     var organizationId: String
@@ -141,12 +151,15 @@ struct ShareImportSessionSnapshot: Equatable, Sendable {
     var shareExtensionImport: Bool
     var aiImportWeb: Bool
     var aiImportSocial: Bool
+    var kitchens: [ShareImportKitchen] = []
+    var shareImportKitchenPicker: Bool = false
 }
 
 struct ShareImportSubmitBody: Equatable, Sendable {
     var clientRequestId: String
     var url: String
     var userText: String?
+    var organizationId: String? = nil
 }
 
 struct ShareImportJobSnapshot: Equatable, Sendable {
@@ -213,9 +226,21 @@ enum ShareImportResumeAction: Equatable, Sendable {
     case continueInKitchen(clientRequestId: String)
     case discard
     case switchKitchen(String)
+    /// The row was never charged. Drop the kitchen and let this kitchen finish it.
+    case retarget(clientRequestId: String)
 }
 
 enum ShareImportResume {
+    static func isCharged(_ record: ShareImportRecord) -> Bool {
+        if record.requestId != nil { return true }
+        switch record.state {
+        case "submitting", "processing", "needsApp", "confirmed":
+            return true
+        default:
+            return false
+        }
+    }
+
     static func decide(
         record: ShareImportRecord,
         userId: String,
@@ -234,10 +259,13 @@ enum ShareImportResume {
         if let owner = record.ownerUserId, owner == userId,
            let recordOrg = record.organizationId, recordOrg != organizationId
         {
-            if memberships.contains(recordOrg) {
-                return .switchKitchen(record.organizationName ?? "the other kitchen")
+            if isCharged(record) {
+                if memberships.contains(recordOrg) {
+                    return .switchKitchen(record.organizationName ?? "the other kitchen")
+                }
+                return .discard
             }
-            return .discard
+            return .retarget(clientRequestId: record.clientRequestId)
         }
         let started = record.requestId != nil
             || record.state == "submitting"
@@ -252,6 +280,111 @@ enum ShareImportResume {
         let currentSession = record.ownerUserId == nil || record.ownerUserId == userId
         guard currentSession else { return .discard }
         return .continueInKitchen(clientRequestId: record.clientRequestId)
+    }
+}
+
+/// In-memory Galley chrome for a share notice. The alert latch is not the App Group row.
+struct GalleyShareChrome: Equatable, Sendable {
+    var alert: String?
+    var actionsEnabled: Bool
+    /// Dismissing the alert does not clear this. Only a release does.
+    var locked: Bool
+
+    static let usable = GalleyShareChrome(alert: nil, actionsEnabled: true, locked: false)
+
+    var canAddMeal: Bool { actionsEnabled }
+    var canGenerateMeal: Bool { actionsEnabled }
+    var canImportMeal: Bool { actionsEnabled }
+
+    func presentOwnershipAlert(_ message: String) -> GalleyShareChrome {
+        GalleyShareChrome(alert: message, actionsEnabled: false, locked: true)
+    }
+
+    func dismissAlert() -> GalleyShareChrome {
+        GalleyShareChrome(alert: nil, actionsEnabled: !locked, locked: locked)
+    }
+
+    func releasePendingImport() -> GalleyShareChrome {
+        .usable
+    }
+}
+
+enum ShareImportRecovery {
+    struct Outcome: Equatable, Sendable {
+        var action: ShareImportResumeAction
+        var record: ShareImportRecord
+        var chrome: GalleyShareChrome
+    }
+
+    static func recover(
+        record: ShareImportRecord,
+        userId: String,
+        organizationId: String,
+        memberships: Set<String>,
+        currentEpoch: Int
+    ) -> Outcome {
+        let action = ShareImportResume.decide(
+            record: record,
+            userId: userId,
+            organizationId: organizationId,
+            memberships: memberships,
+            currentEpoch: currentEpoch
+        )
+        switch action {
+        case .retarget:
+            var released = record
+            released.organizationId = nil
+            released.organizationName = nil
+            if released.requestId == nil {
+                released.state = "saved"
+            }
+            return Outcome(
+                action: action,
+                record: released,
+                chrome: GalleyShareChrome.usable.releasePendingImport()
+            )
+        case .switchKitchen(let name):
+            return Outcome(
+                action: action,
+                record: record,
+                chrome: GalleyShareChrome(
+                    alert: ShareImportCopy.switchKitchen(name),
+                    actionsEnabled: true,
+                    locked: false
+                )
+            )
+        default:
+            return Outcome(action: action, record: record, chrome: .usable)
+        }
+    }
+
+    /// Ownership alert, dismiss leaves Galley dead, release is what frees it.
+    static func unchargedMismatchSequence(
+        record: ShareImportRecord,
+        userId: String,
+        organizationId: String,
+        memberships: Set<String>,
+        currentEpoch: Int
+    ) -> (
+        afterAlert: GalleyShareChrome,
+        afterDismiss: GalleyShareChrome,
+        afterRelease: Outcome
+    ) {
+        let name = record.organizationName ?? "the other kitchen"
+        let afterAlert = GalleyShareChrome.usable.presentOwnershipAlert(
+            ShareImportCopy.switchKitchen(name)
+        )
+        return (
+            afterAlert,
+            afterAlert.dismissAlert(),
+            recover(
+                record: record,
+                userId: userId,
+                organizationId: organizationId,
+                memberships: memberships,
+                currentEpoch: currentEpoch
+            )
+        )
     }
 }
 

@@ -44,7 +44,7 @@ Writers of Person-in-context rows **always** set a non-null org and snapshots at
 | **Person** | Anchor on session `userId` only | Same user only |
 | **Person-in-context** | Session `userId` + **current kitchen** membership; persist non-null `organizationId` + snapshots | Owner only. When **`nutrition-cross-org-diary`** is on (and parent manifest/goals capability allows), **summary/history aggregate across all kitchens** for that user. Flag off → active-org filter (legacy). |
 
-Never take `organizationId` or `userId` from client input as the tenancy anchor. Household members must not read another member’s intake or goals.
+Never take `organizationId` or `userId` from client input as the tenancy anchor. Share import may name a kitchen; the server uses that id only after a membership check, and only the verified id is charged. Household members must not read another member’s intake or goals.
 
 ## Durability
 

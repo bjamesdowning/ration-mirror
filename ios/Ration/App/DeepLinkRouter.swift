@@ -31,6 +31,7 @@ final class DeepLinkRouter {
     private(set) var galleyImportRecordId: String?
     private(set) var galleyImportAllowDeviceCapture = false
     private(set) var shareImportNotice: String?
+    private(set) var galleyActionsEnabled = true
     private var pendingShareResume: (
         requestId: String,
         autoResume: Bool,
@@ -179,6 +180,12 @@ final class DeepLinkRouter {
 
     func presentShareNotice(_ message: String) {
         shareImportNotice = message
+        galleyActionsEnabled = true
+    }
+
+    func applyShareChrome(_ chrome: GalleyShareChrome) {
+        shareImportNotice = chrome.alert
+        galleyActionsEnabled = chrome.actionsEnabled
     }
 
     func acknowledgeShareNotice() {

@@ -19,14 +19,35 @@ The filename order is the upload order. It stays in this order because the first
 
 PNG, RGB, no alpha. Slide 1 adds `Calories, protein, carbs, and fat.` Slide 2 names `Grok · Hermes · Dots · Claude` in type only, and shows Ask Ration beside the person's own agent. Do not upload `08-your-agent.png`.
 
+## iPhone with Dynamic Island (medium display)
+
+This is the 6.1-inch / 6.3-inch slot. 1320×2868 is rejected there. Apple lists 1179×2556, 2556×1179, 1206×2622, and 2622×1206. The frames stay portrait. Upload one whole set, all eight files the same size, in the order above. Prefer [`framed/6.1-6.3/1206x2622/`](framed/6.1-6.3/1206x2622/) (1206×2622). [`framed/6.1-6.3/1179x2556/`](framed/6.1-6.3/1179x2556/) is the other portrait size (1179×2556).
+
+## Header and search results
+
+Both say `Meal planning and macros.` / `You, your agent, or Ration Copilot.`
+
+| Slot | File | Pixels |
+|------|------|--------|
+| Header | [`header/3840x1646.png`](header/3840x1646.png) | 3840×1646 |
+| Header or search | [`header/5244x2950.png`](header/5244x2950.png) | 5244×2950 |
+| Search | [`search/5244x2950.png`](search/5244x2950.png) | 5244×2950 |
+| Search | [`search/3840x2560.png`](search/3840x2560.png) | 3840×2560 |
+| Search | [`search/1920x1280.png`](search/1920x1280.png) | 1920×1280 |
+
+The two 5244×2950 files are the same picture. PNG, RGB, no alpha.
+
 ## Screenshots — fix “dimensions are wrong”
 
-That error means you dropped files into the **wrong display class**.
+That error means the file's pixels are not one of the sizes listed for the slot you dropped it into. 1320×2868 is the large Dynamic Island display. The medium display does not accept it.
 
 | ASC section | Accepted sizes | Our folder |
 |-------------|----------------|------------|
-| **iPhone 6.9"** (preferred) | 1320×2868, 1290×2796, 1260×2736 | [`framed/6.9/`](framed/6.9/) |
-| **iPhone 6.5"** (fallback) | **1284×2778**, 1242×2688 | [`framed/6.5/`](framed/6.5/) |
+| **Dynamic Island, large** (6.9-inch class) | 1320×2868, 1290×2796, 1260×2736 | [`framed/6.9/1.6/`](framed/6.9/1.6/) |
+| **Dynamic Island, medium** (6.1-inch / 6.3-inch) | 1206×2622, 1179×2556, and those sizes turned sideways | [`framed/6.1-6.3/`](framed/6.1-6.3/) |
+| **Header** | 5244×2950, 3840×1646 | [`header/`](header/) |
+| **Search results** | 5244×2950, 3840×2560, 1920×1280 | [`search/`](search/) |
+| **iPhone 6.5"** (older fallback) | **1284×2778**, 1242×2688 | [`framed/6.5/`](framed/6.5/) |
 
 **What to do now**
 

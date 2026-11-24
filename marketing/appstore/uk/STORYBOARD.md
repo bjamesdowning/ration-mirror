@@ -17,6 +17,22 @@ Slide 1 is today's Fuel log, with the Macros screen over it: week, month, or a c
 
 Leave these in the repo and do **not** upload them for 1.6 (same names under `framed/6.5/` as well): `01-hub.png`, `02-macros.png`, `06-plan.png`, `09-ask.png`, `10-theme.png`. The Hub frame for this set is `framed/6.9/1.6/08-hub.png`, not the older `01-hub.png`.
 
+## Medium display, header, and search
+
+App Store Connect rejected `01-daily-fuel.png` in **iPhone with Dynamic Island (medium display)**, the 6.1-inch / 6.3-inch slot. 1320×2868 belongs to the large display. Apple's current spec for the medium display lists 1179×2556, 2556×1179, 1206×2622, and 2622×1206. The frames stay portrait, so the files are the two portrait sizes. Upload one whole set. Every file in the set is the same size. Prefer [`framed/6.1-6.3/1206x2622/`](framed/6.1-6.3/1206x2622/). [`framed/6.1-6.3/1179x2556/`](framed/6.1-6.3/1179x2556/) is the other portrait size. Same eight filenames, same order.
+
+The header and the search-results image use the same two lines: `Meal planning and macros.` / `You, your agent, or Ration Copilot.`
+
+| Placement | File | Pixels |
+|-----------|------|--------|
+| Header | [`header/3840x1646.png`](header/3840x1646.png) | 3840×1646 |
+| Header and search | [`header/5244x2950.png`](header/5244x2950.png) | 5244×2950 |
+| Search | [`search/5244x2950.png`](search/5244x2950.png) | 5244×2950 |
+| Search | [`search/3840x2560.png`](search/3840x2560.png) | 3840×2560 |
+| Search | [`search/1920x1280.png`](search/1920x1280.png) | 1920×1280 |
+
+`search/5244x2950.png` is the same picture as `header/5244x2950.png`. PNG, RGB, no alpha.
+
 # Previous storyboard — English (U.K.)
 
 The table below is the earlier ten-frame set. It is not the 1.6 upload.

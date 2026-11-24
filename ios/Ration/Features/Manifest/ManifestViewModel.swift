@@ -45,6 +45,8 @@ final class ManifestViewModel {
         case nutritionUnavailable
         /// Meal nutrition recompute still pending (`nutrition_updating`).
         case nutritionUpdating
+        /// Chosen day already has the free Fuel limit. Nothing was logged.
+        case paywall
         case failed
     }
 
@@ -457,6 +459,9 @@ final class ManifestViewModel {
             applyAuthoritativeDayTotals(result.dayTotals, nutrition: nutrition)
             return .success(intake: result.intake, undoToken: result.undoToken)
         } catch {
+            if case .paywall = ManifestPlateSaveFailure.decide(error) {
+                return .paywall
+            }
             if let apiError = error as? APIError, apiError.isNutritionConsentRequired {
                 return .consentRequired
             }

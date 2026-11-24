@@ -391,7 +391,7 @@ struct GalleyView: View {
         notes: String? = nil,
         amount: Double? = nil,
         unit: IntakeLoggedUnit? = nil
-    ) async -> String? {
+    ) async -> ManifestPlateSave {
         do {
             let result = try await env.api.upsertManifestIntake(
                 entryId: entry.id,
@@ -408,16 +408,9 @@ struct GalleyView: View {
             }
             Haptics.success()
             cookSuccessMessage = "Serving logged"
-            return nil
+            return .saved
         } catch {
-            if let apiError = error as? APIError, apiError.isNutritionConsentRequired {
-                return "Allow personal serving logs to continue."
-            }
-            if let apiError = error as? APIError, apiError.isNutritionUpdating {
-                return apiError.errorDescription
-                    ?? "Nutrition totals are still updating. Try again shortly."
-            }
-            return (error as? APIError)?.errorDescription ?? error.localizedDescription
+            return ManifestPlateSaveFailure.decide(error)
         }
     }
 

@@ -1,6 +1,6 @@
 # App Store Connect upload checklist (UK)
 
-## iOS 1.6 — iPhone 6.9" only
+## iOS 1.6 — large display (6.9-inch)
 
 Upload [`framed/6.9/1.6/`](framed/6.9/1.6/) into **iPhone 6.9" Display**. Do not upload `framed/6.5/` for this submission, and do not upload the older `framed/6.9/01-hub.png` … `10-theme.png` set.
 
@@ -52,34 +52,14 @@ That error means the file's pixels are not one of the sizes listed for the slot 
 **What to do now**
 
 1. In App Store Connect → Previews and Screenshots, click **View All Sizes** (Media Manager).
-2. Prefer **iPhone 6.9" Display** → upload `framed/6.9/01-hub.png` … `10-theme.png`.
-3. If the UI only shows **6.5"** (or you already started there), upload `framed/6.5/` instead — those are **1284×2778**, matching the error message.
+2. **iPhone with Dynamic Island (large display)** — upload the eight files in [`framed/6.9/1.6/`](framed/6.9/1.6/), all 1320×2868, in the order in the table at the top.
+3. **iPhone with Dynamic Island (medium display)** — upload [`framed/6.1-6.3/1206x2622/`](framed/6.1-6.3/1206x2622/), all eight files, all 1206×2622, same order. Do not drop a 1320×2868 file into this slot.
+4. Header and search use the files in the table above, one file per size.
+5. Leave the older `framed/6.9/01-hub.png` … `10-theme.png` set, and `framed/6.5/`, out of this submission.
 
-Do **not** mix: 1320×2868 files into the 6.5" slot will always fail.
+Do **not** mix sizes inside one slot. Every screenshot in a slot has to be the same pixel size.
 
-### Upload order (both sizes)
-
-| Order | File |
-|-------|------|
-| 1 | `01-hub.png` |
-| 2 | `02-macros.png` |
-| 3 | `03-import.png` |
-| 4 | `04-scan.png` |
-| 5 | `05-galley.png` |
-| 6 | `06-plan.png` |
-| 7 | `07-manifest.png` |
-| 8 | `08-supply.png` |
-| 9 | `09-ask.png` |
-| 10 | `10-theme.png` |
-
-PNG, RGB, no alpha. Apple scales a 6.9" set down for smaller phones if you provide it.
-
-Regenerate both sizes:
-
-```bash
-cd marketing/appstore/uk
-.venv/bin/python frame_screenshots.py
-```
+The 6.5-inch fallback, if a later submission needs it, is still [`framed/6.5/`](framed/6.5/) at 1284×2778. Those ten filenames are the previous set, not the 1.6 eight.
 
 ## Localisation copy
 

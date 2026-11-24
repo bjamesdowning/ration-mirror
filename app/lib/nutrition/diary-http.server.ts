@@ -31,7 +31,6 @@ import {
 	isNutritionFuelPageEnabled,
 } from "./fast-log-flag.server";
 import { lookupFoodBarcode } from "./food-barcode.server";
-import { assertFuelCreateRoom } from "./fuel-cap.server";
 import { isCalendarDate } from "./fuel-date";
 import {
 	confirmFuelPhoto,
@@ -160,15 +159,6 @@ export async function postFoodBarcode(
 	const parsed = FoodBarcodeSchema.safeParse(await readBody(request));
 	if (!parsed.success) {
 		throw data({ code: "invalid_request" }, { status: 400 });
-	}
-	if (await isNutritionFuelPageEnabled(env, flags)) {
-		await assertFuelCreateRoom(
-			env.DB,
-			principal.userId,
-			new Date(),
-			new Date(),
-			parsed.data.fuelTimeZone,
-		);
 	}
 	return lookupFoodBarcode(env, parsed.data.barcode);
 }

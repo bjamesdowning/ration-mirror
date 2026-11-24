@@ -6,7 +6,6 @@ import {
 	isNutritionPhotoLogEnabled,
 } from "../../nutrition/fast-log-flag.server";
 import { lookupFoodBarcode } from "../../nutrition/food-barcode.server";
-import { assertFuelCreateRoom } from "../../nutrition/fuel-cap.server";
 import { proposeFoodLog } from "../../nutrition/propose-food-log.server";
 import { FuelBarcodeSchema } from "../../schemas/fuel";
 import { UuidSchema } from "../../schemas/uuid";
@@ -62,9 +61,6 @@ export function createFoodLogToolDefs(env: McpToolsEnv) {
 						"Barcode food log is unavailable.",
 						"Enable nutrition-barcode-diary. The parent nutrition-fast-log must also be on. iOS below 1.6.0 stays disabled.",
 					);
-				}
-				if (await isNutritionFuelPageEnabled(env, flagContext)) {
-					await assertFuelCreateRoom(env.DB, ctx.userId, new Date());
 				}
 				const result = await lookupFoodBarcode(env, args.barcode);
 				return ok("lookup_food_barcode", result, { outcome: "no_effect" });

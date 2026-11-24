@@ -49,7 +49,8 @@ enum FuelActionDecision: Equatable {
     case disabledOffline
 }
 
-/// Create actions at a full free day open Crew purchase and do not open a camera or a form.
+/// Create actions open the form or camera. A full free day is not decided here.
+/// Save presents Crew when the server returns `fuel_daily_limit`.
 enum FuelActionPolicy {
     static let minimumHitTarget: CGFloat = 44
 
@@ -63,7 +64,8 @@ enum FuelActionPolicy {
     ) -> FuelActionDecision {
         if !isOnline { return .disabledOffline }
         if action == .scan, !photoLogEnabled { return .photoLogOff }
-        if let limit, used >= limit { return .openPurchase }
+        _ = used
+        _ = limit
         switch action {
         case .add:
             return .openForm
@@ -81,6 +83,13 @@ enum FuelActionPolicy {
             return "\(used) of \(limit) meals logged"
         }
         return "\(used) logs"
+    }
+}
+
+/// Save is the only moment a full Fuel day opens Crew.
+enum FuelSaveLimit {
+    static func presentsPaywall(code: String?) -> Bool {
+        code == "fuel_daily_limit"
     }
 }
 

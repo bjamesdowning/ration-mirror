@@ -2,22 +2,63 @@ import XCTest
 @testable import Ration
 
 final class FuelActionPolicyTests: XCTestCase {
-    func testCapOpensPurchaseAndKeepsEdit() {
-        for action in [FuelCreateAction.add, .scan, .barcode] {
-            XCTAssertEqual(
-                FuelActionPolicy.decide(
-                    action: action,
-                    used: 3,
-                    limit: 3,
-                    isOnline: true,
-                    cameraDenied: true
-                ),
-                .openPurchase
-            )
-        }
+    func testFullDayStillOpensCreate() {
+        XCTAssertEqual(
+            FuelActionPolicy.decide(
+                action: .add,
+                used: 3,
+                limit: 3,
+                isOnline: true,
+                cameraDenied: false
+            ),
+            .openForm
+        )
+        XCTAssertEqual(
+            FuelActionPolicy.decide(
+                action: .scan,
+                used: 3,
+                limit: 3,
+                isOnline: true,
+                cameraDenied: false
+            ),
+            .openCamera
+        )
+        XCTAssertEqual(
+            FuelActionPolicy.decide(
+                action: .barcode,
+                used: 3,
+                limit: 3,
+                isOnline: true,
+                cameraDenied: false
+            ),
+            .openBarcodeCamera
+        )
+        XCTAssertEqual(
+            FuelActionPolicy.decide(
+                action: .barcode,
+                used: 3,
+                limit: 3,
+                isOnline: true,
+                cameraDenied: true
+            ),
+            .openTypedBarcode
+        )
+        XCTAssertEqual(
+            FuelActionPolicy.decide(
+                action: .scan,
+                used: 3,
+                limit: 3,
+                isOnline: true,
+                cameraDenied: true
+            ),
+            .cameraOff
+        )
         XCTAssertTrue(FuelActionPolicy.canEditOrVoidExistingRow())
         XCTAssertEqual(FuelActionPolicy.counterLabel(used: 3, limit: 3), "3 of 3 meals logged")
         XCTAssertGreaterThanOrEqual(FuelActionPolicy.minimumHitTarget, 44)
+        XCTAssertTrue(FuelSaveLimit.presentsPaywall(code: "fuel_daily_limit"))
+        XCTAssertFalse(FuelSaveLimit.presentsPaywall(code: "invalid_request"))
+        XCTAssertFalse(FuelSaveLimit.presentsPaywall(code: nil))
     }
 
     func testOfflineDisablesCreates() {

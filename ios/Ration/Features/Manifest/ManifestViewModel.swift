@@ -452,7 +452,8 @@ final class ManifestViewModel {
                 idempotencyKey: idempotencyKey,
                 notes: notes,
                 amount: amount,
-                unit: unit
+                unit: unit,
+                fuelDate: entry.date
             )
             Haptics.success()
             setPersonalIntakeLocally(entryId: entry.id, intake: result.intake)

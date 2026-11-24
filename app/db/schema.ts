@@ -1640,9 +1640,9 @@ export const nutritionIntake = sqliteTable(
 		/** UTC calendar date YYYY-MM-DD. */
 		manifestDate: text("manifest_date").notNull(),
 		/**
-		 * Person calendar day YYYY-MM-DD in fuelTimeZone at insert.
-		 * Nullable so the backfill can copy manifest_date without a zone.
-		 * Not the same value as manifest_date for new writes.
+		 * Person calendar day YYYY-MM-DD.
+		 * A Manifest plate-up stores the line's day. Diary writes store the chosen day.
+		 * Nullable so older rows can exist without a zone.
 		 */
 		fuelDate: text("fuel_date"),
 		slotType: text("slot_type"),

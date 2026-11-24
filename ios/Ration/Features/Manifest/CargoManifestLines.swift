@@ -60,7 +60,8 @@ enum CargoManifestFuelLog {
         nutrition: NutritionSnapshot?,
         editedEnergy: Double?,
         operationKey: String,
-        occurredAt: String
+        occurredAt: String,
+        fuelDate: String
     ) -> DiaryFoodBody {
         let scaled = CargoEatMacroEstimate.scaled(
             nutrition: nutrition,
@@ -81,7 +82,8 @@ enum CargoManifestFuelLog {
             idempotencyKey: operationKey,
             operationKey: operationKey,
             compositionSource: "manual_macros",
-            notes: notes
+            notes: notes,
+            fuelDate: fuelDate
         )
     }
 }

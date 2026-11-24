@@ -328,6 +328,7 @@ export async function quickEatFromCargo(
 				operationKey: intakeOperationKey,
 				planId: cookResult.planId,
 				fuelTimeZone: input.fuelTimeZone,
+				fuelDate: cookResult.entry.date,
 				items: [
 					{
 						entryId: cookResult.entry.id,

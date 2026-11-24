@@ -79,9 +79,11 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 							unit: parsed.data.unit ?? undefined,
 							idempotencyKey: parsed.data.idempotencyKey,
 							notes: parsed.data.notes,
+							fuelDate: parsed.data.fuelDate,
 						},
 					],
 					fuelTimeZone: parsed.data.fuelTimeZone,
+					fuelDate: parsed.data.fuelDate,
 				},
 			);
 			const item = result.items[0];

@@ -24,7 +24,8 @@ final class CargoManifestLineTests: XCTestCase {
                 nutrition: nil,
                 editedEnergy: 6,
                 operationKey: operationKey,
-                occurredAt: "2026-11-12T13:00:00Z"
+                occurredAt: "2026-11-12T13:00:00Z",
+                fuelDate: "2026-11-12"
             )
         )
 

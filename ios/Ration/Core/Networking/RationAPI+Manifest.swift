@@ -71,7 +71,8 @@ extension RationAPI {
         idempotencyKey: String,
         notes: String? = nil,
         amount: Double? = nil,
-        unit: IntakeLoggedUnit? = nil
+        unit: IntakeLoggedUnit? = nil,
+        fuelDate: String? = nil
     ) async throws -> ManifestIntakeUpsertResponse {
         let body = ManifestIntakeUpsertRequest(
             servings: servings,
@@ -79,7 +80,8 @@ extension RationAPI {
             unit: unit,
             idempotencyKey: idempotencyKey,
             notes: notes,
-            fuelTimeZone: FuelDeviceZone.candidate
+            fuelTimeZone: FuelDeviceZone.candidate,
+            fuelDate: fuelDate
         )
         do {
             return try await client.post("manifest/entries/\(entryId)/intake", body: body)

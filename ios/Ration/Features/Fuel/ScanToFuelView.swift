@@ -265,12 +265,23 @@ struct ScanToFuelView: View {
             cameraDenied: false,
             photoLogEnabled: true
         )
-        guard FuelDeviceZone.candidate != nil else {
-            failureMessage = FuelDeviceZone.unusableMessage
+        switch decision {
+        case .disabledOffline:
+            failureMessage = "You're offline."
             phase = .failed
+        case .photoLogOff:
+            failureMessage = "Photo food log is unavailable."
+            phase = .failed
+        case .cameraOff:
             return
+        default:
+            guard FuelDeviceZone.candidate != nil else {
+                failureMessage = FuelDeviceZone.unusableMessage
+                phase = .failed
+                return
+            }
+            showingCamera = true
         }
-        showingCamera = true
     }
 
     private func upload(_ image: UIImage) async {

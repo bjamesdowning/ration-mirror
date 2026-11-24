@@ -24,7 +24,7 @@ Set your **Apple Developer Team ID** in `project.yml` (`DEVELOPMENT_TEAM`) befor
 building to a device, then re-run `xcodegen generate`.
 
 **Versioning:** User-facing app version is `MARKETING_VERSION` in `project.yml`
-(must stay above `LAST_APPROVED_VERSION`, which `ci_scripts/ci_post_clone.sh` checks; currently **1.6.49**, build **200**). `CURRENT_PROJECT_VERSION` is the monotonic build number for
+(must stay above `LAST_APPROVED_VERSION`, which `ci_scripts/ci_post_clone.sh` checks; currently **1.6.50**, build **201**). `CURRENT_PROJECT_VERSION` is the monotonic build number for
 TestFlight / App Store uploads. Follow the same patch/minor rules as the web app
 (`1.X.1`–`1.X.49`, then `1.(X+1).0`); see `.cursor/rules/ration-master.mdc`.
 After editing `project.yml`, run `bun run ios:generate`.
@@ -335,7 +335,7 @@ affirmation after displaying the versioned privacy statement, followed by a sepa
 grant — not an inline Eat field and not implied by Cook or goals. Galley **Cook meal** bridges
 onto today’s Manifest and may offer the same Eat sheet; **Add to Manifest** deep-links to
 Add-to-plan with meal + day prefilled (`ration://manifest/add?mealId=&date=`). Day view shows
-an Intake log derived from personal intake on entries. Settings → Nutrition goals remain a
+an Intake log derived from personal intake on entries. That log is not editable, and Manifest does not offer Log to Fuel. Settings → Nutrition goals remain a
 separate explicit consent path (in-form Save; grant must leave goals consent **active** before upsert).
 
 **Cross-org personal diary:** NutritionStore cache is user-global across kitchen switches. Manifest `dayIntakeRows` powers the day intake log (kitchen name chips); per-entry `personalIntake` markers stay active-kitchen scoped.

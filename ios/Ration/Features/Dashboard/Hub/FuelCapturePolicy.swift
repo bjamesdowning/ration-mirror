@@ -75,58 +75,6 @@ enum HubCapturePolicy {
     }
 }
 
-/// Star, custom macros, and log-by-id. Hidden unless the parent capture
-/// control is visible and the saved-food flag is on. A 1.5 binary stays closed.
-enum SavedFoodPolicy {
-    static func controlVisible(
-        fastLogEnabled: Bool,
-        savedFoodEnabled: Bool,
-        appVersion: String
-    ) -> Bool {
-        savedFoodEnabled
-            && HubCapturePolicy.choiceVisible(
-                fastLogEnabled: fastLogEnabled,
-                appVersion: appVersion
-            )
-    }
-}
-
-/// Shutter and barcode stay disabled unless the parent capture control and
-/// the matching child flag are on. A 1.5 binary stays closed.
-enum FuelLogInputPolicy {
-    static func shutterEnabled(
-        fastLogEnabled: Bool,
-        photoLogEnabled: Bool,
-        appVersion: String
-    ) -> Bool {
-        photoLogEnabled
-            && HubCapturePolicy.choiceVisible(
-                fastLogEnabled: fastLogEnabled,
-                appVersion: appVersion
-            )
-    }
-
-    static func barcodeEnabled(
-        fastLogEnabled: Bool,
-        barcodeLogEnabled: Bool,
-        appVersion: String
-    ) -> Bool {
-        barcodeLogEnabled
-            && HubCapturePolicy.choiceVisible(
-                fastLogEnabled: fastLogEnabled,
-                appVersion: appVersion
-            )
-    }
-}
-
-enum LogToFuelDraft {
-    /// A failed send retries the same key. A new draft mints one.
-    static func operationKey(existing: String?, mint: () -> String) -> String {
-        if let existing, !existing.isEmpty { return existing }
-        return mint()
-    }
-}
-
 enum AppMarketingVersion {
     static var current: String {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0"

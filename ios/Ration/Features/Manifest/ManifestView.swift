@@ -30,8 +30,6 @@ struct ManifestView: View {
     @State private var fuelCargoNutrition: NutritionSnapshot?
     @State private var cargoFuelKey = UUID().uuidString
     @State private var cookingCargoLineIds: Set<String> = []
-    @State private var showFuelLog = false
-    @State private var fuelExisting: LogToFuelExisting?
 
     private var fuelCapture: Bool {
         HubCapturePolicy.choiceVisible(
@@ -94,15 +92,6 @@ struct ManifestView: View {
                         Label("Add entry", systemImage: "plus")
                     }
                     .disabled(!env.network.isOnline)
-                    if fuelCapture {
-                        Button {
-                            fuelExisting = nil
-                            showFuelLog = true
-                        } label: {
-                            Label("Log to Fuel", systemImage: planFuelNames.logToFuelSymbol)
-                        }
-                        .disabled(!env.network.isOnline)
-                    }
                     if env.session.clientFlags.isAiPlanWeekEnabled {
                         Button { showingPlanWeek = true } label: {
                             Label("Plan week", systemImage: "sparkles")
@@ -223,13 +212,6 @@ struct ManifestView: View {
                     onRemove: entry.personalIntake != nil
                         ? { await handleClearServing(entry) }
                         : nil
-                )
-            }
-            .sheet(isPresented: $showFuelLog) {
-                LogToFuelSheet(
-                    existing: fuelExisting,
-                    onClose: { showFuelLog = false },
-                    onSaved: { Task { await reload() } }
                 )
             }
     }
@@ -805,12 +787,6 @@ struct ManifestView: View {
                         .pickerStyle(.segmented)
                         .accessibilityLabel("Diary layout")
                     }
-                    if intakeRows.isEmpty {
-                        Button("Log to Fuel") {
-                            fuelExisting = nil
-                            showFuelLog = true
-                        }
-                    }
                     ForEach(diaryGroups) { group in
                         if let label = group.label {
                             Text(label)
@@ -853,27 +829,7 @@ struct ManifestView: View {
                                     .lineLimit(2)
                             }
                         }
-                        if fuelCapture && row.personalLog {
-                            Button {
-                                fuelExisting = LogToFuelExisting(
-                                    id: row.intake.id,
-                                    name: row.name,
-                                    amount: row.loggedAmount ?? row.intake.servings,
-                                    unit: row.loggedUnit ?? "serving",
-                                    energyKcal: row.intake.energyKcal,
-                                    proteinG: row.intake.proteinG,
-                                    carbsG: row.intake.carbsG,
-                                    fatG: row.intake.fatG,
-                                    occurredAt: row.occurredAt
-                                )
-                                showFuelLog = true
-                            } label: {
-                                line
-                            }
-                            .buttonStyle(.plain)
-                        } else {
-                            line
-                        }
+                        line
                     }
                     }
                 } header: {

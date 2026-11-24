@@ -1,21 +1,21 @@
 # iOS 1.6 screenshot set — upload this
 
-App Store Connect → Media Manager → **iPhone 6.9" Display**. Upload only [`framed/6.9/1.6/`](framed/6.9/1.6/), in this order. Each file is **1320×2868** PNG, RGB, no alpha. Apple shows the first three in search.
+App Store Connect → Media Manager → **iPhone 6.9" Display**. Upload only [`framed/6.9/1.6/`](framed/6.9/1.6/), in this order. Each file is **1320×2868** PNG, RGB, no alpha. Apple shows the first three in search. The filename order is unchanged. Search still gets the job, then the AI choice, then the import.
 
 | Order | File | Caption |
 |------:|------|---------|
-| 1 | [`01-daily-fuel.png`](framed/6.9/1.6/01-daily-fuel.png) | Daily Fuel. / See what's left. |
-| 2 | [`02-agent-sets-fuel.png`](framed/6.9/1.6/02-agent-sets-fuel.png) | Your agent sets / Daily Fuel. You confirm. |
-| 3 | [`03-import.png`](framed/6.9/1.6/03-import.png) | Save recipes from / TikTok, Reels & the web |
-| 4 | [`04-scan.png`](framed/6.9/1.6/04-scan.png) | Scan a receipt / or the fridge |
+| 1 | [`01-daily-fuel.png`](framed/6.9/1.6/01-daily-fuel.png) | Daily Fuel. / Meals, across the days. |
+| 2 | [`02-agent-sets-fuel.png`](framed/6.9/1.6/02-agent-sets-fuel.png) | Any agent can run it. / Or use the one inside. |
+| 3 | [`03-import.png`](framed/6.9/1.6/03-import.png) | Save it from the video. / TikTok, Reels, and the web. |
+| 4 | [`04-scan.png`](framed/6.9/1.6/04-scan.png) | Scan the receipt. / The cupboard updates. |
 | 5 | [`05-galley.png`](framed/6.9/1.6/05-galley.png) | See what you can cook / with what's here |
-| 6 | [`06-manifest.png`](framed/6.9/1.6/06-manifest.png) | Plan the week. / AI fills the days. |
+| 6 | [`06-manifest.png`](framed/6.9/1.6/06-manifest.png) | The week's meals. / For everyone in the kitchen. |
 | 7 | [`07-supply.png`](framed/6.9/1.6/07-supply.png) | Shop only what / you're still missing |
-| 8 | [`08-hub.png`](framed/6.9/1.6/08-hub.png) | The whole kitchen. / One screen. |
+| 8 | [`08-hub.png`](framed/6.9/1.6/08-hub.png) | The whole kitchen. / Stock, meals, and today. |
 
-Slide 3 is the existing TikTok import frame, copied unchanged from `framed/6.9/03-import.png`. Slides 4 and 5 are the existing scan and galley frames. Slide 2 keeps the confirmation chat and adds one Space Mono line, with no logos: `Use Grok, Hermes, Dots, or Claude.` Slide 6 is the current week Manifest. Slide 7 is the existing supply frame with a cutout of Saved lists (Staples, Pets, Household Goods). Slide 8 is the Hub screen. `08-your-agent.png` is not in this set.
+Slide 1 is today's Fuel log, with the Macros screen over it: week, month, or a custom range, the daily average, and how many days were logged. The line under the rule says what the words mean: `Calories, protein, carbs, and fat.` Slide 2 shows the choice. A person's own agent can run the kitchen, and Ask Ration is the assistant inside the app. The names under the rule are type only, with no logos: `Grok · Hermes · Dots · Claude.` Slide 3 keeps the TikTok import photograph and replaces the caption. Slide 4 is the receipt scan, through to the file upload. Slide 5 keeps the earlier Galley frame. Slide 6 is one week for the people who share the kitchen. Slide 7 keeps the earlier Supply frame, with the Saved lists cutout. Slide 8 is the Hub: stock, meals, and today.
 
-Leave these in the repo and do **not** upload them for 1.6 (same names under `framed/6.5/` as well): `01-hub.png`, `02-macros.png`, `06-plan.png`, `09-ask.png`, `10-theme.png`. The new Hub frame is `framed/6.9/1.6/08-hub.png`, not the older `01-hub.png`.
+Leave these in the repo and do **not** upload them for 1.6 (same names under `framed/6.5/` as well): `01-hub.png`, `02-macros.png`, `06-plan.png`, `09-ask.png`, `10-theme.png`. The Hub frame for this set is `framed/6.9/1.6/08-hub.png`, not the older `01-hub.png`.
 
 # Previous storyboard — English (U.K.)
 

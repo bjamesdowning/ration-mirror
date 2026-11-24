@@ -392,7 +392,7 @@ export default function FuelPage({ loaderData }: Route.ComponentProps) {
 				))}
 			</form>
 
-			{showScan && !capped ? (
+			{showScan ? (
 				<ScanToFuel
 					online={online}
 					photoLog={photoLog}
@@ -400,7 +400,7 @@ export default function FuelPage({ loaderData }: Route.ComponentProps) {
 					scanCreditCost={scanCreditCost}
 					defaultDate={day.date}
 					onClose={() => setShowScan(false)}
-					onLimit={() => openFuelPurchase()}
+					onLimit={() => setCrewPaywall(true)}
 					onSaved={() => {
 						setShowScan(false);
 						revalidator.revalidate();
@@ -409,11 +409,12 @@ export default function FuelPage({ loaderData }: Route.ComponentProps) {
 					pollAbort={pollAbort}
 				/>
 			) : null}
-			{showBarcode && !capped ? (
+			{showBarcode ? (
 				<BarcodeToFuel
 					online={online}
+					defaultDate={day.date}
 					onClose={() => setShowBarcode(false)}
-					onLimit={() => openFuelPurchase()}
+					onLimit={() => setCrewPaywall(true)}
 					onSaved={() => {
 						setShowBarcode(false);
 						revalidator.revalidate();
@@ -466,6 +467,41 @@ export default function FuelPage({ loaderData }: Route.ComponentProps) {
 			) : null}
 
 			{showGoals ? <GoalEditor date={day.date} /> : null}
+			{crewPaywall ? (
+				<div
+					className="fixed inset-0 z-50 flex items-end justify-center bg-carbon/40 p-4 sm:items-center"
+					role="dialog"
+					aria-modal="true"
+					aria-labelledby="fuel-crew-paywall-title"
+				>
+					<div className="w-full max-w-md space-y-4 rounded-2xl bg-ceramic p-6 shadow-glow">
+						<h2
+							id="fuel-crew-paywall-title"
+							className="text-xl font-semibold text-carbon"
+						>
+							Crew
+						</h2>
+						<p className="text-sm text-carbon">
+							This date already has 3 Fuel logs. Crew removes the daily limit.
+						</p>
+						<div className="flex flex-wrap gap-3">
+							<Link
+								to="/hub/pricing"
+								className="inline-flex min-h-11 items-center rounded-xl bg-carbon px-4 text-ceramic"
+							>
+								See Crew
+							</Link>
+							<button
+								type="button"
+								className="min-h-11 rounded-xl border border-platinum px-4"
+								onClick={() => setCrewPaywall(false)}
+							>
+								Close
+							</button>
+						</div>
+					</div>
+				</div>
+			) : null}
 			<p className="text-xs text-muted">{loaderData.healthNote}</p>
 		</div>
 	);
@@ -662,7 +698,9 @@ function ScanToFuel({
 				error?: string;
 				requestId?: string;
 			} | null;
-			if (body?.code === "fuel_daily_limit") {
+			if (presentFuelSave(body?.code) === "paywall") {
+				setPhotoPhase("idle");
+				setBusy(false);
 				onLimit();
 				return;
 			}
@@ -776,7 +814,7 @@ function ScanToFuel({
 			code?: string;
 		} | null;
 		setBusy(false);
-		if (body?.code === "fuel_daily_limit") {
+		if (presentFuelSave(body?.code) === "paywall") {
 			onLimit();
 			return;
 		}
@@ -1061,18 +1099,21 @@ async function fuelPhotoJpeg(
 
 function BarcodeToFuel({
 	online,
+	defaultDate,
 	onClose,
 	onLimit,
 	onSaved,
 	onError,
 }: {
 	online: boolean;
+	defaultDate: string;
 	onClose: () => void;
 	onLimit: () => void;
 	onSaved: () => void;
 	onError: (message: string) => void;
 }) {
 	const [code, setCode] = useState("");
+	const [logDate, setLogDate] = useState(defaultDate);
 	const [hit, setHit] = useState<{
 		name: string;
 		energy: number;
@@ -1155,7 +1196,7 @@ function BarcodeToFuel({
 				fatG: number;
 			};
 		} | null;
-		if (body?.code === "fuel_daily_limit") {
+		if (presentFuelSave(body?.code) === "paywall") {
 			onLimit();
 			return;
 		}
@@ -1178,8 +1219,13 @@ function BarcodeToFuel({
 			onError(FUEL_ZONE_UNUSABLE);
 			return;
 		}
+		if (!/^\d{4}-\d{2}-\d{2}$/.test(logDate)) {
+			onError("Pick a date.");
+			return;
+		}
 		const payload = {
 			name: hit.name,
+			fuelDate: logDate,
 			occurredAt: new Date().toISOString(),
 			amount: 1,
 			unit: "serving",
@@ -1204,7 +1250,7 @@ function BarcodeToFuel({
 		const body = (await response.json().catch(() => null)) as {
 			code?: string;
 		} | null;
-		if (body?.code === "fuel_daily_limit") {
+		if (presentFuelSave(body?.code) === "paywall") {
 			onLimit();
 			return;
 		}
@@ -1217,6 +1263,16 @@ function BarcodeToFuel({
 
 	return (
 		<div className="space-y-3 rounded-xl border border-platinum p-4">
+			<label className="block text-sm">
+				Date
+				<input
+					type="date"
+					value={logDate}
+					aria-label="Date"
+					className="mt-1 block min-h-11"
+					onChange={(event) => setLogDate(event.target.value)}
+				/>
+			</label>
 			<label className="block text-sm">
 				Barcode
 				<input

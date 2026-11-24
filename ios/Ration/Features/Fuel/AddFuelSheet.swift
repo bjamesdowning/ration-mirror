@@ -31,6 +31,7 @@ struct AddFuelSheet: View {
     @State private var manualTags: [String] = []
     @State private var tagDraft = ""
     @State private var searching = false
+    @State private var showingLimitPaywall = false
 
     private enum MacroField { case energy, protein, carbs, fat }
 
@@ -159,6 +160,7 @@ struct AddFuelSheet: View {
             .task { await loadSuggestions() }
             .task(id: query) { await refreshSearch() }
             .onChange(of: amountText) { _, _ in applyScaledMacros() }
+            .sheet(isPresented: $showingLimitPaywall) { PaywallView(context: .settings()) }
         }
     }
 
@@ -438,6 +440,10 @@ struct AddFuelSheet: View {
             onSaved()
             dismiss()
         } catch {
+            if FuelSaveLimit.presentsPaywall(code: (error as? APIError)?.code) {
+                showingLimitPaywall = true
+                return
+            }
             onError(error)
         }
     }

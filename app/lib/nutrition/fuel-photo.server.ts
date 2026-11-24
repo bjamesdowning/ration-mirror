@@ -34,6 +34,7 @@ import {
 	assertFuelCreateRoom,
 	assertFuelDayRoom,
 	ensureFuelTimeZone,
+	stampFuelDate,
 } from "./fuel-cap.server";
 import { isCalendarDate } from "./fuel-date";
 import { FuelPhotoTooLargeError, FuelPhotoTypeError } from "./fuel-errors";
@@ -328,7 +329,8 @@ export async function submitFuelPhoto(
 
 	const rate = await checkRateLimit(env.RATION_KV, "scan", principal.userId);
 	if (!rate.allowed) throw rateLimitResponse(rate);
-	let room: { fuelDate: string };
+	// The review Save is the cap. Queueing a photo must not paywall the page day.
+	let fuelDate: string;
 	if (input.fuelDate) {
 		if (!isCalendarDate(input.fuelDate)) {
 			throw Object.assign(new Error("Invalid request"), {
@@ -337,17 +339,11 @@ export async function submitFuelPhoto(
 			});
 		}
 		await ensureFuelTimeZone(env.DB, principal.userId, input.fuelTimeZone);
-		room = await assertFuelDayRoom(
-			env.DB,
-			principal.userId,
-			input.fuelDate,
-			now,
-		);
+		fuelDate = input.fuelDate;
 	} else {
-		room = await assertFuelCreateRoom(
+		fuelDate = await stampFuelDate(
 			env.DB,
 			principal.userId,
-			now,
 			now,
 			input.fuelTimeZone,
 		);
@@ -380,7 +376,7 @@ export async function submitFuelPhoto(
 			operationType: "fuel_photo",
 			status: "in_progress",
 			itemCount: 1,
-			resultJson: { requestId, fuelDate: room.fuelDate },
+			resultJson: { requestId, fuelDate },
 			createdAt: now,
 		});
 		await db.insert(schema.queueJob).values({

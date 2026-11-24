@@ -1004,6 +1004,7 @@ export async function updateDiaryFood(
 	});
 	const credits = chargeDiaryFoodLog();
 	let keptFuelDate: string | null = null;
+	let reservedMove: string | null = null;
 	if (await isNutritionFuelPageEnabled(env, flags)) {
 		try {
 			const zone = await ensureFuelTimeZone(
@@ -1011,12 +1012,34 @@ export async function updateDiaryFood(
 				principal.userId,
 				input.fuelTimeZone,
 			);
-			keptFuelDate = assertFuelDateUnchanged(
-				current.fuelDate,
-				food.occurredAt,
-				zone,
-			);
+			if (input.fuelDate && !isCalendarDate(input.fuelDate)) {
+				throw Object.assign(new Error("fuelDate must be a real day"), {
+					code: "invalid_request",
+					status: 400,
+				});
+			}
+			const chosen =
+				input.fuelDate && isCalendarDate(input.fuelDate)
+					? input.fuelDate
+					: null;
+			if (chosen && chosen !== current.fuelDate) {
+				food.occurredAt = noonOnFuelDate(chosen, zone);
+				const crew = await personIsCrew(env.DB, principal.userId, now);
+				await reserveFuelSlot(env.DB, principal.userId, chosen, crew);
+				reservedMove = chosen;
+				keptFuelDate = chosen;
+			} else {
+				keptFuelDate = assertFuelDateUnchanged(
+					current.fuelDate,
+					food.occurredAt,
+					zone,
+				);
+			}
 		} catch (error) {
+			if (reservedMove) {
+				await releaseFuelSlot(env.DB, principal.userId, reservedMove);
+				reservedMove = null;
+			}
 			await markOperationFailed(db, operationId);
 			throw error;
 		}
@@ -1108,8 +1131,14 @@ export async function updateDiaryFood(
 			}),
 		]);
 	} catch (error) {
+		if (reservedMove) {
+			await releaseFuelSlot(env.DB, principal.userId, reservedMove);
+		}
 		await markOperationFailed(db, operationId);
 		throw error;
+	}
+	if (reservedMove && current.fuelDate && current.fuelDate !== reservedMove) {
+		await releaseFuelSlot(env.DB, principal.userId, current.fuelDate);
 	}
 	return logResult(
 		operationId,

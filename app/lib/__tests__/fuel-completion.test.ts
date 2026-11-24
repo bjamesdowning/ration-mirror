@@ -407,6 +407,87 @@ describe("fuel writers at the cap", () => {
 		}
 	});
 
+	it("stamps the zone day and still accepts a past or future day", async () => {
+		const { db } = await database();
+		const env = envFor(db);
+		await logDiaryFood(env, owner, {}, {
+			...diaryInput("Late"),
+			occurredAt: "2026-11-11T07:30:00.000Z",
+			fuelTimeZone: "America/Los_Angeles",
+		});
+		expect(await readFuelUsed(db, "user-1", "2026-11-10")).toBe(1);
+		await logDiaryFood(env, owner, {}, {
+			...diaryInput("Two"),
+			fuelDate: "2026-11-10",
+			fuelTimeZone: "America/Los_Angeles",
+		});
+		await logDiaryFood(env, owner, {}, {
+			...diaryInput("Three"),
+			fuelDate: "2026-11-10",
+			fuelTimeZone: "America/Los_Angeles",
+		});
+		expect(await readFuelUsed(db, "user-1", "2026-11-10")).toBe(3);
+		await logDiaryFood(env, owner, {}, {
+			...diaryInput("Past"),
+			fuelDate: "2020-01-15",
+		});
+		await logDiaryFood(env, owner, {}, {
+			...diaryInput("Future"),
+			fuelDate: "2027-06-01",
+		});
+		expect(await readFuelUsed(db, "user-1", "2020-01-15")).toBe(1);
+		expect(await readFuelUsed(db, "user-1", "2027-06-01")).toBe(1);
+		await expect(
+			logDiaryFood(env, owner, {}, {
+				...diaryInput("Fourth"),
+				fuelDate: "2026-11-10",
+			}),
+		).rejects.toBeInstanceOf(FuelDailyLimitError);
+		expect(await readFuelUsed(db, "user-1", "2026-11-10")).toBe(3);
+	});
+
+	it("moves a log onto a free day and refuses a full day", async () => {
+		const { db } = await database();
+		const env = envFor(db);
+		const original = await logDiaryFood(env, owner, {}, {
+			...diaryInput("Move me"),
+			fuelDate: "2026-04-01",
+		});
+		for (const name of ["A", "B", "C"]) {
+			await logDiaryFood(env, owner, {}, {
+				...diaryInput(name),
+				fuelDate: "2026-04-02",
+			});
+		}
+		await expect(
+			updateDiaryFood(env, owner, {}, original.intakeId, {
+				...diaryInput("Move me"),
+				fuelDate: "2026-04-02",
+			}),
+		).rejects.toBeInstanceOf(FuelDailyLimitError);
+		expect(await readFuelUsed(db, "user-1", "2026-04-01")).toBe(1);
+		expect(await readFuelUsed(db, "user-1", "2026-04-02")).toBe(3);
+		const moved = await updateDiaryFood(env, owner, {}, original.intakeId, {
+			...diaryInput("Move me"),
+			fuelDate: "2026-08-01",
+		});
+		expect(moved.intakeId).not.toBe(original.intakeId);
+		expect(await readFuelUsed(db, "user-1", "2026-04-01")).toBe(0);
+		expect(await readFuelUsed(db, "user-1", "2026-08-01")).toBe(1);
+		expect(await readFuelUsed(db, "user-1", "2026-04-02")).toBe(3);
+	});
+
+	it("rejects an impossible fuel date instead of the paywall", async () => {
+		const { db } = await database();
+		const env = envFor(db);
+		await expect(
+			logDiaryFood(env, owner, {}, {
+				...diaryInput("Nope"),
+				fuelDate: "2026-02-31",
+			}),
+		).rejects.toMatchObject({ code: "invalid_request" });
+	});
+
 	it("refuses another user on update and void", async () => {
 		const { db } = await database();
 		const env = envFor(db);
@@ -425,7 +506,7 @@ describe("fuel writers at the cap", () => {
 		expect(await readFuelUsed(db, "user-1", "2026-11-10")).toBe(1);
 	});
 
-	it("rejects a barcode lookup before the lookup when the day is full", async () => {
+	it("looks up a barcode when today is already full", async () => {
 		const { db } = await database();
 		await db
 			.prepare(
@@ -438,10 +519,13 @@ describe("fuel writers at the cap", () => {
 			headers: { "content-type": "application/json" },
 			body: JSON.stringify({ barcode: "012345678905" }),
 		});
-		await expect(
-			postFoodBarcode(request, envFor(db), owner, {}),
-		).rejects.toBeInstanceOf(FuelDailyLimitError);
-		expect(lookupFoodBarcode).not.toHaveBeenCalled();
+		await expect(postFoodBarcode(request, envFor(db), owner, {})).resolves.toEqual(
+			{ found: true, name: "Oats" },
+		);
+		expect(lookupFoodBarcode).toHaveBeenCalledWith(
+			expect.anything(),
+			"012345678905",
+		);
 	});
 
 	it("uses the MCP credential principal and not another id", async () => {
@@ -469,8 +553,12 @@ describe("fuel writers at the cap", () => {
 				barcode: "012345678905",
 				userId: "user-1",
 			} as never),
-		).rejects.toBeInstanceOf(FuelDailyLimitError);
-		expect(lookupFoodBarcode).not.toHaveBeenCalled();
+		).resolves.toBeTruthy();
+		expect(lookupFoodBarcode).toHaveBeenCalledTimes(1);
+		expect(lookupFoodBarcode).toHaveBeenCalledWith(
+			expect.anything(),
+			"012345678905",
+		);
 	});
 });
 
@@ -479,7 +567,7 @@ describe("fuel photo queue", () => {
 		vi.clearAllMocks();
 	});
 
-	it("does not store the photo when the free day is full", async () => {
+	it("stores the photo when the free day is full", async () => {
 		const { db } = await database();
 		await db
 			.prepare(
@@ -488,6 +576,7 @@ describe("fuel photo queue", () => {
 			.bind("user-1", "2026-11-10")
 			.run();
 		const put = vi.fn();
+		const refund = vi.fn(async () => undefined);
 		await expect(
 			submitFuelPhoto(
 				envFor(db, { STORAGE: { put, delete: vi.fn() } }),
@@ -499,9 +588,11 @@ describe("fuel photo queue", () => {
 					bytes: new Uint8Array([1, 2, 3]).buffer,
 					now,
 				},
+				{ refund, now },
 			),
-		).rejects.toBeInstanceOf(FuelDailyLimitError);
-		expect(put).not.toHaveBeenCalled();
+		).rejects.toThrow("fuel_photo_queue_missing");
+		expect(put).toHaveBeenCalled();
+		expect(await readFuelUsed(db, "user-1", "2026-11-10")).toBe(3);
 	});
 
 	it("does not upload when no fuel zone can be resolved", async () => {

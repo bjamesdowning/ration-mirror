@@ -7,6 +7,13 @@ import { expect, type Page, test } from "@playwright/test";
 import { cleanupE2eMeals, deleteMealById } from "../helpers/cleanup";
 import { gotoHubPage, openPanelQuickAdd } from "../helpers/hub";
 
+const limitBody =
+	'[{"_1":2},"data",{"_3":4,"_5":6,"_7":8,"_9":10,"_11":10,"_12":13},"error","Daily Fuel limit reached","code","fuel_daily_limit","upgradeRequired",true,"limit",3,"used","localDate","2026-11-24"]';
+const savedBody =
+	'[{"_1":2},"data",{"_3":4},"intake",{"_5":6,"_7":8,"_9":10,"_11":8,"_12":8,"_13":8,"_14":15},"id","e2e-intake","servings",1,"energyKcal",100,"proteinG","carbsG","fatG","occurredAt","2026-11-24T10:00:00.000Z"]';
+const invalidBody =
+	'[{"_1":2},"data",{"_3":4,"_5":6},"error","Invalid request","code","invalid_request"]';
+
 const manifestFuelHeader = JSON.stringify({
 	"nutrition-engine": true,
 	"nutrition-manifest": true,
@@ -116,42 +123,26 @@ test.describe("manifest fuel cap", () => {
 			if (mode === "saved") {
 				await route.fulfill({
 					status: 200,
-					contentType: "application/json",
-					body: JSON.stringify({
-						intake: {
-							id: "e2e-intake",
-							servings: 1,
-							energyKcal: 100,
-							proteinG: 1,
-							carbsG: 1,
-							fatG: 1,
-							occurredAt: new Date().toISOString(),
-						},
-					}),
+					contentType: "text/x-script",
+					headers: { "X-Remix-Response": "yes" },
+					body: savedBody,
 				});
 				return;
 			}
 			if (mode === "invalid") {
 				await route.fulfill({
 					status: 400,
-					contentType: "application/json",
-					body: JSON.stringify({
-						error: "Invalid request",
-						code: "invalid_request",
-					}),
+					contentType: "text/x-script",
+					headers: { "X-Remix-Response": "yes" },
+					body: invalidBody,
 				});
 				return;
 			}
 			await route.fulfill({
 				status: 403,
-				contentType: "application/json",
-				body: JSON.stringify({
-					error: "Daily Fuel limit reached",
-					code: "fuel_daily_limit",
-					upgradeRequired: true,
-					limit: 3,
-					used: 3,
-				}),
+				contentType: "text/x-script",
+				headers: { "X-Remix-Response": "yes" },
+				body: limitBody,
 			});
 		});
 

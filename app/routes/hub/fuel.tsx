@@ -39,6 +39,7 @@ import {
 	FUEL_SCAN_NOT_MEDICAL,
 	FUEL_SCAN_UNAVAILABLE,
 } from "~/lib/nutrition/fuel-scan-copy";
+import { presentFuelSave } from "~/lib/nutrition/fuel-save-presentation";
 import {
 	deviceFuelTimeZone,
 	FUEL_ZONE_UNUSABLE,
@@ -58,10 +59,6 @@ import type { Route } from "./+types/fuel";
 
 const APPLE_HEALTH_REMAINS =
 	"Apple Health samples Ration already wrote stay in the Health app until you delete them there. A deletion started on another device cannot remove them.";
-
-function openFuelPurchase() {
-	window.location.assign("/hub/pricing");
-}
 
 export async function loader({ request, context }: Route.LoaderArgs) {
 	const {
@@ -125,6 +122,7 @@ export default function FuelPage({ loaderData }: Route.ComponentProps) {
 	const [pendingName, setPendingName] = useState<string | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [showAdd, setShowAdd] = useState(false);
+	const [crewPaywall, setCrewPaywall] = useState(false);
 	const [showGoals, setShowGoals] = useState(editor);
 	const [showBarcode, setShowBarcode] = useState(false);
 	const rootData = useRouteLoaderData("root") as
@@ -132,7 +130,6 @@ export default function FuelPage({ loaderData }: Route.ComponentProps) {
 		| undefined;
 	const photoLog = rootData?.clientFlags?.nutritionPhotoLog === true;
 	const [showScan, setShowScan] = useState(false);
-	const capped = day.limit != null && day.used >= day.limit;
 	const pollAbort = useRef<AbortController | null>(null);
 
 	useEffect(() => {
@@ -158,19 +155,11 @@ export default function FuelPage({ loaderData }: Route.ComponentProps) {
 
 	useOpenHubAction("log-to-fuel", true, () => {
 		setShowAdd(false);
-		if (day.limit != null && day.used >= day.limit) {
-			openFuelPurchase();
-			return;
-		}
 		setShowScan(true);
 	});
 
 	function openCreate(kind: "add" | "scan" | "barcode") {
 		if (!online) return;
-		if (capped) {
-			openFuelPurchase();
-			return;
-		}
 		setError(null);
 		if (kind === "add") setShowAdd(true);
 		if (kind === "scan") setShowScan(true);
@@ -256,8 +245,9 @@ export default function FuelPage({ loaderData }: Route.ComponentProps) {
 				const body = (await response.json().catch(() => null)) as {
 					code?: string;
 				} | null;
-				if (body?.code === "fuel_daily_limit") openFuelPurchase();
-				else if (body?.code === "fuel_timezone_required") {
+				if (presentFuelSave(body?.code) === "paywall") {
+					setCrewPaywall(true);
+				} else if (body?.code === "fuel_timezone_required") {
 					setError(FUEL_ZONE_UNUSABLE);
 				} else setError("That log was not saved.");
 				return;

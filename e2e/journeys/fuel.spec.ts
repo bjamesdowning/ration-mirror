@@ -81,7 +81,7 @@ test.describe("settings goals with the fuel page off", () => {
 test.describe("fuel daily cap", () => {
 	test.use({ extraHTTPHeaders: { "x-ration-test-flags": fuelHeader } });
 
-	test("logs three meals and the fourth opens purchase", async ({ page }) => {
+	test("logs three meals and save on that day opens Crew", async ({ page }) => {
 		test.setTimeout(120_000);
 		await grant(page, "intake");
 		await page.goto("/hub/fuel");
@@ -102,23 +102,35 @@ test.describe("fuel daily cap", () => {
 			await expect(page.getByText(meal)).toBeVisible();
 		}
 		await expect(page.getByText("3 of 3 meals logged")).toBeVisible();
-		let leaked = false;
-		await page.route("**/nutrition/diary/barcode", async (route) => {
-			leaked = true;
-			await route.abort();
-		});
-		await page.route("**/nutrition/diary/photo", async (route) => {
-			leaked = true;
-			await route.abort();
-		});
-		// A dev-server reload during the click returns to Fuel. Try again until
-		// the paywall document is the one that stays.
-		await expect(async () => {
-			if (!page.url().includes("/hub/pricing")) {
-				await page.getByRole("button", { name: "Barcode to Fuel" }).click();
-			}
-			await expect(page).toHaveURL(/\/hub\/pricing/, { timeout: 8_000 });
-		}).toPass({ timeout: 45_000 });
-		expect(leaked).toBe(false);
+		await page.getByRole("button", { name: "Barcode to Fuel" }).click();
+		await expect(page.getByRole("textbox", { name: "Barcode" })).toBeVisible();
+		await expect(page).toHaveURL(/\/hub\/fuel/);
+		await page.getByRole("button", { name: "Close" }).click();
+		await page.getByRole("button", { name: "Add Fuel" }).click();
+		await expect(page.getByRole("textbox", { name: "Name" })).toBeVisible();
+		await expect(page).toHaveURL(/\/hub\/fuel/);
+		await page.getByRole("textbox", { name: "Name" }).fill("Fourth");
+		await page
+			.getByRole("spinbutton", { name: "Calories (kcal)" })
+			.fill("400");
+		await page.getByRole("button", { name: "Add to Fuel" }).click();
+		const crew = page.getByRole("dialog", { name: "Crew" });
+		await expect(crew).toBeVisible();
+		await expect(page.getByRole("textbox", { name: "Name" })).toHaveValue(
+			"Fourth",
+		);
+		await expect(page.getByText("That log was not saved.")).toHaveCount(0);
+		await expect(page).toHaveURL(/\/hub\/fuel/);
+		await crew.getByRole("button", { name: "Close" }).click();
+		await expect(crew).toHaveCount(0);
+		await expect(page.getByRole("textbox", { name: "Name" })).toHaveValue(
+			"Fourth",
+		);
+		await page.getByLabel("Date").fill("2020-01-15");
+		await page.getByRole("button", { name: "Add to Fuel" }).click();
+		await expect(page.getByRole("textbox", { name: "Name" })).toHaveCount(0);
+		await expect(page.getByText("That log was not saved.")).toHaveCount(0);
+		await expect(page).toHaveURL(/\/hub\/fuel/);
+		await expect(page.getByText("3 of 3 meals logged")).toBeVisible();
 	});
 });

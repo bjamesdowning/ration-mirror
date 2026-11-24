@@ -5,8 +5,8 @@ import SwiftUI
 /// Never touches Cargo, other members' data, or shared plan state.
 struct ManifestPlateUpSheet: View {
     let entry: ManifestEntry
-    /// Returns an error message on failure, or `nil` on success.
-    let onSave: (_ servings: Double, _ notes: String?, _ amount: Double, _ unit: IntakeLoggedUnit) async -> String?
+    /// `.saved` dismisses. `.paywall` keeps this sheet and opens Crew. `.message` stays on the banner.
+    let onSave: (_ servings: Double, _ notes: String?, _ amount: Double, _ unit: IntakeLoggedUnit) async -> ManifestPlateSave
     var onRemove: (() async -> Void)?
 
     @Environment(AppEnvironment.self) private var env
@@ -19,10 +19,11 @@ struct ManifestPlateUpSheet: View {
     @State private var isRemoving = false
     @State private var errorMessage: String?
     @State private var showingFeatureEnablement = false
+    @State private var showingLimitPaywall = false
 
     init(
         entry: ManifestEntry,
-        onSave: @escaping (_ servings: Double, _ notes: String?, _ amount: Double, _ unit: IntakeLoggedUnit) async -> String?,
+        onSave: @escaping (_ servings: Double, _ notes: String?, _ amount: Double, _ unit: IntakeLoggedUnit) async -> ManifestPlateSave,
         onRemove: (() async -> Void)? = nil
     ) {
         self.entry = entry
@@ -182,6 +183,9 @@ struct ManifestPlateUpSheet: View {
             .sheet(isPresented: $showingFeatureEnablement) {
                 PrivacySettingsView()
             }
+            .sheet(isPresented: $showingLimitPaywall) {
+                PaywallView(context: .settings())
+            }
             .task {
                 await refreshConsentIfNeeded()
             }
@@ -205,11 +209,14 @@ struct ManifestPlateUpSheet: View {
         errorMessage = nil
         defer { isSaving = false }
         let notePayload = IntakeNotesField.payload(from: notes)
-        if let failure = await onSave(servings, notePayload, amount, unit) {
-            errorMessage = failure
-        } else {
+        switch await onSave(servings, notePayload, amount, unit) {
+        case .saved:
             Haptics.success()
             dismiss()
+        case .paywall:
+            showingLimitPaywall = true
+        case .message(let failure):
+            errorMessage = failure
         }
     }
 

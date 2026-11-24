@@ -206,4 +206,73 @@ final class FuelActionPolicyTests: XCTestCase {
             .openForm
         )
     }
+
+    func testManifestPlateSaveOpensCrewOnlyForTheDailyLimit() {
+        XCTAssertEqual(
+            ManifestPlateSaveFailure.decide(
+                APIError.server(
+                    status: 403,
+                    message: "Daily Fuel limit reached",
+                    code: "fuel_daily_limit"
+                )
+            ),
+            .paywall
+        )
+        XCTAssertEqual(
+            ManifestPlateSaveFailure.decide(
+                APIError.server(status: 400, message: "Invalid request", code: "invalid_request")
+            ),
+            .message("Invalid request")
+        )
+        XCTAssertEqual(
+            ManifestPlateSaveFailure.decide(
+                APIError.server(status: 400, message: "Invalid request", code: nil)
+            ),
+            .message("Invalid request")
+        )
+        XCTAssertEqual(
+            ManifestPlateSaveFailure.decide(
+                APIError.server(
+                    status: 403,
+                    message: "Consent required",
+                    code: "nutrition_consent_required"
+                )
+            ),
+            .message("Allow personal serving logs to continue.")
+        )
+        XCTAssertEqual(
+            ManifestPlateSaveFailure.decide(
+                APIError.server(
+                    status: 422,
+                    message: "Nutrition unavailable for this meal.",
+                    code: "nutrition_unavailable"
+                )
+            ),
+            .message("Nutrition unavailable for this meal.")
+        )
+        XCTAssertEqual(
+            ManifestPlateSaveFailure.decide(
+                APIError.server(
+                    status: 409,
+                    message: "Nutrition totals are still updating. Try again shortly.",
+                    code: "nutrition_updating"
+                )
+            ),
+            .message("Nutrition totals are still updating. Try again shortly.")
+        )
+        XCTAssertEqual(
+            ManifestPlateSaveFailure.decide(
+                APIError.server(status: 403, message: "Capacity exceeded", code: "capacity_exceeded")
+            ),
+            .message("Capacity exceeded")
+        )
+        XCTAssertEqual(
+            ManifestPlateSaveFailure.decide(BlankPlateError()),
+            .message("Couldn't log this serving.")
+        )
+    }
+}
+
+private struct BlankPlateError: LocalizedError {
+    var errorDescription: String? { "" }
 }

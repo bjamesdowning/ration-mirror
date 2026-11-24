@@ -33,6 +33,7 @@ import {
 } from "~/components/manifest/WeekNavigator";
 import { WeekSummary } from "~/components/manifest/WeekSummary";
 import { WeekView } from "~/components/manifest/WeekView";
+import { CrewFuelLimitDialog } from "~/components/nutrition/CrewFuelLimitDialog";
 import { LogToFuelDialog } from "~/components/nutrition/FuelCaptureDialogs";
 import { FloatingActionBar } from "~/components/shell/FloatingActionBar";
 import { PageHeader } from "~/components/shell/PageHeader";
@@ -69,6 +70,7 @@ import { aggregateManifestDayNutrition } from "~/lib/nutrition/day-totals";
 import { normalizeDiaryLayout } from "~/lib/nutrition/diary-layout";
 import { isNutritionFastLogEnabled } from "~/lib/nutrition/fast-log-flag.server";
 import { toManifestDayIntake } from "~/lib/nutrition/fuel-capture";
+import { presentManifestIntakeSave } from "~/lib/nutrition/fuel-save-presentation";
 import { goalTargetsFromRow } from "~/lib/nutrition/goal-progress";
 import { getActiveNutritionGoal } from "~/lib/nutrition/persist.server";
 import {
@@ -731,6 +733,8 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 		code?: string;
 	}>();
 	const [eatEntry, setEatEntry] = useState<MealPlanEntryWithMeal | null>(null);
+	const [crewPaywall, setCrewPaywall] = useState(false);
+	const handledIntake = useRef<unknown>(null);
 	const eatToast = useToast({ duration: 4000 });
 	const eatRemovedToast = useToast({ duration: 4000 });
 	const eatErrorToast = useToast({ duration: 6000 });
@@ -1134,19 +1138,25 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 		entries,
 	]);
 
-	// Eat (private intake log) success/error toasts — never mentions Cargo.
+	// Eat (private intake log). A full day opens Crew and leaves the plate-up up.
 	useEffect(() => {
 		if (intakeFetcher.state !== "idle" || !intakeFetcher.data) return;
-		const data = intakeFetcher.data;
-		if (data.intake) {
+		if (handledIntake.current === intakeFetcher.data) return;
+		handledIntake.current = intakeFetcher.data;
+		const presentation = presentManifestIntakeSave(intakeFetcher.data);
+		if (presentation === "saved") {
+			setCrewPaywall(false);
+			setEatEntry(null);
 			revalidator.revalidate();
 			eatToast.show();
-		} else if (data.cleared) {
+		} else if (presentation === "cleared") {
 			revalidator.revalidate();
 			eatRemovedToast.show();
-		} else if (data.code === "fuel_daily_limit") {
-			window.location.assign("/hub/pricing");
-		} else if (data.error) {
+		} else if (presentation === "paywall") {
+			setCrewPaywall(true);
+		} else if (presentation === "message") {
+			setCrewPaywall(false);
+			setEatEntry(null);
 			eatErrorToast.show();
 		}
 	}, [
@@ -1594,9 +1604,8 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 					notesEnabled={nutritionIntakeNotesFlag}
 					defaultNotes={eatEntry.personalIntake?.notes ?? null}
 					onConfirmEat={(servings, notes, amount, unit) => {
-						const entryId = eatEntry.id;
-						setEatEntry(null);
-						handleEat(entryId, servings, notes, amount, unit);
+						if (intakeFetcher.state !== "idle") return;
+						handleEat(eatEntry.id, servings, notes, amount, unit);
 					}}
 					onRemoveLog={() => {
 						const entryId = eatEntry.id;
@@ -1606,6 +1615,13 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 					onClose={() => setEatEntry(null)}
 				/>
 			)}
+
+			{crewPaywall ? (
+				<CrewFuelLimitDialog
+					titleId="manifest-crew-paywall-title"
+					onClose={() => setCrewPaywall(false)}
+				/>
+			) : null}
 
 			{calendarOpen && nutritionManifestFlag && (
 				<ManifestCalendarOverlay

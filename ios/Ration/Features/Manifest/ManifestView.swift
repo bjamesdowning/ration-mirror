@@ -905,14 +905,14 @@ struct ManifestView: View {
         pendingEatEntry = refreshed
     }
 
-    /// Eat — private serving log. Returns an error message on failure for the sheet to display.
+    /// Eat — private serving log. Paywall keeps the sheet; other failures stay on its banner.
     private func handleLogServing(
         _ entry: ManifestEntry,
         servings: Double,
         notes: String? = nil,
         amount: Double? = nil,
         unit: IntakeLoggedUnit? = nil
-    ) async -> String? {
+    ) async -> ManifestPlateSave {
         switch await model.logServing(
             entry,
             servings: servings,
@@ -925,15 +925,19 @@ struct ManifestView: View {
         ) {
         case .success(_, let token):
             setUndo(token: token, message: "Serving logged")
-            return nil
+            return .saved
+        case .paywall:
+            return .paywall
         case .consentRequired:
-            return "Allow personal serving logs to continue."
+            return .message("Allow personal serving logs to continue.")
         case .nutritionUnavailable:
-            return model.errorMessage ?? "Nutrition unavailable for this meal."
+            return .message(model.errorMessage ?? "Nutrition unavailable for this meal.")
         case .nutritionUpdating:
-            return model.errorMessage ?? "Nutrition totals are still updating. Try again shortly."
+            return .message(
+                model.errorMessage ?? "Nutrition totals are still updating. Try again shortly."
+            )
         case .failed:
-            return model.errorMessage ?? "Couldn't log this serving."
+            return .message(model.errorMessage ?? "Couldn't log this serving.")
         }
     }
 

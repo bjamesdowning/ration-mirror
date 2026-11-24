@@ -8,6 +8,7 @@ import {
 } from "react-router";
 import { CheckIcon, PlusIcon } from "~/components/icons/PageIcons";
 import { PlateUpDialog } from "~/components/manifest/PlateUpDialog";
+import { CrewFuelLimitDialog } from "~/components/nutrition/CrewFuelLimitDialog";
 import { NutritionPanel } from "~/components/nutrition/NutritionPanel";
 import { AllergenWarningBadge } from "~/components/shared/AllergenWarningBadge";
 import { useQuantityFormatter } from "~/components/shared/DisplayQuantity";
@@ -24,6 +25,7 @@ import { log } from "~/lib/logging.client";
 import { getTodayISO } from "~/lib/manifest-dates";
 import { inferSlotTypeFromLocalHour } from "~/lib/manifest-slot";
 import type { IngredientMatch, MissingIngredient } from "~/lib/matching.server";
+import { presentManifestIntakeSave } from "~/lib/nutrition/fuel-save-presentation";
 import type { MealNutritionSnapshot } from "~/lib/nutrition/types";
 import { scaleQuantity } from "~/lib/scale";
 import { parseDirections } from "~/lib/schemas/directions";
@@ -238,6 +240,8 @@ export function MealDetail({
 		mealFatGPerServing?: number | null;
 		gramsPerServing?: number | null;
 	} | null>(null);
+	const [crewPaywall, setCrewPaywall] = useState(false);
+	const handledIntake = useRef<unknown>(null);
 	const isCooking = fetcher.state !== "idle";
 	const isDeleting = deleteFetcher.state !== "idle";
 	const isCooked = fetcher.data?.result?.cooked === true;
@@ -474,6 +478,32 @@ export function MealDetail({
 			},
 		);
 	};
+
+	useEffect(() => {
+		if (intakeFetcher.state !== "idle" || intakeFetcher.data == null) return;
+		if (handledIntake.current === intakeFetcher.data) return;
+		handledIntake.current = intakeFetcher.data;
+		const presentation = presentManifestIntakeSave(
+			intakeFetcher.data as {
+				intake?: unknown;
+				cleared?: unknown;
+				code?: string | null;
+				error?: string | null;
+			},
+		);
+		if (presentation === "paywall") {
+			setCrewPaywall(true);
+			return;
+		}
+		if (
+			presentation === "saved" ||
+			presentation === "message" ||
+			presentation === "cleared"
+		) {
+			setCrewPaywall(false);
+			setEatEntry(null);
+		}
+	}, [intakeFetcher.state, intakeFetcher.data]);
 
 	const ingredientNames = meal.ingredients.map((i) => i.ingredientName);
 	const triggeredAllergens = detectAllergens(ingredientNames, userAllergens);
@@ -912,13 +942,18 @@ export function MealDetail({
 					intakeConsentGranted={intakeConsentGranted}
 					notesEnabled={nutritionIntakeNotes}
 					onConfirmEat={(servings, notes, amount, unit) => {
-						const entryId = eatEntry.id;
-						setEatEntry(null);
-						handleEat(entryId, servings, notes, amount, unit);
+						if (intakeFetcher.state !== "idle") return;
+						handleEat(eatEntry.id, servings, notes, amount, unit);
 					}}
 					onClose={() => setEatEntry(null)}
 				/>
 			)}
+			{crewPaywall ? (
+				<CrewFuelLimitDialog
+					titleId="galley-crew-paywall-title"
+					onClose={() => setCrewPaywall(false)}
+				/>
+			) : null}
 		</div>
 	);
 }

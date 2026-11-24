@@ -954,7 +954,6 @@ export function MealDetail({
 					onClose={() => setCrewPaywall(false)}
 				/>
 			) : null}
-			)}
 		</div>
 	);
 }

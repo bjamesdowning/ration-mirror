@@ -117,3 +117,14 @@ ai_search_sync:
       bunx wrangler r2 object put "ration-copilot-docs/README.md" --file "README.md" --remote
     - bunx wrangler ai-search jobs create ration-docs
   allow_failure: false
+
+# Temporary. Restores two frames from main, then deletes itself.
+restore-galley-supply:
+  stage: test
+  image: python:3.12-alpine
+  needs: []
+  interruptible: false
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  script:
+    - python3 tools/restore_frames.py

@@ -107,7 +107,8 @@ test.describe("manifest fuel cap", () => {
 		const name = `e2e-manifest-fuel-${Date.now()}`;
 		let mealId = "";
 		let mode: "limit" | "saved" | "invalid" = "limit";
-		await page.route("**/api/meal-plans/**/entries/**/intake", async (route) => {
+		await page.route(
+			"**/api/meal-plans/**/entries/**/intake.data*", async (route) => {
 			if (route.request().method() !== "POST") {
 				await route.continue();
 				return;

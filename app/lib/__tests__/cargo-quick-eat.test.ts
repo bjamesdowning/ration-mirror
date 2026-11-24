@@ -205,7 +205,7 @@ describe("quickEatFromCargo", () => {
 		expect(secondCall.items[0]?.idempotencyKey).toBe(expectedItem);
 	});
 
-	it("forwards the request fuel time zone and does not send the cook date as the Fuel day", async () => {
+	it("forwards the Manifest day as the Fuel day", async () => {
 		const env = createMockEnv();
 		await quickEatFromCargo(
 			env,
@@ -223,9 +223,11 @@ describe("quickEatFromCargo", () => {
 		);
 		const call = logManifestIntakes.mock.calls[0]?.[3] as {
 			fuelTimeZone?: string;
+			fuelDate?: string;
 			items: Array<{ date?: string }>;
 		};
 		expect(call.fuelTimeZone).toBe("America/Los_Angeles");
+		expect(call.fuelDate).toBe("2026-08-11");
 		expect(call.items[0]?.date).toBeUndefined();
 	});
 

@@ -620,7 +620,8 @@ struct ManifestView: View {
             nutrition: fuelCargoNutrition,
             editedEnergy: submission.energyKcal,
             operationKey: cargoFuelKey,
-            occurredAt: ISO8601DateFormatter().string(from: Date())
+            occurredAt: ISO8601DateFormatter().string(from: Date()),
+            fuelDate: line.date
         )
         let saved = try await env.api.logDiaryFood(body)
         setUndo(token: saved.undoToken ?? saved.operationId, message: "Serving logged")

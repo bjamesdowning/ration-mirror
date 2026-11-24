@@ -5,6 +5,7 @@ import {
 	INTAKE_SERVINGS_MIN,
 	type IntakeLoggedUnit,
 } from "~/lib/nutrition/intake-amount";
+import { isCalendarDate } from "~/lib/nutrition/fuel-date";
 import { FuelTimeZoneSchema } from "./fuel";
 import { INJECTION_PATTERNS } from "./meal";
 
@@ -139,11 +140,25 @@ export const ManifestPersonalIntakeUpsertSchema = z
 		idempotencyKey: z.string().uuid(),
 		/** Optional Eat snippet; persisted only when `nutrition-intake-notes` is on. */
 		notes: IntakeNotesSchema,
-		/** Device IANA zone. The server stamps fuel_date. Not a client day. */
+		/**
+		 * Manifest day for this line. Must match the entry.
+		 * Omitted writes still use the line, not the clock.
+		 */
+		fuelDate: z.string().regex(ISO_DATE_REGEX, "Must be YYYY-MM-DD").optional(),
+		/** Device IANA zone. Noon on the Manifest day is stamped in this zone. */
 		fuelTimeZone: FuelTimeZoneSchema.optional(),
 	})
 	.strict()
-	.superRefine(refineIntakeAmountFields);
+	.superRefine((val, ctx) => {
+		refineIntakeAmountFields(val, ctx);
+		if (val.fuelDate && !isCalendarDate(val.fuelDate)) {
+			ctx.addIssue({
+				code: z.ZodIssueCode.custom,
+				message: "Must be a real date",
+				path: ["fuelDate"],
+			});
+		}
+	});
 
 /**
  * Used by the bulk-add endpoint for both the "Copy Entry / Day" features

@@ -884,12 +884,14 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 		amount?: number,
 		unit?: "serving" | "g" | "oz",
 	) => {
+		const entry = entries.find((e) => e.id === entryId);
 		intakeFetcher.submit(
 			JSON.stringify({
 				servings,
 				...(amount != null && unit != null ? { amount, unit } : {}),
 				idempotencyKey: crypto.randomUUID(),
 				...(notes != null ? { notes } : {}),
+				...(entry ? { fuelDate: entry.date } : {}),
 			}),
 			{
 				method: "POST",

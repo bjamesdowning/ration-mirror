@@ -399,12 +399,16 @@ struct GalleyView: View {
                 idempotencyKey: UUID().uuidString,
                 notes: notes,
                 amount: amount,
-                unit: unit
+                unit: unit,
+                fuelDate: entry.date
             )
             if let dayTotals = result.dayTotals, !dayTotals.isEmpty {
                 env.configureNutritionScope()
-                let day = LocalDay.todayISO()
-                env.nutrition.applyDayTotals(dayTotals, forRange: day, to: day)
+                env.nutrition.applyDayTotals(
+                    dayTotals,
+                    forRange: entry.date,
+                    to: entry.date
+                )
             }
             Haptics.success()
             cookSuccessMessage = "Serving logged"

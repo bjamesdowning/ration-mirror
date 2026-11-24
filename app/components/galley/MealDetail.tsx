@@ -234,6 +234,7 @@ export function MealDetail({
 		id: string;
 		mealName: string;
 		planId: string;
+		date: string;
 		mealEnergyKcalPerServing?: number | null;
 		mealProteinGPerServing?: number | null;
 		mealCarbsGPerServing?: number | null;
@@ -407,6 +408,7 @@ export function MealDetail({
 			id: result.entry.id,
 			mealName: result.entry.mealName,
 			planId: result.planId,
+			date: result.entry.date,
 			mealEnergyKcalPerServing: result.entry.mealEnergyKcalPerServing ?? null,
 			mealProteinGPerServing: result.entry.mealProteinGPerServing ?? null,
 			mealCarbsGPerServing: result.entry.mealCarbsGPerServing ?? null,
@@ -470,6 +472,7 @@ export function MealDetail({
 				...(amount != null && unit != null ? { amount, unit } : {}),
 				idempotencyKey: crypto.randomUUID(),
 				...(notes != null ? { notes } : {}),
+				fuelDate: eatEntry.date,
 			}),
 			{
 				method: "POST",

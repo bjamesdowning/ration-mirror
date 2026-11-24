@@ -27,6 +27,8 @@ import {
 import {
 	assertFuelDateUnchanged,
 	fuelDateForInstant,
+	isCalendarDate,
+	noonOnFuelDate,
 } from "~/lib/nutrition/fuel-date";
 import { previousUtcCalendarDay } from "~/lib/nutrition/goal-effective";
 import {
@@ -82,6 +84,33 @@ export function intakeNotesForCanonicalHash(
 	requestedNotes: string | null | undefined,
 ): { notes?: string | null } {
 	return notesEnabled ? { notes: requestedNotes ?? null } : {};
+}
+
+/**
+ * Fuel day for a Manifest plate-up.
+ * The line's day is the value that is stored. A client day must be that same
+ * real calendar day. Omitted client input uses the line. Future days stay
+ * allowed, the same rule as Add Fuel. This does not move an existing row.
+ */
+export function resolveManifestFuelDate(
+	entryDate: string,
+	requestedDate?: string | null,
+): string {
+	if (!isCalendarDate(entryDate)) {
+		throw new NutritionOperationValidationError(
+			"Manifest day is not a real date",
+		);
+	}
+	if (requestedDate == null || requestedDate === "") return entryDate;
+	if (!isCalendarDate(requestedDate)) {
+		throw new NutritionOperationValidationError("fuelDate must be a real day");
+	}
+	if (requestedDate !== entryDate) {
+		throw new NutritionOperationValidationError(
+			"fuelDate must be the Manifest day for this line",
+		);
+	}
+	return requestedDate;
 }
 
 export type NutritionSurface = "web" | "mobile" | "mcp" | "copilot";
@@ -909,9 +938,13 @@ export async function logManifestIntakes(
 			occurredAt?: Date;
 			/** Private Eat snippet; only persisted when nutrition-intake-notes is on. */
 			notes?: string | null;
+			/** Manifest day for this line. Must match the entry. */
+			fuelDate?: string | null;
 		}>;
-		/** Device IANA zone for this write. Not a client fuel_date. */
+		/** Device IANA zone. Noon on the Manifest day is stamped in this zone. */
 		fuelTimeZone?: string | null;
+		/** Manifest day for every item in this write. Each line must match. */
+		fuelDate?: string | null;
 	},
 ): Promise<LogManifestIntakesResult> {
 	requireScope(principal, "nutrition:write");
@@ -999,6 +1032,10 @@ export async function logManifestIntakes(
 		if (!entry) throw new ManifestIntakeTargetNotFoundError();
 		if (entry.cookedAt == null && entry.consumedAt == null) {
 			throw new ManifestEntryNotPreparedError();
+		}
+		const requestedFuelDate = item.fuelDate ?? input.fuelDate;
+		if (requestedFuelDate != null && requestedFuelDate !== "") {
+			resolveManifestFuelDate(entry.date, requestedFuelDate);
 		}
 	}
 
@@ -1150,18 +1187,31 @@ export async function logManifestIntakes(
 				priorNotes: prior?.notes ?? null,
 			});
 			let fuelDate: string | null = null;
+			let occurredAt = item.occurredAt ?? committedAt;
 			if (fuelPageOn && !prior) {
 				if (!fuelZone) throw new Error("Fuel zone was not resolved");
-				fuelDate = fuelDateForInstant(item.occurredAt ?? committedAt, fuelZone);
+				// The line's day, not the clock. Noon keeps that day near midnight.
+				fuelDate = resolveManifestFuelDate(
+					entry.date,
+					item.fuelDate ?? input.fuelDate,
+				);
+				occurredAt =
+					item.occurredAt != null &&
+					fuelDateForInstant(item.occurredAt, fuelZone) === fuelDate
+						? item.occurredAt
+						: noonOnFuelDate(fuelDate, fuelZone);
 			} else if (fuelPageOn && prior) {
 				if (!fuelZone) throw new Error("Fuel zone was not resolved");
+				// A replacement keeps the stored day, including a legacy mis-dated row.
 				fuelDate = assertFuelDateUnchanged(
 					prior.fuelDate,
 					item.occurredAt ?? prior.occurredAt,
 					fuelZone,
 				);
+				occurredAt = item.occurredAt ?? prior.occurredAt;
 			} else if (prior?.fuelDate) {
 				fuelDate = prior.fuelDate;
+				occurredAt = item.occurredAt ?? prior.occurredAt;
 			}
 			const row: typeof schema.nutritionIntake.$inferInsert = {
 				id: intakeId,
@@ -1184,7 +1234,7 @@ export async function logManifestIntakes(
 				source: "meal",
 				confidence: coverage,
 				verified: coverage >= NUTRITION_COVERAGE_THRESHOLD ? 1 : 0,
-				occurredAt: item.occurredAt ?? committedAt,
+				occurredAt,
 				kitchenEventId: null,
 				schemaVersion: 2,
 				nutrientsJson: toNullableNutrientValues(scaled) as Record<

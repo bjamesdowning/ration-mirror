@@ -167,7 +167,7 @@ struct ShareImportView: View {
         let selected = coordinator.kitchens.first { $0.id == selectedId }
         let balance = selected?.credits ?? 0
         let canConfirm = balance >= cost
-        return VStack(spacing: 12) {
+        VStack(spacing: 12) {
             if coordinator.kitchens.count > 1 {
                 Picker("Kitchen", selection: Binding(
                     get: { selectedId },

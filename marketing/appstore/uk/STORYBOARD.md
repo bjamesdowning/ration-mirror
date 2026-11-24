@@ -8,12 +8,12 @@ App Store Connect → Media Manager → **iPhone 6.9" Display**. Upload only [`f
 | 2 | [`02-agent-sets-fuel.png`](framed/6.9/1.6/02-agent-sets-fuel.png) | Any agent can run it. / Or use the one inside. |
 | 3 | [`03-import.png`](framed/6.9/1.6/03-import.png) | Save it from the video. / TikTok, Reels, and the web. |
 | 4 | [`04-scan.png`](framed/6.9/1.6/04-scan.png) | Scan the receipt. / The cupboard updates. |
-| 5 | [`05-galley.png`](framed/6.9/1.6/05-galley.png) | Cook from what's here. / Matched to the cupboard. |
+| 5 | [`05-galley.png`](framed/6.9/1.6/05-galley.png) | See what you can cook / with what's here |
 | 6 | [`06-manifest.png`](framed/6.9/1.6/06-manifest.png) | The week's meals. / For everyone in the kitchen. |
-| 7 | [`07-supply.png`](framed/6.9/1.6/07-supply.png) | The list writes itself. / From the meals you planned. |
+| 7 | [`07-supply.png`](framed/6.9/1.6/07-supply.png) | Shop only what / you're still missing |
 | 8 | [`08-hub.png`](framed/6.9/1.6/08-hub.png) | The whole kitchen. / Stock, meals, and today. |
 
-Slide 1 is today's Fuel log, with the Macros screen over it: week, month, or a custom range, the daily average, and how many days were logged. The line under the rule says what the words mean: `Calories, protein, carbs, and fat.` Slide 2 shows the choice. A person's own agent can run the kitchen, and Ask Ration is the assistant inside the app. The names under the rule are type only, with no logos: `Grok · Hermes · Dots · Claude.` Slide 3 keeps the TikTok import photograph and replaces the caption. Slide 4 is the receipt scan, through to the file upload. Slide 5 is Galley, meals matched to what is in the cupboard. Slide 6 is one week for the people who share the kitchen. Slide 7 is the supply list the plan writes. The line under the rule is `Share it, or send it out.` Slide 8 is the Hub: stock, meals, and today.
+Slide 1 is today's Fuel log, with the Macros screen over it: week, month, or a custom range, the daily average, and how many days were logged. The line under the rule says what the words mean: `Calories, protein, carbs, and fat.` Slide 2 shows the choice. A person's own agent can run the kitchen, and Ask Ration is the assistant inside the app. The names under the rule are type only, with no logos: `Grok · Hermes · Dots · Claude.` Slide 3 keeps the TikTok import photograph and replaces the caption. Slide 4 is the receipt scan, through to the file upload. Slide 5 keeps the earlier Galley frame. Slide 6 is one week for the people who share the kitchen. Slide 7 keeps the earlier Supply frame, with the Saved lists cutout. Slide 8 is the Hub: stock, meals, and today.
 
 Leave these in the repo and do **not** upload them for 1.6 (same names under `framed/6.5/` as well): `01-hub.png`, `02-macros.png`, `06-plan.png`, `09-ask.png`, `10-theme.png`. The Hub frame for this set is `framed/6.9/1.6/08-hub.png`, not the older `01-hub.png`.
 

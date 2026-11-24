@@ -98,7 +98,7 @@ struct AddFuelSheet: View {
                             .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
                     }
                 }
-                if let selection {
+                if selection != nil {
                     Section("Amount") {
                         LabeledContent("Amount") {
                             TextField("Amount", text: $amountText)

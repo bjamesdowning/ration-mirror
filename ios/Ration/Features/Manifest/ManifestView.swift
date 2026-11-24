@@ -159,7 +159,7 @@ struct ManifestView: View {
             }
             .sheet(item: $editingEntry) { entry in
                 ManifestLineEditSheet(entry: entry) { date, slot, servings in
-                    try await env.api.updateManifestEntry(
+                    _ = try await env.api.updateManifestEntry(
                         id: entry.id,
                         date: date,
                         slotType: slot,

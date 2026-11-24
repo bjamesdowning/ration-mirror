@@ -93,6 +93,35 @@ enum FuelSaveLimit {
     }
 }
 
+/// Plate-up save. Crew stays on the sheet that still holds the amount.
+enum ManifestPlateSave: Equatable {
+    case saved
+    case paywall
+    case message(String)
+}
+
+enum ManifestPlateSaveFailure {
+    static func decide(_ error: Error) -> ManifestPlateSave {
+        guard let api = error as? APIError else {
+            let text = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            return .message(text.isEmpty ? "Couldn't log this serving." : text)
+        }
+        if FuelSaveLimit.presentsPaywall(code: api.code) { return .paywall }
+        if api.isNutritionConsentRequired {
+            return .message("Allow personal serving logs to continue.")
+        }
+        if api.isNutritionUpdating {
+            return .message(
+                api.errorDescription ?? "Nutrition totals are still updating. Try again shortly."
+            )
+        }
+        if api.isNutritionUnavailable {
+            return .message(api.errorDescription ?? "Nutrition unavailable for this meal.")
+        }
+        return .message(api.errorDescription ?? "Couldn't log this serving.")
+    }
+}
+
 /// Fuel delete removes the row after a decoded intake id, or when the server
 /// says the row is already gone. Any other failure stays in the list and shows
 /// the server message. The daily cap still opens Crew purchase.

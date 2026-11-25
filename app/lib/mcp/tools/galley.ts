@@ -76,7 +76,7 @@ export function createGalleyToolDefs(env: McpToolsEnv) {
 		defineSharedTool({
 			name: "update_meal",
 			description:
-				"Update a recipe in the Galley. Round-trip: list_meals → modify → pass complete object including id.",
+				"Update a recipe in the Galley. Round-trip: list_meals → modify → pass complete object including id. The reply echoes each ingredient's isOptional so you can confirm optional lines were kept.",
 			inputSchema: z.object({
 				meal: McpUpdateMealWireSchema,
 			}),
@@ -119,6 +119,7 @@ export function createGalleyToolDefs(env: McpToolsEnv) {
 							ingredientName: i.ingredientName,
 							quantity: i.quantity,
 							unit: i.unit,
+							isOptional: i.isOptional === true,
 						})),
 						tags: updated.tags,
 						...(updated.nutrition ? { nutrition: updated.nutrition } : {}),

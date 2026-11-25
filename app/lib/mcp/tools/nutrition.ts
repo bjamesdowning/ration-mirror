@@ -36,6 +36,10 @@ import {
 import type { McpToolContext } from "../auth";
 import { err, featureDisabled, ok } from "../envelope";
 import {
+	compactManifestIntakeResult,
+	withPerDayVsGoal,
+} from "../result-shapes";
+import {
 	defineSharedTool,
 	type McpToolsEnv,
 	registerSharedMcpTool,
@@ -89,7 +93,7 @@ export function createNutritionToolDefs(env: McpToolsEnv) {
 		defineSharedTool({
 			name: "get_nutrition_summary",
 			description:
-				"Return the caller's personal daily nutrition intake totals (energy, macros, optional fiberG) for a date range, plus the active goal when set. Use this when the user asks remaining calories or whether a meal fits their budget — read vsGoal (and nutritionV2.vsGoal); do not subtract consumed from target yourself. from/to default to the kitchen's local today (temporal.today), or today UTC (temporal.todayUtc) when the kitchen has no time zone yet. Remaining is that calendar day, not a dinner-only slice. Pantry expiry stays on UTC calendar days. When nutrition-cross-org-diary is on, totals include intakes from every kitchen the user logged in — not only the authorized household. Requires nutrition-goals or nutrition-manifest. Not medical advice. These are calendar-day totals, not the iPhone Macros page averages (mean of logged days, previous span of equal length). For that page, point iPhone users to Manifest → chart → Macros. There is no web Macros page.",
+				"Return the caller's personal daily nutrition intake totals (energy, macros, optional fiberG) for a date range, plus the active goal when set. Use this when the user asks remaining calories or whether a meal fits their budget — read vsGoal for the last day and days[].vsGoal for each day; do not subtract consumed from target yourself. from/to default to the kitchen's local today (temporal.today), or today UTC (temporal.todayUtc) when the kitchen has no time zone yet. Remaining is that calendar day, not a dinner-only slice. Pantry expiry stays on UTC calendar days. When nutrition-cross-org-diary is on, totals include intakes from every kitchen the user logged in — not only the authorized household. Requires nutrition-goals or nutrition-manifest. Not medical advice. These are calendar-day totals, not the iPhone Macros page averages (mean of logged days, previous span of equal length). For that page, point iPhone users to Manifest → chart → Macros. There is no web Macros page.",
 			inputSchema: z.object({
 				from: z
 					.string()
@@ -147,10 +151,14 @@ export function createNutritionToolDefs(env: McpToolsEnv) {
 					parsed.data.from,
 					parsed.data.to,
 				);
-				return ok("get_nutrition_summary", serializeNutritionSummary(summary), {
-					outcome: "no_effect",
-					requestId: principal.requestId,
-				});
+				return ok(
+					"get_nutrition_summary",
+					withPerDayVsGoal(serializeNutritionSummary(summary)),
+					{
+						outcome: "no_effect",
+						requestId: principal.requestId,
+					},
+				);
 			},
 		}),
 		defineSharedTool({
@@ -373,7 +381,7 @@ export function createNutritionToolDefs(env: McpToolsEnv) {
 		defineSharedTool({
 			name: "log_manifest_intake",
 			description:
-				"Atomically log or update personal plate-up (Eat) for prepared Manifest entries. Never deducts Cargo. Requires active intake and agent-processing consent established in Ration. Pass operationKey plus portions[{entryId, servings? or amount+unit, idempotencyKey, notes?}] (1–50). servings is 0.01–100 recipe servings; amount+unit may be serving, g, or oz when get_meal_plan gramsPerServing is present. Optional notes (≤280) persist only when nutrition-intake-notes is on. During the compatibility window, omission derives a stable operation key from the ordered item keys. Returns stable replay semantics and authoritative day totals. Not medical advice.",
+				"Atomically log or update personal plate-up (Eat) for prepared Manifest entries. Never deducts Cargo. Requires active intake and agent-processing consent established in Ration. Pass operationKey plus portions[{entryId, servings? or amount+unit, idempotencyKey, notes?}] (1–50). servings is 0.01–100 recipe servings; amount+unit may be serving, g, or oz when get_meal_plan gramsPerServing is present. Optional notes (≤280) persist only when nutrition-intake-notes is on. During the compatibility window, omission derives a stable operation key from the ordered item keys. Returns one compact line per plate-up (intakeId, entryId, date, slot, servings, amount, unit, macros), stable replay semantics, and authoritative day totals. Not medical advice.",
 			inputSchema: z.object({
 				portions: z.array(intakePortionSchema).min(1).max(50),
 				operationKey: UuidSchema.optional(),
@@ -397,18 +405,11 @@ export function createNutritionToolDefs(env: McpToolsEnv) {
 					planId: plan.id,
 					items: a.portions,
 				});
-				return ok(
-					"log_manifest_intake",
-					{
-						logged: result.items.length,
-						...result,
-					},
-					{
-						outcome: result.replayed ? "replayed" : "committed",
-						requestId: principal.requestId,
-						operationId: result.operationId,
-					},
-				);
+				return ok("log_manifest_intake", compactManifestIntakeResult(result), {
+					outcome: result.replayed ? "replayed" : "committed",
+					requestId: principal.requestId,
+					operationId: result.operationId,
+				});
 			},
 		}),
 		defineSharedTool({

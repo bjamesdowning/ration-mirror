@@ -143,7 +143,7 @@ OAuth issues tokens only through `authorization_code` and `refresh_token`; there
 | `clear_nutrition_goal` | `mcp:nutrition:write` | Idempotently close open-ended goals using `operationKey`. **Requires `confirm: true` + host approval.** |
 | `log_manifest_intake` | `mcp:nutrition:write` | Atomic private Eat for 1–50 prepared entries (`operationKey` + per-item `idempotencyKey`). Portions: `servings` (0.01–100) or `amount`+`unit` (`serving`/`g`/`oz`) when `gramsPerServing` is present. Multi-entry calls need host approval. Consent must already be active in Ration. Returns one compact line per item (`intakeId`, `entryId`, meal, date, slot, portion, energy and macros) plus `dayTotals`. |
 | `clear_manifest_intake` | `mcp:nutrition:write` | Atomically soft-void personal intake using `operationKey`. **Requires `confirm: true` + host approval.** |
-| `quick_eat_cargo` | `mcp:inventory:write` + `mcp:manifest:write` + `mcp:nutrition:write` | Personal Quick Eat from Cargo: resolve by `cargoId`, exact name, or a semantic match at ≥ 0.78 (a weaker name returns candidates). Creates a missing line if needed, adds a Manifest snack, and optionally logs private intake. Requires `cargo-quick-eat` + `nutrition-cook-log-split`. |
+| `quick_eat_cargo` | `mcp:inventory:write` + `mcp:manifest:write` + `mcp:nutrition:write` | Personal Quick Eat from Cargo: resolve by `cargoId`, exact name, or a semantic match at ≥ 0.78 (a weaker name returns candidates). Creates a missing line if needed. With `plan-fuel-actions` on: deducts Cargo once and logs Daily Fuel on `date` (local noon that day; default today in the person's Fuel zone; the free daily limit counts that day) with `notes`; `logIntake: false` deducts Cargo only and logs no Fuel. Returns `fuelLogged` (and `intakeId` and `fuelDate` when logged). A replay with the same `operationKey` and arguments returns the first result and does not deduct again; a reused key with different arguments is `conflict`. With the flag off: adds a Manifest snack and optionally logs private intake (`cargo-quick-eat` + `nutrition-cook-log-split`). |
 
 ### Inventory (Cargo)
 
@@ -206,8 +206,8 @@ Registered only when the matching nutrition flags are on (all need `nutrition-fa
 | Tool | Scope | Description |
 |------|-------|-------------|
 | `quote_food_log` | `mcp:nutrition:read` | Quote the credit cost of a food log. No writes, no model call. |
-| `log_diary_food` | `mcp:nutrition:write` | Log one food the caller ate (typed macros or `savedFoodId`). `estimated` marks an AI estimate. Approval required. No Cargo, Galley, Manifest, or Supply change. 0 credits. |
-| `update_diary_food` | `mcp:nutrition:write` | Replace a food log (void + new row). Approval required. 0 credits. |
+| `log_diary_food` | `mcp:nutrition:write` | Log one food the caller ate (typed macros or `savedFoodId`). `estimated` marks an AI estimate. Optional `fuelDate` (YYYY-MM-DD) logs on that Fuel day at local noon; optional `fuelTimeZone` (IANA) when Fuel has no zone yet. Approval required. No Cargo, Galley, Manifest, or Supply change. 0 credits. |
+| `update_diary_food` | `mcp:nutrition:write` | Replace a food log (void + new row). Every edit returns a **new** `intakeId` plus `previousIntakeId`; use the new id next time. Pass `fuelDate` to move the entry to another day (see below). Approval required. 0 credits. |
 | `void_diary_food` | `mcp:nutrition:write` | Void a food log. Destructive; approval required; **requires `confirm: true`**. |
 | `save_diary_food_to_kitchen` | `mcp:nutrition:write` | Copy a food log into Cargo or Galley. Destructive for the shared kitchen; approval required; **requires `confirm: true`**. |
 | `set_diary_layout` | `mcp:preferences:write` | Timeline or slots for the caller's day list. Approval required. |
@@ -220,6 +220,8 @@ Registered only when the matching nutrition flags are on (all need `nutrition-fa
 | `get_health_export_preview` | `mcp:nutrition:read` | Preview the Fuel logs that could export, plus a count of logs kept out (missing or implausible numbers, or older logs without a Health id) (`nutrition-health-export`). |
 | `set_health_export` | `mcp:nutrition:write` | Turn Apple Health export on or off (`nutrition-health-export`). Approval required; **requires `confirm: true`**. |
 | `clear_health_export` | `mcp:nutrition:write` | Ask the person's iPhone to remove every Apple Health sample Ration wrote for this account on its next sync; the device acknowledges when done (`nutrition-health-export`). Destructive; approval required; **requires `confirm: true`**. |
+
+**Moving a Fuel entry to another day.** Call `update_diary_food` with the entry's `intakeId`, its food fields, and `fuelDate` (YYYY-MM-DD), without `occurredAt`. The entry moves to local noon on that day, the old day's free slot is released, and the new day's free limit applies: a full day returns `conflict` with `details.code: "fuel_daily_limit"` and `upgradeRequired: true` (Crew has no limit). Apple Health keeps the same sample and gets the new time on the next export. A replay with the same `operationKey` returns the same ids. Without `fuelDate` an edit stays on its stored day: pass the entry's `occurredAt` (or another time that day), because an omitted `occurredAt` means now and a different day returns `invalid_input` (`fuel_date_immutable`). A day that does not exist or a zone that is not IANA returns `invalid_input`; an unknown or already replaced `intakeId` returns `not_found`.
 
 Server card: [`.well-known/mcp/server-card.json`](https://ration.mayutic.com/.well-known/mcp/server-card.json) · Full API reference: [docs/api](https://ration.mayutic.com/docs/api#mcp-tools)
 

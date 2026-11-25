@@ -353,6 +353,55 @@ export function mapErrorToEnvelope(
 					: "Use portions[].servings (0.01–100) instead of grams or ounces for this meal.",
 			});
 		}
+		if (
+			code === "fuel_date_immutable" ||
+			error.name === "FuelDateImmutableError"
+		) {
+			return err(tool, "invalid_input", error.message, {
+				details: { code: "fuel_date_immutable" },
+				recoveryHint:
+					"An edit keeps the entry on its stored day: pass its occurredAt (or another time on that day). To move it to another day, pass fuelDate (YYYY-MM-DD) without occurredAt. Retry with a new operationKey.",
+			});
+		}
+		if (
+			code === "fuel_timezone_required" ||
+			error.name === "FuelTimezoneRequiredError"
+		) {
+			return err(tool, "invalid_input", error.message, {
+				details: { code: "fuel_timezone_required" },
+				recoveryHint:
+					"Ask the person for their IANA time zone (for example Europe/Dublin), pass it as fuelTimeZone, and retry the same operationKey.",
+			});
+		}
+		if (code === "fuel_daily_limit" || error.name === "FuelDailyLimitError") {
+			const limitError = error as Error & {
+				limit?: unknown;
+				localDate?: unknown;
+			};
+			return err(tool, "conflict", error.message, {
+				details: {
+					code: "fuel_daily_limit",
+					upgradeRequired: true,
+					...(typeof limitError.limit === "number"
+						? { limit: limitError.limit }
+						: {}),
+					...(typeof limitError.localDate === "string"
+						? { fuelDate: limitError.localDate }
+						: {}),
+				},
+				recoveryHint:
+					"That day already has the free Fuel limit. Pick another day, or tell the person Crew removes the limit (get_billing_summary shows upgrade options). Do not retry the same day.",
+			});
+		}
+		if (
+			code === "invalid_request" &&
+			"status" in error &&
+			(error as { status?: unknown }).status === 400
+		) {
+			return err(tool, "invalid_input", error.message, {
+				recoveryHint: "Fix the named field, then retry the same tool.",
+			});
+		}
 		if (code === "capability_unavailable") {
 			return err(tool, "capability_unavailable", error.message, {
 				recoveryHint:
@@ -432,6 +481,13 @@ export function mapErrorToEnvelope(
 			) {
 				recoveryHint =
 					"Call get_meal_plan and retry only an entry that is already cooked.";
+			} else if (
+				tool === "update_diary_food" ||
+				tool === "void_diary_food" ||
+				tool === "save_diary_food_to_kitchen"
+			) {
+				recoveryHint =
+					"Use the latest intakeId: every edit replaces the row and returns a new one. Call get_nutrition_summary or list_nutrition_intakes to find it.";
 			} else if (tool === "get_cargo_item" || /cargo/i.test(error.message)) {
 				recoveryHint =
 					"Call list_inventory to find a valid itemId, then retry.";

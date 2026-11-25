@@ -91,7 +91,12 @@ function overrideEnergy(macros: DiaryMacros, energyKcal?: number): DiaryMacros {
 
 type FuelWrite = Pick<
 	DiaryFoodWrite,
-	"operationKey" | "idempotencyKey" | "fuelTimeZone" | "occurredAt" | "notes"
+	| "operationKey"
+	| "idempotencyKey"
+	| "fuelTimeZone"
+	| "occurredAt"
+	| "notes"
+	| "fuelDate"
 > & { energyKcal?: number };
 
 async function storeFuelActionUndo(
@@ -456,6 +461,8 @@ export async function addCargoToFuel(
 			idempotencyKey: write.idempotencyKey,
 			fuelTimeZone: write.fuelTimeZone,
 			occurredAt: write.occurredAt,
+			// A chosen day logs at local noon and counts against that day's cap.
+			...(write.fuelDate ? { fuelDate: write.fuelDate } : {}),
 		});
 		const undoToken = await storeFuelActionUndo(
 			env,

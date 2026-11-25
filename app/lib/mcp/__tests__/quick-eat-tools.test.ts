@@ -56,6 +56,14 @@ vi.mock("~/lib/plan-fuel-actions.server", () => ({
 	addCargoToFuel: vi.fn(),
 }));
 
+vi.mock("~/lib/nutrition/fuel-cap.server", () => ({
+	completedFuelReplay: vi.fn().mockResolvedValue(null),
+}));
+
+vi.mock("~/lib/cargo-deduction.server", () => ({
+	applyCargoDeductions: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock("~/lib/mcp/agent-flag-context", async () => {
 	const { APP_VERSION } = await import("~/lib/version");
 	return {
@@ -431,5 +439,308 @@ describe("quick_eat_cargo", () => {
 			expect.anything(),
 			expect.objectContaining({ cargoId: CARGO_ID }),
 		);
+	});
+
+	describe("plan-fuel-actions on (#10)", () => {
+		function memoryKv() {
+			const store = new Map<string, string>();
+			return {
+				store,
+				get: vi.fn(async (key: string, type?: string) => {
+					const raw = store.get(key);
+					if (raw == null) return null;
+					return type === "json" ? JSON.parse(raw) : raw;
+				}),
+				put: vi.fn(async (key: string, value: string) => {
+					store.set(key, value);
+				}),
+			};
+		}
+
+		async function cargoAt(...quantities: number[]) {
+			const { getCargoItem } = await import("~/lib/cargo.server");
+			const mocked = vi.mocked(getCargoItem);
+			mocked.mockReset();
+			for (const quantity of quantities) {
+				mocked.mockResolvedValueOnce({
+					id: CARGO_ID,
+					name: "grapes",
+					quantity,
+					unit: "unit",
+				} as never);
+			}
+			return mocked;
+		}
+
+		function tool(env: unknown = {}) {
+			const defs = createQuickEatToolDefs(env as never);
+			const found = defs[0];
+			if (!found) throw new Error("expected quick_eat_cargo");
+			return found;
+		}
+
+		beforeEach(async () => {
+			await mockFlags(true);
+			const { completedFuelReplay } = await import(
+				"~/lib/nutrition/fuel-cap.server"
+			);
+			vi.mocked(completedFuelReplay).mockResolvedValue(null);
+			const { addCargoToFuel } = await import("~/lib/plan-fuel-actions.server");
+			vi.mocked(addCargoToFuel).mockResolvedValue({
+				intakeId: "intake-1",
+				deducted: 1,
+			});
+		});
+
+		it("logIntake:false deducts Cargo and writes no Fuel entry", async () => {
+			await cargoAt(2, 1);
+			const { addCargoToFuel } = await import("~/lib/plan-fuel-actions.server");
+			const { applyCargoDeductions } = await import(
+				"~/lib/cargo-deduction.server"
+			);
+			const envelope = await tool().handler(baseCtx, {
+				cargoId: CARGO_ID,
+				quantity: 1,
+				operationKey: OP_KEY,
+				logIntake: false,
+			});
+			expect(envelope.ok).toBe(true);
+			if (!envelope.ok) return;
+			expect(envelope.data).toEqual({
+				eaten: true,
+				created: false,
+				fuelLogged: false,
+				deducted: 1,
+			});
+			expect(addCargoToFuel).not.toHaveBeenCalled();
+			expect(applyCargoDeductions).toHaveBeenCalledWith(undefined, "org-1", [
+				{ cargoId: CARGO_ID, quantity: 1 },
+			]);
+		});
+
+		it("logIntake:false refuses more than is in Cargo and deducts nothing", async () => {
+			await cargoAt(1);
+			const { applyCargoDeductions } = await import(
+				"~/lib/cargo-deduction.server"
+			);
+			const envelope = await tool().handler(baseCtx, {
+				cargoId: CARGO_ID,
+				quantity: 3,
+				operationKey: OP_KEY,
+				logIntake: false,
+			});
+			expect(envelope.ok).toBe(false);
+			if (envelope.ok) return;
+			expect(envelope.error.code).toBe("conflict");
+			expect(applyCargoDeductions).not.toHaveBeenCalled();
+		});
+
+		it("logs a past date as that Fuel day, with notes", async () => {
+			await cargoAt(2);
+			const { addCargoToFuel } = await import("~/lib/plan-fuel-actions.server");
+			const envelope = await tool().handler(baseCtx, {
+				cargoId: CARGO_ID,
+				quantity: 1,
+				operationKey: OP_KEY,
+				date: "2026-11-20",
+				notes: "post-run",
+			});
+			expect(envelope.ok).toBe(true);
+			if (!envelope.ok) return;
+			expect(envelope.data).toMatchObject({
+				fuelLogged: true,
+				intakeId: "intake-1",
+				fuelDate: "2026-11-20",
+			});
+			const write = vi.mocked(addCargoToFuel).mock.calls[0]?.[6];
+			expect(write).toMatchObject({
+				fuelDate: "2026-11-20",
+				notes: "post-run",
+				operationKey: OP_KEY,
+				idempotencyKey: OP_KEY,
+			});
+			// The diary write puts a chosen day at local noon; no clock is sent.
+			expect(write?.occurredAt).toBeUndefined();
+		});
+
+		it("logs now without a fuelDate when no date is given", async () => {
+			await cargoAt(2);
+			const { addCargoToFuel } = await import("~/lib/plan-fuel-actions.server");
+			await tool().handler(baseCtx, {
+				cargoId: CARGO_ID,
+				quantity: 1,
+				operationKey: OP_KEY,
+			});
+			const write = vi.mocked(addCargoToFuel).mock.calls[0]?.[6];
+			expect(write).not.toHaveProperty("fuelDate");
+			expect(typeof write?.occurredAt).toBe("string");
+		});
+
+		it("maps a full chosen day to conflict with the upgrade hint", async () => {
+			await cargoAt(2);
+			const { addCargoToFuel } = await import("~/lib/plan-fuel-actions.server");
+			const { FuelDailyLimitError } = await import(
+				"~/lib/nutrition/fuel-errors"
+			);
+			vi.mocked(addCargoToFuel).mockRejectedValue(
+				new FuelDailyLimitError(3, "2026-11-20"),
+			);
+			const envelope = await tool().handler(baseCtx, {
+				cargoId: CARGO_ID,
+				quantity: 1,
+				operationKey: OP_KEY,
+				date: "2026-11-20",
+			});
+			expect(envelope.ok).toBe(false);
+			if (envelope.ok) return;
+			expect(envelope.error.code).toBe("conflict");
+			expect(envelope.error.recoveryHint).toMatch(/Crew/);
+		});
+
+		it("rejects a date that is not a real day before touching Cargo", async () => {
+			const getCargoItem = await cargoAt(2);
+			const envelope = await tool().handler(baseCtx, {
+				cargoId: CARGO_ID,
+				quantity: 1,
+				operationKey: OP_KEY,
+				date: "2026-02-31",
+			});
+			expect(envelope.ok).toBe(false);
+			if (envelope.ok) return;
+			expect(envelope.error.code).toBe("invalid_input");
+			expect(getCargoItem).not.toHaveBeenCalled();
+		});
+
+		it("does not touch another kitchen's Cargo", async () => {
+			const getCargoItem = await cargoAt();
+			getCargoItem.mockResolvedValue(null as never);
+			const { addCargoToFuel } = await import("~/lib/plan-fuel-actions.server");
+			const envelope = await tool().handler(
+				{ ...baseCtx, organizationId: "org-2" },
+				{ cargoId: CARGO_ID, quantity: 1, operationKey: OP_KEY },
+			);
+			expect(envelope.ok).toBe(false);
+			if (envelope.ok) return;
+			expect(envelope.error.code).toBe("not_found");
+			expect(getCargoItem).toHaveBeenCalledWith(undefined, "org-2", CARGO_ID);
+			expect(addCargoToFuel).not.toHaveBeenCalled();
+		});
+
+		it("replays the same operationKey without deducting again", async () => {
+			await cargoAt(2, 1);
+			const kv = memoryKv();
+			const { addCargoToFuel } = await import("~/lib/plan-fuel-actions.server");
+			const args = {
+				cargoId: CARGO_ID,
+				quantity: 1,
+				operationKey: OP_KEY,
+				date: "2026-11-20",
+			};
+			const first = await tool({ RATION_KV: kv }).handler(baseCtx, args);
+			const second = await tool({ RATION_KV: kv }).handler(baseCtx, args);
+			expect(first.ok && second.ok).toBe(true);
+			if (!first.ok || !second.ok) return;
+			expect(second.data).toEqual(first.data);
+			expect(second.outcome).toBe("replayed");
+			expect(addCargoToFuel).toHaveBeenCalledTimes(1);
+			expect([...kv.store.keys()]).toEqual([
+				`mcp-quick-eat-fuel:v1:org-1:user-1:${OP_KEY}`,
+			]);
+		});
+
+		it("replays a Cargo-only Quick Eat without deducting again", async () => {
+			await cargoAt(2, 1);
+			const kv = memoryKv();
+			const { applyCargoDeductions } = await import(
+				"~/lib/cargo-deduction.server"
+			);
+			const args = {
+				cargoId: CARGO_ID,
+				quantity: 1,
+				operationKey: OP_KEY,
+				logIntake: false,
+			};
+			await tool({ RATION_KV: kv }).handler(baseCtx, args);
+			const second = await tool({ RATION_KV: kv }).handler(baseCtx, args);
+			expect(second.ok).toBe(true);
+			if (!second.ok) return;
+			expect(second.data).toMatchObject({ fuelLogged: false, deducted: 1 });
+			expect(applyCargoDeductions).toHaveBeenCalledTimes(1);
+		});
+
+		it("refuses the same operationKey for a different Quick Eat", async () => {
+			await cargoAt(2, 2);
+			const kv = memoryKv();
+			const { addCargoToFuel } = await import("~/lib/plan-fuel-actions.server");
+			await tool({ RATION_KV: kv }).handler(baseCtx, {
+				cargoId: CARGO_ID,
+				quantity: 1,
+				operationKey: OP_KEY,
+			});
+			const reused = await tool({ RATION_KV: kv }).handler(baseCtx, {
+				cargoId: CARGO_ID,
+				quantity: 2,
+				operationKey: OP_KEY,
+			});
+			expect(reused.ok).toBe(false);
+			if (reused.ok) return;
+			expect(reused.error.code).toBe("conflict");
+			expect(addCargoToFuel).toHaveBeenCalledTimes(1);
+		});
+
+		it("falls back to the completed Fuel operation when the replay copy is gone", async () => {
+			await cargoAt(2);
+			const { completedFuelReplay } = await import(
+				"~/lib/nutrition/fuel-cap.server"
+			);
+			vi.mocked(completedFuelReplay).mockResolvedValue({
+				intakeId: "intake-9",
+			});
+			const { addCargoToFuel } = await import("~/lib/plan-fuel-actions.server");
+			const envelope = await tool().handler(baseCtx, {
+				cargoId: CARGO_ID,
+				quantity: 1,
+				operationKey: OP_KEY,
+			});
+			expect(envelope.ok).toBe(true);
+			if (!envelope.ok) return;
+			expect(envelope.data).toMatchObject({
+				fuelLogged: true,
+				intakeId: "intake-9",
+			});
+			expect(envelope.outcome).toBe("replayed");
+			expect(completedFuelReplay).toHaveBeenCalledWith(
+				undefined,
+				"user-1",
+				OP_KEY,
+			);
+			expect(addCargoToFuel).not.toHaveBeenCalled();
+		});
+	});
+
+	it("reports fuelLogged from intakeLogged when plan-fuel-actions is off", async () => {
+		await mockFlags(false);
+		const { getCargoItem } = await import("~/lib/cargo.server");
+		vi.mocked(getCargoItem).mockResolvedValue({
+			id: CARGO_ID,
+			name: "grapes",
+			quantity: 2,
+			unit: "unit",
+		} as never);
+		const { quickEatFromCargo } = await import("~/lib/cargo-quick-eat.server");
+		vi.mocked(quickEatFromCargo).mockResolvedValue({
+			...eatResult,
+			intakeLogged: false,
+		});
+		const envelope = createQuickEatToolDefs({} as never)[0]?.handler(baseCtx, {
+			cargoId: CARGO_ID,
+			quantity: 1,
+			operationKey: OP_KEY,
+			logIntake: false,
+		});
+		const result = await envelope;
+		expect(result?.ok).toBe(true);
+		if (!result?.ok) return;
+		expect(result.data).toMatchObject({ fuelLogged: false });
 	});
 });

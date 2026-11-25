@@ -8,6 +8,7 @@ import {
 	getCargoItem,
 	ingestCargoItems,
 } from "../../cargo.server";
+import { applyCargoDeductions } from "../../cargo-deduction.server";
 import { fetchOrgCargoIndex } from "../../cargo-index.server";
 import {
 	QuickEatNotFoundError,
@@ -18,6 +19,8 @@ import {
 import { isFeatureEnabled } from "../../feature-flags/flags.server";
 import { cargoMatchKey, vectorHitDisagreesOnCut } from "../../matching";
 import { isPlanFuelActionsEnabled } from "../../nutrition/fast-log-flag.server";
+import { completedFuelReplay } from "../../nutrition/fuel-cap.server";
+import { isCalendarDate } from "../../nutrition/fuel-date";
 import {
 	FuelDailyLimitError,
 	FuelTimezoneRequiredError,
@@ -85,13 +88,97 @@ type QuickEatCargoData =
 	| ({
 			eaten: true;
 			created: boolean;
+			/** Same as intakeLogged. */
+			fuelLogged: boolean;
 	  } & QuickEatResult)
-	| {
+	| ({
 			eaten: true;
 			created: boolean;
-			intakeId: string;
-			deducted: number;
-	  };
+	  } & FuelQuickEatData);
+
+/** Quick Eat with plan-fuel-actions on: Cargo deducted once, Fuel optional. */
+type FuelQuickEatData = {
+	/** False when logIntake:false. Cargo is still deducted. */
+	fuelLogged: boolean;
+	/** Present only when a Fuel row was written. */
+	intakeId?: string;
+	deducted: number;
+	/** The Fuel day chosen with `date`. Omitted means today in the person's zone. */
+	fuelDate?: string;
+};
+
+/** Same TTL as the flag-off Quick Eat replay cache. */
+const FUEL_QUICK_EAT_REPLAY_TTL_SECONDS = 86_400;
+
+type FuelQuickEatReplay = {
+	fingerprint: string;
+	data: { created: boolean } & FuelQuickEatData;
+};
+
+function fuelQuickEatReplayKey(
+	organizationId: string,
+	userId: string,
+	operationKey: string,
+): string {
+	return `mcp-quick-eat-fuel:v1:${organizationId}:${userId}:${operationKey}`;
+}
+
+/** The request a key stands for. A key reused for another request is refused. */
+function fuelQuickEatFingerprint(args: {
+	cargoId?: string;
+	name?: string;
+	quantity: number;
+	unit?: string;
+	date?: string;
+	logIntake?: boolean;
+	notes?: string | null;
+}): string {
+	return JSON.stringify([
+		args.cargoId ?? null,
+		args.name ?? null,
+		args.quantity,
+		args.unit ?? null,
+		args.date ?? null,
+		args.logIntake !== false,
+		args.notes ?? null,
+	]);
+}
+
+async function loadFuelQuickEatReplay(
+	kv: KVNamespace | undefined,
+	key: string,
+): Promise<FuelQuickEatReplay | null> {
+	if (!kv) return null;
+	try {
+		const raw = await kv.get(key, "json");
+		if (
+			raw &&
+			typeof raw === "object" &&
+			"fingerprint" in raw &&
+			"data" in raw
+		) {
+			return raw as FuelQuickEatReplay;
+		}
+	} catch {
+		/* a cache miss falls through to the Fuel operation check */
+	}
+	return null;
+}
+
+async function storeFuelQuickEatReplay(
+	kv: KVNamespace | undefined,
+	key: string,
+	replay: FuelQuickEatReplay,
+): Promise<void> {
+	if (!kv) return;
+	try {
+		await kv.put(key, JSON.stringify(replay), {
+			expirationTtl: FUEL_QUICK_EAT_REPLAY_TTL_SECONDS,
+		});
+	} catch {
+		/* the Fuel operation row still guards a logged replay */
+	}
+}
 
 function fuelActionError(error: unknown): ToolEnvelope<never> | null {
 	if (error instanceof FuelTimezoneRequiredError) {
@@ -162,7 +249,7 @@ export function createQuickEatToolDefs(env: McpToolsEnv) {
 	return [
 		defineSharedTool({
 			name: "quick_eat_cargo",
-			description: `Log that the caller personally ate a pantry item. Resolves by cargoId or exact name. A semantic match is used only at or above the cook threshold (${STOCK_NAME_MATCH_THRESHOLD}); a weaker hit returns candidates and does not eat or create a line. If no pantry line matches, creates one for the eaten amount then deducts it (net 0, line kept as a restock reminder). When plan-fuel-actions is on, deducts that quantity once and logs Fuel. It does not create a provision or a Manifest snack. When that flag is off, Quick Eat places a Manifest snack and optionally logs private intake. Use for 'I ate / just ate / had a snack of X'. Do not use adjust_cargo_item for personal eating. stockWasShort applies to Quick Eat when they ate more than stock. Flag off requires cargo-quick-eat + nutrition-cook-log-split. Not medical advice.`,
+			description: `Log that the caller personally ate a pantry item. Resolves by cargoId or exact name. A semantic match is used only at or above the cook threshold (${STOCK_NAME_MATCH_THRESHOLD}); a weaker hit returns candidates and does not eat or create a line. If no pantry line matches, creates one for the eaten amount then deducts it (net 0, line kept as a restock reminder). When plan-fuel-actions is on, deducts that quantity once and logs Fuel on date (local noon that day; default today in the person's Fuel zone) with notes; logIntake:false deducts Cargo only and logs no Fuel. fuelLogged says which. A replay with the same operationKey and arguments returns the first result and does not deduct again. It does not create a provision or a Manifest snack. When that flag is off, Quick Eat places a Manifest snack and optionally logs private intake. Use for 'I ate / just ate / had a snack of X'. Do not use adjust_cargo_item for personal eating. stockWasShort applies to Quick Eat when they ate more than stock. Flag off requires cargo-quick-eat + nutrition-cook-log-split. Not medical advice.`,
 			inputSchema: z.object({
 				cargoId: UuidSchema.optional(),
 				name: z
@@ -182,10 +269,16 @@ export function createQuickEatToolDefs(env: McpToolsEnv) {
 					.regex(/^\d{4}-\d{2}-\d{2}$/, "Must be YYYY-MM-DD")
 					.optional()
 					.describe(
-						"Calendar date (defaults to the kitchen's local today, or today UTC when no zone is stored)",
+						"Calendar date. With plan-fuel-actions on, the Fuel day (defaults to today in the person's Fuel zone). Otherwise the Manifest day (defaults to the kitchen's local today, or today UTC when no zone is stored).",
 					),
 				operationKey: UuidSchema,
-				logIntake: z.boolean().optional().default(true),
+				logIntake: z
+					.boolean()
+					.optional()
+					.default(true)
+					.describe(
+						"false deducts Cargo without a Fuel (or intake) entry. Default true.",
+					),
 				notes: IntakeNotesSchema,
 			}),
 			scopes: [
@@ -215,6 +308,17 @@ export function createQuickEatToolDefs(env: McpToolsEnv) {
 						"Provide cargoId or name, not both.",
 					);
 				}
+				if (a.date && !isCalendarDate(a.date)) {
+					return err(
+						"quick_eat_cargo",
+						"invalid_input",
+						"date must be a real calendar day (YYYY-MM-DD).",
+						{
+							recoveryHint:
+								"Fix date, then retry the same operationKey. Nothing was deducted.",
+						},
+					);
+				}
 
 				const flagContext = resolveAgentFlagContext(env, ctx);
 				const fuelActionsOn = await isPlanFuelActionsEnabled(env, flagContext);
@@ -228,6 +332,37 @@ export function createQuickEatToolDefs(env: McpToolsEnv) {
 							"quick_eat_cargo",
 							"Quick Eat is unavailable while cargo-quick-eat or nutrition-cook-log-split is off.",
 							"Enable those flags, or use adjust_cargo_item for pantry-only used/wasted without personal intake.",
+						);
+					}
+				}
+
+				const replayKey = fuelActionsOn
+					? fuelQuickEatReplayKey(
+							ctx.organizationId,
+							ctx.userId,
+							a.operationKey,
+						)
+					: null;
+				const fingerprint = fuelQuickEatFingerprint(a);
+				if (replayKey) {
+					const replay = await loadFuelQuickEatReplay(env.RATION_KV, replayKey);
+					if (replay && replay.fingerprint !== fingerprint) {
+						return err(
+							"quick_eat_cargo",
+							"conflict",
+							"This operationKey was already used for a different Quick Eat.",
+							{
+								details: { code: "idempotency_conflict", retryable: false },
+								recoveryHint:
+									"Send the original arguments to replay it, or use a new operationKey for a new food.",
+							},
+						);
+					}
+					if (replay) {
+						return ok(
+							"quick_eat_cargo",
+							{ eaten: true as const, ...replay.data },
+							{ outcome: "replayed" },
 						);
 					}
 				}
@@ -378,6 +513,79 @@ export function createQuickEatToolDefs(env: McpToolsEnv) {
 								},
 							);
 						}
+						if (a.logIntake === false) {
+							// Cargo only. Same deduction as Add Fuel, no Fuel row.
+							if (quantity > existing.quantity) {
+								return err(
+									"quick_eat_cargo",
+									"conflict",
+									"That amount is not in Cargo",
+									{
+										recoveryHint:
+											"That amount is not in Cargo. Lower the quantity and retry the same operationKey.",
+									},
+								);
+							}
+							await applyCargoDeductions(env.DB, ctx.organizationId, [
+								{ cargoId, quantity },
+							]);
+							const after = await getCargoItem(
+								env.DB,
+								ctx.organizationId,
+								cargoId,
+							);
+							if (
+								!after ||
+								after.quantity > existing.quantity - quantity + 1e-9
+							) {
+								return err(
+									"quick_eat_cargo",
+									"conflict",
+									"That amount is not in Cargo",
+									{
+										recoveryHint:
+											"Cargo changed while eating. Call get_cargo_item, then retry with a new operationKey.",
+									},
+								);
+							}
+							const data = {
+								created,
+								fuelLogged: false,
+								deducted: quantity,
+							};
+							if (replayKey) {
+								await storeFuelQuickEatReplay(env.RATION_KV, replayKey, {
+									fingerprint,
+									data,
+								});
+							}
+							return ok(
+								"quick_eat_cargo",
+								{ eaten: true as const, ...data },
+								{ outcome: "committed", requestId: principal.requestId },
+							);
+						}
+						// The KV copy can be gone. A completed Fuel operation still
+						// means this key already deducted Cargo once.
+						const prior = await completedFuelReplay(
+							env.DB,
+							ctx.userId,
+							a.operationKey,
+						);
+						if (prior?.intakeId) {
+							const data = {
+								created: false,
+								fuelLogged: true,
+								intakeId: prior.intakeId,
+								deducted: quantity,
+								...(a.date ? { fuelDate: a.date } : {}),
+							};
+							return ok(
+								"quick_eat_cargo",
+								{ eaten: true as const, ...data },
+								{ outcome: "replayed", requestId: principal.requestId },
+							);
+						}
 						const logged = await addCargoToFuel(
 							env,
 							ctx.organizationId,
@@ -388,17 +596,29 @@ export function createQuickEatToolDefs(env: McpToolsEnv) {
 							{
 								operationKey: a.operationKey,
 								idempotencyKey: a.operationKey,
-								occurredAt: new Date().toISOString(),
+								notes: a.notes,
+								// A chosen day logs at local noon on that day.
+								...(a.date
+									? { fuelDate: a.date }
+									: { occurredAt: new Date().toISOString() }),
 							},
 						);
+						const data = {
+							created,
+							fuelLogged: true,
+							intakeId: logged.intakeId,
+							deducted: logged.deducted,
+							...(a.date ? { fuelDate: a.date } : {}),
+						};
+						if (replayKey) {
+							await storeFuelQuickEatReplay(env.RATION_KV, replayKey, {
+								fingerprint,
+								data,
+							});
+						}
 						return ok(
 							"quick_eat_cargo",
-							{
-								eaten: true,
-								created,
-								intakeId: logged.intakeId,
-								deducted: logged.deducted,
-							},
+							{ eaten: true as const, ...data },
 							{
 								outcome: "committed",
 								requestId: principal.requestId,
@@ -429,6 +649,7 @@ export function createQuickEatToolDefs(env: McpToolsEnv) {
 							eaten: true,
 							created,
 							...eaten,
+							fuelLogged: eaten.intakeLogged,
 						},
 						{
 							outcome: "committed",

@@ -210,18 +210,14 @@ describe("addCargoToFuel", () => {
 
 		expect(result.intakeId).toBe("intake-1");
 		expect(result.undoToken).toEqual(expect.any(String));
-		expect(result.undoToken).not.toBe(
-			"55555555-5555-4555-8555-555555555555",
-		);
+		expect(result.undoToken).not.toBe("55555555-5555-4555-8555-555555555555");
 		expect(logDiaryFood.mock.calls[0]?.[3]).toMatchObject({
 			notes: "crispy",
 			macros: { energyKcal: 407 },
 		});
 		const stored = vi.mocked(env.RATION_KV.put).mock.calls.at(-1)?.[1];
 		expect(String(stored)).toContain('"kind":"fuel_action"');
-		expect(String(stored)).toContain(
-			"55555555-5555-4555-8555-555555555555",
-		);
+		expect(String(stored)).toContain("55555555-5555-4555-8555-555555555555");
 	});
 
 	it("does not log 100 cups when 100 g has a one-cup perServing", async () => {
@@ -322,6 +318,65 @@ describe("addCargoToFuel", () => {
 		);
 		expect(logDiaryFood.mock.invocationCallOrder[0]).toBeLessThan(
 			applyCargoDeductions.mock.invocationCallOrder[0],
+		);
+	});
+});
+
+describe("addCargoToFuel chosen Fuel day", () => {
+	beforeEach(() => {
+		limit.mockReset();
+		batch.mockReset();
+		logDiaryFood.mockReset();
+		buildCargoDeductionStatements.mockReset();
+		applyCargoDeductions.mockReset();
+		batch.mockResolvedValue(undefined);
+		logDiaryFood.mockResolvedValue({ intakeId: "intake-1" });
+		buildCargoDeductionStatements.mockResolvedValue([{ stmt: true }]);
+		applyCargoDeductions.mockResolvedValue(undefined);
+		limit.mockResolvedValue([cargoRow(carrotSnapshot)]);
+	});
+
+	it("passes the chosen day and notes to the diary write", async () => {
+		await addCargoToFuel(env, orgId, cargoId, 100, principal, flags, {
+			operationKey: write.operationKey,
+			idempotencyKey: write.idempotencyKey,
+			fuelDate: "2026-11-10",
+			notes: "after the run",
+		});
+		const logged = logDiaryFood.mock.calls[0]?.[3];
+		expect(logged).toMatchObject({
+			fuelDate: "2026-11-10",
+			notes: "after the run",
+			operationKey: write.operationKey,
+		});
+		expect(logged?.occurredAt).toBeUndefined();
+	});
+
+	it("sends no fuelDate when the caller did not choose a day", async () => {
+		await addCargoToFuel(env, orgId, cargoId, 100, principal, flags, write);
+		const logged = logDiaryFood.mock.calls[0]?.[3];
+		expect(logged).not.toHaveProperty("fuelDate");
+		expect(logged?.occurredAt).toBe(write.occurredAt);
+	});
+
+	it("restores Cargo when the chosen day is already full", async () => {
+		const { FuelDailyLimitError } = await import("~/lib/nutrition/fuel-errors");
+		logDiaryFood.mockRejectedValue(new FuelDailyLimitError(3, "2026-11-10"));
+		limit
+			.mockResolvedValueOnce([cargoRow(carrotSnapshot, "g", 500)])
+			.mockResolvedValueOnce([{ quantity: 400 }]);
+		await expect(
+			addCargoToFuel(env, orgId, cargoId, 100, principal, flags, {
+				...write,
+				occurredAt: undefined,
+				fuelDate: "2026-11-10",
+			}),
+		).rejects.toMatchObject({ code: "fuel_daily_limit" });
+		expect(applyCargoDeductions).toHaveBeenCalledWith(
+			env.DB,
+			orgId,
+			[{ cargoId, quantity: 100 }],
+			{ sign: 1 },
 		);
 	});
 });

@@ -132,6 +132,8 @@ describe("applyCargoImport updates", () => {
 		]);
 
 		expect(result.updated).toBe(2);
+		expect(result.updatedIds).toEqual(["cargo-1", "cargo-2"]);
+		expect(result.createdIds).toEqual([]);
 		expect(mockBatch).toHaveBeenCalledTimes(1);
 		expect(resolveTagIds).toHaveBeenCalledTimes(1);
 	});
@@ -178,6 +180,9 @@ describe("applyCargoImport creates (skipVectorPhase)", () => {
 
 		expect(result.imported).toBe(2);
 		expect(result.updated).toBe(0);
+		expect(result.createdIds).toHaveLength(2);
+		expect(new Set(result.createdIds).size).toBe(2);
+		expect(result.updatedIds).toEqual([]);
 		expect(result.errors).toEqual([]);
 		expect(findSimilarCargoBatch).not.toHaveBeenCalled();
 		expect(upsertCargoVectors).toHaveBeenCalled();

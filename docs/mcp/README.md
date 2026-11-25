@@ -113,14 +113,16 @@ All tools are scoped to the authorized household. **MCP calls do not consume Rat
 
 OAuth issues tokens only through `authorization_code` and `refresh_token`; there is no `client_credentials` grant. Public PKCE clients may use a loopback redirect (`http://127.0.0.1`, `http://[::1]`, `http://localhost`) on any port.
 
+**Reply shape.** Dates and times in tool results are ISO 8601 strings (an invalid date is `null`, never `{}`). Replies leave out internal ids that an agent cannot act on, such as kitchen, user, consent, credential, and key ids. Entity ids you pass back to other tools (Cargo, meal, Manifest entry, intake, supply list) are kept.
+
 ### Read & account
 
 | Tool | Scope | Description |
 |------|-------|-------------|
 | `get_billing_summary` | `mcp:read` | Tier, credits, renewal, and billing links. |
-| `get_context` | `mcp:read` | Return org id, scopes, kitchen tier/usage/credits/lastActivityAt, capabilities, suggested next actions, and `temporal` (todayUtc, server time, expiry semantics). Safe to call first. |
+| `get_context` | `mcp:read` | Return caller identity (auth method and a readable key name), scopes, kitchen tier/usage/credits/lastActivityAt, capabilities, suggested next actions, and `temporal` (todayUtc, server time, expiry semantics). Safe to call first. |
 | `search_ingredients` | `mcp:read` | Semantic pantry search (recall 0.60). Each hit includes `matchScore` and `cookMatch` (true at ≥ 0.78). |
-| `list_inventory` | `mcp:read` | Cursor-paginated pantry list (default 100, max 200). Optional domain filter, UTC `expiresBefore` / `expiresAfter`, and `sortBy: expiresAt`. Includes `nutrition` when present. |
+| `list_inventory` | `mcp:read` | Cursor-paginated pantry list (default 100, max 200). Optional domain filter, case-insensitive `nameContains`, `tag` slug, UTC `expiresBefore` / `expiresAfter`, and `sortBy: expiresAt`. `expiresAt` is ISO 8601 or `null`. Includes `nutrition` when present; pass `includeNutrition: false` for a smaller page. |
 | `get_cargo_item` | `mcp:read` | Fetch one pantry item by id (name, quantity, unit, domain, tags, expiry, nutrition when present). |
 | `get_kitchen_summary` | `mcp:read` | Single-call operational snapshot (cargo, manifest, supply, tier/credits). Optional `manifestDays` (1–7). Manifest `status` is `planned` or `cooked`. `loggedByYou` is the caller's plate-up and is omitted without `mcp:nutrition:read`, `nutrition-manifest`, and intake consent. Cooking is not eating. |
 | `get_kitchen_events` | `mcp:read` | Flight Recorder timeline of cooks, docks, expiries, and jettisons (filterable, paginated). |
@@ -135,11 +137,11 @@ OAuth issues tokens only through `authorization_code` and `refresh_token`; there
 | `list_supply_lists` | `mcp:read` | Catalog of Live, Saved, Template, and Archived lists. Flag-gated. |
 | `get_user_preferences` | `mcp:read` | Allergens, expiration alert days, theme, manifest defaults, and other user settings. |
 | `update_user_preferences` | `mcp:preferences:write` | Patch user settings (allergens, alerts, theme). Only provided fields change. |
-| `get_nutrition_summary` | `mcp:nutrition:read` | Caller’s personal daily intake totals (energy/macros/optional fiber) for a UTC `from`/`to` range (requires `nutrition-goals` or `nutrition-manifest`). When `nutrition-cross-org-diary` is on, includes every kitchen the user logged—not household nutrition. Agent reads audited. |
+| `get_nutrition_summary` | `mcp:nutrition:read` | Caller’s personal daily intake totals (energy/macros/optional fiber) for a UTC `from`/`to` range (requires `nutrition-goals` or `nutrition-manifest`). `vsGoal` is the last day in the range; `days[].vsGoal` gives remaining per day. When `nutrition-cross-org-diary` is on, includes every kitchen the user logged—not household nutrition. Agent reads audited. |
 | `list_nutrition_intakes` | `mcp:nutrition:read` | Caller’s personal intake rows for a UTC range (cursor-paginated; kitchen labels when present). Cross-org when `nutrition-cross-org-diary` is on. Agent reads audited. |
 | `set_nutrition_goal` | `mcp:nutrition:write` | Idempotently upsert personal daily energy/macro/fiber goals using `operationKey`; consent must already be active in Ration. Store only numbers the person states. Do not suggest, calculate, or invent a target. Not medical advice. |
 | `clear_nutrition_goal` | `mcp:nutrition:write` | Idempotently close open-ended goals using `operationKey`. **Requires `confirm: true` + host approval.** |
-| `log_manifest_intake` | `mcp:nutrition:write` | Atomic private Eat for 1–50 prepared entries (`operationKey` + per-item `idempotencyKey`). Portions: `servings` (0.01–100) or `amount`+`unit` (`serving`/`g`/`oz`) when `gramsPerServing` is present. Multi-entry calls need host approval. Consent must already be active in Ration. |
+| `log_manifest_intake` | `mcp:nutrition:write` | Atomic private Eat for 1–50 prepared entries (`operationKey` + per-item `idempotencyKey`). Portions: `servings` (0.01–100) or `amount`+`unit` (`serving`/`g`/`oz`) when `gramsPerServing` is present. Multi-entry calls need host approval. Consent must already be active in Ration. Returns one compact line per item (`intakeId`, `entryId`, meal, date, slot, portion, energy and macros) plus `dayTotals`. |
 | `clear_manifest_intake` | `mcp:nutrition:write` | Atomically soft-void personal intake using `operationKey`. **Requires `confirm: true` + host approval.** |
 | `quick_eat_cargo` | `mcp:inventory:write` + `mcp:manifest:write` + `mcp:nutrition:write` | Personal Quick Eat from Cargo: resolve by `cargoId`, exact name, or a semantic match at ≥ 0.78 (a weaker name returns candidates). Creates a missing line if needed, adds a Manifest snack, and optionally logs private intake. Requires `cargo-quick-eat` + `nutrition-cook-log-split`. |
 
@@ -152,7 +154,7 @@ OAuth issues tokens only through `authorization_code` and `refresh_token`; there
 | `adjust_cargo_item` | `mcp:inventory:write` | Relative `delta` change (e.g. `-2`). Floors at 0; keeps the row. Exact name, or a semantic match at ≥ 0.78. A weaker name returns candidates and does not change quantity. |
 | `remove_cargo_item` | `mcp:inventory:write` | Permanently delete a pantry line. **Requires `confirm: true`.** |
 | `preview_inventory_import` | `mcp:inventory:write` | Dry-run receipt/bulk import — returns `previewToken` and sample rows. Prefer `ration://schemas/inventory-import` for shape. |
-| `apply_inventory_import` | `mcp:inventory:write` | Commit a previewed import after the user has seen the preview. Annotated `destructiveHint` and `idempotentHint`, so hosts that support approval ask the user first. Idempotent via `idempotencyKey`. |
+| `apply_inventory_import` | `mcp:inventory:write` | Commit a previewed import after the user has seen the preview. Annotated `destructiveHint` and `idempotentHint`, so hosts that support approval ask the user first. Idempotent via `idempotencyKey`. Returns `createdIds` and `updatedIds` so you can act on the new lines without listing Cargo again. |
 | `preview_inventory_remove` | `mcp:inventory:write` | Dry-run bulk Cargo deletes (prefer for 2+ items). |
 | `apply_inventory_remove` | `mcp:inventory:write` | Commit a remove preview after the user has seen it. Annotated `destructiveHint` and `idempotentHint`, so hosts that support approval ask the user first. Idempotent. |
 | `import_inventory_csv` | `mcp:inventory:write` | Parse and apply a CSV string in one call (convenience wrapper). Approval required; pass `confirm: true`. |
@@ -162,7 +164,7 @@ OAuth issues tokens only through `authorization_code` and `refresh_token`; there
 | Tool | Scope | Description |
 |------|-------|-------------|
 | `create_meal` | `mcp:galley:write` | Create a recipe from structured data. |
-| `update_meal` | `mcp:galley:write` | Update a recipe — round-trip via `list_meals` → edit → pass full object. |
+| `update_meal` | `mcp:galley:write` | Update a recipe — round-trip via `list_meals` → edit → pass full object. The reply echoes each ingredient's `isOptional`. |
 | `delete_meal` | `mcp:galley:write` | Delete a recipe. **Requires `confirm: true`.** Cascades to ingredients, tags, and linked Manifest entries. |
 | `set_active_meals` | `mcp:galley:write` | Set Galley active selection to exactly these mealIds. Optional `syncSupply`. |
 | `clear_active_meals` | `mcp:galley:write` | Clear all active meal selections. **Requires `confirm: true`.** |

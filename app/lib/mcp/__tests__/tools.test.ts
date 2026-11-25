@@ -225,6 +225,7 @@ const { drizzle } = await import("drizzle-orm/d1");
 const { findSimilarCargoBatch } = await import("~/lib/vector.server");
 const { isFeatureEnabled } = await import("~/lib/feature-flags/flags.server");
 const { createCatalogList } = await import("~/lib/supply-lists.server");
+const { applyInventoryImport } = await import("~/lib/inventory-import.server");
 
 /**
  * Parses the MCP envelope from a tool response. Returns `data` on success,
@@ -481,6 +482,100 @@ describe("MCP tools", () => {
 			expect(env.ok).toBe(true);
 			expect(env.data).toHaveLength(100);
 			expect(env.meta?.nextCursor).toBeTruthy();
+		});
+
+		const milkRow = {
+			id: "c-milk",
+			name: "whole milk",
+			quantity: 1,
+			unit: "l",
+			domain: "food",
+			status: "stable",
+			expiresAt: new Date("2026-11-27T00:00:00.000Z"),
+			organizationId: "org-test-123",
+			createdAt: new Date("2026-11-20T08:00:00.000Z"),
+			updatedAt: new Date("2026-11-20T08:00:00.000Z"),
+			nutrition: { perServing: { energyKcal: 64 } },
+		};
+
+		it("returns expiresAt as an ISO string and no kitchen id", async () => {
+			vi.mocked(getCargoPage).mockResolvedValueOnce({
+				items: [milkRow],
+				nextCursor: null,
+			} as never);
+			const server = makeServer();
+			const result = await getToolHandler(server, "list_inventory")({});
+			const env = parseEnvelope(result);
+			expect(env.data[0].expiresAt).toBe("2026-11-27T00:00:00.000Z");
+			expect(result.content[0]?.text).not.toContain("organizationId");
+		});
+
+		it("passes nameContains and tag to getCargoPage", async () => {
+			vi.mocked(getCargoPage).mockResolvedValueOnce({
+				items: [],
+				nextCursor: null,
+			} as never);
+			const server = makeServer();
+			await getToolHandler(
+				server,
+				"list_inventory",
+			)({
+				nameContains: "milk",
+				tag: "dairy",
+			});
+			expect(getCargoPage).toHaveBeenLastCalledWith(
+				expect.anything(),
+				"org-test-123",
+				expect.objectContaining({ nameContains: "milk", tag: "dairy" }),
+			);
+		});
+
+		it("omits nutrition when includeNutrition is false", async () => {
+			vi.mocked(getCargoPage).mockResolvedValue({
+				items: [milkRow],
+				nextCursor: null,
+			} as never);
+			const server = makeServer();
+			const withNutrition = parseEnvelope(
+				await getToolHandler(server, "list_inventory")({}),
+			);
+			const without = parseEnvelope(
+				await getToolHandler(
+					server,
+					"list_inventory",
+				)({
+					includeNutrition: false,
+				}),
+			);
+			expect(withNutrition.data[0].nutrition).toBeTruthy();
+			expect(without.data[0]).not.toHaveProperty("nutrition");
+		});
+	});
+
+	describe("apply_inventory_import", () => {
+		it("returns the created and updated Cargo ids", async () => {
+			vi.mocked(applyInventoryImport).mockResolvedValueOnce({
+				imported: 1,
+				updated: 1,
+				createdIds: ["c-new"],
+				updatedIds: ["c-old"],
+				errors: [],
+			});
+			const server = makeServer();
+			const result = await getToolHandler(
+				server,
+				"apply_inventory_import",
+			)({
+				previewToken: "preview-token-1",
+				idempotencyKey: "idem-key-0001",
+			});
+			const data = parseOk(result);
+			expect(data).toMatchObject({
+				imported: 1,
+				updated: 1,
+				createdIds: ["c-new"],
+				updatedIds: ["c-old"],
+			});
 		});
 	});
 
@@ -2593,6 +2688,13 @@ describe("MCP tools", () => {
 						ingredientName: "flour",
 						quantity: 250,
 						unit: "g",
+						isOptional: false,
+					},
+					{
+						ingredientName: "blueberries",
+						quantity: 100,
+						unit: "g",
+						isOptional: true,
 					},
 				],
 				tags: ["breakfast"],
@@ -2627,6 +2729,11 @@ describe("MCP tools", () => {
 			expect(data.ingredients[0]).toMatchObject({
 				ingredientName: "flour",
 				quantity: 250,
+				isOptional: false,
+			});
+			expect(data.ingredients[1]).toMatchObject({
+				ingredientName: "blueberries",
+				isOptional: true,
 			});
 			expect(updateMeal).toHaveBeenCalledWith(
 				expect.anything(),

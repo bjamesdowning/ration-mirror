@@ -922,7 +922,9 @@ export async function updateDiaryFood(
 	const { db, intakeConsent, notesEnabled, metadata } = prepared;
 	const now = input.now ?? new Date();
 	const current = await loadOwned(db, principal.userId, intakeId);
-	if (!current || current.voidedAt) throw new DiaryFoodNotFoundError();
+	// A completed edit voids `current`, so a replay of that edit finds it
+	// voided. Check the operation key before refusing a voided row.
+	if (!current) throw new DiaryFoodNotFoundError();
 	const previewNotes = resolveIntakeNotesForWrite({
 		notesEnabled,
 		requestedNotes: input.notes ?? null,
@@ -986,6 +988,7 @@ export async function updateDiaryFood(
 		if (!row) throw new DiaryFoodNotFoundError();
 		return logResult(existing.id, row, true);
 	}
+	if (current.voidedAt) throw new DiaryFoodNotFoundError();
 
 	const nutrientsChanged =
 		current.energyKcal !== food.energyKcal ||

@@ -11,8 +11,12 @@ import {
 import { normalizeDiaryLayout } from "../../nutrition/diary-layout";
 import {
 	isNutritionFastLogEnabled,
+	isNutritionFuelPageEnabled,
 	isNutritionSavedFoodEnabled,
 } from "../../nutrition/fast-log-flag.server";
+import { requireFuelTimeZone } from "../../nutrition/fuel-cap.server";
+import { noonOnFuelDate } from "../../nutrition/fuel-date";
+import type { DiaryFoodWrite } from "../../schemas/diary";
 import {
 	DiaryFoodWriteSchema,
 	DiaryKitchenSaveSchema,
@@ -80,6 +84,20 @@ const diaryWriteFields = {
 	notes: z.string().trim().max(280).nullable().optional(),
 	/** The caller estimated the macros (for example from a photo). */
 	estimated: z.boolean().optional(),
+	fuelDate: z
+		.string()
+		.regex(/^\d{4}-\d{2}-\d{2}$/, "Must be YYYY-MM-DD")
+		.optional()
+		.describe(
+			"Fuel day (YYYY-MM-DD). Logs at local noon on that day and counts against that day's limit. On update_diary_food, a different day moves the entry.",
+		),
+	fuelTimeZone: z
+		.string()
+		.max(64)
+		.optional()
+		.describe(
+			"The person's IANA time zone, for example Europe/Dublin. Needed only when Fuel has no zone yet.",
+		),
 };
 
 export function toDiaryWrite(args: {
@@ -105,6 +123,8 @@ export function toDiaryWrite(args: {
 	operationKey: string;
 	notes?: string | null;
 	estimated?: boolean;
+	fuelDate?: string;
+	fuelTimeZone?: string;
 }) {
 	const hasMacros =
 		args.energyKcal != null &&
@@ -147,10 +167,33 @@ export function toDiaryWrite(args: {
 		idempotencyKey: args.idempotencyKey,
 		operationKey: args.operationKey,
 		notes: args.notes,
+		...(args.fuelDate ? { fuelDate: args.fuelDate } : {}),
+		...(args.fuelTimeZone ? { fuelTimeZone: args.fuelTimeZone } : {}),
 		// A saved food carries its own stored numbers, so it is never an estimate.
 		...(args.estimated === true && !args.savedFoodId
 			? { compositionSource: "ai_estimate" as const }
 			: {}),
+	};
+}
+
+/**
+ * fuelDate without occurredAt: pin the clock to local noon on that day here,
+ * the same instant the diary service picks. A replay then hashes the same
+ * request instead of a new "now". Reads the stored zone; writes nothing.
+ */
+export async function pinFuelDayClock(
+	env: McpToolsEnv,
+	userId: string,
+	flagContext: ReturnType<typeof resolveAgentFlagContext>,
+	write: DiaryFoodWrite,
+): Promise<DiaryFoodWrite> {
+	if (!write.fuelDate || write.occurredAt) return write;
+	if (!(await isNutritionFuelPageEnabled(env, flagContext))) return write;
+	const zone =
+		write.fuelTimeZone ?? (await requireFuelTimeZone(env.DB, userId));
+	return {
+		...write,
+		occurredAt: noonOnFuelDate(write.fuelDate, zone).toISOString(),
 	};
 }
 
@@ -181,7 +224,7 @@ export function createDiaryToolDefs(env: McpToolsEnv) {
 		defineSharedTool({
 			name: "log_diary_food",
 			description:
-				"Log one personal food the caller ate. Writes nutrition intake with a null plan entry and does not change Cargo, Galley, Manifest, or Supply. Requires approval even for one item, active intake consent, and agent-processing consent. Pass name and explicit energyKcal/proteinG/carbsG/fatG, or savedFoodId. Typed macros are stored as given and are not converted. A savedFoodId copies that person's stored name and nutrients onto the intake row and ignores any macros the caller substitutes. savedFoodId requires nutrition-saved-food as well as nutrition-fast-log. Optional amount+unit label a typed log. To scale per 100 g, omit the typed macros and pass per100gEnergyKcal/per100gProteinG/per100gCarbsG/per100gFatG plus amount and unit. Household units scale only from gram weights already stored for fdcId. An unknown unit returns amount_unit_unavailable and the units that food allows. Do not invent a gram weight, and do not turn a handful into grams. Also pass manifestDate, occurredAt, slotType, notes, idempotencyKey, and operationKey. Set estimated: true when you estimated the numbers (for example from a photo); the log is labelled an AI estimate the person can change. Costs 0 credits. Does not save to the kitchen; the result includes kitchenOffer only. Not medical advice.",
+				"Log one personal food the caller ate. Writes nutrition intake with a null plan entry and does not change Cargo, Galley, Manifest, or Supply. Requires approval even for one item, active intake consent, and agent-processing consent. Pass name and explicit energyKcal/proteinG/carbsG/fatG, or savedFoodId. Typed macros are stored as given and are not converted. A savedFoodId copies that person's stored name and nutrients onto the intake row and ignores any macros the caller substitutes. savedFoodId requires nutrition-saved-food as well as nutrition-fast-log. Optional amount+unit label a typed log. To scale per 100 g, omit the typed macros and pass per100gEnergyKcal/per100gProteinG/per100gCarbsG/per100gFatG plus amount and unit. Household units scale only from gram weights already stored for fdcId. An unknown unit returns amount_unit_unavailable and the units that food allows. Do not invent a gram weight, and do not turn a handful into grams. Also pass manifestDate, occurredAt, slotType, notes, idempotencyKey, and operationKey. Pass fuelDate (YYYY-MM-DD) to log on another Fuel day; it logs at local noon that day and counts against that day's free limit (conflict with details.code fuel_daily_limit when full). Set estimated: true when you estimated the numbers (for example from a photo); the log is labelled an AI estimate the person can change. Costs 0 credits. Does not save to the kitchen; the result includes kitchenOffer only. Not medical advice.",
 			inputSchema: z.object(diaryWriteFields),
 			scopes: ["mcp:nutrition:write"],
 			rateLimitCategory: "mcp_write",
@@ -217,7 +260,7 @@ export function createDiaryToolDefs(env: McpToolsEnv) {
 					env,
 					diaryPrincipal(ctx),
 					flagContext,
-					parsed.data,
+					await pinFuelDayClock(env, ctx.userId, flagContext, parsed.data),
 				);
 				return ok("log_diary_food", result, {
 					outcome: result.replayed ? "replayed" : "committed",
@@ -228,7 +271,7 @@ export function createDiaryToolDefs(env: McpToolsEnv) {
 		defineSharedTool({
 			name: "update_diary_food",
 			description:
-				"Replace the caller's personal food log. Voids the previous row and writes a new one. Does not change Cargo or the plan. Requires approval. Same fields as log_diary_food plus intakeId. Costs 0 credits. Not medical advice.",
+				"Replace the caller's personal food log. Voids the previous row and writes a new one with a new intakeId (previousIntakeId is the one you passed); use the new id for later edits. Does not change Cargo or the plan. Requires approval. Same fields as log_diary_food plus intakeId. To move the entry to another day, pass fuelDate (YYYY-MM-DD) and omit occurredAt: it moves to local noon on that day, frees a slot on the old day, and counts against the new day's free limit (conflict with details.code fuel_daily_limit when full). Without fuelDate the entry stays on its stored day: pass its occurredAt (or another time that day), because an omitted occurredAt means now and a different day is refused with invalid_input (details.code fuel_date_immutable). Apple Health keeps the same sample and gets the new day on the next export. Costs 0 credits. Not medical advice.",
 			inputSchema: z.object({
 				intakeId: UuidSchema,
 				...diaryWriteFields,
@@ -273,12 +316,20 @@ export function createDiaryToolDefs(env: McpToolsEnv) {
 					diaryPrincipal(ctx),
 					flagContext,
 					args.intakeId,
-					parsed.data,
+					await pinFuelDayClock(env, ctx.userId, flagContext, parsed.data),
 				);
-				return ok("update_diary_food", result, {
-					outcome: result.replayed ? "replayed" : "committed",
-					operationId: result.operationId,
-				});
+				return ok(
+					"update_diary_food",
+					{
+						...result,
+						previousIntakeId: args.intakeId,
+						...(parsed.data.fuelDate ? { fuelDate: parsed.data.fuelDate } : {}),
+					},
+					{
+						outcome: result.replayed ? "replayed" : "committed",
+						operationId: result.operationId,
+					},
+				);
 			},
 		}),
 		defineSharedTool({

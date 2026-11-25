@@ -113,13 +113,13 @@ All tools are scoped to the authorized household. **MCP calls do not consume Rat
 
 OAuth issues tokens only through `authorization_code` and `refresh_token`; there is no `client_credentials` grant. Public PKCE clients may use a loopback redirect (`http://127.0.0.1`, `http://[::1]`, `http://localhost`) on any port.
 
-**Reply shape.** Dates and times in tool results are ISO 8601 strings (an invalid date is `null`, never `{}`). Replies leave out internal ids that an agent cannot act on, such as kitchen, user, consent, credential, and key ids. Entity ids you pass back to other tools (Cargo, meal, Manifest entry, intake, supply list) are kept.
+**Reply shape.** Dates and times in tool results are ISO 8601 strings (an invalid date is `null`, never `{}`). In this phase, replies omit kitchen ids, along with user, membership, consent, credential, and API key ids that an agent cannot act on. Later, kitchen ids will be available only through `list_kitchens` (and an optional `kitchenId` on tools), limited to kitchens in the grant. Entity ids you pass back to other tools (Cargo, meal, Manifest entry, intake, supply list) are kept. Identifiers for things you own, such as Health sample sync identifiers and the Cargo id inside a pagination cursor, stay visible to you.
 
 ### Read & account
 
 | Tool | Scope | Description |
 |------|-------|-------------|
-| `get_billing_summary` | `mcp:read` | Tier, credits, renewal, and billing links. |
+| `get_billing_summary` | `mcp:read` | Tier, credits, renewal, and billing links. The kitchen appears by name and role, without its id. |
 | `get_context` | `mcp:read` | Return caller identity (auth method and a readable key name), scopes, kitchen tier/usage/credits/lastActivityAt, capabilities, suggested next actions, and `temporal` (todayUtc, server time, expiry semantics). Safe to call first. |
 | `search_ingredients` | `mcp:read` | Semantic pantry search (recall 0.60). Each hit includes `matchScore` and `cookMatch` (true at ≥ 0.78). |
 | `list_inventory` | `mcp:read` | Cursor-paginated pantry list (default 100, max 200). Optional domain filter, case-insensitive `nameContains`, `tag` slug, UTC `expiresBefore` / `expiresAfter`, and `sortBy: expiresAt`. `expiresAt` is ISO 8601 or `null`. Includes `nutrition` when present; pass `includeNutrition: false` for a smaller page. |

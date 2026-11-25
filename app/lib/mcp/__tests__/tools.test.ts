@@ -510,6 +510,38 @@ describe("MCP tools", () => {
 			expect(result.content[0]?.text).not.toContain("organizationId");
 		});
 
+		it("rejects a cursor whose date cannot be read", async () => {
+			const server = makeServer();
+			const cursor = btoa(
+				JSON.stringify({ sortBy: "expiresAt", expiresAt: "never", id: "c1" }),
+			);
+			const env = parseEnvelope(
+				await getToolHandler(
+					server,
+					"list_inventory",
+				)({
+					cursor,
+					sortBy: "expiresAt",
+				}),
+			);
+			expect(env.ok).toBe(false);
+			expect(env.error.code).toBe("invalid_input");
+			expect(getCargoPage).not.toHaveBeenCalled();
+		});
+
+		it("rejects tampered createdAt cursors on list_meals and get_supply_list", async () => {
+			const server = makeServer();
+			const cursor = btoa(JSON.stringify({ createdAt: "soon", id: "x1" }));
+			for (const tool of ["list_meals", "get_supply_list"]) {
+				const env = parseEnvelope(
+					await getToolHandler(server, tool)({ cursor }),
+				);
+				expect(env.ok, tool).toBe(false);
+				expect(env.error.code, tool).toBe("invalid_input");
+			}
+			expect(getMealsPage).not.toHaveBeenCalled();
+		});
+
 		it("passes nameContains and tag to getCargoPage", async () => {
 			vi.mocked(getCargoPage).mockResolvedValueOnce({
 				items: [],
@@ -2229,6 +2261,15 @@ describe("MCP tools", () => {
 			const data = parseOk(result);
 
 			expect(data.organization.credits).toBe(7);
+			// The agent reply never carries the kitchen id (#15).
+			expect(data.organization).not.toHaveProperty("id");
+			expect(data.organization).toMatchObject({
+				name: "Test Org",
+				userRole: "owner",
+				effectiveTier: "free",
+			});
+			expect(data.copilot.sessionMaxTokens).toBe(128_000);
+			expect(result.content[0]?.text).not.toContain("org-test-123");
 			expect(getBillingAccountSummary).toHaveBeenCalledWith(expect.anything(), {
 				userId: "user-test-123",
 				organizationId: "org-test-123",

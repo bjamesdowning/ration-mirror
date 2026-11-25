@@ -49,24 +49,53 @@ function isSupplyTool(tool: string): boolean {
 /**
  * Internal identifiers the agent profile never returns, at any depth (#15).
  * No MCP tool takes one of these as input, so dropping them costs agents
- * nothing. Any key ending in `UserId` (cookedByUserId, voidedByUserId, …) is
- * dropped too. Entity ids an agent passes back (intakeId, entryId, cargo and
- * meal ids) are kept.
+ * nothing. Matching ignores case and underscores, so `organization_id` and
+ * `OrganizationID` are dropped too, as is any key ending in `UserId`
+ * (cookedByUserId, voided_by_user_id, …). Entity ids an agent passes back
+ * (intakeId, entryId, cargo and meal ids) are kept.
  */
 export const AGENT_DENIED_KEYS: ReadonlySet<string> = new Set([
 	"organizationId",
 	"activeOrganizationId",
+	"orgId",
 	"userId",
+	"memberId",
+	"inviterId",
 	"consentId",
 	"healthSyncId",
 	"credentialId",
 	"apiKeyId",
 	"clientId",
+	"sessionId",
+	"stripeCustomerId",
 	"voidedByUserId",
 ]);
 
+function normalizeKey(key: string): string {
+	return key.replace(/_/g, "").toLowerCase();
+}
+
+const DENIED_NORMALIZED = new Set([...AGENT_DENIED_KEYS].map(normalizeKey));
+
 export function isAgentDeniedKey(key: string): boolean {
-	return AGENT_DENIED_KEYS.has(key) || key.endsWith("UserId");
+	const normalized = normalizeKey(key);
+	return DENIED_NORMALIZED.has(normalized) || normalized.endsWith("userid");
+}
+
+/**
+ * Objects that describe the caller's kitchen, account, or membership. Their
+ * bare `id` is the kitchen, user, or member id, so the agent profile drops it
+ * (for example `get_billing_summary` → `organization.id`). Their other fields
+ * (name, tier, role, credits) stay.
+ */
+const AGENT_ID_OWNER_KEYS: ReadonlySet<string> = new Set(
+	["organization", "activeOrganization", "user", "member", "inviter"].map(
+		normalizeKey,
+	),
+);
+
+export function isAgentIdOwnerKey(key: string): boolean {
+	return AGENT_ID_OWNER_KEYS.has(normalizeKey(key));
 }
 
 /**
@@ -128,20 +157,30 @@ function projectNode(
 	profile: ResponseProfile,
 	tool: string,
 	keepDetail: boolean,
+	parentKey?: string,
 ): unknown {
 	if (value instanceof Date) {
 		return dateToIsoOrNull(value);
 	}
 	if (Array.isArray(value)) {
-		return value.map((item) => projectNode(item, profile, tool, keepDetail));
+		return value.map((item) =>
+			projectNode(item, profile, tool, keepDetail, parentKey),
+		);
 	}
 	if (!isRecord(value)) {
 		return value;
 	}
 
+	const dropBareId =
+		profile === "agent" &&
+		parentKey !== undefined &&
+		isAgentIdOwnerKey(parentKey);
 	const next: Record<string, unknown> = {};
 	for (const [key, child] of Object.entries(value)) {
 		if (profile === "agent" && isAgentDeniedKey(key)) {
+			continue;
+		}
+		if (dropBareId && key === "id") {
 			continue;
 		}
 		if (
@@ -154,7 +193,7 @@ function projectNode(
 		if (profile === "agent" && key === "nutritionV2") {
 			continue;
 		}
-		next[key] = projectNode(child, profile, tool, keepDetail);
+		next[key] = projectNode(child, profile, tool, keepDetail, key);
 	}
 
 	if (isSupplyTool(tool) && typeof next.quantity === "number") {

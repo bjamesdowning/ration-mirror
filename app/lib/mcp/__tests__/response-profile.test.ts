@@ -287,3 +287,109 @@ describe("internal ids in agent results (#15)", () => {
 		expect(isAgentDeniedKey("user")).toBe(false);
 	});
 });
+
+describe("snake_case and owner ids in agent results (#15 follow-up)", () => {
+	it("drops denied keys whatever their case or underscores", () => {
+		const projected = projectToolResult({
+			tool: "list_nutrition_intakes",
+			profile: "agent",
+			data: [
+				{
+					id: "intake-1",
+					organization_id: "org-1",
+					user_id: "user-1",
+					OrganizationID: "org-1",
+					voided_by_user_id: "user-2",
+					member_id: "member-1",
+					inviterId: "user-3",
+					stripeCustomerId: "cus_123",
+					session_id: "sess-1",
+					energyKcal: 420,
+				},
+			],
+		});
+		expect(projected.data).toEqual([{ id: "intake-1", energyKcal: 420 }]);
+	});
+
+	it("keeps snake_case ids in the card profile", () => {
+		const data = { id: "intake-1", organization_id: "org-1" };
+		const projected = projectToolResult({
+			tool: "list_nutrition_intakes",
+			profile: "card",
+			data,
+		});
+		expect(projected.data).toEqual(data);
+	});
+
+	it("drops the bare id of kitchen, user, and member objects", () => {
+		const projected = projectToolResult({
+			tool: "anything",
+			profile: "agent",
+			data: {
+				organization: { id: "org-1", name: "Home" },
+				user: { id: "user-1", name: "Sam" },
+				member: { id: "member-1", role: "owner" },
+				cargo: { id: "cargo-1", name: "milk" },
+			},
+		});
+		expect(projected.data).toEqual({
+			organization: { name: "Home" },
+			user: { name: "Sam" },
+			member: { role: "owner" },
+			cargo: { id: "cargo-1", name: "milk" },
+		});
+	});
+});
+
+describe("get_billing_summary agent reply (#15, F1)", () => {
+	const summary = {
+		account: {
+			tier: "crew_member",
+			tierExpired: false,
+			renewsOrEndsAt: "2026-12-25T00:00:00.000Z",
+			cancelAtPeriodEnd: false,
+			crewSubscribedAt: "2026-01-02T00:00:00.000Z",
+		},
+		organization: {
+			id: "org-secret-1",
+			name: "E2E Kitchen",
+			credits: 42,
+			effectiveTier: "crew_member",
+			effectiveTierExpired: false,
+			userRole: "owner",
+		},
+		subscription: {
+			active: true,
+			store: "stripe",
+			managementUrl: null,
+			canPurchaseOnWeb: false,
+			purchaseBlockReason: null,
+			billingUnavailable: false,
+		},
+		actions: {
+			pricingUrl: "https://ration.example/hub/pricing",
+			settingsUrl: "https://ration.example/hub/settings",
+			portalAvailable: true,
+		},
+	};
+
+	it("omits organization.id and keeps every other billing field", () => {
+		const projected = projectToolResult({
+			tool: "get_billing_summary",
+			profile: "agent",
+			data: summary,
+		});
+		const { id: _id, ...organization } = summary.organization;
+		expect(projected.data).toEqual({ ...summary, organization });
+		expect(JSON.stringify(projected.data)).not.toContain("org-secret-1");
+	});
+
+	it("leaves the card profile unchanged", () => {
+		const projected = projectToolResult({
+			tool: "get_billing_summary",
+			profile: "card",
+			data: summary,
+		});
+		expect(projected.data).toEqual(summary);
+	});
+});

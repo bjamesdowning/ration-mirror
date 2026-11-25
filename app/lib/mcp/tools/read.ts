@@ -245,6 +245,16 @@ async function maybePersonalNutritionToday(
 	}
 }
 
+/**
+ * The date inside a decoded pagination cursor, or null when `new Date()`
+ * cannot read it. A tampered cursor is `invalid_input`, never an Invalid
+ * Date in a query. MCP-only: the shared cursor decoder is unchanged.
+ */
+export function readCursorDate(value: string): Date | null {
+	const date = new Date(value);
+	return Number.isFinite(date.getTime()) ? date : null;
+}
+
 export function createReadToolDefs(env: McpToolsEnv) {
 	return [
 		defineSharedTool({
@@ -505,18 +515,23 @@ export function createReadToolDefs(env: McpToolsEnv) {
 					);
 				}
 				let pageCursor: CargoPageCursor | null = null;
-				if (decoded?.sortBy === "expiresAt" && decoded.expiresAt) {
-					pageCursor = {
-						sortBy: "expiresAt",
-						expiresAt: new Date(decoded.expiresAt),
-						id: decoded.id,
-					};
-				} else if (decoded?.sortBy === "createdAt" && decoded.createdAt) {
-					pageCursor = {
-						sortBy: "createdAt",
-						createdAt: new Date(decoded.createdAt),
-						id: decoded.id,
-					};
+				if (decoded) {
+					const rawDate =
+						decoded.sortBy === "expiresAt"
+							? decoded.expiresAt
+							: decoded.createdAt;
+					const cursorDate = rawDate ? readCursorDate(rawDate) : null;
+					if (!cursorDate) {
+						return err(
+							"list_inventory",
+							"invalid_input",
+							"Malformed cursor; omit it to start from the first page.",
+						);
+					}
+					pageCursor =
+						decoded.sortBy === "expiresAt"
+							? { sortBy: "expiresAt", expiresAt: cursorDate, id: decoded.id }
+							: { sortBy: "createdAt", createdAt: cursorDate, id: decoded.id };
 				}
 				const { items, nextCursor } = await getCargoPage(
 					env.DB,
@@ -639,7 +654,8 @@ export function createReadToolDefs(env: McpToolsEnv) {
 					SUPPLY_LIST_PAGE_MAX,
 				);
 				const decoded = a.cursor ? decodeCursor(a.cursor) : null;
-				if (a.cursor && !decoded) {
+				const afterDate = decoded ? readCursorDate(decoded.createdAt) : null;
+				if (a.cursor && !afterDate) {
 					return err(
 						"get_supply_list",
 						"invalid_input",
@@ -648,9 +664,10 @@ export function createReadToolDefs(env: McpToolsEnv) {
 				}
 				const fetchOptions = {
 					limit: limit + 1,
-					after: decoded
-						? { createdAt: new Date(decoded.createdAt), id: decoded.id }
-						: undefined,
+					after:
+						decoded && afterDate
+							? { createdAt: afterDate, id: decoded.id }
+							: undefined,
 					includeSourceMeals: a.includeSourceMeals === true,
 				};
 				let targetListId = a.listId;
@@ -834,16 +851,18 @@ export function createReadToolDefs(env: McpToolsEnv) {
 				const limit = a.limit ?? 100;
 				const includeIngredients = a.includeIngredients === true;
 				const decoded = a.cursor ? decodeCursor(a.cursor) : null;
-				if (a.cursor && !decoded) {
+				const cursorDate = decoded ? readCursorDate(decoded.createdAt) : null;
+				if (a.cursor && !cursorDate) {
 					return err(
 						"list_meals",
 						"invalid_input",
 						"Malformed cursor; omit it to start from the first page.",
 					);
 				}
-				const cursor = decoded
-					? { createdAt: new Date(decoded.createdAt), id: decoded.id }
-					: null;
+				const cursor =
+					decoded && cursorDate
+						? { createdAt: cursorDate, id: decoded.id }
+						: null;
 				const { items, nextCursor } = await getMealsPage(
 					env.DB,
 					ctx.organizationId,

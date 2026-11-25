@@ -33,8 +33,16 @@ function resultFromStatement(
  * Test-only D1 adapter backed by Node's in-memory SQLite. Batch calls use one
  * transaction so rollback behavior matches D1's atomic `db.batch()` contract.
  */
-export function createSqliteD1() {
-	const sqlite = new DatabaseSync(":memory:");
+export function createSqliteD1(options?: {
+	/**
+	 * Read `"name"` as a string when no such column exists, as D1 does. Needed
+	 * only to replay the drizzle migrations (an early rebuild relies on it).
+	 */
+	doubleQuotedStrings?: boolean;
+}) {
+	const sqlite = new DatabaseSync(":memory:", {
+		enableDoubleQuotedStringLiterals: options?.doubleQuotedStrings ?? false,
+	});
 	sqlite.exec("pragma foreign_keys = off");
 
 	const database = {

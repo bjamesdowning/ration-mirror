@@ -352,10 +352,24 @@ describe("addCargoToFuel chosen Fuel day", () => {
 		expect(logged?.occurredAt).toBeUndefined();
 	});
 
+	// Live 1.11.45: the Fuel day was the chosen one but the Manifest day came
+	// from the clock, so reads by Manifest day showed the entry on today.
+	it("sends the chosen day as the Manifest day too", async () => {
+		await addCargoToFuel(env, orgId, cargoId, 100, principal, flags, {
+			operationKey: write.operationKey,
+			idempotencyKey: write.idempotencyKey,
+			fuelDate: "2026-12-20",
+		});
+		const logged = logDiaryFood.mock.calls[0]?.[3];
+		expect(logged?.fuelDate).toBe("2026-12-20");
+		expect(logged?.manifestDate).toBe("2026-12-20");
+	});
+
 	it("sends no fuelDate when the caller did not choose a day", async () => {
 		await addCargoToFuel(env, orgId, cargoId, 100, principal, flags, write);
 		const logged = logDiaryFood.mock.calls[0]?.[3];
 		expect(logged).not.toHaveProperty("fuelDate");
+		expect(logged).not.toHaveProperty("manifestDate");
 		expect(logged?.occurredAt).toBe(write.occurredAt);
 	});
 

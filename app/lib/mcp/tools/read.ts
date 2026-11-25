@@ -250,7 +250,7 @@ export function createReadToolDefs(env: McpToolsEnv) {
 		defineSharedTool({
 			name: "get_context",
 			description:
-				"Return organization id, caller identity (API key or OAuth grant), scopes, capabilities, onboarding, a slim kitchen tier/credits snapshot, and suggested next actions. For full pantry/manifest/supply status prefer get_kitchen_summary.",
+				"Return caller identity (auth method and a readable key name), scopes, capabilities, onboarding, a slim kitchen tier/credits snapshot, and suggested next actions. For full pantry/manifest/supply status prefer get_kitchen_summary.",
 			inputSchema: z.object({}),
 			scopes: ["mcp:read"],
 			rateLimitCategory: "mcp_list",
@@ -354,7 +354,11 @@ export function createReadToolDefs(env: McpToolsEnv) {
 					env,
 					ctx.organizationId,
 					[a.query],
-					{ topK: a.topK ?? 5, threshold: NAME_SEARCH_RECALL_THRESHOLD, floor: "recall" },
+					{
+						topK: a.topK ?? 5,
+						threshold: NAME_SEARCH_RECALL_THRESHOLD,
+						floor: "recall",
+					},
 				);
 				const matches = results.get(a.query) || [];
 				if (matches.length === 0) {
@@ -421,7 +425,7 @@ export function createReadToolDefs(env: McpToolsEnv) {
 		defineSharedTool({
 			name: "list_inventory",
 			description:
-				"Retrieve ingredients in the pantry. Cursor-paginated: pass `cursor` from a previous response to fetch the next page. Default limit 100, max 200. Optional UTC expiry filters and expiresAt sort. Includes nutrition snapshot when present on the cargo row.",
+				"Retrieve ingredients in the pantry. Cursor-paginated: pass `cursor` from a previous response to fetch the next page. Default limit 100, max 200. Optional UTC expiry filters and expiresAt sort, `nameContains` (case-insensitive substring) and `tag` (one tag slug). expiresAt is an ISO-8601 string or null. Includes the nutrition snapshot when present; pass includeNutrition:false for a lighter page when you only need names and quantities. Keep the same filters when you pass a cursor.",
 			inputSchema: z.object({
 				domain: z
 					.enum(["food", "household", "alcohol"])
@@ -455,12 +459,35 @@ export function createReadToolDefs(env: McpToolsEnv) {
 					.describe(
 						"Sort order: createdAt (newest first) or expiresAt (soonest first; omits items without expiry)",
 					),
+				nameContains: z
+					.string()
+					.trim()
+					.min(1)
+					.max(100)
+					.optional()
+					.describe(
+						"Only items whose name contains this text (case-insensitive)",
+					),
+				tag: z
+					.string()
+					.trim()
+					.min(1)
+					.max(64)
+					.optional()
+					.describe("Only items carrying this tag slug (e.g. dairy)"),
+				includeNutrition: z
+					.boolean()
+					.optional()
+					.describe(
+						"Include each item's nutrition snapshot (default true). Pass false to keep the page small.",
+					),
 			}),
 			scopes: ["mcp:read"],
 			rateLimitCategory: "mcp_list",
 			audit: false,
 			handler: async (ctx, a) => {
 				const limit = a.limit ?? 100;
+				const includeNutrition = a.includeNutrition !== false;
 				const sortBy = a.sortBy ?? "createdAt";
 				const decoded = a.cursor ? decodeInventoryCursor(a.cursor) : null;
 				if (a.cursor && !decoded) {
@@ -501,6 +528,8 @@ export function createReadToolDefs(env: McpToolsEnv) {
 						expiresBefore: a.expiresBefore,
 						expiresAfter: a.expiresAfter,
 						sortBy,
+						nameContains: a.nameContains,
+						tag: a.tag,
 					},
 				);
 				const tagMap = await getTagsForCargoIds(
@@ -515,7 +544,9 @@ export function createReadToolDefs(env: McpToolsEnv) {
 					domain: c.domain,
 					tags: tagsToSlugs(tagMap.get(c.id) ?? []),
 					expiresAt: c.expiresAt,
-					...(c.nutrition ? { nutrition: c.nutrition } : {}),
+					...(includeNutrition && c.nutrition
+						? { nutrition: c.nutrition }
+						: {}),
 				}));
 				return ok("list_inventory", mapped, {
 					meta: {

@@ -93,6 +93,10 @@ export interface InventoryImportPreview {
 export interface InventoryImportApplyResult {
 	imported: number;
 	updated: number;
+	/** Cargo ids this import created. Absent on replays cached before ids shipped. */
+	createdIds?: string[];
+	/** Cargo ids this import updated or merged into. Absent on older replays. */
+	updatedIds?: string[];
 	errors: Array<{ name: string; error: string }>;
 	warnings?: string[];
 	replayed?: boolean;
@@ -315,6 +319,8 @@ export async function applyInventoryImport(
 	const outcome: InventoryImportApplyResult = {
 		imported: result.imported,
 		updated: result.updated,
+		createdIds: result.createdIds,
+		updatedIds: result.updatedIds,
 		errors: result.errors,
 	};
 	await env.RATION_KV.put(idemKey, JSON.stringify(outcome), {
@@ -364,6 +370,8 @@ export async function importInventoryCsv(
 	const outcome: InventoryImportApplyResult = {
 		imported: result.imported,
 		updated: result.updated,
+		createdIds: result.createdIds,
+		updatedIds: result.updatedIds,
 		errors: result.errors,
 		warnings: warnings.length > 0 ? warnings : undefined,
 	};

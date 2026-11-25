@@ -54,6 +54,10 @@ export const E2E_FLAG_OVERRIDES = {
 	"nutrition-manifest": true,
 	"nutrition-goals": true,
 	"nutrition-cook-log-split": true,
+	// Fuel: Quick Eat logs to Daily Fuel and diary edits can move days.
+	"nutrition-fast-log": true,
+	"nutrition-fuel-page": true,
+	"plan-fuel-actions": true,
 };
 
 function stripJsonc(text: string): string {

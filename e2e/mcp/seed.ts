@@ -153,12 +153,14 @@ export async function seedMcpKitchen(
 
 	run(
 		`INSERT INTO "user" (id, name, email, email_verified, created_at, updated_at, settings, tier, tos_accepted_at)
-		 VALUES (?, ?, ?, 1, ?, ?, '{}', 'free', ?)`,
+		 VALUES (?, ?, ?, 1, ?, ?, ?, 'free', ?)`,
 		ids.userId,
 		"E2E Agent Owner",
 		"mcp-e2e@example.test",
 		nowS,
 		nowS,
+		// Fuel days are UTC here, so `today` is the same day for Fuel and Cargo.
+		JSON.stringify({ fuelTimeZone: "UTC" }),
 		nowS,
 	);
 	run(

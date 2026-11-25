@@ -597,19 +597,30 @@ describe("quick_eat_cargo", () => {
 			expect(envelope.error.recoveryHint).toMatch(/Crew/);
 		});
 
-		it("rejects a date that is not a real day before touching Cargo", async () => {
-			const getCargoItem = await cargoAt(2);
-			const envelope = await tool().handler(baseCtx, {
-				cargoId: CARGO_ID,
-				quantity: 1,
-				operationKey: OP_KEY,
-				date: "2026-02-31",
-			});
-			expect(envelope.ok).toBe(false);
-			if (envelope.ok) return;
-			expect(envelope.error.code).toBe("invalid_input");
-			expect(getCargoItem).not.toHaveBeenCalled();
-		});
+		it.each(["2026-02-31", "2026-13-01"])(
+			"rejects %s before touching Cargo or Fuel",
+			async (date) => {
+				const getCargoItem = await cargoAt(2);
+				const { addCargoToFuel } = await import(
+					"~/lib/plan-fuel-actions.server"
+				);
+				const { applyCargoDeductions } = await import(
+					"~/lib/cargo-deduction.server"
+				);
+				const envelope = await tool().handler(baseCtx, {
+					cargoId: CARGO_ID,
+					quantity: 1,
+					operationKey: OP_KEY,
+					date,
+				});
+				expect(envelope.ok).toBe(false);
+				if (envelope.ok) return;
+				expect(envelope.error.code).toBe("invalid_input");
+				expect(getCargoItem).not.toHaveBeenCalled();
+				expect(addCargoToFuel).not.toHaveBeenCalled();
+				expect(applyCargoDeductions).not.toHaveBeenCalled();
+			},
+		);
 
 		it("does not touch another kitchen's Cargo", async () => {
 			const getCargoItem = await cargoAt();

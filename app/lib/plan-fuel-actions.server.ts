@@ -462,7 +462,11 @@ export async function addCargoToFuel(
 			fuelTimeZone: write.fuelTimeZone,
 			occurredAt: write.occurredAt,
 			// A chosen day logs at local noon and counts against that day's cap.
-			...(write.fuelDate ? { fuelDate: write.fuelDate } : {}),
+			// It is the Manifest day too. Without it the diary write stamps the
+			// Manifest day from now, and reads by that day show the entry today.
+			...(write.fuelDate
+				? { fuelDate: write.fuelDate, manifestDate: write.fuelDate }
+				: {}),
 		});
 		const undoToken = await storeFuelActionUndo(
 			env,

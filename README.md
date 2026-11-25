@@ -2246,6 +2246,7 @@ bun run test:e2e      # Playwright E2E (starts dev server)
 bun run test:e2e:ui   # Playwright UI mode
 bun run test:e2e:headed # Playwright headed (visible browser)
 bun run test:e2e:report # Open last HTML report
+bun run test:mcp-e2e  # MCP e2e: real JSON-RPC against the MCP worker in Miniflare (no secrets)
 bun run typecheck     # cf-typegen + react-router typegen + tsc -b
 bun run verify:admin-d1 # Smoke-test admin D1 queries against remote ration-db
 bun run grant-admin -- user@example.com # Set user.is_admin on remote ration-db

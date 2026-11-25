@@ -66,6 +66,25 @@ export const TOOL_CASES: ToolCase[] = [
 		},
 	},
 	{
+		id: "get_billing_summary",
+		tool: "get_billing_summary",
+		args: () => ({}),
+		maxBytes: 4_000,
+		check: (data) => {
+			const summary = record(data);
+			const organization = record(summary.organization);
+			// F1: the kitchen id is not in the agent reply; the rest is.
+			expect(organization).not.toHaveProperty("id");
+			expect(organization).toMatchObject({
+				name: "E2E Kitchen",
+				userRole: "owner",
+			});
+			expect(typeof organization.credits).toBe("number");
+			expect(summary).toHaveProperty("account");
+			expect(summary).toHaveProperty("subscription");
+		},
+	},
+	{
 		id: "list_inventory",
 		tool: "list_inventory",
 		args: () => ({}),

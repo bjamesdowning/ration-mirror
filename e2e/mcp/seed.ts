@@ -34,6 +34,31 @@ export const SEED_IDS = {
 	entryCookedId: "e2e00000-0000-4000-8000-000000000041",
 } as const;
 
+/** Fixed nutrition consent row ids (one per purpose). */
+export const SEED_CONSENT_IDS = {
+	consentGoalsId: "e2e-consent-goals",
+	consentIntakeId: "e2e-consent-intake",
+	consentAgentProcessingId: "e2e-consent-agent_processing",
+} as const;
+
+/**
+ * Seeded values that must never appear in an agent reply, by name: the
+ * user, kitchen, membership, API key, and consent ids, the API key itself,
+ * and its stored prefix. Entity ids (Cargo, meals, Manifest) are not here:
+ * agents pass those back to other tools.
+ */
+export function sensitiveSeedValues(apiKey: string): Record<string, string> {
+	return {
+		userId: SEED_IDS.userId,
+		organizationId: SEED_IDS.organizationId,
+		memberId: SEED_IDS.memberId,
+		apiKeyId: SEED_IDS.apiKeyId,
+		...SEED_CONSENT_IDS,
+		apiKey,
+		apiKeyPrefix: apiKey.slice(0, 17),
+	};
+}
+
 /** Every scope a first-party agent key can hold, nutrition included. */
 export const SEED_SCOPES = [
 	"mcp:read",
@@ -169,7 +194,11 @@ export async function seedMcpKitchen(
 			`INSERT INTO nutrition_consent (id, user_id, purpose, policy_version, source, granted_at, created_at,
 			   statement_version, statement_sha256, privacy_notice_version, client_surface)
 			 VALUES (?, ?, ?, ?, 'web', ?, ?, ?, ?, ?, 'web')`,
-			`e2e-consent-${purpose}`,
+			{
+				goals: SEED_CONSENT_IDS.consentGoalsId,
+				intake: SEED_CONSENT_IDS.consentIntakeId,
+				agent_processing: SEED_CONSENT_IDS.consentAgentProcessingId,
+			}[purpose],
 			ids.userId,
 			purpose,
 			statement.policyVersion,

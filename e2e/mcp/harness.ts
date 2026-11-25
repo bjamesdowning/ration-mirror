@@ -163,22 +163,49 @@ export class McpTestClient {
 /**
  * Keys the agent profile must never return, at any depth. Kept here as an
  * independent copy of AGENT_DENIED_KEYS so the suite checks the server rather
- * than re-using its list. Any key ending in `UserId` is also denied.
+ * than re-using its list. Matching ignores case and underscores, and any key
+ * ending in `UserId` is also denied.
  */
 export const DENIED_KEYS = new Set([
 	"organizationId",
 	"activeOrganizationId",
+	"orgId",
 	"userId",
+	"memberId",
+	"inviterId",
 	"consentId",
 	"healthSyncId",
 	"credentialId",
 	"apiKeyId",
 	"clientId",
+	"sessionId",
+	"stripeCustomerId",
 	"voidedByUserId",
 ]);
 
+const normalize = (key: string) => key.replace(/_/g, "").toLowerCase();
+const DENIED_NORMALIZED = new Set([...DENIED_KEYS].map(normalize));
+
 export function isDeniedKey(key: string): boolean {
-	return DENIED_KEYS.has(key) || key.endsWith("UserId");
+	const normalized = normalize(key);
+	return DENIED_NORMALIZED.has(normalized) || normalized.endsWith("userid");
+}
+
+/**
+ * Value-based check: which of these seeded values appear anywhere in a reply,
+ * including inside strings, under any key (a bare `id`, a cursor, a URL).
+ * The key deny-list above cannot see `organization: { id }`; this can.
+ * Matching is case-insensitive.
+ */
+export function findSensitiveValues(
+	reply: unknown,
+	sensitive: Record<string, string>,
+): string[] {
+	const text = JSON.stringify(reply).toLowerCase();
+	return Object.entries(sensitive)
+		.filter(([, value]) => value.length > 0)
+		.filter(([, value]) => text.includes(value.toLowerCase()))
+		.map(([name]) => name);
 }
 
 /** Paths of every denied key in a JSON value. */

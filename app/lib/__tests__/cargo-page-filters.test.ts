@@ -91,6 +91,21 @@ describe("getCargoPage filters (#19)", () => {
 		expect(page.items).toEqual([]);
 	});
 
+	it("treats _ in nameContains as text, not a single-character wildcard", async () => {
+		const page = await getCargoPage(db, ORG, { limit: 10, nameContains: "_" });
+		expect(page.items).toEqual([]);
+		const exact = await getCargoPage(db, ORG, {
+			limit: 10,
+			nameContains: "dish soap",
+		});
+		expect(ids(exact.items)).toEqual(["c-soap"]);
+		const underscored = await getCargoPage(db, ORG, {
+			limit: 10,
+			nameContains: "dish_soap",
+		});
+		expect(underscored.items).toEqual([]);
+	});
+
 	it("filters by tag slug within the kitchen only", async () => {
 		const page = await getCargoPage(db, ORG, { limit: 10, tag: "Dairy" });
 		expect(ids(page.items)).toEqual(["c-milk", "c-cheddar"]);

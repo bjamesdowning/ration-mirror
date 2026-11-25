@@ -379,7 +379,7 @@ export const TOOL_CASES: ToolCase[] = [
 		id: "quick_eat_cargo:fuel-yesterday",
 		tool: "quick_eat_cargo",
 		args: quickEatYesterday,
-		maxBytes: 1_500,
+		maxBytes: 1_000,
 		check: (data, ctx, envelope) => {
 			const eaten = record(data);
 			expect(eaten).toMatchObject({
@@ -397,7 +397,7 @@ export const TOOL_CASES: ToolCase[] = [
 		id: "quick_eat_cargo:replay",
 		tool: "quick_eat_cargo",
 		args: quickEatYesterday,
-		maxBytes: 1_500,
+		maxBytes: 1_000,
 		check: (data, ctx, envelope) => {
 			expect(data).toEqual(ctx.data("quick_eat_cargo:fuel-yesterday"));
 			expect(envelope.outcome).toBe("replayed");
@@ -432,7 +432,7 @@ export const TOOL_CASES: ToolCase[] = [
 			logIntake: false,
 			operationKey: key(11),
 		}),
-		maxBytes: 1_500,
+		maxBytes: 800,
 		check: (data) => {
 			expect(data).toEqual({
 				eaten: true,
@@ -461,7 +461,7 @@ export const TOOL_CASES: ToolCase[] = [
 			date: "2026-02-31",
 			operationKey: key(12),
 		}),
-		maxBytes: 1_000,
+		maxBytes: 900,
 		expectError: "invalid_input",
 	},
 	// Phase 2 (#11): move a Fuel entry to another day.
@@ -515,7 +515,7 @@ export const TOOL_CASES: ToolCase[] = [
 			idempotencyKey: key(15),
 			operationKey: key(16),
 		}),
-		maxBytes: 2_000,
+		maxBytes: 900,
 		expectError: "invalid_input",
 	},
 	{

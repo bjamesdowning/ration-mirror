@@ -415,11 +415,39 @@ export const TOOL_CASES: ToolCase[] = [
 	{
 		id: "get_nutrition_summary:fuel-yesterday",
 		tool: "get_nutrition_summary",
-		args: (ctx) => ({ from: dayBefore(ctx.today), to: dayBefore(ctx.today) }),
+		args: (ctx) => ({ from: dayBefore(ctx.today), to: ctx.today }),
 		maxBytes: 6_000,
 		check: (data, ctx) => {
 			const day = summaryDay(data, dayBefore(ctx.today));
 			expect(day?.energyKcal ?? 0).toBeGreaterThan(0);
+			// Not also on today (the Manifest intake was cleared).
+			expect(summaryDay(data, ctx.today)?.energyKcal ?? 0).toBe(0);
+		},
+	},
+	// Live 1.11.45: the reply and the Fuel day said yesterday, but the stored
+	// Manifest day was today. list_nutrition_intakes reads by Manifest day, so
+	// these two cases read where the entry was stored, not the reply.
+	{
+		id: "list_nutrition_intakes:quick-eat-on-chosen-day",
+		tool: "list_nutrition_intakes",
+		args: (ctx) => ({ from: dayBefore(ctx.today), to: dayBefore(ctx.today) }),
+		maxBytes: 2_500,
+		check: (data, ctx) => {
+			const items = record(data).items as Row[];
+			expect(items).toHaveLength(1);
+			expect(items[0]).toMatchObject({
+				mealName: "Whole milk",
+				manifestDate: dayBefore(ctx.today),
+			});
+		},
+	},
+	{
+		id: "list_nutrition_intakes:quick-eat-not-today",
+		tool: "list_nutrition_intakes",
+		args: (ctx) => ({ from: ctx.today, to: ctx.today }),
+		maxBytes: 1_500,
+		check: (data) => {
+			expect(record(data).items as Row[]).toEqual([]);
 		},
 	},
 	{

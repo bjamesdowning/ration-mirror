@@ -69,6 +69,8 @@ Worker vars: `RATION_ENV=development`, `MCP_OAUTH_ENABLED=false` (API key auth o
 
 Cases run in order against one kitchen, so a write changes what later cases see. Put a write after the reads that depend on the old state, or use its own seeded rows.
 
+For a write that takes a day (`date`, `fuelDate`), add read cases for that day and for today. A reply field only echoes the request. Quick Eat once replied with the chosen day but stored its Manifest day as today, and only a read by that day showed it (`list_nutrition_intakes:quick-eat-on-chosen-day` and `:quick-eat-not-today`).
+
 ## Limits
 
 - **Rate limits.** The worker's KV rate limits apply (per minute: about 30 list calls, 15 writes per kitchen and per key, and 120 requests per IP). One run stays well under them. If the suite grows past that, split cases across files with their own seeded key, or wait between groups.

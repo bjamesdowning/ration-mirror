@@ -30,12 +30,15 @@ export type ToolCase = {
 	 * size table the run prints, with about 1.5x headroom.
 	 */
 	maxBytes: number;
+	/** The envelope must fail with this error code (the scans still run). */
+	expectError?: string;
 	check?: (data: unknown, ctx: CaseContext, envelope: Envelope) => void;
 };
 
 export type Envelope = {
 	ok: boolean;
 	tool: string;
+	outcome?: string;
 	data?: unknown;
 	meta?: Record<string, unknown>;
 	warnings?: string[];
@@ -51,6 +54,26 @@ const names = (data: unknown) => rows(data).map((row) => row.name);
 /** Stable per-run UUIDs for idempotency/operation keys. */
 const key = (n: number) =>
 	`e2e10000-0000-4000-8000-${String(n).padStart(12, "0")}`;
+
+/** The UTC day before `today` (the seeded Fuel zone is UTC). */
+const dayBefore = (today: string) =>
+	new Date(Date.parse(`${today}T00:00:00.000Z`) - 86_400_000)
+		.toISOString()
+		.slice(0, 10);
+
+type SummaryDay = { date: string; energyKcal: number };
+const summaryDay = (data: unknown, date: string) =>
+	(record(data).days as SummaryDay[]).find((day) => day.date === date);
+
+/** Quick Eat of 200 ml milk, logged on yesterday's Fuel day (#10). */
+const quickEatYesterday = (ctx: CaseContext) => ({
+	cargoId: ctx.ids.cargoMilkId,
+	quantity: 200,
+	unit: "ml",
+	date: dayBefore(ctx.today),
+	notes: "e2e after the run",
+	operationKey: key(10),
+});
 
 export const TOOL_CASES: ToolCase[] = [
 	{
@@ -350,5 +373,166 @@ export const TOOL_CASES: ToolCase[] = [
 		check: (data) => {
 			expect(record(data).clearedCount).toBe(1);
 		},
+	},
+	// Phase 2 (#10): Quick Eat respects date, notes, logIntake, and replays.
+	{
+		id: "quick_eat_cargo:fuel-yesterday",
+		tool: "quick_eat_cargo",
+		args: quickEatYesterday,
+		maxBytes: 1_500,
+		check: (data, ctx, envelope) => {
+			const eaten = record(data);
+			expect(eaten).toMatchObject({
+				eaten: true,
+				created: false,
+				fuelLogged: true,
+				deducted: 200,
+				fuelDate: dayBefore(ctx.today),
+			});
+			expect(typeof eaten.intakeId).toBe("string");
+			expect(envelope.outcome).toBe("committed");
+		},
+	},
+	{
+		id: "quick_eat_cargo:replay",
+		tool: "quick_eat_cargo",
+		args: quickEatYesterday,
+		maxBytes: 1_500,
+		check: (data, ctx, envelope) => {
+			expect(data).toEqual(ctx.data("quick_eat_cargo:fuel-yesterday"));
+			expect(envelope.outcome).toBe("replayed");
+		},
+	},
+	{
+		id: "get_cargo_item:milk-deducted-once",
+		tool: "get_cargo_item",
+		args: (ctx) => ({ itemId: ctx.ids.cargoMilkId }),
+		maxBytes: 2_000,
+		check: (data) => {
+			expect(record(data).quantity).toBe(800);
+		},
+	},
+	{
+		id: "get_nutrition_summary:fuel-yesterday",
+		tool: "get_nutrition_summary",
+		args: (ctx) => ({ from: dayBefore(ctx.today), to: dayBefore(ctx.today) }),
+		maxBytes: 6_000,
+		check: (data, ctx) => {
+			const day = summaryDay(data, dayBefore(ctx.today));
+			expect(day?.energyKcal ?? 0).toBeGreaterThan(0);
+		},
+	},
+	{
+		id: "quick_eat_cargo:cargo-only",
+		tool: "quick_eat_cargo",
+		args: (ctx) => ({
+			cargoId: ctx.ids.cargoRiceId,
+			quantity: 100,
+			unit: "g",
+			logIntake: false,
+			operationKey: key(11),
+		}),
+		maxBytes: 1_500,
+		check: (data) => {
+			expect(data).toEqual({
+				eaten: true,
+				created: false,
+				fuelLogged: false,
+				deducted: 100,
+			});
+		},
+	},
+	{
+		id: "get_cargo_item:rice-deducted",
+		tool: "get_cargo_item",
+		args: (ctx) => ({ itemId: ctx.ids.cargoRiceId }),
+		maxBytes: 2_000,
+		check: (data) => {
+			expect(record(data).quantity).toBe(900);
+		},
+	},
+	{
+		id: "quick_eat_cargo:bad-date",
+		tool: "quick_eat_cargo",
+		args: (ctx) => ({
+			cargoId: ctx.ids.cargoRiceId,
+			quantity: 1,
+			unit: "g",
+			date: "2026-02-31",
+			operationKey: key(12),
+		}),
+		maxBytes: 1_000,
+		expectError: "invalid_input",
+	},
+	// Phase 2 (#11): move a Fuel entry to another day.
+	{
+		id: "update_diary_food:move-to-today",
+		tool: "update_diary_food",
+		args: (ctx) => ({
+			intakeId: record(ctx.data("quick_eat_cargo:fuel-yesterday")).intakeId,
+			name: "Whole milk",
+			energyKcal: 128,
+			proteinG: 6.6,
+			carbsG: 9.6,
+			fatG: 7.2,
+			fuelDate: ctx.today,
+			idempotencyKey: key(13),
+			operationKey: key(14),
+		}),
+		maxBytes: 1_500,
+		check: (data, ctx) => {
+			const moved = record(data);
+			const original = record(ctx.data("quick_eat_cargo:fuel-yesterday"));
+			expect(moved.previousIntakeId).toBe(original.intakeId);
+			expect(typeof moved.intakeId).toBe("string");
+			expect(moved.intakeId).not.toBe(original.intakeId);
+			expect(moved.fuelDate).toBe(ctx.today);
+			expect(moved.replayed).toBe(false);
+		},
+	},
+	{
+		id: "get_nutrition_summary:after-move",
+		tool: "get_nutrition_summary",
+		args: (ctx) => ({ from: dayBefore(ctx.today), to: ctx.today }),
+		maxBytes: 6_000,
+		check: (data, ctx) => {
+			// Gone from yesterday, on today (the Manifest intake was cleared).
+			expect(summaryDay(data, dayBefore(ctx.today))?.energyKcal ?? 0).toBe(0);
+			expect(summaryDay(data, ctx.today)?.energyKcal).toBeCloseTo(128);
+		},
+	},
+	{
+		id: "update_diary_food:bad-date",
+		tool: "update_diary_food",
+		args: (ctx) => ({
+			intakeId: record(ctx.data("update_diary_food:move-to-today")).intakeId,
+			name: "Whole milk",
+			energyKcal: 128,
+			proteinG: 6.6,
+			carbsG: 9.6,
+			fatG: 7.2,
+			fuelDate: "2026-02-31",
+			idempotencyKey: key(15),
+			operationKey: key(16),
+		}),
+		maxBytes: 2_000,
+		expectError: "invalid_input",
+	},
+	{
+		id: "update_diary_food:unknown-id",
+		tool: "update_diary_food",
+		args: (ctx) => ({
+			intakeId: key(99),
+			name: "Whole milk",
+			energyKcal: 128,
+			proteinG: 6.6,
+			carbsG: 9.6,
+			fatG: 7.2,
+			fuelDate: ctx.today,
+			idempotencyKey: key(17),
+			operationKey: key(18),
+		}),
+		maxBytes: 1_000,
+		expectError: "not_found",
 	},
 ];

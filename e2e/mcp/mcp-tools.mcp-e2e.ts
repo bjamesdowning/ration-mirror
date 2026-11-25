@@ -20,7 +20,7 @@ const apiKey = inject("mcpApiKey");
 const seed = inject("mcpSeed");
 const sensitive = sensitiveSeedValues(apiKey);
 
-/** Tools Phase 1 reshaped; tools/list must advertise every one of them. */
+/** Tools Phases 1-2 reshaped; tools/list must advertise every one of them. */
 const AFFECTED_TOOLS = [
 	"get_context",
 	"get_billing_summary",
@@ -30,6 +30,9 @@ const AFFECTED_TOOLS = [
 	"update_meal",
 	"get_nutrition_summary",
 	"log_manifest_intake",
+	"quick_eat_cargo",
+	"log_diary_food",
+	"update_diary_food",
 ];
 
 describe("MCP transport", () => {
@@ -126,11 +129,20 @@ describe("MCP tool results (agent profile)", () => {
 				toolCase.args(ctx),
 			);
 			const envelope = envelopeOf(result) as Envelope;
-			expect(
-				envelope.ok,
-				`${toolCase.tool} error: ${JSON.stringify(envelope.error)}`,
-			).toBe(true);
-			expect(result.isError).toBe(false);
+			if (toolCase.expectError) {
+				// Error cases still get every scan below: no ids, ISO dates, size.
+				expect(
+					envelope.ok,
+					`${toolCase.tool} should fail with ${toolCase.expectError}`,
+				).toBe(false);
+				expect(envelope.error?.code).toBe(toolCase.expectError);
+			} else {
+				expect(
+					envelope.ok,
+					`${toolCase.tool} error: ${JSON.stringify(envelope.error)}`,
+				).toBe(true);
+				expect(result.isError).toBe(false);
+			}
 			expect(envelope.tool).toBe(toolCase.tool);
 			bytesByCase.set(toolCase.id, bytes);
 			dataByCase.set(toolCase.id, envelope.data);

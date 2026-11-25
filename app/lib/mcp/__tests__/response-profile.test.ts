@@ -86,3 +86,310 @@ describe("supply quantity rounding", () => {
 		expect(cargo.quantity).toBe(1.3333333);
 	});
 });
+
+describe("dates in tool results (#12)", () => {
+	const at = new Date("2026-11-25T09:30:00.000Z");
+
+	it("serialises Dates as ISO strings at any depth, never {}", () => {
+		for (const profile of ["agent", "card"] as const) {
+			const projected = projectToolResult({
+				tool: "list_inventory",
+				profile,
+				data: [
+					{
+						id: "c1",
+						expiresAt: at,
+						history: [{ when: at, nested: { createdAt: at } }],
+					},
+				],
+			});
+			const encoded = JSON.stringify(projected.data);
+			expect(encoded).not.toContain("{}");
+			expect(projected.data).toEqual([
+				{
+					id: "c1",
+					expiresAt: "2026-11-25T09:30:00.000Z",
+					history: [
+						{
+							when: "2026-11-25T09:30:00.000Z",
+							nested: { createdAt: "2026-11-25T09:30:00.000Z" },
+						},
+					],
+				},
+			]);
+		}
+	});
+
+	it("returns null for an invalid Date", () => {
+		const projected = projectToolResult({
+			tool: "get_cargo_item",
+			profile: "agent",
+			data: { id: "c1", expiresAt: new Date("not a date") },
+		});
+		expect(projected.data).toEqual({ id: "c1", expiresAt: null });
+	});
+
+	it("keeps a top-level Date result", () => {
+		const projected = projectToolResult({
+			tool: "anything",
+			profile: "agent",
+			data: at,
+		});
+		expect(projected.data).toBe("2026-11-25T09:30:00.000Z");
+	});
+
+	it("serialises Dates on the sourceMeals strip path too", () => {
+		const projected = projectToolResult({
+			tool: "get_supply_list",
+			profile: "agent",
+			data: {
+				id: "l1",
+				name: "Live",
+				updatedAt: at,
+				items: [{ id: "i1", createdAt: at, sourceMeals: [{ id: "m1" }] }],
+			},
+		});
+		expect(projected.data).toEqual({
+			id: "l1",
+			name: "Live",
+			updatedAt: "2026-11-25T09:30:00.000Z",
+			items: [{ id: "i1", createdAt: "2026-11-25T09:30:00.000Z" }],
+		});
+	});
+
+	it("matches JSON.stringify for Dates", async () => {
+		const { dateToIsoOrNull } = await import("../response-profile");
+		expect(dateToIsoOrNull(at)).toBe(JSON.parse(JSON.stringify(at)));
+		expect(dateToIsoOrNull(new Date(Number.NaN))).toBe(
+			JSON.parse(JSON.stringify(new Date(Number.NaN))),
+		);
+	});
+});
+
+describe("internal ids in agent results (#15)", () => {
+	const intakeRow = {
+		id: "intake-1",
+		organizationId: "org-1",
+		userId: "user-1",
+		consentId: "consent-1",
+		healthSyncId: "hs-1",
+		voidedByUserId: null,
+		entryId: "entry-1",
+		energyKcal: 420,
+	};
+
+	it("drops denied keys recursively in the agent profile", () => {
+		const projected = projectToolResult({
+			tool: "log_manifest_intake",
+			profile: "agent",
+			data: {
+				operationId: "op-1",
+				items: [{ intake: intakeRow, replayed: false }],
+				meta: {
+					credentialId: "k1",
+					apiKeyId: "k1",
+					clientId: "c1",
+					activeOrganizationId: "org-1",
+					cookedByUserId: "user-1",
+					claimedByUserId: "user-2",
+				},
+			},
+		});
+		const encoded = JSON.stringify(projected.data);
+		for (const key of [
+			"organizationId",
+			"userId",
+			"consentId",
+			"healthSyncId",
+			"voidedByUserId",
+			"credentialId",
+			"apiKeyId",
+			"clientId",
+			"activeOrganizationId",
+			"cookedByUserId",
+			"claimedByUserId",
+		]) {
+			expect(encoded).not.toContain(`"${key}"`);
+		}
+		expect(projected.data).toEqual({
+			operationId: "op-1",
+			items: [
+				{
+					intake: { id: "intake-1", entryId: "entry-1", energyKcal: 420 },
+					replayed: false,
+				},
+			],
+			meta: {},
+		});
+	});
+
+	it("keeps entity ids an agent passes back", () => {
+		const projected = projectToolResult({
+			tool: "get_meal_plan",
+			profile: "agent",
+			data: {
+				planId: "p1",
+				entries: [{ id: "e1", mealId: "m1", intakeId: "i1", cargoId: "c1" }],
+			},
+		});
+		expect(projected.data).toEqual({
+			planId: "p1",
+			entries: [{ id: "e1", mealId: "m1", intakeId: "i1", cargoId: "c1" }],
+		});
+	});
+
+	it("leaves the card profile untouched apart from dates", () => {
+		const projected = projectToolResult({
+			tool: "log_manifest_intake",
+			profile: "card",
+			data: { items: [intakeRow] },
+		});
+		expect(projected.data).toEqual({ items: [intakeRow] });
+	});
+
+	it("still hides opaque get_context key names", () => {
+		const opaque = projectToolResult({
+			tool: "get_context",
+			profile: "agent",
+			data: {
+				organizationId: "org-1",
+				apiKeyId: "key-abc",
+				keyName: "key-abc",
+				keyPrefix: "rtn_live_abcdefgh",
+				scopes: ["mcp:read"],
+			},
+		});
+		expect(opaque.data).toEqual({ scopes: ["mcp:read"] });
+
+		const readable = projectToolResult({
+			tool: "get_context",
+			profile: "agent",
+			data: {
+				organizationId: "org-1",
+				apiKeyId: "0d1f6c3e-6a41-4d2f-9c67-5b1a8f0e2c11",
+				keyName: "Kitchen laptop",
+				keyPrefix: "rtn_live_abcdefgh",
+				scopes: ["mcp:read"],
+			},
+		});
+		expect(readable.data).toEqual({
+			keyName: "Kitchen laptop",
+			scopes: ["mcp:read"],
+		});
+	});
+
+	it("matches the deny-list helper", async () => {
+		const { isAgentDeniedKey } = await import("../response-profile");
+		expect(isAgentDeniedKey("organizationId")).toBe(true);
+		expect(isAgentDeniedKey("reviewedByUserId")).toBe(true);
+		expect(isAgentDeniedKey("intakeId")).toBe(false);
+		expect(isAgentDeniedKey("entryId")).toBe(false);
+		expect(isAgentDeniedKey("user")).toBe(false);
+	});
+});
+
+describe("snake_case and owner ids in agent results (#15 follow-up)", () => {
+	it("drops denied keys whatever their case or underscores", () => {
+		const projected = projectToolResult({
+			tool: "list_nutrition_intakes",
+			profile: "agent",
+			data: [
+				{
+					id: "intake-1",
+					organization_id: "org-1",
+					user_id: "user-1",
+					OrganizationID: "org-1",
+					voided_by_user_id: "user-2",
+					member_id: "member-1",
+					inviterId: "user-3",
+					stripeCustomerId: "cus_123",
+					session_id: "sess-1",
+					energyKcal: 420,
+				},
+			],
+		});
+		expect(projected.data).toEqual([{ id: "intake-1", energyKcal: 420 }]);
+	});
+
+	it("keeps snake_case ids in the card profile", () => {
+		const data = { id: "intake-1", organization_id: "org-1" };
+		const projected = projectToolResult({
+			tool: "list_nutrition_intakes",
+			profile: "card",
+			data,
+		});
+		expect(projected.data).toEqual(data);
+	});
+
+	it("drops the bare id of kitchen, user, and member objects", () => {
+		const projected = projectToolResult({
+			tool: "anything",
+			profile: "agent",
+			data: {
+				organization: { id: "org-1", name: "Home" },
+				user: { id: "user-1", name: "Sam" },
+				member: { id: "member-1", role: "owner" },
+				cargo: { id: "cargo-1", name: "milk" },
+			},
+		});
+		expect(projected.data).toEqual({
+			organization: { name: "Home" },
+			user: { name: "Sam" },
+			member: { role: "owner" },
+			cargo: { id: "cargo-1", name: "milk" },
+		});
+	});
+});
+
+describe("get_billing_summary agent reply (#15, F1)", () => {
+	const summary = {
+		account: {
+			tier: "crew_member",
+			tierExpired: false,
+			renewsOrEndsAt: "2026-12-25T00:00:00.000Z",
+			cancelAtPeriodEnd: false,
+			crewSubscribedAt: "2026-01-02T00:00:00.000Z",
+		},
+		organization: {
+			id: "org-secret-1",
+			name: "E2E Kitchen",
+			credits: 42,
+			effectiveTier: "crew_member",
+			effectiveTierExpired: false,
+			userRole: "owner",
+		},
+		subscription: {
+			active: true,
+			store: "stripe",
+			managementUrl: null,
+			canPurchaseOnWeb: false,
+			purchaseBlockReason: null,
+			billingUnavailable: false,
+		},
+		actions: {
+			pricingUrl: "https://ration.example/hub/pricing",
+			settingsUrl: "https://ration.example/hub/settings",
+			portalAvailable: true,
+		},
+	};
+
+	it("omits organization.id and keeps every other billing field", () => {
+		const projected = projectToolResult({
+			tool: "get_billing_summary",
+			profile: "agent",
+			data: summary,
+		});
+		const { id: _id, ...organization } = summary.organization;
+		expect(projected.data).toEqual({ ...summary, organization });
+		expect(JSON.stringify(projected.data)).not.toContain("org-secret-1");
+	});
+
+	it("leaves the card profile unchanged", () => {
+		const projected = projectToolResult({
+			tool: "get_billing_summary",
+			profile: "card",
+			data: summary,
+		});
+		expect(projected.data).toEqual(summary);
+	});
+});

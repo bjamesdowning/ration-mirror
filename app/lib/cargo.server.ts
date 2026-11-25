@@ -14,7 +14,13 @@ import {
 } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { z } from "zod";
-import { cargo, cargoTag, ledger, type supplyItem } from "../db/schema";
+import {
+	cargo,
+	cargoTag,
+	ledger,
+	type supplyItem,
+	tag as tagTable,
+} from "../db/schema";
 import {
 	assertCargoIngestCapacity,
 	CapacityExceededError,
@@ -223,6 +229,8 @@ export type CargoPageCursor =
  *
  * Default order: `(createdAt desc, id asc)`.
  * With `sortBy: "expiresAt"`: `(expiresAt asc, id asc)` — items without expiry are omitted.
+ * Optional `nameContains` (case-insensitive substring) and `tag` (one tag slug
+ * in this kitchen) narrow the page. Callers that omit them get the old query.
  */
 export async function getCargoPage(
 	db: D1Database,
@@ -234,6 +242,8 @@ export async function getCargoPage(
 		expiresBefore?: string;
 		expiresAfter?: string;
 		sortBy?: CargoPageSortBy;
+		nameContains?: string;
+		tag?: string;
 	},
 ) {
 	const d1 = drizzle(db);
@@ -241,6 +251,28 @@ export async function getCargoPage(
 	const conditions = [eq(cargo.organizationId, organizationId)];
 	if (options.domain) {
 		conditions.push(eq(cargo.domain, options.domain));
+	}
+	const nameNeedle = options.nameContains?.trim().toLowerCase();
+	if (nameNeedle) {
+		conditions.push(sql`instr(lower(${cargo.name}), ${nameNeedle}) > 0`);
+	}
+	const tagSlug = options.tag?.trim().toLowerCase();
+	if (tagSlug) {
+		conditions.push(
+			inArray(
+				cargo.id,
+				d1
+					.select({ cargoId: cargoTag.cargoId })
+					.from(cargoTag)
+					.innerJoin(tagTable, eq(tagTable.id, cargoTag.tagId))
+					.where(
+						and(
+							eq(tagTable.organizationId, organizationId),
+							eq(tagTable.slug, tagSlug),
+						),
+					),
+			),
+		);
 	}
 	if (options.expiresBefore) {
 		conditions.push(
@@ -1018,8 +1050,7 @@ export async function ingestCargoItems(
 						typeof target.status === "string" && target.status.length > 0
 							? target.status
 							: calculateInventoryStatus(target.expiresAt ?? null),
-					createdAt:
-						target.createdAt instanceof Date ? target.createdAt : now,
+					createdAt: target.createdAt instanceof Date ? target.createdAt : now,
 					updatedAt: now,
 					expiresAt: target.expiresAt ?? null,
 					nutrition: mergeNutrition ?? target.nutrition ?? null,
@@ -1874,10 +1905,12 @@ async function bulkUpdateCargoImportItems(
 	tagIdsBySlug: Map<string, string>,
 ): Promise<{
 	updated: number;
+	updatedIds: string[];
 	errors: Array<{ name: string; error: string }>;
 }> {
 	const result = {
 		updated: 0,
+		updatedIds: [] as string[],
 		errors: [] as Array<{ name: string; error: string }>,
 	};
 	const d1 = drizzle(env.DB);
@@ -1937,6 +1970,7 @@ async function bulkUpdateCargoImportItems(
 			}
 
 			result.updated += validItems.length;
+			result.updatedIds.push(...validItems.map((item) => item.id));
 		} catch (batchError) {
 			for (const item of validItems) {
 				try {
@@ -1956,7 +1990,10 @@ async function bulkUpdateCargoImportItems(
 						item.id,
 						updateData,
 					);
-					if (updated) result.updated += 1;
+					if (updated) {
+						result.updated += 1;
+						result.updatedIds.push(item.id);
+					}
 				} catch (e) {
 					result.errors.push({
 						name: item.name,
@@ -1978,6 +2015,10 @@ async function bulkUpdateCargoImportItems(
 export interface ApplyCargoImportResult {
 	imported: number;
 	updated: number;
+	/** Cargo ids created by this import, in row order, without duplicates. */
+	createdIds: string[];
+	/** Cargo ids updated or merged into, in row order, without duplicates. */
+	updatedIds: string[];
 	errors: Array<{ name: string; error: string }>;
 }
 
@@ -1994,6 +2035,8 @@ export async function applyCargoImport(
 	const result: ApplyCargoImportResult = {
 		imported: 0,
 		updated: 0,
+		createdIds: [],
+		updatedIds: [],
 		errors: [],
 	};
 	const items = parsedItems.slice(0, APPLY_IMPORT_MAX_ROWS);
@@ -2055,6 +2098,7 @@ export async function applyCargoImport(
 			tagIdsBySlug,
 		);
 		result.updated += bulkResult.updated;
+		result.updatedIds.push(...bulkResult.updatedIds);
 		result.errors.push(...bulkResult.errors);
 	}
 
@@ -2083,14 +2127,23 @@ export async function applyCargoImport(
 			const r = ingestResults[i];
 			const p = toCreate[i];
 			if (r.status === "created" || r.status === "merged") {
-				if (r.status === "created") result.imported += 1;
-				else result.updated += 1;
+				if (r.status === "created") {
+					result.imported += 1;
+					if (r.item) result.createdIds.push(r.item.id);
+				} else {
+					result.updated += 1;
+					if (r.item) result.updatedIds.push(r.item.id);
+				}
 			} else if (r.status === "capacity_exceeded" || r.status === "error") {
 				result.errors.push({ name: p.name, error: r.error ?? r.status });
 			}
 		}
 	}
 
+	result.createdIds = [...new Set(result.createdIds)];
+	result.updatedIds = [...new Set(result.updatedIds)].filter(
+		(id) => !result.createdIds.includes(id),
+	);
 	return result;
 }
 

@@ -21,10 +21,7 @@ import { vectorHitDisagreesOnCut } from "../../matching";
 import { CargoNutritionOverrideSchema } from "../../schemas/nutrition";
 import { UNIT_FIELD_DESCRIPTION, UuidSchema } from "../../schemas/uuid";
 import { coerceToolUnit } from "../../units";
-import {
-	cargoVectorFloors,
-	findSimilarCargoBatch,
-} from "../../vector.server";
+import { cargoVectorFloors, findSimilarCargoBatch } from "../../vector.server";
 import { resolveAgentFlagContext } from "../agent-flag-context";
 import { err, ok, type ToolEnvelope } from "../envelope";
 import {
@@ -318,7 +315,11 @@ export function createInventoryToolDefs(env: McpToolsEnv) {
 							env,
 							ctx.organizationId,
 							[a.name],
-							{ topK: 3, threshold: NAME_SEARCH_RECALL_THRESHOLD, floor: "recall" },
+							{
+								topK: 3,
+								threshold: NAME_SEARCH_RECALL_THRESHOLD,
+								floor: "recall",
+							},
 						);
 						const matches = (results.get(a.name) ?? []).filter(
 							(match) =>
@@ -618,7 +619,7 @@ export function createInventoryToolDefs(env: McpToolsEnv) {
 		defineSharedTool({
 			name: "apply_inventory_import",
 			description:
-				"Commit a previously-previewed inventory import. Pass the previewToken from preview_inventory_import (valid 15 minutes). Only call after the user has seen the preview; hosts that support approval ask the user to approve. May merge into or overwrite existing Cargo rows. Idempotent via idempotencyKey.",
+				"Commit a previously-previewed inventory import. Pass the previewToken from preview_inventory_import (valid 15 minutes). Only call after the user has seen the preview; hosts that support approval ask the user to approve. May merge into or overwrite existing Cargo rows. Idempotent via idempotencyKey. Returns createdIds and updatedIds (Cargo ids) so you can call get_cargo_item or update_cargo_item without listing the pantry again.",
 			inputSchema: z.object({
 				previewToken: z
 					.string()

@@ -100,6 +100,27 @@ e2e:
     - bunx playwright install --with-deps chromium
     - bun run test:e2e
 
+# MCP e2e: bundles the ration-mcp worker (wrangler deploy --dry-run, no
+# upload) and serves it from Miniflare with in-memory D1/KV/R2. Applies the
+# drizzle migrations, seeds a test kitchen and API key, then drives real
+# JSON-RPC (initialize, tools/list, tools/call). No browsers, no secrets, no
+# remote bindings. Runs beside e2e, not inside it. See docs/dev/mcp-e2e.md.
+mcp-e2e:
+  extends: .gate
+  variables:
+    WRANGLER_SEND_METRICS: "false"
+  script:
+    # Bundling uses wrangler --dry-run only; keep Cloudflare credentials out.
+    - unset CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID
+    - export PATH="$CI_PROJECT_DIR/.node/bin:$PATH"
+    - node --version
+    - node --run test:mcp-e2e
+  artifacts:
+    when: always
+    reports:
+      junit: reports/mcp-e2e-junit.xml
+    expire_in: 1 week
+
 # Operator sync for the Copilot docs corpus. Not part of the merge gate.
 # The workflow creates merge-request pipelines only, and this rule keeps
 # the job out of those pipelines. Run the script by hand outside this gate.

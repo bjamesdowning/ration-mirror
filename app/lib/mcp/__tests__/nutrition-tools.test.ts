@@ -168,8 +168,14 @@ describe("createNutritionToolDefs", () => {
 		);
 		const data = envelope.data as {
 			vsGoal: { energyKcal: { remaining: number } };
+			days: Array<{
+				date: string;
+				vsGoal: { energyKcal: { remaining: number } } | null;
+			}>;
 		};
 		expect(data.vsGoal.energyKcal.remaining).toBe(1500);
+		// Per-day remaining survives the agent profile, which drops nutritionV2.
+		expect(data.days[0]?.vsGoal?.energyKcal.remaining).toBe(1500);
 	});
 
 	it("returns consent_required when Eat upsert denies consent", async () => {
@@ -247,7 +253,17 @@ describe("createNutritionToolDefs", () => {
 		});
 		expect(envelope.ok).toBe(true);
 		if (!envelope.ok) return;
-		expect(envelope.data).toMatchObject({ logged: 1 });
+		expect(envelope.data).toMatchObject({
+			logged: 1,
+			items: [
+				{
+					intakeId: "intake-1",
+					entryId: "11111111-1111-4111-8111-111111111111",
+					replayed: false,
+				},
+			],
+		});
+		expect(envelope.data).not.toHaveProperty("items.0.intake");
 		expect(logManifestIntakes).toHaveBeenCalledWith(
 			expect.anything(),
 			expect.objectContaining({

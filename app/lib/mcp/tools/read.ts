@@ -245,12 +245,22 @@ async function maybePersonalNutritionToday(
 	}
 }
 
+/**
+ * The date inside a decoded pagination cursor, or null when `new Date()`
+ * cannot read it. A tampered cursor is `invalid_input`, never an Invalid
+ * Date in a query. MCP-only: the shared cursor decoder is unchanged.
+ */
+export function readCursorDate(value: string): Date | null {
+	const date = new Date(value);
+	return Number.isFinite(date.getTime()) ? date : null;
+}
+
 export function createReadToolDefs(env: McpToolsEnv) {
 	return [
 		defineSharedTool({
 			name: "get_context",
 			description:
-				"Return organization id, caller identity (API key or OAuth grant), scopes, capabilities, onboarding, a slim kitchen tier/credits snapshot, and suggested next actions. For full pantry/manifest/supply status prefer get_kitchen_summary.",
+				"Return caller identity (auth method and a readable key name), scopes, capabilities, onboarding, a slim kitchen tier/credits snapshot, and suggested next actions. For full pantry/manifest/supply status prefer get_kitchen_summary.",
 			inputSchema: z.object({}),
 			scopes: ["mcp:read"],
 			rateLimitCategory: "mcp_list",
@@ -354,7 +364,11 @@ export function createReadToolDefs(env: McpToolsEnv) {
 					env,
 					ctx.organizationId,
 					[a.query],
-					{ topK: a.topK ?? 5, threshold: NAME_SEARCH_RECALL_THRESHOLD, floor: "recall" },
+					{
+						topK: a.topK ?? 5,
+						threshold: NAME_SEARCH_RECALL_THRESHOLD,
+						floor: "recall",
+					},
 				);
 				const matches = results.get(a.query) || [];
 				if (matches.length === 0) {
@@ -421,7 +435,7 @@ export function createReadToolDefs(env: McpToolsEnv) {
 		defineSharedTool({
 			name: "list_inventory",
 			description:
-				"Retrieve ingredients in the pantry. Cursor-paginated: pass `cursor` from a previous response to fetch the next page. Default limit 100, max 200. Optional UTC expiry filters and expiresAt sort. Includes nutrition snapshot when present on the cargo row.",
+				"Retrieve ingredients in the pantry. Cursor-paginated: pass `cursor` from a previous response to fetch the next page. Default limit 100, max 200. Optional UTC expiry filters and expiresAt sort, `nameContains` (case-insensitive substring) and `tag` (one tag slug). expiresAt is an ISO-8601 string or null. Includes the nutrition snapshot when present; pass includeNutrition:false for a lighter page when you only need names and quantities. Keep the same filters when you pass a cursor.",
 			inputSchema: z.object({
 				domain: z
 					.enum(["food", "household", "alcohol"])
@@ -455,12 +469,35 @@ export function createReadToolDefs(env: McpToolsEnv) {
 					.describe(
 						"Sort order: createdAt (newest first) or expiresAt (soonest first; omits items without expiry)",
 					),
+				nameContains: z
+					.string()
+					.trim()
+					.min(1)
+					.max(100)
+					.optional()
+					.describe(
+						"Only items whose name contains this text (case-insensitive)",
+					),
+				tag: z
+					.string()
+					.trim()
+					.min(1)
+					.max(64)
+					.optional()
+					.describe("Only items carrying this tag slug (e.g. dairy)"),
+				includeNutrition: z
+					.boolean()
+					.optional()
+					.describe(
+						"Include each item's nutrition snapshot (default true). Pass false to keep the page small.",
+					),
 			}),
 			scopes: ["mcp:read"],
 			rateLimitCategory: "mcp_list",
 			audit: false,
 			handler: async (ctx, a) => {
 				const limit = a.limit ?? 100;
+				const includeNutrition = a.includeNutrition !== false;
 				const sortBy = a.sortBy ?? "createdAt";
 				const decoded = a.cursor ? decodeInventoryCursor(a.cursor) : null;
 				if (a.cursor && !decoded) {
@@ -478,18 +515,23 @@ export function createReadToolDefs(env: McpToolsEnv) {
 					);
 				}
 				let pageCursor: CargoPageCursor | null = null;
-				if (decoded?.sortBy === "expiresAt" && decoded.expiresAt) {
-					pageCursor = {
-						sortBy: "expiresAt",
-						expiresAt: new Date(decoded.expiresAt),
-						id: decoded.id,
-					};
-				} else if (decoded?.sortBy === "createdAt" && decoded.createdAt) {
-					pageCursor = {
-						sortBy: "createdAt",
-						createdAt: new Date(decoded.createdAt),
-						id: decoded.id,
-					};
+				if (decoded) {
+					const rawDate =
+						decoded.sortBy === "expiresAt"
+							? decoded.expiresAt
+							: decoded.createdAt;
+					const cursorDate = rawDate ? readCursorDate(rawDate) : null;
+					if (!cursorDate) {
+						return err(
+							"list_inventory",
+							"invalid_input",
+							"Malformed cursor; omit it to start from the first page.",
+						);
+					}
+					pageCursor =
+						decoded.sortBy === "expiresAt"
+							? { sortBy: "expiresAt", expiresAt: cursorDate, id: decoded.id }
+							: { sortBy: "createdAt", createdAt: cursorDate, id: decoded.id };
 				}
 				const { items, nextCursor } = await getCargoPage(
 					env.DB,
@@ -501,6 +543,8 @@ export function createReadToolDefs(env: McpToolsEnv) {
 						expiresBefore: a.expiresBefore,
 						expiresAfter: a.expiresAfter,
 						sortBy,
+						nameContains: a.nameContains,
+						tag: a.tag,
 					},
 				);
 				const tagMap = await getTagsForCargoIds(
@@ -515,7 +559,9 @@ export function createReadToolDefs(env: McpToolsEnv) {
 					domain: c.domain,
 					tags: tagsToSlugs(tagMap.get(c.id) ?? []),
 					expiresAt: c.expiresAt,
-					...(c.nutrition ? { nutrition: c.nutrition } : {}),
+					...(includeNutrition && c.nutrition
+						? { nutrition: c.nutrition }
+						: {}),
 				}));
 				return ok("list_inventory", mapped, {
 					meta: {
@@ -608,7 +654,8 @@ export function createReadToolDefs(env: McpToolsEnv) {
 					SUPPLY_LIST_PAGE_MAX,
 				);
 				const decoded = a.cursor ? decodeCursor(a.cursor) : null;
-				if (a.cursor && !decoded) {
+				const afterDate = decoded ? readCursorDate(decoded.createdAt) : null;
+				if (a.cursor && !afterDate) {
 					return err(
 						"get_supply_list",
 						"invalid_input",
@@ -617,9 +664,10 @@ export function createReadToolDefs(env: McpToolsEnv) {
 				}
 				const fetchOptions = {
 					limit: limit + 1,
-					after: decoded
-						? { createdAt: new Date(decoded.createdAt), id: decoded.id }
-						: undefined,
+					after:
+						decoded && afterDate
+							? { createdAt: afterDate, id: decoded.id }
+							: undefined,
 					includeSourceMeals: a.includeSourceMeals === true,
 				};
 				let targetListId = a.listId;
@@ -803,16 +851,18 @@ export function createReadToolDefs(env: McpToolsEnv) {
 				const limit = a.limit ?? 100;
 				const includeIngredients = a.includeIngredients === true;
 				const decoded = a.cursor ? decodeCursor(a.cursor) : null;
-				if (a.cursor && !decoded) {
+				const cursorDate = decoded ? readCursorDate(decoded.createdAt) : null;
+				if (a.cursor && !cursorDate) {
 					return err(
 						"list_meals",
 						"invalid_input",
 						"Malformed cursor; omit it to start from the first page.",
 					);
 				}
-				const cursor = decoded
-					? { createdAt: new Date(decoded.createdAt), id: decoded.id }
-					: null;
+				const cursor =
+					decoded && cursorDate
+						? { createdAt: cursorDate, id: decoded.id }
+						: null;
 				const { items, nextCursor } = await getMealsPage(
 					env.DB,
 					ctx.organizationId,

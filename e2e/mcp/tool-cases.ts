@@ -25,7 +25,10 @@ export type ToolCase = {
 	id: string;
 	tool: string;
 	args: (ctx: CaseContext) => Record<string, unknown>;
-	/** Size budget for the whole tools/call result (JSON bytes). */
+	/**
+	 * Size budget for the whole tools/call result (JSON bytes). Set from the
+	 * size table the run prints, with about 1.5x headroom.
+	 */
 	maxBytes: number;
 	check?: (data: unknown, ctx: CaseContext, envelope: Envelope) => void;
 };
@@ -54,7 +57,7 @@ export const TOOL_CASES: ToolCase[] = [
 		id: "get_context",
 		tool: "get_context",
 		args: () => ({}),
-		maxBytes: 12_000,
+		maxBytes: 8_000,
 		check: (data) => {
 			const context = record(data);
 			expect(context).not.toHaveProperty("keyPrefix");
@@ -66,7 +69,7 @@ export const TOOL_CASES: ToolCase[] = [
 		id: "list_inventory",
 		tool: "list_inventory",
 		args: () => ({}),
-		maxBytes: 6_000,
+		maxBytes: 5_500,
 		check: (data, ctx) => {
 			expect(rows(data)).toHaveLength(4);
 			const milk = rows(data).find((row) => row.id === ctx.ids.cargoMilkId);
@@ -92,7 +95,7 @@ export const TOOL_CASES: ToolCase[] = [
 		id: "list_inventory:tag",
 		tool: "list_inventory",
 		args: () => ({ tag: "dairy" }),
-		maxBytes: 3_500,
+		maxBytes: 3_000,
 		check: (data) => {
 			expect(names(data).sort()).toEqual(["Mature cheddar", "Whole milk"]);
 		},
@@ -101,7 +104,7 @@ export const TOOL_CASES: ToolCase[] = [
 		id: "list_inventory:no-nutrition",
 		tool: "list_inventory",
 		args: () => ({ includeNutrition: false }),
-		maxBytes: 3_500,
+		maxBytes: 3_000,
 		check: (data, ctx) => {
 			expect(rows(data)).toHaveLength(4);
 			for (const row of rows(data)) expect(row).not.toHaveProperty("nutrition");
@@ -114,7 +117,7 @@ export const TOOL_CASES: ToolCase[] = [
 		id: "list_inventory:expiry-page-1",
 		tool: "list_inventory",
 		args: () => ({ sortBy: "expiresAt", limit: 1, includeNutrition: false }),
-		maxBytes: 2_000,
+		maxBytes: 1_500,
 		check: (data, _ctx, envelope) => {
 			expect(names(data)).toEqual(["Whole milk"]);
 			expect(typeof envelope.meta?.nextCursor).toBe("string");
@@ -124,7 +127,7 @@ export const TOOL_CASES: ToolCase[] = [
 		id: "get_cargo_item",
 		tool: "get_cargo_item",
 		args: (ctx) => ({ itemId: ctx.ids.cargoMilkId }),
-		maxBytes: 3_000,
+		maxBytes: 2_000,
 		check: (data) => {
 			const item = record(data);
 			expect(item.name).toBe("Whole milk");
@@ -135,7 +138,7 @@ export const TOOL_CASES: ToolCase[] = [
 		id: "get_expiring_items",
 		tool: "get_expiring_items",
 		args: () => ({ days: 7 }),
-		maxBytes: 4_000,
+		maxBytes: 1_500,
 		check: (data) => {
 			expect(JSON.stringify(data)).toContain("Whole milk");
 		},
@@ -154,7 +157,7 @@ export const TOOL_CASES: ToolCase[] = [
 				},
 			],
 		}),
-		maxBytes: 6_000,
+		maxBytes: 2_500,
 		check: (data) => {
 			expect(typeof record(data).previewToken).toBe("string");
 		},
@@ -166,7 +169,7 @@ export const TOOL_CASES: ToolCase[] = [
 			previewToken: record(ctx.data("preview_inventory_import")).previewToken,
 			idempotencyKey: key(1),
 		}),
-		maxBytes: 2_500,
+		maxBytes: 1_500,
 		check: (data, ctx) => {
 			const result = record(data);
 			expect(result.imported).toBe(1);
@@ -183,7 +186,7 @@ export const TOOL_CASES: ToolCase[] = [
 				record(ctx.data("apply_inventory_import")).createdIds as string[]
 			)[0],
 		}),
-		maxBytes: 3_000,
+		maxBytes: 1_000,
 		check: (data) => {
 			expect(record(data).name).toBe("Rolled oats");
 		},
@@ -210,7 +213,7 @@ export const TOOL_CASES: ToolCase[] = [
 				tags: [],
 			},
 		}),
-		maxBytes: 4_000,
+		maxBytes: 2_500,
 		check: (data) => {
 			const byName = new Map(
 				(record(data).ingredients as Row[]).map((row) => [
@@ -226,19 +229,19 @@ export const TOOL_CASES: ToolCase[] = [
 		id: "list_meals",
 		tool: "list_meals",
 		args: () => ({}),
-		maxBytes: 3_000,
+		maxBytes: 2_500,
 	},
 	{
 		id: "get_meal",
 		tool: "get_meal",
 		args: (ctx) => ({ mealId: ctx.ids.mealSoupId }),
-		maxBytes: 6_000,
+		maxBytes: 4_500,
 	},
 	{
 		id: "get_meal_plan",
 		tool: "get_meal_plan",
 		args: (ctx) => ({ startDate: ctx.today, days: 1 }),
-		maxBytes: 5_000,
+		maxBytes: 2_500,
 		check: (data) => {
 			expect(JSON.stringify(data)).toContain("E2E lentil soup");
 		},
@@ -252,7 +255,7 @@ export const TOOL_CASES: ToolCase[] = [
 			effectiveFrom: ctx.today,
 			operationKey: key(2),
 		}),
-		maxBytes: 3_000,
+		maxBytes: 2_000,
 	},
 	{
 		id: "log_manifest_intake",
@@ -290,7 +293,7 @@ export const TOOL_CASES: ToolCase[] = [
 		id: "get_nutrition_summary",
 		tool: "get_nutrition_summary",
 		args: (ctx) => ({ from: ctx.today, to: ctx.today }),
-		maxBytes: 4_000,
+		maxBytes: 6_000,
 		check: (data, ctx) => {
 			const summary = record(data);
 			expect(summary).not.toHaveProperty("nutritionV2");
@@ -305,7 +308,7 @@ export const TOOL_CASES: ToolCase[] = [
 		id: "list_nutrition_intakes",
 		tool: "list_nutrition_intakes",
 		args: (ctx) => ({ from: ctx.today, to: ctx.today }),
-		maxBytes: 4_000,
+		maxBytes: 2_500,
 		check: (data) => {
 			expect(record(data).items as Row[]).toHaveLength(1);
 		},
@@ -314,7 +317,7 @@ export const TOOL_CASES: ToolCase[] = [
 		id: "get_kitchen_summary",
 		tool: "get_kitchen_summary",
 		args: () => ({}),
-		maxBytes: 12_000,
+		maxBytes: 9_000,
 	},
 	{
 		id: "clear_manifest_intake",
@@ -324,7 +327,7 @@ export const TOOL_CASES: ToolCase[] = [
 			confirm: true,
 			operationKey: key(5),
 		}),
-		maxBytes: 3_000,
+		maxBytes: 2_500,
 		check: (data) => {
 			expect(record(data).clearedCount).toBe(1);
 		},

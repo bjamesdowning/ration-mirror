@@ -9,17 +9,21 @@ import {
 	envelopeOf,
 	findBadTimestamps,
 	findDeniedKeys,
+	findSensitiveValues,
 	McpTestClient,
 } from "./harness";
+import { sensitiveSeedValues } from "./seed";
 import { type CaseContext, type Envelope, TOOL_CASES } from "./tool-cases";
 
 const url = inject("mcpUrl");
 const apiKey = inject("mcpApiKey");
 const seed = inject("mcpSeed");
+const sensitive = sensitiveSeedValues(apiKey);
 
 /** Tools Phase 1 reshaped; tools/list must advertise every one of them. */
 const AFFECTED_TOOLS = [
 	"get_context",
+	"get_billing_summary",
 	"get_cargo_item",
 	"list_inventory",
 	"apply_inventory_import",
@@ -97,6 +101,19 @@ describe("MCP tool results (agent profile)", () => {
 		console.log(`[mcp-e2e] reply sizes\n${lines.join("\n")}`);
 	});
 
+	it("value scan catches a seeded id under a bare key", () => {
+		// Guards the guard: a bare `id` holding the kitchen id must be found.
+		expect(
+			findSensitiveValues(
+				{ organization: { id: seed.ids.organizationId } },
+				sensitive,
+			),
+		).toEqual(["organizationId"]);
+		expect(
+			findSensitiveValues({ note: `key ${apiKey.slice(0, 17)}` }, sensitive),
+		).toEqual(["apiKeyPrefix"]);
+	});
+
 	it("has a unique id per case", () => {
 		const ids = TOOL_CASES.map((toolCase) => toolCase.id);
 		expect(new Set(ids).size).toBe(ids.length);
@@ -118,7 +135,12 @@ describe("MCP tool results (agent profile)", () => {
 			bytesByCase.set(toolCase.id, bytes);
 			dataByCase.set(toolCase.id, envelope.data);
 
-			expect(findDeniedKeys(envelope), "internal ids in reply").toEqual([]);
+			expect(findDeniedKeys(envelope), "internal id keys in reply").toEqual([]);
+			// The whole tools/call result: text copy, structuredContent, _meta.
+			expect(
+				findSensitiveValues(result, sensitive),
+				"seeded internal id values in reply",
+			).toEqual([]);
 			expect(findBadTimestamps(envelope), "non-ISO timestamps").toEqual([]);
 			expect(bytes, `reply size budget for ${toolCase.id}`).toBeLessThanOrEqual(
 				toolCase.maxBytes,

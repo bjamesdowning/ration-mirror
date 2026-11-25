@@ -110,6 +110,8 @@ mcp-e2e:
   variables:
     WRANGLER_SEND_METRICS: "false"
   script:
+    # Bundling uses wrangler --dry-run only; keep Cloudflare credentials out.
+    - unset CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID
     - export PATH="$CI_PROJECT_DIR/.node/bin:$PATH"
     - node --version
     - node --run test:mcp-e2e

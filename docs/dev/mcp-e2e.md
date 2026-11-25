@@ -22,6 +22,8 @@ No secrets, no network, and no remote bindings. In CI it runs as the `mcp-e2e` j
 4. Seeds one test kitchen (`e2e/mcp/seed.ts`) and mints an API key for it.
 5. Passes the URL, key, and seed ids to the tests with Vitest `provide`/`inject`.
 
+The bundle step refuses to run without `--dry-run` and strips `CLOUDFLARE_*` variables from wrangler's environment, and the CI job unsets `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`. `wrangler.mcp.jsonc` names production D1/KV ids and the custom domain; the dry run only bundles, and Miniflare gets its own local bindings. The worker's outbound `fetch` is limited to loopback: any other host gets a 599 and is logged as `[mcp-e2e] blocked outbound fetch to <host>`.
+
 Worker vars: `RATION_ENV=development`, `MCP_OAUTH_ENABLED=false` (API key auth only), and a local-only `BETTER_AUTH_SECRET` placeholder. `FEATURE_FLAG_OVERRIDES` turns on only the flags the suite needs (`E2E_FLAG_OVERRIDES` in `global-setup.ts`). Everything else keeps its registry default.
 
 ## Files
@@ -39,7 +41,8 @@ Worker vars: `RATION_ENV=development`, `MCP_OAUTH_ENABLED=false` (API key auth o
 
 - The envelope is `ok: true` and the result is not `isError`.
 - The text copy and `structuredContent` agree.
-- No internal id key at any depth (kitchen, user, consent, credential, key ids). The deny-list in `harness.ts` is kept separate from `app/lib/mcp/response-profile.ts` on purpose, so a change to one does not silently pass the other.
+- No internal id key at any depth (kitchen, user, membership, consent, credential, key ids), ignoring case and underscores. The deny-list in `harness.ts` is kept separate from `app/lib/mcp/response-profile.ts` on purpose, so a change to one does not silently pass the other.
+- No seeded internal id **value** anywhere in the result, including inside strings and under a bare `id` key. `sensitiveSeedValues` in `seed.ts` lists them: the user, kitchen, membership, API key, and consent ids, the API key, and its stored prefix. Key names alone miss `organization: { id }`; this check does not. If you seed another id that agents must not see, add it there. Entity ids that agents pass back to other tools (Cargo, meals, Manifest) are not in the list.
 - Every key ending in `At` is `null`, an ISO 8601 date-time, or a `YYYY-MM-DD` date. A `Date` that turned into `{}` fails here.
 - The reply fits its `maxBytes` budget. The run prints a size table at the end; use it when you set or tighten a budget.
 

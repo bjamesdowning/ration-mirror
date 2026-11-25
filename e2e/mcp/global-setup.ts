@@ -21,7 +21,12 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative, resolve, sep } from "node:path";
-import { Miniflare } from "miniflare";
+import {
+	Miniflare,
+	type Request as MiniflareRequest,
+	Response as MiniflareResponse,
+	fetch as miniflareFetch,
+} from "miniflare";
 import type { TestProject } from "vitest/node";
 import {
 	compareMigrationNames,
@@ -122,23 +127,35 @@ function bundleWorker(outdir: string): {
 	modules: Record<string, { type: "esm"; contents: string }>;
 } {
 	const wrangler = join(ROOT, "node_modules", ".bin", "wrangler");
-	const result = spawnSync(
-		wrangler,
-		[
-			"deploy",
-			"--config",
-			WORKER_CONFIG,
-			"--env=",
-			"--dry-run",
-			"--outdir",
-			outdir,
-		],
-		{
-			cwd: ROOT,
-			stdio: "inherit",
-			env: { ...process.env, WRANGLER_SEND_METRICS: "false" },
-		},
-	);
+	const args = [
+		"deploy",
+		"--config",
+		WORKER_CONFIG,
+		"--env=",
+		"--dry-run",
+		"--outdir",
+		outdir,
+	];
+	// wrangler.mcp.jsonc names production D1/KV ids and the custom domain.
+	// Only ever bundle it with --dry-run, and never with Cloudflare
+	// credentials in the environment, so nothing can reach the account.
+	if (!args.includes("--dry-run")) {
+		throw new Error("mcp-e2e only bundles with wrangler deploy --dry-run");
+	}
+	const env: NodeJS.ProcessEnv = {
+		...process.env,
+		WRANGLER_SEND_METRICS: "false",
+	};
+	for (const name of Object.keys(env)) {
+		if (name.startsWith("CLOUDFLARE_") || name.startsWith("CF_API")) {
+			delete env[name];
+		}
+	}
+	const result = spawnSync(wrangler, args, {
+		cwd: ROOT,
+		stdio: "inherit",
+		env,
+	});
 	if (result.status !== 0) {
 		throw new Error(
 			`wrangler deploy --dry-run failed (exit ${result.status ?? result.signal})`,
@@ -177,10 +194,34 @@ async function migrate(db: SeedDatabase): Promise<number> {
 	return files.length;
 }
 
+const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "[::1]", "::1"]);
+
+/**
+ * Outbound fetch from the worker: loopback only. Anything else gets a 599
+ * and is logged by host, so a tool that starts calling a real service shows
+ * up in the job log instead of quietly reaching the internet.
+ */
+function loopbackOnly(blockedHosts: Set<string>) {
+	return async (request: MiniflareRequest) => {
+		const { hostname } = new URL(request.url);
+		if (LOOPBACK_HOSTS.has(hostname)) {
+			return miniflareFetch(request);
+		}
+		if (!blockedHosts.has(hostname)) {
+			blockedHosts.add(hostname);
+			console.warn(`[mcp-e2e] blocked outbound fetch to ${hostname}`);
+		}
+		return new MiniflareResponse("mcp-e2e: outbound network is disabled", {
+			status: 599,
+		});
+	};
+}
+
 export default async function setup(project: TestProject) {
 	const workdir = mkdtempSync(join(tmpdir(), "ration-mcp-e2e-"));
 	const { compatibilityDate, compatibilityFlags } = readWorkerConfig();
 	const bundle = bundleWorker(join(workdir, "bundle"));
+	const blockedHosts = new Set<string>();
 
 	const mf = new Miniflare({
 		host: "127.0.0.1",
@@ -212,9 +253,15 @@ export default async function setup(project: TestProject) {
 					},
 					manifest: bundle,
 				},
+				dev: {
+					outboundService: {
+						type: "fetcher",
+						handler: loopbackOnly(blockedHosts),
+					},
+				},
 			},
 		],
-	} as ConstructorParameters<typeof Miniflare>[0]);
+	});
 
 	try {
 		const url = await mf.ready;
@@ -237,6 +284,11 @@ export default async function setup(project: TestProject) {
 	}
 
 	return async () => {
+		if (blockedHosts.size > 0) {
+			console.warn(
+				`[mcp-e2e] outbound hosts blocked during the run: ${[...blockedHosts].join(", ")}`,
+			);
+		}
 		await mf.dispose();
 		rmSync(workdir, { recursive: true, force: true });
 	};
